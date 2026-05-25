@@ -1,0 +1,11 @@
+{
+  "Id": "WrathAccess",
+  "DisplayName": "Wrath Access",
+  "Author": "bradjrenshaw",
+  "Version": "0.1.0",
+  "ManagerVersion": "0.22.15",
+  "AssemblyName": "WrathAccess.dll",
+  "EntryMethod": "WrathAccess.Main.Load",
+  "HomePage": "",
+  "Repository": ""
+}

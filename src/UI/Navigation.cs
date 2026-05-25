@@ -1,0 +1,21 @@
+using WrathAccess.Input;
+using WrathAccess.Screens;
+
+namespace WrathAccess.UI
+{
+    /// <summary>
+    /// Holds the active Navigator (swappable by user preference later) and is the
+    /// entry point input dispatches into. ScreenManager re-attaches it on screen change.
+    /// </summary>
+    public static class Navigation
+    {
+        public static Navigator Active = new TraditionalNavigator();
+
+        public static void Attach(Screen screen) => Active?.Attach(screen);
+
+        public static bool DispatchJustPressed(InputAction action) =>
+            Active != null && Active.OnInputJustPressed(action);
+
+        public static void AnnounceCurrent() => Active?.AnnounceCurrent();
+    }
+}

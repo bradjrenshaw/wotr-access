@@ -50,8 +50,16 @@ namespace WrathAccess.Screens
                 Rebuild();
                 Navigation.Attach(this);
                 if (FocusMode.Active) Navigation.AnnounceCurrent();
+                return;
             }
+            // Same phase: let subclasses refresh selection-driven content in place (e.g. a detail
+            // panel) without rebuilding the whole tree or moving focus.
+            OnPhaseTick();
         }
+
+        /// <summary>Called each update while the phase is unchanged — for live, in-place updates
+        /// (a detail panel that tracks the current selection). Must not disturb the focus path.</summary>
+        protected virtual void OnPhaseTick() { }
 
         private void Rebuild()
         {

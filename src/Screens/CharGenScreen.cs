@@ -2,7 +2,10 @@ using System.Linq;
 using Kingmaker;
 using Kingmaker.Blueprints.Root.Strings;
 using Kingmaker.UI.MVVM._VM.CharGen;
+using Kingmaker.UI.MVVM._VM.CharGen.Phases.Pregen;
 using WrathAccess.UI;
+using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Tooltips;
 
 namespace WrathAccess.Screens
 {
@@ -34,10 +37,65 @@ namespace WrathAccess.Screens
         protected override object CurrentPhase() => Vm()?.CurrentPhaseVM.Value;
         protected override string PhaseLabel() => Vm()?.CurrentPhaseVM.Value?.PhaseName.Value;
 
+        // The phase's selection-driven detail panel (rendered inline from InfoVM.CurrentTooltip),
+        // plus the selection it was last built for — refreshed in place when selection changes.
+        private Panel _detailPanel;
+        private object _detailFrom;
+
         protected override void BuildContent(Container content)
         {
-            // Per-phase content lands in M1+ (Race/Class/Abilities/Skills/Feats/Spells/…).
-            content.Add(new TextElement("This phase is not accessible yet."));
+            _detailPanel = null;
+            _detailFrom = null;
+            var phase = Vm()?.CurrentPhaseVM.Value;
+            if (phase is CharGenPregenPhaseVM pregen)
+                BuildPregen(content, pregen);
+            else
+                content.Add(new TextElement("This phase is not accessible yet."));
+        }
+
+        // Pregen phase: a list of premade characters ending with Custom Character, then a live
+        // Details panel (the selected option's build), split into sections you tab between.
+        private void BuildPregen(Container content, CharGenPregenPhaseVM phase)
+        {
+            var list = new ListContainer();
+            foreach (var item in phase.PregenSelectionGroup.EntitiesCollection)
+                list.Add(new ProxyPregenItem(item, phase));
+            list.Add(new ProxyCustomCharacter(phase)); // last entry, in the list itself
+            content.Add(list);
+
+            _detailPanel = new Panel("Details");
+            content.Add(_detailPanel);
+            FillDetail(phase);
+        }
+
+        // Render the selected option's detail template (InfoVM) into the Details panel as a set of
+        // tab-between section lists (Overview / Features and Abilities / Ability Scores / Skills).
+        private void FillDetail(CharGenPregenPhaseVM phase)
+        {
+            if (_detailPanel == null) return;
+            _detailPanel.Clear();
+            _detailFrom = phase.SelectedPregenEntity.Value;
+            var tpl = phase.InfoVM != null ? phase.InfoVM.CurrentTooltip : null;
+            if (tpl == null) return;
+
+            foreach (var section in TooltipReader.BuildSections(tpl))
+            {
+                var sectionList = new ListContainer(section.Title);
+                foreach (var el in section.Elements) sectionList.Add(el);
+                _detailPanel.Add(sectionList);
+            }
+        }
+
+        protected override void OnPhaseTick()
+        {
+            // Refresh the Details panel in place when the selection changes (focus stays on the
+            // list — selection only changes from there, so this never disturbs the focus path).
+            if (_detailPanel != null
+                && Vm()?.CurrentPhaseVM.Value is CharGenPregenPhaseVM pregen
+                && !ReferenceEquals(pregen.SelectedPregenEntity.Value, _detailFrom))
+            {
+                FillDetail(pregen);
+            }
         }
 
         protected override void OnBack()

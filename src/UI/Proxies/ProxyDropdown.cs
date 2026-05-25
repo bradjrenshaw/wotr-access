@@ -46,6 +46,9 @@ namespace WrathAccess.UI.Proxies
             yield return new ElementAction(ActionIds.Activate, Message.Raw("Open"), _ => OpenSubmenu());
         }
 
+        public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate()
+            => WrathAccess.UI.Tooltips.SimpleTooltip.Make(_vm?.Title, _vm?.Description);
+
         private void OpenSubmenu()
         {
             var vals = _vm?.LocalizedValues;

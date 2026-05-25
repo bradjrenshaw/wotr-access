@@ -84,7 +84,7 @@ namespace WrathAccess.Screens
             else if (phase is NewGamePhaseDifficultyVM difficulty)
                 SettingsEntityBuilder.BuildInto(content, difficulty.SettingEntities); // same VMs as Settings
             else
-                content.Add(new ProxyLabel("This step is not accessible yet."));
+                content.Add(new TextElement("This step is not accessible yet."));
             Add(content);
 
             // Footer: Back, then Next (label + availability track the current phase live).
@@ -104,7 +104,7 @@ namespace WrathAccess.Screens
             content.Add(campaigns);
 
             // Live description of the currently-selected campaign (updates as you pick).
-            content.Add(new ProxyLabel(
+            content.Add(new TextElement(
                 () => story.Description != null ? story.Description.Value : "", "description"));
 
             // Hardcore/permadeath mode toggle (code name "Last Azlanti"; the localized label

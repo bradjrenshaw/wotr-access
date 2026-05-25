@@ -43,5 +43,8 @@ namespace WrathAccess.UI.Proxies
             yield return new ElementAction(ActionIds.SetValue, Message.Raw("Set value"),
                 a => _vm.SetTempValue((float)ActionArgs.Get<double>(a, "value")));
         }
+
+        public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate()
+            => WrathAccess.UI.Tooltips.SimpleTooltip.Make(_vm?.Title, _vm?.Description);
     }
 }

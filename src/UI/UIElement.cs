@@ -37,6 +37,12 @@ namespace WrathAccess.UI
         /// </summary>
         public virtual bool ReannounceOnActivate => false;
 
+        /// <summary>
+        /// A "complex" (brick) tooltip template for this element, or null. The tooltip key (Space)
+        /// opens the reader screen with it. Override on elements that carry a game tooltip.
+        /// </summary>
+        public virtual Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate() => null;
+
         /// <summary>Like <see cref="ReannounceOnActivate"/>, but for the secondary (context) action —
         /// e.g. clearing a key binding should re-announce the now-empty value.</summary>
         public virtual bool ReannounceOnContext => false;

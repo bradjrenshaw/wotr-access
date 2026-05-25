@@ -60,7 +60,7 @@ namespace WrathAccess.Screens
             // Message body first (focusable so it can be re-read), then the buttons —
             // all direct children of the root panel, so they're individual Tab-stops.
             if (!string.IsNullOrEmpty(vm.MessageText))
-                Add(new ProxyLabel(vm.MessageText));
+                Add(new TextElement(vm.MessageText));
 
             Add(new ProxyActionButton(vm.AcceptText, () => true, () => vm.OnAcceptPressed()));
             if (vm.ShowDecline)

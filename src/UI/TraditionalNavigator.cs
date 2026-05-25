@@ -52,6 +52,13 @@ namespace WrathAccess.UI
                 case "nav.back":
                     // Screen-level back/close (e.g. Settings → Close). Consume only if the screen handles it.
                     return Screen != null && Screen.InvokeAction(ActionIds.Back);
+                case "focus.tooltip":
+                {
+                    var tpl = Current?.GetTooltipTemplate();
+                    if (tpl != null) WrathAccess.Screens.TooltipScreen.Open(tpl);
+                    else Speak("No tooltip");
+                    return true;
+                }
                 default:
                     return false; // not a nav key → bubble to globals
             }

@@ -89,6 +89,7 @@ namespace WrathAccess
             InputManager.Register("nav.primary", "Primary action").AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
             InputManager.Register("nav.secondary", "Secondary action").AddBinding(KeyCode.Backspace);
             InputManager.Register("nav.back", "Back").AddBinding(KeyCode.Escape);
+            InputManager.Register("focus.tooltip", "Read tooltip").AddBinding(KeyCode.Space);
             InputManager.Register("nav.next", "Next (Tab)").AddBinding(KeyCode.Tab).Repeating();
             InputManager.Register("nav.prev", "Previous (Shift+Tab)").AddBinding(KeyCode.Tab, shift: true).Repeating();
         }

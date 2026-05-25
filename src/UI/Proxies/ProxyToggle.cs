@@ -36,5 +36,8 @@ namespace WrathAccess.UI.Proxies
             if (Enabled)
                 yield return new ElementAction(ActionIds.Activate, Message.Raw("Toggle"), _ => _vm.ChangeValue());
         }
+
+        public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate()
+            => WrathAccess.UI.Tooltips.SimpleTooltip.Make(_vm?.Title, _vm?.Description);
     }
 }

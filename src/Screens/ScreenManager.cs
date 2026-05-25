@@ -106,7 +106,8 @@ namespace WrathAccess.Screens
             Register(new SettingsScreen());
             Register(new ChoiceSubmenuScreen()); // mod-pushed, layer 26 (above settings)
             Register(new KeyBindCaptureScreen()); // key-binding capture, layer 27 (raw-input passthrough)
-            Register(new MessageModalScreen()); // generic confirm/message modal, layer 30 (above everything)
+            Register(new MessageModalScreen()); // generic confirm/message modal, layer 30
+            Register(new TooltipScreen()); // on-demand brick-tooltip reader, layer 40 (top)
 
             Main.Log?.Log("ScreenManager: " + _registered.Count + " screens registered.");
         }

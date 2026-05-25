@@ -37,6 +37,7 @@ namespace WrathAccess.UI.Proxies
         public override bool CanFocus => !_hideWhenDisabled || Enabled;
 
         public override bool ReannounceOnActivate => true; // flips in place → re-announce "checked"/"unchecked"
+        public override Kingmaker.UI.UISoundType? ActivateSound => Kingmaker.UI.UISoundType.SettingsSwitchToggle;
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {

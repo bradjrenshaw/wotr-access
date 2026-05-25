@@ -47,6 +47,12 @@ namespace WrathAccess.UI
         /// e.g. clearing a key binding should re-announce the now-empty value.</summary>
         public virtual bool ReannounceOnContext => false;
 
+        /// <summary>The game UI sound to play when this element is activated (its sound normally
+        /// lived in the view's click handler, which we bypass). Default is a generic button click;
+        /// controls override for their real sound (e.g. toggles → SettingsSwitchToggle), or return
+        /// null when the element already plays its own sound (e.g. portraits) so we don't double it.</summary>
+        public virtual Kingmaker.UI.UISoundType? ActivateSound => Kingmaker.UI.UISoundType.ButtonClick;
+
         /// <summary>Find an advertised action by id and execute it. Returns true if found.</summary>
         public bool InvokeAction(string id, object args = null)
         {

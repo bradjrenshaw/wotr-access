@@ -64,6 +64,10 @@ namespace WrathAccess.UI
         /// </summary>
         protected void AnnounceDelta(List<UIElement> oldPath, bool interrupt = false)
         {
+            // interrupt == true marks an actual focus MOVE (arrow/tab), not a screen-entry readout —
+            // so it's where the game would play its control-hover sound.
+            if (interrupt) WrathAccess.UiSound.Hover();
+
             int i = 0;
             while (i < oldPath.Count && i < Path.Count && oldPath[i] == Path[i]) i++;
 

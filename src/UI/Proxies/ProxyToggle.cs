@@ -17,6 +17,7 @@ namespace WrathAccess.UI.Proxies
         public ProxyToggle(SettingsEntityBoolVM vm) { _vm = vm; }
 
         public override bool ReannounceOnActivate => true; // toggling flips the value in place
+        public override Kingmaker.UI.UISoundType? ActivateSound => Kingmaker.UI.UISoundType.SettingsSwitchToggle;
 
         // ModificationAllowed is a snapshot taken at VM construction. Fine at the main
         // menu (nothing locks settings there); for in-game we'd read the live source.

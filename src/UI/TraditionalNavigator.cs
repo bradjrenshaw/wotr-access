@@ -42,8 +42,13 @@ namespace WrathAccess.UI
                 case "nav.next": return Tab(1);
                 case "nav.prev": return Tab(-1);
                 case "nav.primary":
-                    if (Current != null && Current.InvokeAction(ActionIds.Activate) && Current.ReannounceOnActivate)
-                        Speak(Current.GetStateMessage().Resolve(), interrupt: true); // just the changed state ("checked"/"selected"), not the whole control/path
+                    if (Current != null && Current.InvokeAction(ActionIds.Activate))
+                    {
+                        var sound = Current.ActivateSound; // game plays this in the view handler we bypass
+                        if (sound.HasValue) WrathAccess.UiSound.Play(sound.Value);
+                        if (Current.ReannounceOnActivate)
+                            Speak(Current.GetStateMessage().Resolve(), interrupt: true); // just the changed state, not the whole control/path
+                    }
                     return true;
                 case "nav.secondary":
                     if (Current != null && Current.InvokeAction(ActionIds.Context) && Current.ReannounceOnContext)

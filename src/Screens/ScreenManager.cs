@@ -85,6 +85,7 @@ namespace WrathAccess.Screens
             // Base contexts (layer 0) — mutually exclusive.
             Register(new MainMenuScreen());
             Register(new NewGameScreen()); // main-menu New Game wizard (shown instead of the sidebar)
+            Register(new CharGenScreen()); // chargen / level-up (menu + in-game); layer 15, above contexts
             Register(new PredicateScreen("ctx.ingame", "Game", 0, () => RC()?.IsInGame ?? false));
             Register(new PredicateScreen("ctx.globalmap", "World Map", 0, () => RC()?.IsGlobalMap ?? false));
             Register(new PredicateScreen("ctx.tacticalcombat", "Tactical Combat", 0, () => RC()?.IsTacticalCombat ?? false));

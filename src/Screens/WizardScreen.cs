@@ -1,0 +1,74 @@
+using WrathAccess.UI;
+using WrathAccess.UI.Proxies;
+
+namespace WrathAccess.Screens
+{
+    /// <summary>
+    /// Shared shell for the game's phase-based wizards (New Game setup, character generation):
+    /// a content panel labeled with the current phase, plus Back/Next footer buttons. Rebuilds
+    /// and re-homes focus onto the new page when the wizard VM or current phase changes (so
+    /// pressing Next lands you on the next phase's content). Subclasses supply the VM, the current
+    /// phase, the phase content, and the footer behaviour.
+    /// </summary>
+    public abstract class WizardScreen : Screen
+    {
+        protected WizardScreen() { Wrap = true; }
+
+        public override bool IsActive() => WizardVm() != null;
+
+        /// <summary>The wizard root VM, or null when inactive. Used for activity + change detection.</summary>
+        protected abstract object WizardVm();
+
+        /// <summary>The current phase object — compared by reference to detect phase changes.</summary>
+        protected abstract object CurrentPhase();
+
+        /// <summary>Label for the content panel (the current phase's name).</summary>
+        protected abstract string PhaseLabel();
+
+        /// <summary>Fill the current phase's content.</summary>
+        protected abstract void BuildContent(Container content);
+
+        protected abstract void OnBack();
+        protected abstract void OnNext();
+        protected abstract string NextLabel();
+        protected virtual bool NextEnabled() => true;
+        protected virtual bool BackEnabled() => true;
+
+        private object _builtVm;
+        private object _builtPhase;
+
+        public override void OnPush() { _builtVm = null; _builtPhase = null; Rebuild(); }
+        public override void OnPop() { Clear(); _builtVm = null; _builtPhase = null; }
+
+        public override void OnUpdate()
+        {
+            var vm = WizardVm();
+            if (vm == null) return;
+            if (!ReferenceEquals(vm, _builtVm) || !ReferenceEquals(CurrentPhase(), _builtPhase))
+            {
+                // VM swapped or phase changed (Next/Back, or a step pick) — rebuild and land on it.
+                Rebuild();
+                Navigation.Attach(this);
+                if (FocusMode.Active) Navigation.AnnounceCurrent();
+            }
+        }
+
+        private void Rebuild()
+        {
+            Clear();
+            var vm = WizardVm();
+            _builtVm = vm;
+            _builtPhase = vm != null ? CurrentPhase() : null;
+            if (vm == null) return;
+
+            // Content panel, labeled with the current phase so entering it announces the phase.
+            var content = new Panel(PhaseLabel());
+            BuildContent(content);
+            Add(content);
+
+            // Footer: Back then Next (label + availability track the current phase live).
+            Add(new ProxyActionButton("Back", BackEnabled, OnBack));
+            Add(new ProxyActionButton(NextLabel, NextEnabled, OnNext));
+        }
+    }
+}

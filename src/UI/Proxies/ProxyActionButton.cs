@@ -9,11 +9,15 @@ namespace WrathAccess.UI.Proxies
         typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyActionButton : UIElement
     {
-        private readonly string _label;
+        private readonly Func<string> _label;
         private readonly Func<bool> _enabled;
         private readonly Action _activate;
 
         public ProxyActionButton(string label, Func<bool> enabled, Action activate)
+            : this(() => label, enabled, activate) { }
+
+        // Live label — for buttons whose text changes (e.g. a wizard's Next → "Start").
+        public ProxyActionButton(Func<string> label, Func<bool> enabled, Action activate)
         {
             _label = label;
             _enabled = enabled;
@@ -24,7 +28,7 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
-            yield return new LabelAnnouncement(Message.Raw(_label));
+            yield return new LabelAnnouncement(Message.Raw(_label != null ? _label() : ""));
             yield return new RoleAnnouncement("button");
             yield return new EnabledAnnouncement(Enabled);
         }

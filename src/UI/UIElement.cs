@@ -73,6 +73,16 @@ namespace WrathAccess.UI
             return Message.Join(", ", parts.ToArray());
         }
 
+        /// <summary>This element's label text (from its LabelAnnouncement), or null. Used to
+        /// de-duplicate a container whose label matches the control directly beneath it.</summary>
+        public string GetLabelText()
+        {
+            var ctx = new AnnouncementContext(this);
+            foreach (var a in GetFocusAnnouncements())
+                if (a is LabelAnnouncement) { var m = a.Render(ctx); return m != null ? m.Resolve() : null; }
+            return null;
+        }
+
         /// <summary>The composed spoken focus message (parts + parent-supplied position).</summary>
         public Message GetFocusMessage()
         {

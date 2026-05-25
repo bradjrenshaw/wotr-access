@@ -9,8 +9,8 @@ namespace WrathAccess.UI.Proxies
     /// A numeric setting → slider. Left/Right step by the game's own SetNextValue;
     /// setValue sets directly. Value read live and formatted by IsInt/DecimalPlaces.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
+    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
+        typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxySlider : UIElement
     {
         private readonly SettingsEntitySliderVM _vm;
@@ -32,6 +32,7 @@ namespace WrathAccess.UI.Proxies
             yield return new RoleAnnouncement("slider");
             yield return new ValueAnnouncement(Message.Raw(ValueText()));
             yield return new EnabledAnnouncement(Enabled);
+            yield return new TooltipAnnouncement(Message.Raw(_vm?.Description));
         }
 
         public override IEnumerable<ElementAction> GetActions()

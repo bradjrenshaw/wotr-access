@@ -51,6 +51,19 @@ namespace WrathAccess.UI.Announcements
         public override Message Render(AnnouncementContext ctx) => _text ?? Message.Empty;
     }
 
+    /// <summary>
+    /// A "simple" tooltip — the header/body description text of a control (e.g. a settings
+    /// entity's TooltipDescription). Read just before position; empty when there's none, so it
+    /// self-skips. (The rich, brick/glossary-link tooltips are a separate later feature.)
+    /// </summary>
+    public sealed class TooltipAnnouncement : Announcement
+    {
+        private readonly Message _text;
+        public TooltipAnnouncement(Message text) { _text = text; }
+        public override string Key => "tooltip";
+        public override Message Render(AnnouncementContext ctx) => _text ?? Message.Empty;
+    }
+
     /// <summary>Position within the parent container, e.g. "2 of 8". Injected by GetFocusMessage.</summary>
     public sealed class PositionAnnouncement : Announcement
     {

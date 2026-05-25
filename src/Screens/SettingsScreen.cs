@@ -3,6 +3,7 @@ using Kingmaker.Settings;
 using Kingmaker.UI.MVVM._VM.Settings;
 using Kingmaker.UI.MVVM._VM.Settings.Entities;
 using Kingmaker.UI.MVVM._VM.Settings.Entities.Decorative;
+using Kingmaker.UI.MVVM._VM.Settings.Entities.Difficulty;
 using Owlcat.Runtime.UI.MVVM;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
@@ -90,45 +91,14 @@ namespace WrathAccess.Screens
         }
 
         // Refills only the content panel (tabs/actions stay put), so focus on the tab
-        // list survives a tab switch.
+        // list survives a tab switch. The entity→proxy mapping is shared with the New Game
+        // difficulty phase via SettingsEntityBuilder.
         private void RebuildContent(SettingsVM vm)
         {
             _lastTab = vm.SelectedMenuEntity.Value;
             if (_content == null) return;
             _content.Clear();
-
-            Panel section = null;
-            foreach (var e in vm.SettingEntities)
-            {
-                if (e is SettingsEntityHeaderVM header)
-                {
-                    section = new Panel(header.Tittle);
-                    _content.Add(section);
-                    continue;
-                }
-                var proxy = MakeProxy(e);
-                if (proxy != null) (section != null ? (UI.Container)section : _content).Add(proxy);
-            }
-        }
-
-        private static UIElement MakeProxy(VirtualListElementVMBase e)
-        {
-            if (e is SettingsEntityBoolVM b) return new ProxyToggle(b);
-            if (e is SettingsEntitySliderVM s) return new ProxySlider(s);
-            if (e is SettingsEntityDropdownVM d) return new ProxyDropdown(d);
-            if (e is SettingEntityKeyBindingVM kb) return BuildKeyBindingBar(kb);
-            if (e is SettingsEntityVM sv) return new ProxyUnsupportedSetting(sv.Title); // difficulty/opt-out — later
-            return null;
-        }
-
-        // A key-binding row = a horizontal Bar (labeled with the control) holding its two
-        // binding slots; Left/Right moves between them, primary rebinds, secondary clears.
-        private static Bar BuildKeyBindingBar(SettingEntityKeyBindingVM vm)
-        {
-            var bar = new Bar(vm.Title);
-            bar.Add(new ProxyKeyBindingSlot(vm, 0, "binding 1"));
-            bar.Add(new ProxyKeyBindingSlot(vm, 1, "binding 2"));
-            return bar;
+            SettingsEntityBuilder.BuildInto(_content, vm.SettingEntities);
         }
     }
 }

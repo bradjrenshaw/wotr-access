@@ -8,8 +8,8 @@ namespace WrathAccess.UI.Proxies
     /// A boolean setting → checkbox. Value is "checked"/"unchecked" (read live);
     /// activate flips it. Announced "Label, checkbox, checked, [disabled]".
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
+    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
+        typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyToggle : UIElement
     {
         private readonly SettingsEntityBoolVM _vm;
@@ -28,6 +28,7 @@ namespace WrathAccess.UI.Proxies
             yield return new RoleAnnouncement("checkbox");
             yield return new ValueAnnouncement(Message.Raw(_vm != null && _vm.GetTempValue() ? "checked" : "unchecked"));
             yield return new EnabledAnnouncement(Enabled);
+            yield return new TooltipAnnouncement(Message.Raw(_vm?.Description));
         }
 
         public override IEnumerable<ElementAction> GetActions()

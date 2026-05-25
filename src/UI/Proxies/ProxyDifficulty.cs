@@ -1,37 +1,39 @@
 using System.Collections.Generic;
-using Kingmaker.UI.MVVM._VM.Settings.Entities;
+using Kingmaker.UI.MVVM._VM.Settings.Entities.Difficulty;
 using WrathAccess.Screens;
 using WrathAccess.UI.Announcements;
 
 namespace WrathAccess.UI.Proxies
 {
     /// <summary>
-    /// A dropdown setting → combo box. Left/Right cycle options inline (quick path);
-    /// primary opens a submenu listing all options. Value is the current option text.
+    /// The game-difficulty picker. It's a dropdown subclass, but each option carries a
+    /// description (what that difficulty means), so unlike a plain dropdown the submenu
+    /// reads "Title. Description" per option. Left/Right still cycle by name inline.
     /// </summary>
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
-    public sealed class ProxyDropdown : UIElement
+    public sealed class ProxyDifficulty : UIElement
     {
-        private readonly SettingsEntityDropdownVM _vm;
+        private readonly SettingsEntityDropdownGameDifficultyVM _vm;
 
-        public ProxyDropdown(SettingsEntityDropdownVM vm) { _vm = vm; }
+        public ProxyDifficulty(SettingsEntityDropdownGameDifficultyVM vm) { _vm = vm; }
 
         private bool Enabled => _vm != null && _vm.ModificationAllowed.Value;
 
-        private string CurrentOption()
+        private string CurrentTitle()
         {
             if (_vm == null) return "";
-            var vals = _vm.LocalizedValues;
             int i = _vm.GetTempValue();
-            return (vals != null && i >= 0 && i < vals.Count) ? vals[i] : "";
+            var items = _vm.Items;
+            if (items != null && i >= 0 && i < items.Count) return items[i].Title;
+            return "";
         }
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(_vm?.Title ?? ""));
             yield return new RoleAnnouncement("combo box");
-            yield return new ValueAnnouncement(Message.Raw(CurrentOption()));
+            yield return new ValueAnnouncement(Message.Raw(CurrentTitle()));
             yield return new EnabledAnnouncement(Enabled);
             yield return new TooltipAnnouncement(Message.Raw(_vm?.Description));
         }
@@ -48,9 +50,15 @@ namespace WrathAccess.UI.Proxies
 
         private void OpenSubmenu()
         {
-            var vals = _vm?.LocalizedValues;
-            if (vals == null) return;
-            ChoiceSubmenuScreen.Open(_vm.Title, vals, _vm.GetTempValue(), i => _vm.SetTempValue(i));
+            var items = _vm?.Items;
+            if (items == null || items.Count == 0) return;
+            var options = new List<string>(items.Count);
+            foreach (var it in items)
+            {
+                string desc = string.IsNullOrEmpty(it.Description) ? "" : ". " + it.Description;
+                options.Add(it.Title + desc);
+            }
+            ChoiceSubmenuScreen.Open(_vm.Title, options, _vm.GetTempValue(), i => _vm.SetTempValue(i));
         }
     }
 }

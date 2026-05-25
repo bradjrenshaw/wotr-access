@@ -72,6 +72,14 @@ namespace WrathAccess.UI
                 var sb = new List<string>();
                 for (int j = i; j < Path.Count; j++)
                 {
+                    // Skip a container whose label just duplicates the node beneath it (e.g. a
+                    // "Game difficulty" section wrapping the "Game difficulty" control).
+                    if (j + 1 < Path.Count)
+                    {
+                        var label = Path[j].GetLabelText();
+                        if (!string.IsNullOrEmpty(label) && label == Path[j + 1].GetLabelText())
+                            continue;
+                    }
                     var d = Path[j].GetFocusMessage().Resolve();
                     if (!string.IsNullOrEmpty(d)) sb.Add(d);
                 }

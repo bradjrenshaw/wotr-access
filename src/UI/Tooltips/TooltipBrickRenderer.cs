@@ -68,6 +68,19 @@ namespace WrathAccess.UI.Tooltips
         }
 
         protected static readonly IEnumerable<UIElement> None = Array.Empty<UIElement>();
+
+        /// <summary>One leaf node per non-empty line of <paramref name="text"/> — game text bricks
+        /// often pack a list (e.g. class skills) into a single brick separated by newlines, which a
+        /// single node would flatten into one spoken run.</summary>
+        protected static IEnumerable<TooltipNode> Lines(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) yield break;
+            foreach (var part in text.Split('\n'))
+            {
+                var line = part.Trim();
+                if (line.Length > 0) yield return TooltipNode.Leaf(line);
+            }
+        }
     }
 
     /// <summary>Typed base: subclasses read the concrete VM without casting.</summary>

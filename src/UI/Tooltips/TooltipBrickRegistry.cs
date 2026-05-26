@@ -82,6 +82,7 @@ namespace WrathAccess.UI.Tooltips
             Register(new IconNameDescBrickRenderer());
             Register(new FeatureBrickRenderer());
             Register(new MultipleFeatureBrickRenderer());
+            Register(new ArchetypeFeatureBrickRenderer());
             Register(new FeatureShortDescriptionBrickRenderer());
             Register(new EntityHeaderBrickRenderer());
             Register(new IconValueStatBrickRenderer());

@@ -7,7 +7,8 @@ namespace WrathAccess.Screens
 {
     /// <summary>
     /// Pregen phase: the premade-character list (ending with Custom Character) + a live Details
-    /// panel (the selected option's build), split into tab-between sections, refreshed on selection.
+    /// panel — the selected option's build, rendered as a single treeview from its tooltip (one
+    /// Tab-stop you arrow through; groups collapse/expand), refreshed on selection.
     /// </summary>
     public sealed class PregenPhaseContent : CharGenPhaseContent<CharGenPregenPhaseVM>
     {
@@ -43,12 +44,14 @@ namespace WrathAccess.Screens
             var tpl = Phase.InfoVM != null ? Phase.InfoVM.CurrentTooltip : null;
             if (tpl == null) return;
 
-            foreach (var section in TooltipReader.BuildSections(tpl))
-            {
-                var sectionList = new ListContainer(section.Title);
-                foreach (var el in section.Elements) sectionList.Add(el);
-                _detailPanel.Add(sectionList);
-            }
+            // One treeview for the whole build (title ranks → groups), not a stack of section
+            // tab-stops. Structural groups start expanded so it reads fully; drill-ins stay lazy.
+            var tree = new TreeGroup();
+            foreach (var node in TooltipTreeBuilder.Build(tpl))
+                tree.Add(node);
+            if (tree.Children.Count == 0) return;
+            TooltipTreeBuilder.ExpandStructural(tree);
+            _detailPanel.Add(tree);
         }
     }
 }

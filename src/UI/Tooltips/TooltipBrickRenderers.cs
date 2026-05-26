@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Progression.ChupaChupses; // ClassArchetypeDifType
 using Kingmaker.UI.MVVM._VM.Tooltip.Bricks;
+using Owlcat.Runtime.UI.Tooltips; // TooltipBaseBrickVM
 
 namespace WrathAccess.UI.Tooltips
 {
@@ -11,6 +13,10 @@ namespace WrathAccess.UI.Tooltips
     public sealed class TextBrickRenderer : TooltipBrickRenderer<TooltipBrickTextVM>
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTextVM vm) => One(vm?.Text);
+
+        // In the tree, split a multi-line text brick (e.g. the class-skills list, newline-separated)
+        // into one leaf per line instead of a single flattened run.
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm) => Lines((vm as TooltipBrickTextVM)?.Text);
     }
 
     public sealed class ColorizedTextBrickRenderer : TooltipBrickRenderer<TooltipBrickColorizedTextVM>
@@ -31,7 +37,20 @@ namespace WrathAccess.UI.Tooltips
 
     public sealed class TripleTextBrickRenderer : TooltipBrickRenderer<TooltipBrickTripleTextVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTripleTextVM vm) => One(vm?.MiddleLine);
+        // Flat path: all three columns on one line. (Left/Right come from the DoubleTextVM base.)
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTripleTextVM vm)
+            => One(vm == null ? null : Join(vm.LeftLine, vm.MiddleLine, vm.RightLine));
+
+        // Tree: one node per column, left → middle → right (e.g. per-level saves: Fortitude, Reflex,
+        // Will as three vertical nodes).
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+        {
+            var t = vm as TooltipBrickTripleTextVM;
+            if (t == null) yield break;
+            if (!string.IsNullOrWhiteSpace(t.LeftLine)) yield return TooltipNode.Leaf(t.LeftLine.Trim());
+            if (!string.IsNullOrWhiteSpace(t.MiddleLine)) yield return TooltipNode.Leaf(t.MiddleLine.Trim());
+            if (!string.IsNullOrWhiteSpace(t.RightLine)) yield return TooltipNode.Leaf(t.RightLine.Trim());
+        }
     }
 
     public sealed class IconAndNameBrickRenderer : TooltipBrickRenderer<TooltipBrickIconAndNameVM>
@@ -69,6 +88,23 @@ namespace WrathAccess.UI.Tooltips
         public override IEnumerable<UIElement> GetFlatElements(TooltipBrickMultipleFeatureVM vm)
             => One(vm?.TooltipBrickFeatures == null ? null
                 : Join(vm.TooltipBrickFeatures.Where(f => f != null).Select(f => f.Name).ToArray()));
+    }
+
+    // A per-level feature in the archetype/first-level progression: like a feature (name + drill-in
+    // write-up) plus the archetype's Added/Removed marker. It subclasses TooltipBrickFeatureVM, but
+    // the registry keys on exact type, so it needs its own renderer (it won't reuse FeatureBrick's).
+    public sealed class ArchetypeFeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickArchetypeFeatureVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArchetypeFeatureVM vm) => One(vm?.Name, vm?.Tooltip);
+
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+        {
+            var f = vm as TooltipBrickArchetypeFeatureVM;
+            if (f == null || string.IsNullOrWhiteSpace(f.Name)) yield break;
+            string anno = f.DifType == ClassArchetypeDifType.Added ? "added"
+                        : f.DifType == ClassArchetypeDifType.Removed ? "removed" : null;
+            yield return TooltipNode.Leaf(f.Name, annotation: anno, drillIn: f.Tooltip);
+        }
     }
 
     public sealed class FeatureShortDescriptionBrickRenderer : TooltipBrickRenderer<TooltipBrickFeatureShortDescriptionVM>

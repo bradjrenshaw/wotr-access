@@ -8,9 +8,10 @@ namespace WrathAccess.Screens
 {
     /// <summary>
     /// On-demand reader for a "complex" (brick) tooltip — opened with Space on a focused element
-    /// that provides a TooltipBaseTemplate. Lists the rendered bricks as a vertical list you
-    /// arrow through; Escape closes and returns to where you were. Layer 40 so it can sit over
-    /// any screen (a tooltip can be requested from anywhere). Mod-pushed (IsActive reads our state).
+    /// that provides a TooltipBaseTemplate. Renders it as a treeview (groups by title rank; arrow
+    /// through it, Right/Left expand/collapse, drill-in nodes expand on demand). Structural groups
+    /// start expanded so the tooltip reads fully on open; Escape closes and returns to where you
+    /// were. Layer 40 so it can sit over any screen. Mod-pushed (IsActive reads our state).
     /// </summary>
     public sealed class TooltipScreen : Screen
     {
@@ -43,12 +44,13 @@ namespace WrathAccess.Screens
             _builtFor = s_template;
             if (s_template == null) return;
 
-            var list = new ListContainer();
-            foreach (var brick in TooltipReader.Build(s_template))
-                list.Add(brick);
-            if (list.Children.Count == 0)
-                list.Add(new TextElement("No tooltip information."));
-            Add(list);
+            var root = new TreeGroup();
+            foreach (var node in TooltipTreeBuilder.Build(s_template))
+                root.Add(node);
+            if (root.Children.Count == 0)
+                root.Add(TooltipNode.Leaf("No tooltip information."));
+            TooltipTreeBuilder.ExpandStructural(root); // read fully on open; drill-ins stay lazy
+            Add(root);
         }
     }
 }

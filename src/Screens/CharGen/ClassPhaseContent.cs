@@ -101,75 +101,29 @@ namespace WrathAccess.Screens
             // Bail when nothing's selected yet (a class auto-selects on phase entry, so this is rare).
             if (Phase.SelectedClassVM.Value == null) return;
 
-            if (_detailed) FillMechanic();
-            else FillShort();
+            // Both modes are a single treeview from a game tooltip template (via TooltipTreeBuilder):
+            //  • Short    — the template the game itself feeds its InfoSectionView (ReactiveTooltipTemplate):
+            //               short build-info for a short-desc class; the first-level-class body (full
+            //               description + skills + per-level features) for an archetype/short-less class.
+            //  • Mechanic — the class's mechanic tooltip: name + prerequisites + description + signature
+            //               features + casting/memory + saves/BAB + spell table + skills (archetype-aware).
+            // The full per-level progression grid (UnitProgressionVM) is still TODO in both.
+            var subject = Phase.SelectedArchetypeVM.Value ?? Phase.SelectedClassVM.Value;
+            var tpl = _detailed
+                ? subject?.TooltipTemplateMechanicClassDescription
+                : Phase.ReactiveTooltipTemplate.Value;
+            FillTree(tpl);
         }
 
-        // Short mode: render the game's own selected template — the one it placed in
-        // ReactiveTooltipTemplate and feeds to the InfoSectionView — at type=Info, so we match the
-        // screen exactly (short build-info for a class with a short desc; first-level-class with full
-        // description + skills + features for archetypes/short-less classes; level templates in
-        // level-up mode). No field-guessing.
-        private void FillShort()
+        private void FillTree(Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate tpl)
         {
-            // One flat list, not a list-per-section: the game renders these bricks as a single
-            // vertical stack anyway (level headers are just text lines, not separate groups). As one
-            // ListContainer it's a single Tab-stop that Down-arrow walks straight through — instead
-            // of ~20 per-level lists you'd have to Tab past to reach the Next button. (Build = flat;
-            // BuildSections would split at every "Level N" title.)
-            var tpl = Phase.ReactiveTooltipTemplate.Value;
-            var list = new ListContainer();
-            foreach (var el in TooltipReader.Build(tpl, expanded: true, type: TooltipTemplateType.Info))
-                list.Add(el);
-            if (list.Children.Count > 0) _detailPanel.Add(list);
-        }
-
-        // Mechanic mode: the plain bindings the game's mechanic view shows — name + full description
-        // (LocalizedDescription, archetype-aware) + the stat blocks below. (Progression grid TODO.)
-        private void FillMechanic()
-        {
-            var head = new ListContainer(null);
-            var name = Phase.ClassDisplayName.Value;
-            var desc = Phase.ClassDescription.Value;
-            if (!string.IsNullOrEmpty(name)) head.Add(new TextElement(name, "heading"));
-            if (!string.IsNullOrEmpty(desc)) head.Add(new TextElement(desc));
-            _detailPanel.Add(head);
-
-            // Mechanical stats (saves/BAB/HP) — separate from the build-info template.
-            var m = Phase.MartialStatsVM.Value;
-            if (m != null)
-            {
-                var stats = new ListContainer("Statistics");
-                stats.Add(new TextElement("Base attack bonus: " + m.BAB.Value));
-                stats.Add(new TextElement("Fortitude save: " + m.Fortitude.Value));
-                stats.Add(new TextElement("Reflex save: " + m.Reflex.Value));
-                stats.Add(new TextElement("Will save: " + m.Will.Value));
-                stats.Add(new TextElement("Hit points at first level: " + m.HitPointsFirstLevel.Value));
-                stats.Add(new TextElement("Hit points per level: " + m.HitPointsPerLevel.Value));
-                _detailPanel.Add(stats);
-            }
-
-            // Spellcasting (only for casters).
-            var c = Phase.ClassCasterStatsVM.Value;
-            if (c != null && c.CanCast.Value)
-            {
-                var caster = new ListContainer("Spellcasting");
-                caster.Add(new TextElement("Maximum spell level: " + c.MaxSpellsLevel.Value));
-                caster.Add(new TextElement("Casting ability: " + c.CasterAbilityScore.Value));
-                caster.Add(new TextElement("Caster type: " + c.CasterMindType.Value));
-                caster.Add(new TextElement("Spellbook: " + c.SpellbookUseType.Value));
-                _detailPanel.Add(caster);
-            }
-
-            // Class skills.
-            var s = Phase.ClassSkillsVM.Value;
-            if (s != null && s.ClassSkills != null && s.ClassSkills.Count > 0)
-            {
-                var skills = new ListContainer("Class skills");
-                foreach (var entry in s.ClassSkills)
-                    if (entry != null) skills.Add(new TextElement(entry.DisplayName));
-                _detailPanel.Add(skills);
-            }
+            if (tpl == null) return;
+            var tree = new TreeGroup();
+            foreach (var node in TooltipTreeBuilder.Build(tpl, TooltipTemplateType.Info))
+                tree.Add(node);
+            if (tree.Children.Count == 0) return;
+            TooltipTreeBuilder.ExpandStructural(tree); // read fully on focus; drill-ins stay lazy
+            _detailPanel.Add(tree);
         }
 
         private IEnumerable<CharGenClassSelectorItemVM> Classes()

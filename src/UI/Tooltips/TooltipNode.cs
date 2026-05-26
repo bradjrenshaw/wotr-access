@@ -70,9 +70,27 @@ namespace WrathAccess.UI.Tooltips
             string role = "group", string annotation = null)
             => new TooltipNode(label, role, annotation, childFactory);
 
-        /// <summary>Can be expanded — eager children present, or a lazy factory not yet run.
-        /// (Cheap: doesn't build lazy children.)</summary>
-        public override bool Expandable => _childFactory != null || Children.Count > 0;
+        /// <summary>Can be expanded — eager children present, or a lazy drill-in not yet run. A
+        /// drill-in is suppressed when an ancestor already has the same label: feature tooltips embed
+        /// the feature itself (same drill-in) as their header, so without this a node would re-open
+        /// itself forever (e.g. Sneak Attack → Sneak Attack → …). (Cheap: doesn't build children.)</summary>
+        public override bool Expandable
+        {
+            get
+            {
+                if (Children.Count > 0) return true;       // eager group / already-built drill-in
+                if (_childFactory == null) return false;   // plain leaf
+                return !HasAncestorLabel(_label);          // lazy drill-in, unless it would cycle
+            }
+        }
+
+        private bool HasAncestorLabel(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return false;
+            for (var p = Parent; p != null; p = p.Parent)
+                if (string.Equals(p.Label, label)) return true;
+            return false;
+        }
 
         /// <summary>Build lazy children on first expand (cached); then mark expanded. No-op for leaves.</summary>
         public override void Expand()
@@ -82,7 +100,9 @@ namespace WrathAccess.UI.Tooltips
             {
                 _built = true;
                 foreach (var child in _childFactory() ?? Enumerable.Empty<TooltipNode>())
-                    if (child != null) Add(child);
+                    // Drop the drill-in's self-referential header: a feature's tooltip leads with the
+                    // feature's own name (== this node's label), which is redundant once you've drilled in.
+                    if (child != null && !string.Equals(child.Label, _label)) Add(child);
             }
             base.Expand();
         }

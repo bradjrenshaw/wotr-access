@@ -56,6 +56,23 @@ namespace WrathAccess.UI.Tooltips
             return roots;
         }
 
+        /// <summary>
+        /// Expand the structural skeleton — groups whose children are already built (headings,
+        /// sub-groups) — recursively, while leaving lazy drill-in nodes (feature write-ups, glossary
+        /// links) collapsed. Use for surfaces that should read fully on open (a tooltip panel); other
+        /// surfaces (settings) start collapsed so a group can be skipped with one step.
+        /// </summary>
+        public static void ExpandStructural(Container root)
+        {
+            if (root == null) return;
+            foreach (var child in root.Children)
+                if (child is Container c && c.Shape == ContainerShape.Tree && c.Children.Count > 0)
+                {
+                    c.Expand();              // eager children only — does not trigger a lazy factory
+                    ExpandStructural(c);
+                }
+        }
+
         private static IEnumerable<ITooltipBrick> Bricks(TooltipBaseTemplate t, TooltipTemplateType type)
         {
             foreach (var b in Section(t, x => x.GetHeader(type))) yield return b;

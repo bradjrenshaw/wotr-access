@@ -194,8 +194,11 @@ namespace WrathAccess.UI
             return true;
         }
 
-        // Move the cell cursor in a Table and announce Excel-style: the header for whichever axis
-        // changed (column header on Left/Right, row header on Up/Down) + the cell ("blank" if empty).
+        // Move the cell cursor in a Table and announce Excel-style. Headers resolve by proximity
+        // (nearest Column above / Row to the left / Group up column 0). We speak: the group when it
+        // changes (crossing into a new block), the column header when the column changed, the row
+        // header when the row changed, then the cell ("blank" if empty). A header cell just reads
+        // itself (its own text is the header), plus the group if that changed.
         private bool GridArrow(NavDirection dir, Table table)
         {
             if (!table.TryCoords(Current, out int r, out int c)) return false;
@@ -212,8 +215,18 @@ namespace WrathAccess.UI
 
             BuildPathTo(next);
             var parts = new List<string>();
-            if (nc != c && nr >= 0) { var h = table.ColumnHeaderText(nc); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
-            if (nr != r && nc >= 0) { var h = table.RowHeaderText(nr); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
+            var role = table.RoleAt(nr, nc);
+
+            var group = table.GroupText(nr, nc);
+            if (group != table.GroupText(r, c) && !string.IsNullOrEmpty(group) && role != CellRole.Group)
+                parts.Add(group); // entered a new block (the group cell itself already reads the name)
+
+            if (role == CellRole.None) // data cell → tack on the axis header(s) that changed
+            {
+                if (nc != c) { var h = table.ColumnHeaderText(nr, nc); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
+                if (nr != r) { var h = table.RowHeaderText(nr, nc); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
+            }
+
             var cell = next.GetLabelText();
             parts.Add(string.IsNullOrWhiteSpace(cell) ? "blank" : cell);
 

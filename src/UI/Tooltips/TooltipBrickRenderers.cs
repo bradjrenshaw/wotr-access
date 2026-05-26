@@ -249,6 +249,27 @@ namespace WrathAccess.UI.Tooltips
             => One(vm?.Skills?.Skills == null ? null : Join(vm.Skills.Skills.Select(StatLine).ToArray()));
     }
 
+    // Spells-per-day for one character level: Values is indexed by spell level (0 = cantrips, an
+    // "infinity" sprite = at will; 1..max = the per-day count). One node per spell level, labeled
+    // with word ordinals ("First", "Second", …) — no "level", to avoid clashing with character level.
+    public sealed class SpellTableBrickRenderer : TooltipBrickRenderer<TooltipBrickSpellTableVM>
+    {
+        private static readonly string[] Words =
+            { "Cantrips", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth" };
+
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSpellTableVM vm)
+        {
+            if (vm?.Values == null) yield break;
+            for (int i = 0; i < vm.Values.Count; i++)
+            {
+                if (string.IsNullOrEmpty(vm.Values[i])) continue; // no spells of this level
+                string label = i < Words.Length ? Words[i] : i.ToString();
+                string value = i == 0 ? "at will" : vm.Values[i]; // cantrips: the infinity sprite → "at will"
+                yield return new TextElement(label + ": " + value);
+            }
+        }
+    }
+
     // Pure layout — nothing to read.
     public sealed class SeparatorBrickRenderer : TooltipBrickRenderer<TooltipBrickSeparatorVM>
     {

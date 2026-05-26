@@ -212,7 +212,10 @@ namespace WrathAccess.Screens
                 _detailPanel.Add(tree);
             }
 
-            // (Progression grid — UnitProgressionVM — would be the next tab-stop here. TODO.)
+            // Progression grid as a Table tab-stop: levels = columns, feature lines = rows (banded by
+            // class / Feats / Shared). Space on a cell drills into the feature.
+            var grid = ProgressionGrid.Build(Phase.ProgressionVM);
+            if (grid != null) _detailPanel.Add(grid);
 
             // Auto-levelup button: present only when the game shows it active (first level + a default
             // build plan). Label/enabled mirror the view; activate opens its confirm dialog.

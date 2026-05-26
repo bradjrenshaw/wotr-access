@@ -88,6 +88,9 @@ namespace WrathAccess.UI
                 // at the bar's edge → fall through so the tree can collapse/ascend
             }
 
+            // Table (grid): 2-D cursor with Excel-style header+cell announce.
+            if (Current.Parent is Table grid) return GridArrow(dir, grid);
+
             // Treeview region: Up/Down over expanded nodes (DFS); Right/Left expand/collapse/descend/ascend.
             var root = TreeRootOf(Current);
             if (root != null) return TreeArrow(dir, root);
@@ -188,6 +191,34 @@ namespace WrathAccess.UI
             var snapshot = new List<UIElement>(Path);
             FocusTreeNode(vis[ni]);
             AnnounceDelta(snapshot, interrupt: true);
+            return true;
+        }
+
+        // Move the cell cursor in a Table and announce Excel-style: the header for whichever axis
+        // changed (column header on Left/Right, row header on Up/Down) + the cell ("blank" if empty).
+        private bool GridArrow(NavDirection dir, Table table)
+        {
+            if (!table.TryCoords(Current, out int r, out int c)) return false;
+            int nr = r, nc = c;
+            switch (dir)
+            {
+                case NavDirection.Down: nr++; break;
+                case NavDirection.Up: nr--; break;
+                case NavDirection.Right: nc++; break;
+                case NavDirection.Left: nc--; break;
+            }
+            var next = table.CellAt(nr, nc);
+            if (next == null) return true; // edge → consume (no wrap)
+
+            BuildPathTo(next);
+            var parts = new List<string>();
+            if (nc != c && nr >= 0) { var h = table.ColumnHeaderText(nc); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
+            if (nr != r && nc >= 0) { var h = table.RowHeaderText(nr); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
+            var cell = next.GetLabelText();
+            parts.Add(string.IsNullOrWhiteSpace(cell) ? "blank" : cell);
+
+            WrathAccess.UiSound.Hover(); // a focus move, like AnnounceDelta's interrupt path
+            Speak(string.Join(", ", parts), interrupt: true);
             return true;
         }
 

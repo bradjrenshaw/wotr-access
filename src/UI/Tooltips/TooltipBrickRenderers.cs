@@ -109,8 +109,9 @@ namespace WrathAccess.UI.Tooltips
 
     public sealed class FeatureShortDescriptionBrickRenderer : TooltipBrickRenderer<TooltipBrickFeatureShortDescriptionVM>
     {
+        // Name + short desc, with the feature's full write-up as a drill-in (e.g. signature features).
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickFeatureShortDescriptionVM vm)
-            => One(vm == null ? null : Join(vm.Name, vm.Description));
+            => One(vm == null ? null : Join(vm.Name, vm.Description), vm?.Tooltip);
     }
 
     public sealed class EntityHeaderBrickRenderer : TooltipBrickRenderer<TooltipBrickEntityHeaderVM>
@@ -149,6 +150,44 @@ namespace WrathAccess.UI.Tooltips
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTwoColumnsStatVM vm)
             => One(vm == null ? null : Join(Stat(vm.NameLeft, vm.ValueLeft, vm.IconLeft), Stat(vm.NameRight, vm.ValueRight, vm.IconRight)));
+
+        // Tree: one node per column so each column's own drill-in tooltip is reachable.
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+        {
+            var v = vm as TooltipBrickTwoColumnsStatVM;
+            if (v == null) yield break;
+            var l = Stat(v.NameLeft, v.ValueLeft, v.IconLeft);
+            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: v.TooltipLeft);
+            var r = Stat(v.NameRight, v.ValueRight, v.IconRight);
+            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: v.TooltipRight);
+        }
+    }
+
+    public sealed class ThreeColumnsStatBrickRenderer : TooltipBrickRenderer<TooltipBrickThreeColumnsStatVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickThreeColumnsStatVM vm)
+            => One(vm == null ? null : Join(Stat(vm.NameLeft, vm.ValueLeft, vm.IconLeft),
+                Stat(vm.NameCenter, vm.ValueCenter, vm.IconCenter), Stat(vm.NameRight, vm.ValueRight, vm.IconRight)));
+
+        // Tree: one node per column, each carrying its column's drill-in tooltip.
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+        {
+            var v = vm as TooltipBrickThreeColumnsStatVM;
+            if (v == null) yield break;
+            var l = Stat(v.NameLeft, v.ValueLeft, v.IconLeft);
+            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: v.TooltipLeft);
+            var c = Stat(v.NameCenter, v.ValueCenter, v.IconCenter);
+            if (!string.IsNullOrWhiteSpace(c)) yield return TooltipNode.Leaf(c, drillIn: v.TooltipCenter);
+            var r = Stat(v.NameRight, v.ValueRight, v.IconRight);
+            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: v.TooltipRight);
+        }
+    }
+
+    public sealed class AbilityTargetBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityTargetVM>
+    {
+        // Label + text, with its drill-in tooltip (the GetNodes bridge attaches the One()'s tooltip).
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityTargetVM vm)
+            => One(vm == null ? null : Join(vm.Label, vm.Text), vm?.Tooltip);
     }
 
     public sealed class PictureBrickRenderer : TooltipBrickRenderer<TooltipBrickPictureVM>

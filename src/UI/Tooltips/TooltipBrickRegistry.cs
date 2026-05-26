@@ -106,6 +106,8 @@ namespace WrathAccess.UI.Tooltips
             Register(new MultipleIconValueStatBrickRenderer());
             Register(new ValueStatFormulaBrickRenderer());
             Register(new TwoColumnsStatBrickRenderer());
+            Register(new ThreeColumnsStatBrickRenderer());
+            Register(new AbilityTargetBrickRenderer());
             Register(new PictureBrickRenderer());
             Register(new ShortClassDescriptionBrickRenderer());
             Register(new AbilityScoresBlockBrickRenderer());

@@ -100,9 +100,17 @@ namespace WrathAccess.UI.Tooltips
             {
                 _built = true;
                 foreach (var child in _childFactory() ?? Enumerable.Empty<TooltipNode>())
-                    // Drop the drill-in's self-referential header: a feature's tooltip leads with the
-                    // feature's own name (== this node's label), which is redundant once you've drilled in.
-                    if (child != null && !string.Equals(child.Label, _label)) Add(child);
+                {
+                    if (child == null) continue;
+                    // A drill-in's content is usually fronted by a header repeating this node's label
+                    // (a glossary's title, a feature's name). Don't keep that redundant header — but if
+                    // it's a GROUP, the real content is nested inside it, so splice in its children;
+                    // only a bare leaf header is dropped outright.
+                    if (string.Equals(child.Label, _label))
+                        foreach (var grandchild in child.Children) Add(grandchild);
+                    else
+                        Add(child);
+                }
             }
             base.Expand();
         }

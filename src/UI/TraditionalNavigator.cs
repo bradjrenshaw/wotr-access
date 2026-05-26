@@ -154,7 +154,15 @@ namespace WrathAccess.UI
 
             if (dir == NavDirection.Right)
             {
-                if (isGroup && !group.Expanded) { group.Expand(); Speak(node.GetFocusMessage().Resolve(), interrupt: true); return true; }
+                if (isGroup && !group.Expanded)
+                {
+                    group.Expand();
+                    // A lazy drill-in can resolve to nothing (e.g. a skill whose glossary key has no
+                    // entry). Don't leave a silent empty-expanded node — recollapse and say so.
+                    if (group.Children.Count == 0) { group.Collapse(); Speak("No details", interrupt: true); }
+                    else Speak(node.GetFocusMessage().Resolve(), interrupt: true);
+                    return true;
+                }
                 if (!(isGroup && group.Expanded)) return true; // leaf/empty → nothing to descend into
                 dir = NavDirection.Down; // expanded group → descend = step to first child (next visible)
             }
@@ -187,7 +195,12 @@ namespace WrathAccess.UI
         {
             var stops = ComputeTabStops();
             if (stops.Count == 0) return false;
-            int idx = stops.IndexOf(Current);
+            // Current may be deeper than its tab-stop (a node inside a tree/list, where the stop is an
+            // ancestor representative), so walk up to the nearest element that IS a stop — otherwise
+            // IndexOf returns -1 and Tab wrongly jumps to the first stop.
+            int idx = -1;
+            for (var e = Current; e != null && idx < 0; e = e.Parent)
+                idx = stops.IndexOf(e);
             int ni = (idx < 0) ? 0 : idx + step;
             if (ni < 0 || ni >= stops.Count)
             {

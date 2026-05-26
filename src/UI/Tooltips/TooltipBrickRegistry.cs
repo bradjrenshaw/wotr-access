@@ -44,13 +44,30 @@ namespace WrathAccess.UI.Tooltips
             return FallbackNodes(vm);
         }
 
+        // No renderer for this brick → surface it AUDIBLY (annotation "no renderer: <Type>") so an
+        // unhandled brick is obvious while browsing, rather than silently joined-to-one-line or
+        // dropped. Carries whatever string content reflection found (may be nothing).
         private static IEnumerable<TooltipNode> FallbackNodes(TooltipBaseBrickVM vm)
         {
+            string type = ShortBrickName(vm.GetType());
+            string content = null;
             foreach (var el in Fallback(vm))
             {
                 var t = el.GetLabelText();
-                if (!string.IsNullOrWhiteSpace(t)) yield return TooltipNode.Leaf(t);
+                if (!string.IsNullOrWhiteSpace(t)) { content = t; break; }
             }
+            yield return string.IsNullOrWhiteSpace(content)
+                ? TooltipNode.Leaf(type, annotation: "no renderer")
+                : TooltipNode.Leaf(content, annotation: "no renderer: " + type);
+        }
+
+        // "TooltipBrickSpellLevelVM" → "SpellLevel" — the readable part for the audible marker.
+        private static string ShortBrickName(Type t)
+        {
+            var n = t.Name;
+            if (n.StartsWith("TooltipBrick")) n = n.Substring("TooltipBrick".Length);
+            if (n.EndsWith("VM")) n = n.Substring(0, n.Length - 2);
+            return n;
         }
 
         private static IEnumerable<UIElement> Fallback(TooltipBaseBrickVM vm)

@@ -30,6 +30,26 @@ namespace WrathAccess.Screens
         private static readonly System.Reflection.FieldInfo ClassesField =
             AccessTools.Field(typeof(CharGenClassPhaseVM), "m_ClassesVMs");
 
+        // The Short/Mechanic toggle is VIEW state (CharGenClassPhaseDetailedPCView.m_ViewMode), not on
+        // the VM — so to make the rendered screen track our toggle, we reach the live view by type and
+        // call its private SwitchMode(). Reflection + a typed FindObjectOfType is the only path (no VM
+        // hook); a no-op when the view is in Level-up mode (no switch) or isn't present.
+        private static readonly System.Type DetailViewType =
+            AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.Phases.Class.CharGenClassPhaseDetailedPCView");
+        private static readonly System.Reflection.FieldInfo ViewModeField =
+            DetailViewType != null ? AccessTools.Field(DetailViewType, "m_ViewMode") : null;
+        private static readonly System.Reflection.MethodInfo SwitchModeMethod =
+            DetailViewType != null ? AccessTools.Method(DetailViewType, "SwitchMode") : null;
+        private static readonly System.Type ViewModeEnum = ResolveModeEnum();
+
+        private static System.Type ResolveModeEnum()
+        {
+            var t = ViewModeField?.FieldType; // ReactiveProperty<ClassDetailedViewMode?>
+            if (t == null || !t.IsGenericType) return null;
+            var arg = t.GetGenericArguments()[0];
+            return System.Nullable.GetUnderlyingType(arg) ?? arg;
+        }
+
         private Panel _archetypePanel;
         private Panel _detailPanel;
         private object _classFrom;
@@ -53,15 +73,31 @@ namespace WrathAccess.Screens
             content.Add(new ProxyBoolToggle(
                 UIStrings.Instance.CharGen.DetailedDescription,
                 () => _detailed,
-                () => { _detailed = !_detailed; FillDetail(); }));
+                () => { _detailed = !_detailed; SyncGameViewMode(); FillDetail(); }));
 
             _detailPanel = new Panel("Details");
             content.Add(_detailPanel);
 
             _classFrom = Phase.SelectedClassVM.Value;
             _archetypeFrom = Phase.SelectedArchetypeVM.Value;
+            SyncGameViewMode(); // align the on-screen view with our default on entry
             FillArchetypes();
             FillDetail();
+        }
+
+        // Flip the game's own detail view (Short/Mechanic) to match our toggle so the rendered screen
+        // tracks what we read. View state, so we set it on the live view; left alone in Level-up mode.
+        private void SyncGameViewMode()
+        {
+            if (ViewModeField == null || SwitchModeMethod == null || ViewModeEnum == null) return;
+            var view = UnityEngine.Object.FindObjectOfType(DetailViewType);
+            if (view == null) return;
+            var rp = ViewModeField.GetValue(view);
+            var cur = rp?.GetType().GetProperty("Value")?.GetValue(rp);
+            if (cur == null) return;                                            // view not bound yet
+            if (cur.Equals(System.Enum.Parse(ViewModeEnum, "Levelup"))) return; // no switch in level-up
+            var target = System.Enum.Parse(ViewModeEnum, _detailed ? "MechanicDescription" : "ShortDescription");
+            if (!cur.Equals(target)) SwitchModeMethod.Invoke(view, null);       // toggles Short↔Mechanic to match
         }
 
         public override void Tick()
@@ -101,22 +137,16 @@ namespace WrathAccess.Screens
             // Bail when nothing's selected yet (a class auto-selects on phase entry, so this is rare).
             if (Phase.SelectedClassVM.Value == null) return;
 
-            // Both modes are a single treeview from a game tooltip template (via TooltipTreeBuilder):
-            //  • Short    — the template the game itself feeds its InfoSectionView (ReactiveTooltipTemplate):
-            //               short build-info for a short-desc class; the first-level-class body (full
-            //               description + skills + per-level features) for an archetype/short-less class.
-            //  • Mechanic — the class's mechanic tooltip: name + prerequisites + description + signature
-            //               features + casting/memory + saves/BAB + spell table + skills (archetype-aware).
-            // The full per-level progression grid (UnitProgressionVM) is still TODO in both.
-            var subject = Phase.SelectedArchetypeVM.Value ?? Phase.SelectedClassVM.Value;
-            var tpl = _detailed
-                ? subject?.TooltipTemplateMechanicClassDescription
-                : Phase.ReactiveTooltipTemplate.Value;
-            FillTree(tpl);
+            if (_detailed) FillMechanic();
+            else FillShort();
         }
 
-        private void FillTree(Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate tpl)
+        // Short mode mirrors the game's InfoSectionView: render the exact template it feeds there
+        // (ReactiveTooltipTemplate) as one treeview — short build-info for a short-desc class; the
+        // first-level-class body (full description + skills + per-level features) for an archetype.
+        private void FillShort()
         {
+            var tpl = Phase.ReactiveTooltipTemplate.Value;
             if (tpl == null) return;
             var tree = new TreeGroup();
             foreach (var node in TooltipTreeBuilder.Build(tpl, TooltipTemplateType.Info))
@@ -124,6 +154,75 @@ namespace WrathAccess.Screens
             if (tree.Children.Count == 0) return;
             TooltipTreeBuilder.ExpandStructural(tree); // read fully on focus; drill-ins stay lazy
             _detailPanel.Add(tree);
+        }
+
+        // Mechanic mode reconstructs the game's Detailed PANEL (which is plain VM bindings, NOT a
+        // tooltip) as a treeview tab-stop: name, full description, then Martial / Caster / Class-skill
+        // groups (each value a child). After the tree come the progression grid (TODO) and — only
+        // when actually present — the auto-levelup button, as their own tab-stops.
+        private void FillMechanic()
+        {
+            var tree = new TreeGroup();
+
+            var name = Phase.ClassDisplayName.Value;
+            if (!string.IsNullOrEmpty(name)) tree.Add(TooltipNode.Leaf(name));
+            var desc = Phase.ClassDescription.Value;
+            if (!string.IsNullOrEmpty(desc)) tree.Add(TooltipNode.Leaf(desc));
+
+            // Saves/BAB are progression GRADES here (the panel's representation), not numbers.
+            var m = Phase.MartialStatsVM.Value;
+            if (m != null)
+            {
+                var g = TooltipNode.Branch("Martial stats");
+                g.Add(TooltipNode.Leaf("Base attack bonus: " + m.BAB.Value));
+                g.Add(TooltipNode.Leaf("Fortitude: " + m.Fortitude.Value));
+                g.Add(TooltipNode.Leaf("Reflex: " + m.Reflex.Value));
+                g.Add(TooltipNode.Leaf("Will: " + m.Will.Value));
+                g.Add(TooltipNode.Leaf("Hit points at first level: " + m.HitPointsFirstLevel.Value));
+                g.Add(TooltipNode.Leaf("Hit points per level: " + m.HitPointsPerLevel.Value));
+                tree.Add(g);
+            }
+
+            var c = Phase.ClassCasterStatsVM.Value;
+            if (c != null && c.CanCast.Value)
+            {
+                var g = TooltipNode.Branch("Caster stats");
+                g.Add(TooltipNode.Leaf("Maximum spell level: " + c.MaxSpellsLevel.Value));
+                g.Add(TooltipNode.Leaf("Casting ability: " + c.CasterAbilityScore.Value));
+                g.Add(TooltipNode.Leaf("Caster type: " + c.CasterMindType.Value));
+                g.Add(TooltipNode.Leaf("Spellbook: " + c.SpellbookUseType.Value));
+                tree.Add(g);
+            }
+
+            var s = Phase.ClassSkillsVM.Value;
+            if (s != null && s.ClassSkills != null && s.ClassSkills.Count > 0)
+            {
+                var g = TooltipNode.Branch("Class skills");
+                foreach (var entry in s.ClassSkills)
+                    if (entry != null) g.Add(TooltipNode.Leaf(entry.DisplayName));
+                tree.Add(g);
+            }
+
+            if (tree.Children.Count > 0)
+            {
+                TooltipTreeBuilder.ExpandStructural(tree); // groups expanded so it reads fully
+                _detailPanel.Add(tree);
+            }
+
+            // (Progression grid — UnitProgressionVM — would be the next tab-stop here. TODO.)
+
+            // Auto-levelup button: present only when the game shows it active (first level + a default
+            // build plan). Label/enabled mirror the view; activate opens its confirm dialog.
+            var al = Phase.AutoLevelupButtonVM;
+            if (al != null && al.ButtonIsActiveProperty.Value)
+            {
+                _detailPanel.Add(new ProxyActionButton(
+                    () => al.AutoLevelupIsAccessible.Value
+                        ? UIStrings.Instance.CharGen.LoadDefaultClassButton
+                        : UIStrings.Instance.CharGen.NoDefaultBuildForArchetype,
+                    () => al.ButtonIsActiveProperty.Value && al.AutoLevelupIsAccessible.Value && !al.AutoLevelupIsOnProperty.Value,
+                    () => al.RequestActivateAutoLevelup()));
+            }
         }
 
         private IEnumerable<CharGenClassSelectorItemVM> Classes()

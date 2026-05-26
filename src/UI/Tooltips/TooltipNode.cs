@@ -73,12 +73,16 @@ namespace WrathAccess.UI.Tooltips
         /// <summary>Can be expanded — eager children present, or a lazy drill-in not yet run. A
         /// drill-in is suppressed when an ancestor already has the same label: feature tooltips embed
         /// the feature itself (same drill-in) as their header, so without this a node would re-open
-        /// itself forever (e.g. Sneak Attack → Sneak Attack → …). (Cheap: doesn't build children.)</summary>
+        /// itself forever (e.g. Sneak Attack → Sneak Attack → …). Once a lazy drill-in has been run and
+        /// turned out empty (its template had no content beyond the header we drop), the node stops
+        /// advertising children — many feature tooltips are header-only, and a node shouldn't keep
+        /// claiming to expand into nothing. (Cheap: doesn't build children up front.)</summary>
         public override bool Expandable
         {
             get
             {
                 if (Children.Count > 0) return true;       // eager group / already-built drill-in
+                if (_built) return false;                  // lazy factory ran and produced nothing
                 if (_childFactory == null) return false;   // plain leaf
                 return !HasAncestorLabel(_label);          // lazy drill-in, unless it would cycle
             }
@@ -112,6 +116,10 @@ namespace WrathAccess.UI.Tooltips
                         Add(child);
                 }
             }
+            // The drill-in resolved to nothing (header-only template, or only the self-header we drop):
+            // stay collapsed and let Expandable report false from now on, rather than sit "expanded"
+            // with no children. The navigator still says "No details" for this first attempt.
+            if (Children.Count == 0) return;
             base.Expand();
         }
 

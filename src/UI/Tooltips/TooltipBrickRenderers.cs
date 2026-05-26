@@ -270,6 +270,23 @@ namespace WrathAccess.UI.Tooltips
         }
     }
 
+    // Racial (and similar) ability-score modifiers: one entry per ability, but only the ones the
+    // source actually changes carry a value. Read those as "Strength: +2" / "Constitution: -2", each
+    // with the stat's glossary drill-in; skip the unmodified abilities.
+    public sealed class AbilityScoreBonusesBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityScoreBonusesVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityScoreBonusesVM vm)
+        {
+            if (vm?.UIStatBonuses == null) yield break;
+            foreach (var s in vm.UIStatBonuses)
+            {
+                if (s == null || !s.IsValueEnabled) continue;
+                int v = s.BonusValue;
+                yield return new TextElement(s.DisplayName + ": " + (v >= 0 ? "+" + v : v.ToString()), null, s.Tooltip);
+            }
+        }
+    }
+
     // Pure layout — nothing to read.
     public sealed class SeparatorBrickRenderer : TooltipBrickRenderer<TooltipBrickSeparatorVM>
     {

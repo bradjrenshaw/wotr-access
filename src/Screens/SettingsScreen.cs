@@ -29,7 +29,7 @@ namespace WrathAccess.Screens
 
         private SettingsVM _builtFrom;
         private object _lastTab;
-        private Panel _content;
+        private TreeGroup _content;
 
         private static SettingsVM Vm()
         {
@@ -80,7 +80,9 @@ namespace WrathAccess.Screens
                 tabs.Add(new ProxySettingsTab(tab, vm));
             Add(tabs);
 
-            _content = new Panel();
+            // The current tab's settings as a treeview: each header group is one collapsible node, so
+            // it's a single Tab-stop you arrow through (and can collapse to skip), not dozens of stops.
+            _content = new TreeGroup();
             Add(_content);
             RebuildContent(vm);
 
@@ -98,7 +100,7 @@ namespace WrathAccess.Screens
             _lastTab = vm.SelectedMenuEntity.Value;
             if (_content == null) return;
             _content.Clear();
-            SettingsEntityBuilder.BuildInto(_content, vm.SettingEntities);
+            SettingsEntityBuilder.BuildInto(_content, vm.SettingEntities, tree: true);
         }
     }
 }

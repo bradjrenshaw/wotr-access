@@ -74,12 +74,111 @@ namespace WrathAccess.UI
             if (Current == null) return false;
 
             // A focused slider/dropdown advertises increase/decrease; Left/Right invoke them,
-            // then announce just the new value (not the whole control/path).
+            // then announce just the new value (not the whole control/path). Takes priority over a
+            // tree's collapse/expand so adjusting a setting still works inside the tree.
             if (dir == NavDirection.Left && Current.InvokeAction(ActionIds.Decrease)) { Speak(Current.GetStateMessage().Resolve(), interrupt: true); return true; }
             if (dir == NavDirection.Right && Current.InvokeAction(ActionIds.Increase)) { Speak(Current.GetStateMessage().Resolve(), interrupt: true); return true; }
 
+            // Inside a horizontal sub-list (e.g. a keybinding Bar): Left/Right move between its items.
+            if ((dir == NavDirection.Left || dir == NavDirection.Right)
+                && Current.Parent != null && Current.Parent.Shape == ContainerShape.HorizontalList)
+            {
+                var snap = new List<UIElement>(Path);
+                if (Move(dir)) { AnnounceDelta(snap, interrupt: true); return true; }
+                // at the bar's edge → fall through so the tree can collapse/ascend
+            }
+
+            // Treeview region: Up/Down over expanded nodes (DFS); Right/Left expand/collapse/descend/ascend.
+            var root = TreeRootOf(Current);
+            if (root != null) return TreeArrow(dir, root);
+
             var snapshot = new List<UIElement>(Path);
             if (!Move(dir)) return false;
+            AnnounceDelta(snapshot, interrupt: true);
+            return true;
+        }
+
+        // ---- Treeview navigation (ContainerShape.Tree) ----
+
+        // The topmost Tree-shaped ancestor (the tab-stop the tree lives in), or null if not in a tree.
+        private static Container TreeRootOf(UIElement e)
+        {
+            Container root = null;
+            var c = (e as Container) ?? e?.Parent;
+            while (c != null) { if (c.Shape == ContainerShape.Tree) root = c; c = c.Parent; }
+            return root;
+        }
+
+        // The visible-list node representing the focused element: itself if it's a direct child of a
+        // tree group (a group node or leaf), else the ancestor that is (e.g. the Bar holding a focused
+        // keybinding slot).
+        private static UIElement TreeNodeOf(UIElement e, Container root)
+        {
+            var cur = e;
+            while (cur != null && cur != root)
+            {
+                if (cur.Parent != null && cur.Parent.Shape == ContainerShape.Tree) return cur;
+                cur = cur.Parent;
+            }
+            return e;
+        }
+
+        // Nodes currently visible (DFS pre-order): a tree group contributes itself, then — only if
+        // expanded — its children, recursively. A non-tree container (a Bar) is a single node.
+        private static void CollectVisible(Container c, List<UIElement> outList)
+        {
+            foreach (var child in c.Children)
+            {
+                if (child.CanFocus) outList.Add(child);
+                if (child is Container cc && cc.Shape == ContainerShape.Tree && cc.Expanded)
+                    CollectVisible(cc, outList);
+            }
+        }
+
+        // Focus a tree node; if it's a non-tree container (a Bar), descend to its first actionable leaf.
+        private void FocusTreeNode(UIElement node)
+        {
+            BuildPathTo(node);
+            if (node is Container c && c.Shape != ContainerShape.Tree)
+            {
+                var first = c.FirstFocusable();
+                if (first != null) { c.SetFocusedChild(first); AppendWithDescend(first); }
+            }
+        }
+
+        private bool TreeArrow(NavDirection dir, Container root)
+        {
+            var node = TreeNodeOf(Current, root);
+            var group = node as Container;
+            bool isGroup = group != null && group.Shape == ContainerShape.Tree && group.Expandable;
+
+            if (dir == NavDirection.Right)
+            {
+                if (isGroup && !group.Expanded) { group.Expand(); Speak(node.GetFocusMessage().Resolve(), interrupt: true); return true; }
+                if (!(isGroup && group.Expanded)) return true; // leaf/empty → nothing to descend into
+                dir = NavDirection.Down; // expanded group → descend = step to first child (next visible)
+            }
+            else if (dir == NavDirection.Left)
+            {
+                if (isGroup && group.Expanded) { group.Collapse(); Speak(node.GetFocusMessage().Resolve(), interrupt: true); return true; }
+                var parent = node.Parent; // ascend to the enclosing group
+                if (parent != null && parent != root && parent.CanFocus)
+                {
+                    var snap = new List<UIElement>(Path);
+                    FocusTreeNode(parent);
+                    AnnounceDelta(snap, interrupt: true);
+                }
+                return true;
+            }
+
+            var vis = new List<UIElement>();
+            CollectVisible(root, vis);
+            int idx = vis.IndexOf(node);
+            if (idx < 0) return true;
+            int ni = dir == NavDirection.Down ? idx + 1 : idx - 1;
+            if (ni < 0 || ni >= vis.Count) return true; // at an end; consume
+            var snapshot = new List<UIElement>(Path);
+            FocusTreeNode(vis[ni]);
             AnnounceDelta(snapshot, interrupt: true);
             return true;
         }

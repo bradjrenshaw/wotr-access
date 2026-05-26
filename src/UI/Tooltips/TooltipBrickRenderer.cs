@@ -20,6 +20,23 @@ namespace WrathAccess.UI.Tooltips
         public abstract IEnumerable<UIElement> GetExpandedElements(TooltipBaseBrickVM vm);
         public abstract IEnumerable<UIElement> GetFlatElements(TooltipBaseBrickVM vm);
 
+        /// <summary>
+        /// The tree nodes for this brick (the new tooltip model). Default bridges the legacy element
+        /// output — each element becomes a leaf carrying its text + any drill-in tooltip — so a
+        /// renderer works in the tree before it's converted. Override to emit real structure (a group
+        /// with children, a row node, a feature node with a lazy write-up, …).
+        /// </summary>
+        public virtual IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+        {
+            foreach (var el in GetExpandedElements(vm))
+            {
+                if (el == null) continue;
+                var text = el.GetLabelText();
+                if (string.IsNullOrWhiteSpace(text)) continue;
+                yield return TooltipNode.Leaf(text, drillIn: el.GetTooltipTemplate());
+            }
+        }
+
         // ---- shared formatting helpers ----
 
         /// <summary>"Label: Value"; falls back to the icon's sprite name when there's no text label.</summary>

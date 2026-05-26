@@ -8,7 +8,8 @@ namespace WrathAccess.UI.Proxies
     /// <summary>
     /// The game-difficulty picker. It's a dropdown subclass, but each option carries a
     /// description (what that difficulty means), so unlike a plain dropdown the submenu
-    /// reads "Title. Description" per option. Left/Right still cycle by name inline.
+    /// reads "Title. Description" per option. Like <see cref="ProxyDropdown"/>, it opens via primary
+    /// and does NOT advertise Left/Right adjust (those are tree collapse/ascend).
     /// </summary>
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
@@ -41,10 +42,6 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (!Enabled) yield break;
-            yield return new ElementAction(ActionIds.Decrease, Message.Raw("Previous option"),
-                _ => { if (_vm.IsPrevValue) _vm.SetTempValue(_vm.GetTempValue() - 1); });
-            yield return new ElementAction(ActionIds.Increase, Message.Raw("Next option"),
-                _ => { if (_vm.IsNextValue) _vm.SetTempValue(_vm.GetTempValue() + 1); });
             yield return new ElementAction(ActionIds.Activate, Message.Raw("Open"), _ => OpenSubmenu());
         }
 

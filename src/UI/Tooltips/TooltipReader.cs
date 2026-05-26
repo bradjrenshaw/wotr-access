@@ -23,35 +23,40 @@ namespace WrathAccess.UI.Tooltips
     /// </summary>
     public static class TooltipReader
     {
-        public static List<UIElement> Build(TooltipBaseTemplate template, bool expanded = true)
+        public static List<UIElement> Build(TooltipBaseTemplate template, bool expanded = true,
+            TooltipTemplateType type = TooltipTemplateType.Tooltip)
         {
             var result = new List<UIElement>();
             if (template == null) return result;
 
-            Prepare(template);
-            AddFlat(Get(template, t => t.GetHeader(TooltipTemplateType.Tooltip)), result, expanded);
-            AddFlat(Get(template, t => t.GetBody(TooltipTemplateType.Tooltip)), result, expanded);
-            AddFlat(Get(template, t => t.GetFooter(TooltipTemplateType.Tooltip)), result, expanded);
+            Prepare(template, type);
+            AddFlat(Get(template, t => t.GetHeader(type)), result, expanded);
+            AddFlat(Get(template, t => t.GetBody(type)), result, expanded);
+            AddFlat(Get(template, t => t.GetFooter(type)), result, expanded);
             return result;
         }
 
-        public static List<TooltipSection> BuildSections(TooltipBaseTemplate template, bool expanded = true)
+        // type controls how the template renders itself: Tooltip is the mouseover form; Info is the
+        // larger "info panel" form (e.g. a class's first-level template adds skills/features only at
+        // type==Info). Inline detail panels that mirror the game's InfoSectionView pass Info.
+        public static List<TooltipSection> BuildSections(TooltipBaseTemplate template, bool expanded = true,
+            TooltipTemplateType type = TooltipTemplateType.Tooltip)
         {
             var sections = new List<TooltipSection>();
             if (template == null) return sections;
 
-            Prepare(template);
+            Prepare(template, type);
             var current = new TooltipSection(null);
             sections.Add(current);
-            current = Collect(Get(template, t => t.GetHeader(TooltipTemplateType.Tooltip)), sections, current, expanded, allowBreaks: false);
-            current = Collect(Get(template, t => t.GetBody(TooltipTemplateType.Tooltip)), sections, current, expanded, allowBreaks: true);
-            current = Collect(Get(template, t => t.GetFooter(TooltipTemplateType.Tooltip)), sections, current, expanded, allowBreaks: true);
+            current = Collect(Get(template, t => t.GetHeader(type)), sections, current, expanded, allowBreaks: false);
+            current = Collect(Get(template, t => t.GetBody(type)), sections, current, expanded, allowBreaks: true);
+            current = Collect(Get(template, t => t.GetFooter(type)), sections, current, expanded, allowBreaks: true);
             return sections.Where(s => s.Elements.Count > 0).ToList();
         }
 
-        private static void Prepare(TooltipBaseTemplate template)
+        private static void Prepare(TooltipBaseTemplate template, TooltipTemplateType type)
         {
-            try { template.Prepare(TooltipTemplateType.Tooltip); }
+            try { template.Prepare(type); }
             catch (Exception e) { Main.Log?.Error("TooltipReader.Prepare: " + e.Message); }
         }
 

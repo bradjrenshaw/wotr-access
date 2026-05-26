@@ -15,20 +15,24 @@ namespace WrathAccess.Screens
     /// </summary>
     internal static class SettingsEntityBuilder
     {
-        public static void BuildInto(Container content, IEnumerable<VirtualListElementVMBase> entities)
+        /// <param name="tree">When true, header runs become collapsible <see cref="TreeGroup"/>s (a
+        /// treeview — one Tab-stop, Down/Up over expanded controls, Right/Left expand/collapse). When
+        /// false, they're <see cref="Panel"/> sections (each control its own Tab-stop) — the old shape.</param>
+        public static void BuildInto(Container content, IEnumerable<VirtualListElementVMBase> entities,
+            bool tree = false)
         {
             if (entities == null) return;
-            Panel section = null;
+            Container section = null;
             foreach (var e in entities)
             {
                 if (e is SettingsEntityHeaderVM header)
                 {
-                    section = new Panel(header.Tittle);
+                    section = tree ? (Container)new TreeGroup(header.Tittle) : new Panel(header.Tittle);
                     content.Add(section);
                     continue;
                 }
                 var proxy = MakeProxy(e);
-                if (proxy != null) (section != null ? (Container)section : content).Add(proxy);
+                if (proxy != null) (section ?? content).Add(proxy);
             }
         }
 
@@ -38,21 +42,22 @@ namespace WrathAccess.Screens
             if (e is SettingsEntitySliderVM s) return new ProxySlider(s);
             if (e is SettingsEntityDropdownGameDifficultyVM diff) return new ProxyDifficulty(diff); // subclass — check before generic dropdown
             if (e is SettingsEntityDropdownVM d) return new ProxyDropdown(d);
-            if (e is SettingEntityKeyBindingVM kb) return BuildKeyBindingBar(kb);
+            if (e is SettingEntityKeyBindingVM kb) return BuildKeyBindingGroup(kb);
             // Privacy/data opt-out: a button that opens the privacy page in a browser.
             if (e is SettingsEntityStatisticsOptOutVM opt) return new ProxyActionButton(opt.Title, () => true, () => opt.OpenSettingsInBrowser());
             if (e is SettingsEntityVM sv) return new ProxyUnsupportedSetting(sv.Title);
             return null;
         }
 
-        // A key-binding row = a horizontal Bar (labeled with the control) holding its two
-        // binding slots; Left/Right moves between them, primary rebinds, secondary clears.
-        private static Bar BuildKeyBindingBar(SettingEntityKeyBindingVM vm)
+        // A key-binding row = a collapsible tree group (labeled with the control) holding its two
+        // binding slots as button children: expand to reach them, primary rebinds, secondary clears.
+        // (Matches the treeview — no more horizontal Left/Right bar.)
+        private static TreeGroup BuildKeyBindingGroup(SettingEntityKeyBindingVM vm)
         {
-            var bar = new Bar(vm.Title);
-            bar.Add(new ProxyKeyBindingSlot(vm, 0, "binding 1"));
-            bar.Add(new ProxyKeyBindingSlot(vm, 1, "binding 2"));
-            return bar;
+            var group = new TreeGroup(vm.Title);
+            group.Add(new ProxyKeyBindingSlot(vm, 0, "binding 1"));
+            group.Add(new ProxyKeyBindingSlot(vm, 1, "binding 2"));
+            return group;
         }
     }
 }

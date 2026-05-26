@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases;
+using Kingmaker.UI.MVVM._VM.CharGen.Phases.Class;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Portrait;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Pregen;
 using WrathAccess.UI;
@@ -51,6 +52,7 @@ namespace WrathAccess.Screens
         {
             Register<CharGenPregenPhaseVM>(vm => new PregenPhaseContent(vm));
             Register<CharGenPortraitPhaseVM>(vm => new PortraitPhaseContent(vm));
+            Register<CharGenClassPhaseVM>(vm => new ClassPhaseContent(vm));
         }
     }
 }

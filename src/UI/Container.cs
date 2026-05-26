@@ -25,9 +25,23 @@ namespace WrathAccess.UI
         /// <summary>When set on a screen root, navigators that respect it wrap Tab past the ends.</summary>
         public bool Wrap { get; set; }
 
+        // ---- Tree expand/collapse (only meaningful for Shape == Tree) ----
+
+        /// <summary>Whether a Tree node is currently expanded (its children participate in nav).</summary>
+        public bool Expanded { get; protected set; }
+
+        /// <summary>True if this Tree node can be expanded to reveal children. Cheap — must NOT build
+        /// lazy children; a subclass with a deferred factory (e.g. TooltipNode drill-in) overrides.</summary>
+        public virtual bool Expandable => Shape == ContainerShape.Tree && _children.Count > 0;
+
+        /// <summary>Expand this Tree node. Subclasses with lazy children override to build first.</summary>
+        public virtual void Expand() => Expanded = true;
+
+        public void Collapse() => Expanded = false;
+
         public override string Label => _label;
 
-        /// <summary>Lists/grids announce their children's position; panels (pure structure) don't.</summary>
+        /// <summary>Lists/grids/trees announce their children's position; panels (pure structure) don't.</summary>
         public virtual bool AnnouncePosition => Shape != ContainerShape.Panel;
 
         /// <summary>"index of count" among focusable children, or null if not found.</summary>
@@ -43,12 +57,17 @@ namespace WrathAccess.UI
             return ci < 0 ? null : Message.Raw(ci + " of " + count);
         }
 
-        // Unlabeled structural containers stay silent; labeled ones announce name (+ "list" for lists).
+        // Unlabeled structural containers stay silent; labeled ones announce name (+ a role: a Tree
+        // node reads its expanded/collapsed state; other lists/grids read "list").
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             if (string.IsNullOrEmpty(Label)) yield break;
             yield return new LabelAnnouncement(Message.Raw(Label));
-            if (Shape != ContainerShape.Panel) yield return new RoleAnnouncement("list");
+            if (Shape == ContainerShape.Tree)
+            {
+                if (Expandable) yield return new RoleAnnouncement(Expanded ? "expanded" : "collapsed");
+            }
+            else if (Shape != ContainerShape.Panel) yield return new RoleAnnouncement("list");
         }
 
         public Container() { }

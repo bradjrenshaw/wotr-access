@@ -31,6 +31,28 @@ namespace WrathAccess.UI.Tooltips
             return Fallback(vm);
         }
 
+        /// <summary>The tree nodes for a brick (the new model). Renderer's GetNodes, or a leaf from the
+        /// reflection fallback for unconverted/unknown types.</summary>
+        public static IEnumerable<TooltipNode> Nodes(TooltipBaseBrickVM vm)
+        {
+            if (vm == null) return Array.Empty<TooltipNode>();
+            if (_map.TryGetValue(vm.GetType(), out var renderer))
+                return renderer.GetNodes(vm);
+
+            if (_loggedUnknown.Add(vm.GetType()))
+                Main.Log?.Log("TooltipBrickRegistry: no renderer for " + vm.GetType().Name + " — reflection fallback (node).");
+            return FallbackNodes(vm);
+        }
+
+        private static IEnumerable<TooltipNode> FallbackNodes(TooltipBaseBrickVM vm)
+        {
+            foreach (var el in Fallback(vm))
+            {
+                var t = el.GetLabelText();
+                if (!string.IsNullOrWhiteSpace(t)) yield return TooltipNode.Leaf(t);
+            }
+        }
+
         private static IEnumerable<UIElement> Fallback(TooltipBaseBrickVM vm)
         {
             var parts = new List<string>();

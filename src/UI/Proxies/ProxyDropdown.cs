@@ -6,8 +6,9 @@ using WrathAccess.UI.Announcements;
 namespace WrathAccess.UI.Proxies
 {
     /// <summary>
-    /// A dropdown setting → combo box. Left/Right cycle options inline (quick path);
-    /// primary opens a submenu listing all options. Value is the current option text.
+    /// A dropdown setting → combo box. Primary opens a submenu listing all options (the only way to
+    /// change it). It deliberately does NOT advertise Left/Right adjust: in a treeview those mean
+    /// collapse/ascend, and stealing them for inline cycling is unintuitive. Value = current option.
     /// </summary>
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
@@ -39,10 +40,6 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (!Enabled) yield break;
-            yield return new ElementAction(ActionIds.Decrease, Message.Raw("Previous option"),
-                _ => { if (_vm.IsPrevValue) _vm.SetTempValue(_vm.GetTempValue() - 1); });
-            yield return new ElementAction(ActionIds.Increase, Message.Raw("Next option"),
-                _ => { if (_vm.IsNextValue) _vm.SetTempValue(_vm.GetTempValue() + 1); });
             yield return new ElementAction(ActionIds.Activate, Message.Raw("Open"), _ => OpenSubmenu());
         }
 

@@ -23,6 +23,13 @@ namespace WrathAccess.Screens
 
         public override void Build(Container content)
         {
+            // The selection's own description — what this choice IS (e.g. "choose your celestial
+            // heritage…") — which the game shows in its info panel before you pick. We surface just the
+            // description, not the selection's full tooltip, since that would re-list the options below.
+            var overview = Phase.FeatureSelectorStateVM?.Feature?.Description;
+            if (!string.IsNullOrWhiteSpace(overview))
+                content.Add(new TextElement(overview));
+
             if (Phase.SelectionIsProhibited != null && Phase.SelectionIsProhibited.Value)
                 content.Add(new TextElement("Nothing to select here."));
             _treePanel = new Panel();

@@ -26,8 +26,9 @@ namespace WrathAccess.Input
 
         public static void Tick()
         {
-            // Don't steal keystrokes while the player is typing in a game text field.
-            if (IsTypingInTextField()) return;
+            // Don't steal keystrokes while the player is typing in a game text field — either the
+            // game's own console field (IsInInputField) or one we're driving via TextEntry.
+            if (IsTypingInTextField() || WrathAccess.UI.TextEntry.SuppressInput) return;
 
             // A screen capturing raw input (e.g. key-binding capture) wants the keys to reach
             // the game's own handler — stand down entirely while it's focused.

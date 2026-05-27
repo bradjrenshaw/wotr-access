@@ -9,6 +9,8 @@ using Kingmaker.UI.MVVM._VM.CharGen.Phases.FeatureSelector;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.AbilityScores;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Skills;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Voice;
+using Kingmaker.UI.MVVM._VM.CharGen.Phases.Alignment;
+using Kingmaker.UI.MVVM._VM.CharGen.Phases.Name;
 using WrathAccess.UI;
 
 namespace WrathAccess.Screens
@@ -63,6 +65,8 @@ namespace WrathAccess.Screens
             Register<CharGenAbilityScoresVM>(vm => new AbilityScoresPhaseContent(vm));
             Register<CharGenSkillsPhaseVM>(vm => new SkillsPhaseContent(vm));
             Register<CharGenVoicePhaseVM>(vm => new VoicePhaseContent(vm));
+            Register<CharGenAlignmentPhaseVM>(vm => new AlignmentPhaseContent(vm));
+            Register<CharGenNamePhaseVM>(vm => new NamePhaseContent(vm));
         }
     }
 }

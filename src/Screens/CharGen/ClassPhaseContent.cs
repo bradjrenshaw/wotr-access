@@ -32,9 +32,10 @@ namespace WrathAccess.Screens
             AccessTools.Field(typeof(CharGenClassPhaseVM), "m_ClassesVMs");
 
         // The Short/Mechanic toggle is VIEW state (CharGenClassPhaseDetailedPCView.m_ViewMode), not on
-        // the VM — so to make the rendered screen track our toggle, we reach the live view by type and
-        // call its private SwitchMode(). Reflection + a typed FindObjectOfType is the only path (no VM
-        // hook); a no-op when the view is in Level-up mode (no switch) or isn't present.
+        // the VM — so to make the rendered screen track our toggle, we reach the live view and call its
+        // private SwitchMode(). We get there via CharGenView's static self-ref → SelectedDetailView
+        // (the active detailed phase view) — a deterministic chain, no FindObjectOfType scene scan; a
+        // no-op when the view is in Level-up mode (no switch) or isn't present.
         private static readonly System.Type DetailViewType =
             AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.Phases.Class.CharGenClassPhaseDetailedPCView");
         private static readonly System.Reflection.FieldInfo ViewModeField =
@@ -42,6 +43,24 @@ namespace WrathAccess.Screens
         private static readonly System.Reflection.MethodInfo SwitchModeMethod =
             DetailViewType != null ? AccessTools.Method(DetailViewType, "SwitchMode") : null;
         private static readonly System.Type ViewModeEnum = ResolveModeEnum();
+
+        // CharGenView.s_Instance (static self-ref) → SelectedDetailView (current detailed phase view).
+        private static readonly System.Type CharGenViewType =
+            AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.CharGenView");
+        private static readonly System.Reflection.FieldInfo InstanceField =
+            CharGenViewType != null ? AccessTools.Field(CharGenViewType, "s_Instance") : null;
+        private static readonly System.Reflection.FieldInfo SelectedDetailField =
+            CharGenViewType != null ? AccessTools.Field(CharGenViewType, "SelectedDetailView") : null;
+
+        // The live class detail view via the static chain — only when SelectedDetailView is actually
+        // the class detail view (i.e. we're on the class phase), else null.
+        private static object ActiveClassDetailView()
+        {
+            var cgv = InstanceField?.GetValue(null);
+            if (cgv == null) return null;
+            var view = SelectedDetailField?.GetValue(cgv);
+            return DetailViewType != null && view != null && DetailViewType.IsInstanceOfType(view) ? view : null;
+        }
 
         private static System.Type ResolveModeEnum()
         {
@@ -91,7 +110,7 @@ namespace WrathAccess.Screens
         private void SyncGameViewMode()
         {
             if (ViewModeField == null || SwitchModeMethod == null || ViewModeEnum == null) return;
-            var view = UnityEngine.Object.FindObjectOfType(DetailViewType);
+            var view = ActiveClassDetailView();
             if (view == null) return;
             var rp = ViewModeField.GetValue(view);
             var cur = rp?.GetType().GetProperty("Value")?.GetValue(rp);

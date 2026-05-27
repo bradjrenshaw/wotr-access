@@ -111,6 +111,7 @@ namespace WrathAccess.UI.Tooltips
             Register(new PictureBrickRenderer());
             Register(new SpellTableBrickRenderer());
             Register(new AbilityScoreBonusesBrickRenderer());
+            Register(new PrerequisiteBrickRenderer());
             Register(new ShortClassDescriptionBrickRenderer());
             Register(new AbilityScoresBlockBrickRenderer());
             Register(new SkillsBrickRenderer());

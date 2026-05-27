@@ -287,6 +287,21 @@ namespace WrathAccess.UI.Tooltips
         }
     }
 
+    // A feat/feature's prerequisites: one line per requirement with whether it's met, e.g.
+    // "Strength 13 (met)", "Power Attack (not met)".
+    public sealed class PrerequisiteBrickRenderer : TooltipBrickRenderer<TooltipBrickPrerequisiteVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickPrerequisiteVM vm)
+        {
+            if (vm?.PrerequisiteEntries == null) yield break;
+            foreach (var e in vm.PrerequisiteEntries)
+            {
+                if (e == null || string.IsNullOrWhiteSpace(e.Text)) continue;
+                yield return new TextElement(e.Text + (e.Done ? " (met)" : " (not met)"));
+            }
+        }
+    }
+
     // Pure layout — nothing to read.
     public sealed class SeparatorBrickRenderer : TooltipBrickRenderer<TooltipBrickSeparatorVM>
     {

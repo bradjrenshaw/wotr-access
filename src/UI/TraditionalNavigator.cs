@@ -227,6 +227,7 @@ namespace WrathAccess.UI
                 if (nr != r) { var h = table.RowHeaderText(nr, nc); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
             }
 
+            if (!string.IsNullOrEmpty(next.Role)) parts.Add(next.Role); // e.g. an actionable cell → "button"
             var cell = next.GetLabelText();
             parts.Add(string.IsNullOrWhiteSpace(cell) ? "blank" : cell);
 

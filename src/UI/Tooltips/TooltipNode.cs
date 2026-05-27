@@ -70,21 +70,25 @@ namespace WrathAccess.UI.Tooltips
             string role = "group", string annotation = null)
             => new TooltipNode(label, role, annotation, childFactory);
 
-        /// <summary>Can be expanded — eager children present, or a lazy drill-in not yet run. A
-        /// drill-in is suppressed when an ancestor already has the same label: feature tooltips embed
-        /// the feature itself (same drill-in) as their header, so without this a node would re-open
-        /// itself forever (e.g. Sneak Attack → Sneak Attack → …). Once a lazy drill-in has been run and
-        /// turned out empty (its template had no content beyond the header we drop), the node stops
-        /// advertising children — many feature tooltips are header-only, and a node shouldn't keep
-        /// claiming to expand into nothing. (Cheap: doesn't build children up front.)</summary>
+        /// <summary>Can be expanded — eager children present, or a lazy drill-in that, once built, has
+        /// content. A lazy drill-in is <b>probed</b> here (built once, cached): many feature/source
+        /// tooltips are header-only, so we must build to know whether there's anything beyond the
+        /// redundant header we drop — otherwise the node would falsely announce "collapsed" and then
+        /// give "No details" on Right. Probing is driven by focus: <see cref="GetFocusAnnouncements"/>
+        /// evaluates this only after the label/role parts, so focusing a node builds its drill-in, while
+        /// <see cref="UIElement.GetLabelText"/> (which stops at the label) and tree construction do not.
+        /// A drill-in is also suppressed when an ancestor shares its label (feature tooltips embed the
+        /// feature as their header → would re-open forever, e.g. Sneak Attack → Sneak Attack → …).</summary>
         public override bool Expandable
         {
             get
             {
-                if (Children.Count > 0) return true;       // eager group / already-built drill-in
-                if (_built) return false;                  // lazy factory ran and produced nothing
-                if (_childFactory == null) return false;   // plain leaf
-                return !HasAncestorLabel(_label);          // lazy drill-in, unless it would cycle
+                if (Children.Count > 0) return true;        // eager group / already-built drill-in
+                if (_built) return false;                   // probed and hollow (header-only)
+                if (_childFactory == null) return false;    // plain leaf
+                if (HasAncestorLabel(_label)) return false; // lazy drill-in that would cycle
+                BuildChildren();                            // probe once so we report honestly
+                return Children.Count > 0;
             }
         }
 
@@ -96,31 +100,30 @@ namespace WrathAccess.UI.Tooltips
             return false;
         }
 
-        /// <summary>Build lazy children on first expand (cached); then mark expanded. No-op for leaves.</summary>
+        /// <summary>Mark expanded. Children are already present — either eager, or built by the probe in
+        /// <see cref="Expandable"/> (which Expand consults first). A hollow/leaf node is a no-op.</summary>
         public override void Expand()
         {
-            if (!Expandable) return;
-            if (!_built && _childFactory != null)
-            {
-                _built = true;
-                foreach (var child in _childFactory() ?? Enumerable.Empty<TooltipNode>())
-                {
-                    if (child == null) continue;
-                    // A drill-in's content is usually fronted by a header repeating this node's label
-                    // (a glossary's title, a feature's name). Don't keep that redundant header — but if
-                    // it's a GROUP, the real content is nested inside it, so splice in its children;
-                    // only a bare leaf header is dropped outright.
-                    if (string.Equals(child.Label, _label))
-                        foreach (var grandchild in child.Children) Add(grandchild);
-                    else
-                        Add(child);
-                }
-            }
-            // The drill-in resolved to nothing (header-only template, or only the self-header we drop):
-            // stay collapsed and let Expandable report false from now on, rather than sit "expanded"
-            // with no children. The navigator still says "No details" for this first attempt.
-            if (Children.Count == 0) return;
+            if (!Expandable) return; // probes the lazy drill-in if needed; false ⇒ nothing to expand into
             base.Expand();
+        }
+
+        // Build the lazy drill-in's children once (cached). A drill-in's content is usually fronted by a
+        // header repeating this node's label (a glossary title, a feature name); drop that redundant
+        // header — but if it's a GROUP, splice in its children (the real content is nested inside);
+        // only a bare leaf header is dropped outright.
+        private void BuildChildren()
+        {
+            if (_built || _childFactory == null) return;
+            _built = true;
+            foreach (var child in _childFactory() ?? Enumerable.Empty<TooltipNode>())
+            {
+                if (child == null) continue;
+                if (string.Equals(child.Label, _label))
+                    foreach (var grandchild in child.Children) Add(grandchild);
+                else
+                    Add(child);
+            }
         }
 
         // A focusable node reads its own label; empty-label structural nodes don't focus.

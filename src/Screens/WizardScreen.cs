@@ -1,3 +1,4 @@
+using Kingmaker.UI; // UISoundType
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
 
@@ -46,9 +47,15 @@ namespace WrathAccess.Screens
             if (vm == null) return;
             if (!ReferenceEquals(vm, _builtVm) || !ReferenceEquals(CurrentPhase(), _builtPhase))
             {
-                // VM swapped or phase changed (Next/Back, or a step pick) — rebuild and land on it.
+                // A phase change WITHIN this wizard (Next/Back/step pick) — not the initial build or a
+                // VM swap. The game plays a page-turn on phase advance; our VM-level SelectNext/Prev
+                // bypasses it, so play it here.
+                bool phaseChange = ReferenceEquals(vm, _builtVm) && _builtPhase != null;
+
+                // VM swapped or phase changed — rebuild and land on it.
                 Rebuild();
                 Navigation.Attach(this);
+                if (phaseChange) UiSound.Play(UISoundType.BookPageTurn);
                 if (FocusMode.Active) Navigation.AnnounceCurrent();
                 return;
             }

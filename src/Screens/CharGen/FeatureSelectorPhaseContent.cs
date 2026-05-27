@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Kingmaker.Blueprints.Classes;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.FeatureSelector;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
@@ -23,12 +24,17 @@ namespace WrathAccess.Screens
 
         public override void Build(Container content)
         {
-            // The selection's own description — what this choice IS (e.g. "choose your celestial
-            // heritage…") — which the game shows in its info panel before you pick. We surface just the
-            // description, not the selection's full tooltip, since that would re-list the options below.
+            // Source + description as one vertical list (a single tab-stop): the source of this pick —
+            // the granting class / race / progression (item 1) — then the selection's own description,
+            // "what this choice is" (item 2). The game shows the description in its info panel; the
+            // source isn't shown anywhere, but it's too useful to omit. Just the description, not the
+            // selection's full tooltip (which would re-list the options below).
+            var info = new ListContainer();
+            var source = SourceLabel();
+            if (!string.IsNullOrWhiteSpace(source)) info.Add(new TextElement("Source: " + source));
             var overview = Phase.FeatureSelectorStateVM?.Feature?.Description;
-            if (!string.IsNullOrWhiteSpace(overview))
-                content.Add(new TextElement(overview));
+            if (!string.IsNullOrWhiteSpace(overview)) info.Add(new TextElement(overview));
+            if (info.Children.Count > 0) content.Add(info);
 
             if (Phase.SelectionIsProhibited != null && Phase.SelectionIsProhibited.Value)
                 content.Add(new TextElement("Nothing to select here."));
@@ -54,6 +60,19 @@ namespace WrathAccess.Screens
             var tree = new TreeGroup(); // unlabeled root; the phase name announces "Background"
             foreach (var it in top) tree.Add(new ProxyNestedFeatureItem(it, Phase.SelectorVM));
             _treePanel.Add(tree);
+        }
+
+        // The selection's source blueprint reads as a class / race / progression name (the level-up
+        // origin of this pick), or null if unknown.
+        private string SourceLabel()
+        {
+            var st = Phase.FeatureSelectorStateVM?.SelectionState;
+            if (st == null) return null;
+            var bp = st.Source.Blueprint;
+            if (bp is BlueprintCharacterClass c) return c.Name;
+            if (bp is BlueprintRace r) return r.Name;
+            if (bp is BlueprintFeatureBase f) return f.Name; // progression / feature (e.g. bonus-feat source)
+            return null;
         }
 
         // The top-level feature entities, from the game's own nested-selection collection (keyed by the

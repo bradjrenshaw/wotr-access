@@ -33,7 +33,8 @@ namespace WrathAccess.UI.Tooltips
                 if (el == null) continue;
                 var text = el.GetLabelText();
                 if (string.IsNullOrWhiteSpace(text)) continue;
-                yield return TooltipNode.Leaf(text, drillIn: el.GetTooltipTemplate());
+                var element = el; // capture for the live drill-in factory
+                yield return TooltipNode.Leaf(text, drillIn: element.GetTooltipTemplate);
             }
         }
 
@@ -62,7 +63,7 @@ namespace WrathAccess.UI.Tooltips
             return name + ": " + val;
         }
 
-        protected static IEnumerable<UIElement> One(string text, TooltipBaseTemplate tooltip = null)
+        protected static IEnumerable<UIElement> One(string text, Func<TooltipBaseTemplate> tooltip = null)
         {
             yield return new TextElement(text, null, tooltip);
         }

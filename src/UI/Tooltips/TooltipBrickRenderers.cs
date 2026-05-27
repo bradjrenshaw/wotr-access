@@ -56,7 +56,7 @@ namespace WrathAccess.UI.Tooltips
     public sealed class IconAndNameBrickRenderer : TooltipBrickRenderer<TooltipBrickIconAndNameVM>
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickIconAndNameVM vm)
-            => One(vm?.Line, vm?.Tooltip); // icon may carry a nested tooltip → drill-in
+            => One(vm?.Line, () => vm?.Tooltip); // icon may carry a nested tooltip → drill-in
     }
 
     public sealed class PortraitAndNameBrickRenderer : TooltipBrickRenderer<TooltipBrickPortraitAndNameVM>
@@ -73,7 +73,7 @@ namespace WrathAccess.UI.Tooltips
     public sealed class FeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickFeatureVM>
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickFeatureVM vm)
-            => One(vm?.Name, vm?.Tooltip); // full feature/ability writeup on drill-in
+            => One(vm?.Name, () => vm?.Tooltip); // full feature/ability writeup on drill-in
     }
 
     public sealed class MultipleFeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickMultipleFeatureVM>
@@ -82,7 +82,7 @@ namespace WrathAccess.UI.Tooltips
         {
             if (vm?.TooltipBrickFeatures == null) yield break;
             foreach (var f in vm.TooltipBrickFeatures)
-                if (f != null) yield return new TextElement(f.Name, null, f.Tooltip);
+                if (f != null) yield return new TextElement(f.Name, null, () => f.Tooltip);
         }
 
         public override IEnumerable<UIElement> GetFlatElements(TooltipBrickMultipleFeatureVM vm)
@@ -95,7 +95,7 @@ namespace WrathAccess.UI.Tooltips
     // the registry keys on exact type, so it needs its own renderer (it won't reuse FeatureBrick's).
     public sealed class ArchetypeFeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickArchetypeFeatureVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArchetypeFeatureVM vm) => One(vm?.Name, vm?.Tooltip);
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArchetypeFeatureVM vm) => One(vm?.Name, () => vm?.Tooltip);
 
         public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
         {
@@ -103,7 +103,7 @@ namespace WrathAccess.UI.Tooltips
             if (f == null || string.IsNullOrWhiteSpace(f.Name)) yield break;
             string anno = f.DifType == ClassArchetypeDifType.Added ? "added"
                         : f.DifType == ClassArchetypeDifType.Removed ? "removed" : null;
-            yield return TooltipNode.Leaf(f.Name, annotation: anno, drillIn: f.Tooltip);
+            yield return TooltipNode.Leaf(f.Name, annotation: anno, drillIn: () => f.Tooltip);
         }
     }
 
@@ -111,7 +111,7 @@ namespace WrathAccess.UI.Tooltips
     {
         // Name + short desc, with the feature's full write-up as a drill-in (e.g. signature features).
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickFeatureShortDescriptionVM vm)
-            => One(vm == null ? null : Join(vm.Name, vm.Description), vm?.Tooltip);
+            => One(vm == null ? null : Join(vm.Name, vm.Description), () => vm?.Tooltip);
     }
 
     public sealed class EntityHeaderBrickRenderer : TooltipBrickRenderer<TooltipBrickEntityHeaderVM>
@@ -123,7 +123,7 @@ namespace WrathAccess.UI.Tooltips
     public sealed class IconValueStatBrickRenderer : TooltipBrickRenderer<TooltipBrickIconValueStatVM>
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickIconValueStatVM vm)
-            => One(vm == null ? null : Stat(vm.Name, vm.Value, vm.Icon), vm?.Tooltip);
+            => One(vm == null ? null : Stat(vm.Name, vm.Value, vm.Icon), () => vm?.Tooltip);
     }
 
     public sealed class MultipleIconValueStatBrickRenderer : TooltipBrickRenderer<TooltipBrickMultipleIconValueStatVM>
@@ -132,7 +132,7 @@ namespace WrathAccess.UI.Tooltips
         {
             if (vm?.TooltipBrickIconValueStats == null) yield break;
             foreach (var s in vm.TooltipBrickIconValueStats)
-                if (s != null) yield return new TextElement(Stat(s.Name, s.Value, s.Icon), null, s.Tooltip);
+                if (s != null) yield return new TextElement(Stat(s.Name, s.Value, s.Icon), null, () => s.Tooltip);
         }
 
         public override IEnumerable<UIElement> GetFlatElements(TooltipBrickMultipleIconValueStatVM vm)
@@ -157,9 +157,9 @@ namespace WrathAccess.UI.Tooltips
             var v = vm as TooltipBrickTwoColumnsStatVM;
             if (v == null) yield break;
             var l = Stat(v.NameLeft, v.ValueLeft, v.IconLeft);
-            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: v.TooltipLeft);
+            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: () => v.TooltipLeft);
             var r = Stat(v.NameRight, v.ValueRight, v.IconRight);
-            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: v.TooltipRight);
+            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: () => v.TooltipRight);
         }
     }
 
@@ -175,11 +175,11 @@ namespace WrathAccess.UI.Tooltips
             var v = vm as TooltipBrickThreeColumnsStatVM;
             if (v == null) yield break;
             var l = Stat(v.NameLeft, v.ValueLeft, v.IconLeft);
-            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: v.TooltipLeft);
+            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: () => v.TooltipLeft);
             var c = Stat(v.NameCenter, v.ValueCenter, v.IconCenter);
-            if (!string.IsNullOrWhiteSpace(c)) yield return TooltipNode.Leaf(c, drillIn: v.TooltipCenter);
+            if (!string.IsNullOrWhiteSpace(c)) yield return TooltipNode.Leaf(c, drillIn: () => v.TooltipCenter);
             var r = Stat(v.NameRight, v.ValueRight, v.IconRight);
-            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: v.TooltipRight);
+            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: () => v.TooltipRight);
         }
     }
 
@@ -187,7 +187,7 @@ namespace WrathAccess.UI.Tooltips
     {
         // Label + text, with its drill-in tooltip (the GetNodes bridge attaches the One()'s tooltip).
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityTargetVM vm)
-            => One(vm == null ? null : Join(vm.Label, vm.Text), vm?.Tooltip);
+            => One(vm == null ? null : Join(vm.Label, vm.Text), () => vm?.Tooltip);
     }
 
     public sealed class PictureBrickRenderer : TooltipBrickRenderer<TooltipBrickPictureVM>
@@ -282,7 +282,7 @@ namespace WrathAccess.UI.Tooltips
             {
                 if (s == null || !s.IsValueEnabled) continue;
                 int v = s.BonusValue;
-                yield return new TextElement(s.DisplayName + ": " + (v >= 0 ? "+" + v : v.ToString()), null, s.Tooltip);
+                yield return new TextElement(s.DisplayName + ": " + (v >= 0 ? "+" + v : v.ToString()), null, () => s.Tooltip);
             }
         }
     }

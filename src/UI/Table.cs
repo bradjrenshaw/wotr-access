@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using Owlcat.Runtime.UI.Tooltips;
 using WrathAccess.UI.Announcements;
 
 namespace WrathAccess.UI
@@ -25,6 +27,7 @@ namespace WrathAccess.UI
         private struct Cell { public UIElement Element; public CellRole Role; }
 
         private readonly List<List<Cell>> _rows = new List<List<Cell>>(); // [r][c]
+        private readonly List<Func<TooltipBaseTemplate>> _rowTooltips = new List<Func<TooltipBaseTemplate>>(); // per row, parallel to _rows
         private int _cols;
 
         public Table(string label = null) : base(ContainerShape.Grid, label) { }
@@ -39,16 +42,19 @@ namespace WrathAccess.UI
             var row = new List<Cell> { Make(group, CellRole.Group) };
             if (columnHeaders != null)
                 foreach (var h in columnHeaders) row.Add(Make(h, CellRole.Column));
-            Append(row);
+            Append(row, null);
         }
 
-        /// <summary>A data row: the row label in the leftmost cell, then its cells (null → blank).</summary>
-        public void AddDataRow(UIElement rowLabel, IEnumerable<UIElement> cells)
+        /// <summary>A data row: the row label in the leftmost cell, then its cells (null → blank). An
+        /// optional <paramref name="rowTooltip"/> applies to the whole row — Space on any cell that has
+        /// no tooltip of its own drills into it (resolved live).</summary>
+        public void AddDataRow(UIElement rowLabel, IEnumerable<UIElement> cells,
+            Func<TooltipBaseTemplate> rowTooltip = null)
         {
             var row = new List<Cell> { Make(rowLabel, CellRole.Row) };
             if (cells != null)
                 foreach (var c in cells) row.Add(Make(c, CellRole.None));
-            Append(row);
+            Append(row, rowTooltip);
         }
 
         private Cell Make(UIElement e, CellRole role)
@@ -59,9 +65,10 @@ namespace WrathAccess.UI
         }
 
         // Grow to the widest row, back-padding shorter rows with blanks so every position is landable.
-        private void Append(List<Cell> row)
+        private void Append(List<Cell> row, Func<TooltipBaseTemplate> rowTooltip)
         {
             _rows.Add(row);
+            _rowTooltips.Add(rowTooltip);
             if (row.Count > _cols) { _cols = row.Count; foreach (var r in _rows) Pad(r); }
             else Pad(row);
         }
@@ -115,6 +122,14 @@ namespace WrathAccess.UI
             for (int rr = r; rr >= 0; rr--)
                 if (RoleAt(rr, 0) == CellRole.Group) return CellAt(rr, 0)?.GetLabelText();
             return null;
+        }
+
+        // The row-level tooltip for whichever row a cell sits in, resolved live — so Space on any cell
+        // in a row (the value, a stepper, the header) drills into the row's detail when the cell has none.
+        public TooltipBaseTemplate RowTooltipForCell(UIElement cell)
+        {
+            if (!TryCoords(cell, out int r, out _)) return null;
+            return (r >= 0 && r < _rowTooltips.Count) ? _rowTooltips[r]?.Invoke() : null;
         }
 
         public override UIElement FirstFocusable() => CellAt(0, 0) ?? base.FirstFocusable();

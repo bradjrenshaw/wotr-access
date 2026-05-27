@@ -146,7 +146,7 @@ namespace WrathAccess.Screens
                 int b = prog.GetBonus(lv.Level);
                 cells.Add(new TextElement(b >= 0 ? "+" + b : b.ToString()));
             }
-            table.AddDataRow(new TextElement(name, null, new TooltipTemplateGlossary(glossaryKey)), cells);
+            table.AddDataRow(new TextElement(name, null, () => new TooltipTemplateGlossary(glossaryKey)), cells);
         }
 
         // One "Spells" row mirroring the game: a cell at each caster level showing the highest spell
@@ -161,7 +161,7 @@ namespace WrathAccess.Screens
             {
                 if (ch == null) continue;
                 if (ch.SpellLevel.HasValue) runningMax = ch.SpellLevel.Value;
-                cellAt[ch.Level] = new TextElement(Ordinal(runningMax) + "-level spells", null, ch.Tooltip);
+                cellAt[ch.Level] = new TextElement(Ordinal(runningMax) + "-level spells", null, () => ch.Tooltip);
             }
 
             var cells = new List<UIElement>(levels.Count);
@@ -247,7 +247,7 @@ namespace WrathAccess.Screens
             if (ch.HasRank && !string.IsNullOrEmpty(ch.Rank)) text += " " + ch.Rank;
             if (ch.DifType == ClassArchetypeDifType.Added) text += " (added)";
             else if (ch.DifType == ClassArchetypeDifType.Removed) text += " (removed)";
-            return new TextElement(text, null, ch.Tooltip); // Space drills into the feature write-up
+            return new TextElement(text, null, () => ch.Tooltip); // Space drills into the feature write-up
         }
     }
 }

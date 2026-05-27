@@ -42,13 +42,18 @@ namespace WrathAccess.UI.Tooltips
         }
 
         /// <summary>A leaf — a single read-out line, optionally carrying a drill-in tooltip whose
-        /// content becomes this node's (lazy) children when expanded.</summary>
+        /// content becomes this node's (lazy) children when expanded. The drill-in is a FACTORY,
+        /// resolved live when the node is expanded — never a cached template.</summary>
         public static TooltipNode Leaf(string label, string role = null, string annotation = null,
-            TooltipBaseTemplate drillIn = null)
+            Func<TooltipBaseTemplate> drillIn = null)
         {
             Func<IEnumerable<TooltipNode>> factory = drillIn == null
                 ? null
-                : (Func<IEnumerable<TooltipNode>>)(() => TooltipTreeBuilder.Build(drillIn));
+                : (Func<IEnumerable<TooltipNode>>)(() =>
+                {
+                    var t = drillIn();
+                    return t != null ? TooltipTreeBuilder.Build(t) : Enumerable.Empty<TooltipNode>();
+                });
             return new TooltipNode(label, role, annotation, factory);
         }
 

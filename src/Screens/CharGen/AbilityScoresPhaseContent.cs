@@ -48,12 +48,12 @@ namespace WrathAccess.Screens
                     // The game's "Scores"/Modifier/Race bonus are the live total (incl. racial), the
                     // ability modifier of that total, and the racial component — read on focus (settled),
                     // so the racial choice is reflected here.
-                    new TextElement(() => alloc.StatValue.Value.ToString(), null, alloc.TooltipTemplate()),
+                    new TextElement(() => alloc.StatValue.Value.ToString()),
                     new TextElement(() => Signed(alloc.Bonus.Value)),
                     new TextElement(() => alloc.RaceBonus.Value.HasValue ? Signed(alloc.RaceBonus.Value.Value) : ""),
                     new ProxyAbilityStep(alloc, _controller, raise: true),
                     new ProxyAbilityStep(alloc, _controller, raise: false),
-                });
+                }, rowTooltip: () => alloc.TooltipTemplate()); // Space on any cell in the row → stat detail
             }
             content.Add(table);
 

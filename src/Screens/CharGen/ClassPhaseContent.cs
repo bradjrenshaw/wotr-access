@@ -177,12 +177,12 @@ namespace WrathAccess.Screens
                 // Each stat carries the game's glossary tooltip as a (collapsed) drill-in — Right to
                 // read what e.g. "Fortitude save" means. Keys match the panel views' SetTooltip calls.
                 var g = TooltipNode.Branch("Martial stats");
-                g.Add(TooltipNode.Leaf("Base attack bonus: " + m.BAB.Value, drillIn: new TooltipTemplateGlossary("BaseAttackBonus")));
-                g.Add(TooltipNode.Leaf("Fortitude: " + m.Fortitude.Value, drillIn: new TooltipTemplateGlossary("SaveFortitude")));
-                g.Add(TooltipNode.Leaf("Reflex: " + m.Reflex.Value, drillIn: new TooltipTemplateGlossary("SaveReflex")));
-                g.Add(TooltipNode.Leaf("Will: " + m.Will.Value, drillIn: new TooltipTemplateGlossary("SaveWill")));
-                g.Add(TooltipNode.Leaf("Hit points at first level: " + m.HitPointsFirstLevel.Value, drillIn: new TooltipTemplateGlossary("HP")));
-                g.Add(TooltipNode.Leaf("Hit points per level: " + m.HitPointsPerLevel.Value, drillIn: new TooltipTemplateGlossary("HPPerLevel")));
+                g.Add(TooltipNode.Leaf("Base attack bonus: " + m.BAB.Value, drillIn: () => new TooltipTemplateGlossary("BaseAttackBonus")));
+                g.Add(TooltipNode.Leaf("Fortitude: " + m.Fortitude.Value, drillIn: () => new TooltipTemplateGlossary("SaveFortitude")));
+                g.Add(TooltipNode.Leaf("Reflex: " + m.Reflex.Value, drillIn: () => new TooltipTemplateGlossary("SaveReflex")));
+                g.Add(TooltipNode.Leaf("Will: " + m.Will.Value, drillIn: () => new TooltipTemplateGlossary("SaveWill")));
+                g.Add(TooltipNode.Leaf("Hit points at first level: " + m.HitPointsFirstLevel.Value, drillIn: () => new TooltipTemplateGlossary("HP")));
+                g.Add(TooltipNode.Leaf("Hit points per level: " + m.HitPointsPerLevel.Value, drillIn: () => new TooltipTemplateGlossary("HPPerLevel")));
                 tree.Add(g);
             }
 
@@ -190,10 +190,10 @@ namespace WrathAccess.Screens
             if (c != null && c.CanCast.Value)
             {
                 var g = TooltipNode.Branch("Caster stats");
-                g.Add(TooltipNode.Leaf("Maximum spell level: " + c.MaxSpellsLevel.Value, drillIn: new TooltipTemplateGlossary("MaxSpellsLevel")));
-                g.Add(TooltipNode.Leaf("Casting ability: " + c.CasterAbilityScore.Value, drillIn: new TooltipTemplateGlossary("CasterAbilityScore")));
-                g.Add(TooltipNode.Leaf("Caster type: " + c.CasterMindType.Value, drillIn: new TooltipTemplateGlossary("CasterType")));
-                g.Add(TooltipNode.Leaf("Spellbook: " + c.SpellbookUseType.Value, drillIn: new TooltipTemplateGlossary("CasterMemoryType")));
+                g.Add(TooltipNode.Leaf("Maximum spell level: " + c.MaxSpellsLevel.Value, drillIn: () => new TooltipTemplateGlossary("MaxSpellsLevel")));
+                g.Add(TooltipNode.Leaf("Casting ability: " + c.CasterAbilityScore.Value, drillIn: () => new TooltipTemplateGlossary("CasterAbilityScore")));
+                g.Add(TooltipNode.Leaf("Caster type: " + c.CasterMindType.Value, drillIn: () => new TooltipTemplateGlossary("CasterType")));
+                g.Add(TooltipNode.Leaf("Spellbook: " + c.SpellbookUseType.Value, drillIn: () => new TooltipTemplateGlossary("CasterMemoryType")));
                 tree.Add(g);
             }
 
@@ -202,7 +202,7 @@ namespace WrathAccess.Screens
             {
                 var g = TooltipNode.Branch("Class skills");
                 foreach (var entry in s.ClassSkills)
-                    if (entry != null) g.Add(TooltipNode.Leaf(entry.DisplayName, drillIn: entry.TooltipTemplate));
+                    if (entry != null) g.Add(TooltipNode.Leaf(entry.DisplayName, drillIn: () => entry.TooltipTemplate));
                 tree.Add(g);
             }
 

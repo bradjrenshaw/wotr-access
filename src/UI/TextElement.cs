@@ -18,15 +18,17 @@ namespace WrathAccess.UI
     {
         private readonly Func<string> _text;
         private readonly string _role;
-        private readonly TooltipBaseTemplate _tooltip;
+        private readonly Func<TooltipBaseTemplate> _tooltip;
 
         /// <summary>For subclasses that produce their text by overriding <see cref="GetText"/>.</summary>
         protected TextElement() { }
 
-        public TextElement(string text, string role = null, TooltipBaseTemplate tooltip = null)
+        // The tooltip is a FACTORY, resolved live on each drill-in — never a cached instance — so a
+        // cell whose value changes (a skill rank, an ability score) always drills into current data.
+        public TextElement(string text, string role = null, Func<TooltipBaseTemplate> tooltip = null)
             : this(() => text, role, tooltip) { }
 
-        public TextElement(Func<string> text, string role = null, TooltipBaseTemplate tooltip = null)
+        public TextElement(Func<string> text, string role = null, Func<TooltipBaseTemplate> tooltip = null)
         {
             _text = text;
             _role = role;
@@ -44,7 +46,7 @@ namespace WrathAccess.UI
             if (!string.IsNullOrEmpty(_role)) yield return new RoleAnnouncement(_role);
         }
 
-        // A nested tooltip (e.g. a feature's full description) — the tooltip key drills into it.
-        public override TooltipBaseTemplate GetTooltipTemplate() => _tooltip;
+        // A nested tooltip (e.g. a feature's full description) — built fresh on each drill-in.
+        public override TooltipBaseTemplate GetTooltipTemplate() => _tooltip != null ? _tooltip() : null;
     }
 }

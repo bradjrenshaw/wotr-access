@@ -60,6 +60,9 @@ namespace WrathAccess.UI
                 case "focus.tooltip":
                 {
                     var tpl = Current?.GetTooltipTemplate();
+                    // In a grid, a cell with no tooltip of its own falls back to its row's tooltip, so
+                    // Space works on any element in the row (the value, a stepper, the header).
+                    if (tpl == null && Current?.Parent is Table grid) tpl = grid.RowTooltipForCell(Current);
                     if (tpl != null) WrathAccess.Screens.TooltipScreen.Open(tpl);
                     else Speak("No tooltip");
                     return true;

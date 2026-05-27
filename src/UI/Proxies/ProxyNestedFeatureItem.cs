@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.FeatureSelector;
+using Kingmaker.UI.MVVM._VM.Other; // RecommendationType
 using Kingmaker.UI.MVVM._VM.Other.NestedSelectionGroup;
 using Kingmaker.UnitLogic.Class.LevelUp; // FeatureSelectionViewState.SelectState
 using Owlcat.Runtime.UI.Tooltips;
@@ -56,11 +58,32 @@ namespace WrathAccess.UI.Proxies
         private void RebuildChildren()
         {
             Clear();
-            if (_selector != null && _vm != null
-                && _selector.NestedEntityCollections.TryGetValue(_vm, out var kids) && kids != null)
-                foreach (var k in kids)
-                    if (k is CharGenFeatureSelectorItemVM it) Add(new ProxyNestedFeatureItem(it, _selector));
+            if (_selector == null || _vm == null
+                || !_selector.NestedEntityCollections.TryGetValue(_vm, out var kids) || kids == null) return;
+            var items = new List<CharGenFeatureSelectorItemVM>();
+            foreach (var k in kids) if (k is CharGenFeatureSelectorItemVM it) items.Add(it);
+            items.Sort(CompareItems);
+            foreach (var it in items) Add(new ProxyNestedFeatureItem(it, _selector));
         }
+
+        // The game's feature-list order (CharGenFeatureSelectorPCView.EntityComparer): selectable
+        // (selected or can-select) first, then by recommendation (Recommended &gt; Neutral &gt;
+        // NotRecommended), then alphabetical. The game's "already has" tier is a no-op (it compares an
+        // item to itself — a copy-paste bug), so we skip it to match the observable order.
+        public static int CompareItems(CharGenFeatureSelectorItemVM a, CharGenFeatureSelectorItemVM b)
+        {
+            int s = Pickable(b).CompareTo(Pickable(a));
+            if (s != 0) return s;
+            int r = Recommend(b).CompareTo(Recommend(a));
+            if (r != 0) return r;
+            return string.Compare(a.FeatureName, b.FeatureName, StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        private static bool Pickable(CharGenFeatureSelectorItemVM x)
+            => x.IsSelected.Value || x.SelectState == FeatureSelectionViewState.SelectState.CanSelect;
+
+        private static RecommendationType Recommend(CharGenFeatureSelectorItemVM x)
+            => x.FeatureRecommendation.Value?.Recommendation.Value ?? RecommendationType.Neutral;
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {

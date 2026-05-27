@@ -17,8 +17,12 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class FeatureSelectorPhaseContent : CharGenPhaseContent<CharGenFeatureSelectorPhaseVM>
     {
+        private Panel _filterPanel;
         private Panel _treePanel;
-        private int _topCount = -1;
+        private int _rawCount = -1;          // unfiltered top-level count (for lazy-materialize detection)
+        private bool _filterBuilt;
+        private int _tagIndex;               // 0 = All; 1.. = a tag
+        private List<string> _tagOptions;    // ["All", tag1, …]
 
         public FeatureSelectorPhaseContent(CharGenFeatureSelectorPhaseVM phase) : base(phase) { }
 
@@ -38,6 +42,8 @@ namespace WrathAccess.Screens
 
             if (Phase.SelectionIsProhibited != null && Phase.SelectionIsProhibited.Value)
                 content.Add(new TextElement("Nothing to select here."));
+            _filterPanel = new Panel(); // the tag filter, when the selection actually has tags
+            content.Add(_filterPanel);
             _treePanel = new Panel();
             content.Add(_treePanel);
             FillTree();
@@ -46,20 +52,43 @@ namespace WrathAccess.Screens
         public override void Tick()
         {
             // The selector + its top-level entities are created lazily on entering detailed view;
-            // (re)build when they appear. Per-node state is read live, so no rebuild for that.
-            if (TopEntities().Count != _topCount) FillTree();
+            // (re)build when they appear (tracked by the UNFILTERED count). Add the tag filter once the
+            // list exists and actually has tags. Per-node state is read live, so no rebuild for that.
+            if (!_filterBuilt && Phase.HasFeatureTags) BuildFilter();
+            if (TopEntities().Count != _rawCount) FillTree();
         }
 
         private void FillTree()
         {
             if (_treePanel == null) return;
             var top = TopEntities();
-            _topCount = top.Count;
+            _rawCount = top.Count;
             _treePanel.Clear();
-            if (top.Count == 0) return;
-            var tree = new TreeGroup(); // unlabeled root; the phase name announces "Background"
-            foreach (var it in top) tree.Add(new ProxyNestedFeatureItem(it, Phase.SelectorVM));
+
+            // Filter by the chosen tag (top level only — sub-choices of a matching feat aren't filtered),
+            // then sort the game's way (selectable → recommended → name).
+            var items = new List<CharGenFeatureSelectorItemVM>();
+            foreach (var it in top)
+                if (_tagIndex <= 0 || (_tagOptions != null && it.HasText(_tagOptions[_tagIndex]))) items.Add(it);
+            items.Sort(ProxyNestedFeatureItem.CompareItems);
+            if (items.Count == 0) return;
+
+            var tree = new TreeGroup(); // unlabeled root; the phase name announces "Background" / "Feat"
+            foreach (var it in items) tree.Add(new ProxyNestedFeatureItem(it, Phase.SelectorVM));
             _treePanel.Add(tree);
+        }
+
+        // The game's tag dropdown: present only when the selection has tagged features. "All" clears it.
+        private void BuildFilter()
+        {
+            _filterBuilt = true;
+            var tags = Phase.CharGenFeatureSearchVM?.LocalizedValues;
+            if (_filterPanel == null || tags == null || tags.Count == 0) return;
+            _tagOptions = new List<string> { "All" };
+            _tagOptions.AddRange(tags);
+            _filterPanel.Clear();
+            _filterPanel.Add(new ProxyChoiceDropdown("Filter by tag", _tagOptions,
+                () => _tagIndex, i => { _tagIndex = i; FillTree(); }));
         }
 
         // The selection's source blueprint reads as a class / race / progression name (the level-up

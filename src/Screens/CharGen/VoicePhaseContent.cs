@@ -48,8 +48,19 @@ namespace WrathAccess.Screens
             _count = voices.Count; // unfiltered count, for lazy-materialize detection
             _listPanel.Clear();
             var list = new ListContainer("Voices");
+
+            // Mirror CharGenVoiceSelectorPCView.IsVisible: same-gender items are always visible;
+            // cross-gender items are hidden EXCEPT the empty ("None") voice, which is always visible
+            // regardless of filter. The VM dedups the cross-gender empty so the selector holds exactly
+            // one "None" — that single entry appears under both Male and Female filters.
+            var visible = new List<CharGenVoiceItemVM>();
             foreach (var v in voices)
-                if (v != null && v.Gender == _filter) list.Add(new ProxyVoiceItem(v));
+                if (v != null && (v.Gender == _filter || v.IsEmptyVoice)) visible.Add(v);
+
+            // Mirror EntityComparer: empty voices sort to the end.
+            visible.Sort((a, b) => a.IsEmptyVoice == b.IsEmptyVoice ? 0 : a.IsEmptyVoice ? 1 : -1);
+
+            foreach (var v in visible) list.Add(new ProxyVoiceItem(v));
             if (list.Children.Count > 0) _listPanel.Add(list);
         }
 

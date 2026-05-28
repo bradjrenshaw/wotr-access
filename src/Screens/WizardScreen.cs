@@ -68,6 +68,10 @@ namespace WrathAccess.Screens
         /// (a detail panel that tracks the current selection). Must not disturb the focus path.</summary>
         protected virtual void OnPhaseTick() { }
 
+        /// <summary>Optional content above the phase panel — chargen uses it for the roadmap strip.
+        /// Default: nothing (NewGame has no header).</summary>
+        protected virtual void BuildHeader(Container root) { }
+
         private void Rebuild()
         {
             Clear();
@@ -75,6 +79,9 @@ namespace WrathAccess.Screens
             _builtVm = vm;
             _builtPhase = vm != null ? CurrentPhase() : null;
             if (vm == null) return;
+
+            // Header (e.g. the chargen roadmap) above the phase content, matching the game's layout.
+            BuildHeader(this);
 
             // Content panel, labeled with the current phase so entering it announces the phase.
             var content = new Panel(PhaseLabel());
@@ -84,6 +91,10 @@ namespace WrathAccess.Screens
             // Footer: Back then Next (label + availability track the current phase live).
             Add(new ProxyActionButton("Back", BackEnabled, OnBack));
             Add(new ProxyActionButton(NextLabel, NextEnabled, OnNext));
+
+            // Land initial focus on the phase content, not the header — so advancing/jumping phases
+            // drops you onto the new phase, not back on the roadmap (the header is first in tab order).
+            SetFocusedChild(content);
         }
     }
 }

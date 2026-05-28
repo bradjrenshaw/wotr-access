@@ -1,9 +1,12 @@
+using System.Collections.Generic;
 using System.Linq;
 using Kingmaker;
 using Kingmaker.Blueprints.Root.Strings;
 using Kingmaker.UI; // UISoundType
 using Kingmaker.UI.MVVM._VM.CharGen;
+using Kingmaker.UI.MVVM._VM.CharGen.Phases; // CharGenPhaseBaseVM
 using WrathAccess.UI;
+using WrathAccess.UI.Proxies;
 
 namespace WrathAccess.Screens
 {
@@ -47,8 +50,60 @@ namespace WrathAccess.Screens
                 content.Add(new TextElement("This phase is not accessible yet."));
         }
 
-        // Let the active phase content refresh its selection-driven bits in place (no rebuild).
-        protected override void OnPhaseTick() => _phaseContent?.Tick();
+        // The roadmap strip (top of screen): one entry per phase, name + state + live summary, each a
+        // jump target. Built first (above the phase content) via the WizardScreen header hook.
+        private Panel _roadmapPanel;
+        private List<CharGenPhaseBaseVM> _roadmapPhases;
+
+        protected override void BuildHeader(Container root)
+        {
+            _roadmapPanel = new Panel();
+            root.Add(_roadmapPanel);
+            FillRoadmap();
+        }
+
+        private void FillRoadmap()
+        {
+            if (_roadmapPanel == null) return;
+            _roadmapPanel.Clear();
+            var phases = Vm()?.PhasesCollection;
+            _roadmapPhases = phases != null ? phases.ToList() : new List<CharGenPhaseBaseVM>();
+            if (_roadmapPhases.Count == 0) return;
+
+            var list = new ListContainer("Steps");
+            foreach (var p in _roadmapPhases)
+            {
+                if (p == null) continue;
+                var phase = p; // capture for the live summary closure
+                list.Add(new ProxyRoadmapEntry(phase, () => RoadmapSummary.For(phase)));
+            }
+            _roadmapPanel.Add(list);
+        }
+
+        // The phase set changes from many events (a class adds Spells, race adds/removes phases, …)
+        // without the current phase changing, so poll the set each tick and rebuild the strip in place
+        // when it differs. Summaries read live, so only add/remove/reorder needs a rebuild. Focus isn't
+        // disturbed: these changes originate from choices made in the content, where focus lives.
+        protected override void OnPhaseTick()
+        {
+            _phaseContent?.Tick();
+            if (PhaseSetChanged()) FillRoadmap();
+        }
+
+        private bool PhaseSetChanged()
+        {
+            var phases = Vm()?.PhasesCollection;
+            int n = phases?.Count ?? 0;
+            if (_roadmapPhases == null || _roadmapPhases.Count != n) return true;
+            int i = 0;
+            if (phases != null)
+                foreach (var p in phases)
+                {
+                    if (!ReferenceEquals(p, _roadmapPhases[i])) return true;
+                    i++;
+                }
+            return false;
+        }
 
         protected override void OnBack()
         {

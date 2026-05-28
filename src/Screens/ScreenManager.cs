@@ -89,6 +89,7 @@ namespace WrathAccess.Screens
             Register(new PredicateScreen("ctx.ingame", "Game", 0, () => RC()?.IsInGame ?? false));
             Register(new PredicateScreen("ctx.globalmap", "World Map", 0, () => RC()?.IsGlobalMap ?? false));
             Register(new PredicateScreen("ctx.tacticalcombat", "Tactical Combat", 0, () => RC()?.IsTacticalCombat ?? false));
+            Register(new DialogueScreen()); // in-game conversation (common DialogVM); layer 15, above contexts + service windows
             Register(new PredicateScreen("ctx.kingdom", "Kingdom", 0, () => RC()?.IsKingdom ?? false));
             Register(new PredicateScreen("ctx.citybuilder", "City", 0, () => RC()?.IsCityBuilder ?? false));
 

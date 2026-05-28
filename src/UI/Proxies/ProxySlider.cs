@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Kingmaker.UI; // UISoundType
 using Kingmaker.UI.MVVM._VM.Settings.Entities;
 using WrathAccess.UI.Announcements;
 
@@ -38,10 +39,34 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (!Enabled) yield break;
-            yield return new ElementAction(ActionIds.Decrease, Message.Raw("Decrease"), _ => _vm.SetNextValue(-1));
-            yield return new ElementAction(ActionIds.Increase, Message.Raw("Increase"), _ => _vm.SetNextValue(1));
+            yield return new ElementAction(ActionIds.Decrease, Message.Raw("Decrease"), _ => Step(-1));
+            yield return new ElementAction(ActionIds.Increase, Message.Raw("Increase"), _ => Step(1));
             yield return new ElementAction(ActionIds.SetValue, Message.Raw("Set value"),
-                a => _vm.SetTempValue((float)ActionArgs.Get<double>(a, "value")));
+                a => SetValue((float)ActionArgs.Get<double>(a, "value")));
+        }
+
+        // Mirror SettingsEntitySliderPCView.SetValueFromUI: play the move sound only when the value
+        // actually changes (so stepping at min/max stays silent). For volume sliders this doubles as
+        // the level cue — SoundSettingsController updates the Wwise bus on the VM change, so the click
+        // sounds at the new volume, just like the game.
+        private void Step(int dir)
+        {
+            float before = _vm.GetTempValue();
+            _vm.SetNextValue(dir);
+            PlayMoveIfChanged(before);
+        }
+
+        private void SetValue(float value)
+        {
+            float before = _vm.GetTempValue();
+            _vm.SetTempValue(value);
+            PlayMoveIfChanged(before);
+        }
+
+        private void PlayMoveIfChanged(float before)
+        {
+            if (Math.Abs(_vm.GetTempValue() - before) > float.Epsilon)
+                UiSound.Play(UISoundType.SettingsSliderMove);
         }
 
         public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate()

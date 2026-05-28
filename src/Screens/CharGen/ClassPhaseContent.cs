@@ -232,8 +232,13 @@ namespace WrathAccess.Screens
             }
 
             // Progression grid as a Table tab-stop: levels = columns, feature lines = rows (banded by
-            // class / Feats / Shared). Space on a cell drills into the feature.
-            var grid = ProgressionGrid.Build(Phase.ProgressionVM, Phase.SelectedClassVM.Value?.Class);
+            // class / Shared). Space on a cell drills into the feature. The chargen class-Mechanic
+            // UnitProgressionView prefab instance is the one place the game leaves m_FeatProgressionView
+            // unwired, suppressing the Feats band here (and with it the racial feat selections that
+            // FeatProgressionVM packs into AdditionalChupaChupsList). Mirror that — feats/race show up
+            // on the feature-selector phases via the global edge-window, not on the class screen.
+            var grid = ProgressionGrid.Build(Phase.ProgressionVM, Phase.SelectedClassVM.Value?.Class,
+                new ProgressionGrid.Options { IncludeFeats = false });
             if (grid != null) _detailPanel.Add(grid);
 
             // Auto-levelup button: present only when the game shows it active (first level + a default

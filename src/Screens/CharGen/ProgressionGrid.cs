@@ -12,10 +12,11 @@ namespace WrathAccess.Screens
 {
     /// <summary>
     /// Maps the game's progression grid (<see cref="UnitProgressionVM"/>) onto one navigable
-    /// <see cref="Table"/>. The game stacks several mini-grids per class — Statistics (BAB/saves), the
+    /// <see cref="Table"/>. The game's view (UnitProgressionView prefab) stacks the sections in a
+    /// vertical layout in this order: Feats, then one section per class — Statistics (BAB/saves), the
     /// spellbook, then one block per <see cref="ProgressionVM"/> (the main progression and each
-    /// sub-progression such as Weapon Training), then Feats and any Shared tracks — each with its own
-    /// level ruler. We mirror that as groups inside a single grid: every block emits a header row
+    /// sub-progression such as Weapon Training) — then any Shared tracks last; each block carries its
+    /// own level ruler (verified from the prefab). We mirror that as groups inside a single grid: every block emits a header row
     /// ("[group name] | Level 1 | Level 2 | …") followed by its data rows, and the navigator resolves a
     /// cell's group/level/row headers by nearest-cell lookup. A feature cell is the feature at that
     /// (line, level) with rank + Added/Removed marker and a Space drill-in; a stat cell is the value at
@@ -23,6 +24,25 @@ namespace WrathAccess.Screens
     /// </summary>
     internal static class ProgressionGrid
     {
+        /// <summary>Which bands to include. Defaults match a fully-wired UnitProgressionView prefab
+        /// (in-game character sheet, edge-window); flip a flag off to mirror a prefab that nulled the
+        /// corresponding sub-view. Game-side mapping: each option below names the serialized field on
+        /// <c>UnitProgressionView</c> that gates the band — RefreshView does
+        /// <c>m_X.Or(null)?.Bind(...)</c>, so a null reference silently skips it. The chargen
+        /// class-Mechanic instance, uniquely, nulls <c>m_FeatProgressionView</c>.</summary>
+        public sealed class Options
+        {
+            /// <summary>Per-class blocks (Statistics, Spells, each <see cref="ProgressionVM"/> block).
+            /// Prefab field: <c>m_WidgetListClasses</c>.</summary>
+            public bool IncludeClasses { get; set; } = true;
+            /// <summary>Feats band — the FeatProgressionVM lines plus its AdditionalChupaChupsList
+            /// (racial feat selections). Prefab field: <c>m_FeatProgressionView</c>.</summary>
+            public bool IncludeFeats { get; set; } = true;
+            /// <summary>Shared progressions (background, race-shared tracks, etc.). Prefab field:
+            /// <c>m_WidgetListSharedProgressions</c>.</summary>
+            public bool IncludeShared { get; set; } = true;
+        }
+
         // Each ClassProgressionVM keeps its class/archetype private; we reflect them to compute the
         // per-level BAB/saves (the grid's stat chupachups only flag increases, not the numbers).
         private static readonly System.Reflection.FieldInfo ClassField =
@@ -30,8 +50,10 @@ namespace WrathAccess.Screens
         private static readonly System.Reflection.FieldInfo ArchetypeField =
             AccessTools.Field(typeof(ClassProgressionVM), "m_UnitArchetype");
 
-        public static Table Build(UnitProgressionVM prog, BlueprintCharacterClass selectedClass)
+        public static Table Build(UnitProgressionVM prog, BlueprintCharacterClass selectedClass,
+                                  Options options = null)
         {
+            options ??= new Options();
             var levels = prog?.LevelProgressionVM?.EntryVms;
             if (levels == null || levels.Count == 0) return null;
 
@@ -39,18 +61,24 @@ namespace WrathAccess.Screens
             // second band (it holds the last two classes touched, newest first), even though the preview
             // unit itself has only the current class. Render only the band for the selected class; fall
             // back to the first (newest) band if we can't match by blueprint.
-            var bands = new List<ClassProgressionVM>(SelectBands(prog.ClassProgressionVms, selectedClass));
+            var bands = options.IncludeClasses
+                ? new List<ClassProgressionVM>(SelectBands(prog.ClassProgressionVms, selectedClass))
+                : new List<ClassProgressionVM>();
 
             var table = new Table("Progression");
+
+            // Section order mirrors the game's UnitProgressionView prefab (verified from
+            // mainmenupcview.res, which lays the scroll content out in a vertical layout):
+            // Feats first, then the class blocks, then shared progressions last.
+            if (options.IncludeFeats && prog.FeatProgressionVM != null)
+                AddBand(table, "Feats", prog.FeatProgressionVM.MainChupaChupsLines,
+                    prog.FeatProgressionVM.AdditionalChupaChupsList, levels);
+
             bool prefix = bands.Count > 1; // multiclass → disambiguate group names by class
             foreach (var cls in bands)
                 if (cls != null) AddClassBlocks(table, cls, levels, prefix ? cls.Name + " — " : "");
 
-            if (prog.FeatProgressionVM != null)
-                AddBand(table, "Feats", prog.FeatProgressionVM.MainChupaChupsLines,
-                    prog.FeatProgressionVM.AdditionalChupaChupsList, levels);
-
-            if (prog.SharedProgressionVms != null)
+            if (options.IncludeShared && prog.SharedProgressionVms != null)
                 foreach (var sh in prog.SharedProgressionVms)
                     if (sh != null) AddBand(table, sh.ProgressionName ?? "Shared",
                         sh.MainChupaChupsLines, sh.AdditionalChupaChupsList, levels);

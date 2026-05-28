@@ -1,6 +1,7 @@
 using System.Linq;
 using Kingmaker;
 using Kingmaker.Blueprints.Root.Strings;
+using Kingmaker.UI; // UISoundType
 using Kingmaker.UI.MVVM._VM.CharGen;
 using WrathAccess.UI;
 
@@ -62,7 +63,14 @@ namespace WrathAccess.Screens
         {
             var vm = Vm();
             if (vm == null) return;
-            if (IsLastPhase(vm)) vm.Complete();
+            if (IsLastPhase(vm))
+            {
+                // The game's view plays this on completion (CharGenView.GoToNextPhaseOrComplete);
+                // driving Complete() from the VM bypasses it, so replay it here. Phase advances play
+                // the page-turn instead (WizardScreen, on phase change) — completion deliberately doesn't.
+                vm.Complete();
+                UiSound.Play(UISoundType.ChargenCompleteClick);
+            }
             else vm.PhasesSelectionGroupRadioVM.SelectNextValidEntity();
         }
 

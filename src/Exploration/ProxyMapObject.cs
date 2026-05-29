@@ -19,6 +19,13 @@ namespace WrathAccess.Exploration
 
         public ProxyMapObject(MapObjectEntityData obj) : base(obj) { _obj = obj; }
 
+        // Mirror the local map's own marker filter (LocalMapMarkerPart.IsVisible): a static object stays
+        // listed once it's been revealed, even if it's currently back in fog — so we keep showing things
+        // the player has seen, like the map does. Perception gates the hidden ones: IsPerceptionCheckPassed
+        // is true by default but false for secret/trapped objects until their perception check passes, so
+        // undiscovered ones don't leak. (This is why we don't use the base current-visibility filter.)
+        public override bool IsVisible => _obj.IsInGame && _obj.IsRevealed && _obj.IsPerceptionCheckPassed;
+
         public override IEnumerable<ScanCategory> Categories
         {
             get

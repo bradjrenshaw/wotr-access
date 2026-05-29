@@ -6,7 +6,10 @@ namespace WrathAccess.Exploration
     /// <summary>
     /// A <see cref="ScanItem"/> backed by a live game entity. Reads its position live and filters to
     /// what the player can actually perceive (so we don't leak fogged/hidden things — see the
-    /// surface-only-visible memory). Concrete kinds: <see cref="ProxyUnit"/>, <see cref="ProxyMapObject"/>.
+    /// surface-only-visible memory). Default is current visibility, which matches the local map for the
+    /// dynamic case (units); <see cref="ProxyMapObject"/> overrides it to the map's reveal-based rule so a
+    /// discovered static object keeps showing through fog. Concrete kinds: <see cref="ProxyUnit"/>,
+    /// <see cref="ProxyMapObject"/>.
     /// </summary>
     internal abstract class ProxyEntity : ScanItem
     {

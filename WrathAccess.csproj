@@ -46,12 +46,26 @@
     <Reference Include="TolkDotNet"><HintPath>$(TolkDir)\TolkDotNet.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- NAudio (1.x = a single managed NAudio.dll, net35, loads fine on the game's Mono/net48): plays
+         our own wall-tone WAVs through the default output device, independent of the game's Wwise. We
+         deploy NAudio.dll into the mod folder in DeployMod (GeneratePathProperty gives $(PkgNAudio)). -->
+    <PackageReference Include="NAudio" Version="1.10.0" GeneratePathProperty="true" />
+  </ItemGroup>
+
   <!-- Deploy to the game's Mods folder after a Debug build, then restart the game. -->
   <Target Name="DeployMod" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
     <MakeDir Directories="$(ModsDir)" />
     <Copy SourceFiles="$(OutputPath)$(ModName).dll" DestinationFolder="$(ModsDir)" />
     <Copy SourceFiles="$(MSBuildProjectDirectory)\Info.json" DestinationFolder="$(ModsDir)" />
     <Copy SourceFiles="$(TolkDir)\TolkDotNet.dll" DestinationFolder="$(ModsDir)" />
+    <!-- NAudio (managed; no native dll) ships next to our dll so the runtime resolves it. -->
+    <Copy SourceFiles="$(PkgNAudio)\lib\net35\NAudio.dll" DestinationFolder="$(ModsDir)" />
+    <!-- Bundled assets (wall-tone WAV sets, etc.), structure preserved under the mod's assets/. -->
+    <ItemGroup>
+      <ModAsset Include="$(MSBuildProjectDirectory)\assets\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ModAsset)" DestinationFiles="@(ModAsset->'$(ModsDir)\assets\%(RecursiveDir)%(Filename)%(Extension)')" />
     <!-- Native libs must sit next to Wrath.exe so P/Invoke can resolve them. -->
     <Copy SourceFiles="$(TolkDir)\x64\Tolk.dll" DestinationFolder="$(GameDir)" />
     <Copy SourceFiles="$(TolkDir)\x64\nvdaControllerClient64.dll" DestinationFolder="$(GameDir)" />

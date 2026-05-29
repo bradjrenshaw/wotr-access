@@ -78,6 +78,7 @@ namespace WrathAccess
             if (!Enabled) return;
             InputManager.Tick();
             ScreenManager.Tick();
+            OverlayManager.Tick(dt); // per-frame overlay update (continuous cursor + wall tones)
         }
 
         // Space's exploration job: toggle the game's pause. Only when focus mode owns the keyboard AND

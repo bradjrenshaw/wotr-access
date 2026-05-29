@@ -12,7 +12,11 @@ namespace WrathAccess.Exploration.Overlays
     /// </summary>
     internal static class OverlayManager
     {
-        private static readonly List<Overlay> _overlays = new List<Overlay> { new VirtualTileView() };
+        private static readonly List<Overlay> _overlays = new List<Overlay>
+        {
+            new VirtualTileView(),
+            new ContinuousCursor(),
+        };
         private static int _active = -1; // -1 = overlays off
 
         private static bool InExploration =>
@@ -32,6 +36,10 @@ namespace WrathAccess.Exploration.Overlays
             Tts.Speak(Current.Name, interrupt: true);
             Current.OnEnter();
         }
+
+        // Ticks the selected overlay every frame (whether or not we're in exploration); the overlay
+        // self-gates on Active for movement/audio so it can mute/idle when a menu's up or focus is off.
+        public static void Tick(float dt) { Current?.Tick(dt); }
 
         public static void Move(NavDirection dir) { if (Active) Current.Move(dir); }
         public static void VerticalFollow(int dir) { if (Active) Current.VerticalFollow(dir); }

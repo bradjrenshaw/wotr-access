@@ -16,6 +16,11 @@ namespace WrathAccess.Exploration.Overlays
         public virtual void OnEnter() { }
         public virtual void OnExit() { }
 
+        /// <summary>Per-frame update while this overlay is the selected one (for continuous movement,
+        /// audio, etc.). Called every frame regardless of focus/screen — the overlay self-gates on
+        /// <see cref="OverlayManager.Active"/>. <paramref name="dt"/> is unscaled delta time.</summary>
+        public virtual void Tick(float dt) { }
+
         /// <summary>Arrow-key movement of the overlay's cursor/focus.</summary>
         public virtual void Move(NavDirection dir) { }
 

@@ -24,6 +24,15 @@ namespace WrathAccess.Input
             return action;
         }
 
+        /// <summary>Whether the action with this key is currently held — for per-frame polling (e.g. the
+        /// continuous overlay reading held arrows), rather than the press/repeat Performed path.</summary>
+        public static bool Held(string key)
+        {
+            for (int i = 0; i < _actions.Count; i++)
+                if (_actions[i].Key == key) return _actions[i].Held;
+            return false;
+        }
+
         public static void Tick()
         {
             // Don't steal keystrokes while the player is typing in a game text field — either the

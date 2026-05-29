@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Kingmaker;
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UnitLogic.Commands; // UnitMoveTo
+using Kingmaker.View; // ObstacleAnalyzer (navmesh Area reachability)
 using UnityEngine;
 using WrathAccess.Screens;
 
@@ -137,11 +138,24 @@ namespace WrathAccess.Exploration
         {
             var sel = Selected;
             if (sel == null) { Speak("No item selected"); return; }
+            var name = string.IsNullOrEmpty(sel.Name) ? "that" : sel.Name;
+            var mc = Game.Instance?.Player?.MainCharacter.Value;
+            if (mc != null)
+            {
+                // Interact approaches the thing adjacently (it doesn't path onto the thing's exact point),
+                // so we don't require its centre to be on-mesh. A closed door sits in its own navmesh cut,
+                // so its centre can snap to the far side — re-test a point nudged toward the actor, which
+                // lands on our side, so we don't wrongly block walking up to open it.
+                var from = Geo.Live(mc);
+                bool reachable = SameArea(from, sel.Position)
+                                 || SameArea(from, Vector3.MoveTowards(sel.Position, from, 2f));
+                if (!reachable) { Speak("Can't reach " + name + ", no path"); return; }
+            }
             EnsureSelection();
             if (sel.Interact())
                 Speak("Interacting with " + (string.IsNullOrEmpty(sel.Name) ? "item" : sel.Name));
             else
-                Speak("Can't interact with " + (string.IsNullOrEmpty(sel.Name) ? "that" : sel.Name));
+                Speak("Can't interact with " + name);
         }
 
         // Walk to the shared cursor — the point planted by Home or moved by the tile-view overlay. We
@@ -157,11 +171,32 @@ namespace WrathAccess.Exploration
             if (mc == null) { Speak("No character to move"); return; }
 
             var dest = Cursor.Position.Value;
+            if (!OnNavmesh(dest)) { Speak("Can't move there, not walkable"); return; }
+            if (!SameArea(Geo.Live(mc), dest)) { Speak("Can't reach the cursor, no path"); return; }
             var dir = dest - Geo.Live(mc);
             float orient = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
             mc.Commands.Run(new UnitMoveTo(dest, 0.3f) { Orientation = orient, CreatedByPlayer = true });
             Speak("Moving to cursor");
         }
+
+        private const uint NoArea = 999999u; // ObstacleAnalyzer.GetArea's sentinel when no node is near
+
+        // Two world points are mutually walkable iff their nearest navmesh nodes share an Area (connected
+        // component) — the game's own cross-Area move block ([[wotr-exploration-world-model]]): a closed
+        // door that's the only route splits the Areas, so this is "no path" until it's opened. Because
+        // reachable ⇒ same Area, a DIFFERENT id means genuinely unreachable, so we never block a target you
+        // could actually reach. Unknown (off-mesh → NoArea) is treated as same so a snap we can't classify
+        // doesn't block; callers that must not path onto off-mesh points gate on OnNavmesh first.
+        private static bool SameArea(Vector3 a, Vector3 b)
+        {
+            uint ar = ObstacleAnalyzer.GetArea(a), br = ObstacleAnalyzer.GetArea(b);
+            return ar == NoArea || br == NoArea || ar == br;
+        }
+
+        // Is this point actually on walkable ground? We refuse to path to off-navmesh points: the game
+        // would silently clamp to the nearest walkable spot, and a blind player can't see the marker
+        // showing where it landed. (Same 0.35 m tolerance the tile view uses to call a tile walkable.)
+        private static bool OnNavmesh(Vector3 p) => NavmeshProbe.Sample(p.x, p.z, p.y).OnNavmesh;
 
         // The interaction handlers act on the player's current selection; keyboard nav may have none, so
         // make sure at least the main character is selected (a mouse player always has a selection).

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Kingmaker;
+using Kingmaker.Controllers; // FogOfWarController
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using UnityEngine;
 using WrathAccess.UI; // NavDirection
@@ -142,6 +143,10 @@ namespace WrathAccess.Exploration.Overlays
             if (vert != null) sb.Append(", ").Append(vert);
 
             sb.Append("; ").Append(Terrain(s, fromY));
+
+            // Currently out of the party's sight (vision radius + LoS). Informational only — you can still
+            // move into fog; it just means we can't see what's there right now (entities are hidden too).
+            if (FogOfWarController.IsInFogOfWar(centre)) sb.Append("; fog of war");
 
             var contents = Contents();
             if (contents.Count > 0) sb.Append("; ").Append(string.Join(", ", contents.ToArray()));

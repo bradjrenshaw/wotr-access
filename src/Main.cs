@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using Kingmaker;
+using Kingmaker.GameModes; // GameModeType
 using UnityEngine;
 using UnityModManagerNet;
 using WrathAccess.Exploration.Overlays;
@@ -94,6 +96,28 @@ namespace WrathAccess
             Tts.Speak(wasPaused ? "Unpaused" : "Paused");
         }
 
+        // Game modes where a quick-save is sensible — normal play, paused, world/global map, kingdom, and
+        // service/fullscreen windows. Not dialogue, cutscenes, rest, turn-based combat, loading, etc. This
+        // approximates the game's own save-allowed set without reproducing its keybinding registration.
+        private static readonly HashSet<GameModeType> QuickSaveModes = new HashSet<GameModeType>
+        {
+            GameModeType.Default, GameModeType.Pause, GameModeType.GlobalMap,
+            GameModeType.Kingdom, GameModeType.KingdomSettlement, GameModeType.FullScreenUi,
+        };
+
+        // F5 quick-save. Only while focus mode owns the keyboard: F5 is the game's own quick-save key, but
+        // focus mode suppresses the game's keyboard, so we stand in for it here; with focus off the game's
+        // native F5 saves and ours must not fire (no double-save). Calls the game's own MakeQuickSave.
+        private static void QuickSave()
+        {
+            if (!FocusMode.Active) return;
+            var game = Game.Instance;
+            if (game == null) return;
+            if (!QuickSaveModes.Contains(game.CurrentMode)) { Tts.Speak("Can't quick save now"); return; }
+            try { game.MakeQuickSave(); Tts.Speak("Quick saving"); }
+            catch (Exception e) { Log.Error("[quicksave] " + e); Tts.Speak("Quick save failed"); }
+        }
+
         /// <summary>
         /// Temporary proof-of-life bindings for the input/speech/suppression slice.
         /// These get replaced by real navigation + a rebindable action set.
@@ -111,6 +135,21 @@ namespace WrathAccess
             InputManager.Register("speak_test", "Speak Test", () =>
                 Tts.Speak("Wrath Access input and speech are working."))
                 .AddBinding(KeyCode.T, ctrl: true, shift: true);
+
+            // Quick save (the game's own MakeQuickSave). Self-gates to focus mode + a save-allowed mode.
+            InputManager.Register("game.quickSave", "Quick save", QuickSave).AddBinding(KeyCode.F5);
+
+            // Party selection — drives the game's real selection, which decides move-to-cursor's
+            // single-vs-formation behaviour. Ctrl+A = whole party; Ctrl+1..6 = a single member.
+            InputManager.Register("party.selectAll", "Select whole party",
+                WrathAccess.Exploration.PartySelection.SelectWholeParty).AddBinding(KeyCode.A, ctrl: true);
+            for (int i = 0; i < 6; i++)
+            {
+                int idx = i; // capture per-iteration for the closure
+                InputManager.Register("party.select" + (i + 1), "Select party member " + (i + 1),
+                    () => WrathAccess.Exploration.PartySelection.SelectMember(idx))
+                    .AddBinding(KeyCode.Alpha1 + i, ctrl: true);
+            }
 
             // Navigation actions (consumed by the active navigator while focus mode is on).
             // Movement actions auto-repeat while held (Repeating); activation keys do not.

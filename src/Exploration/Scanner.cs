@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Kingmaker;
+using Kingmaker.Controllers.Clicks.Handlers; // ClickGroundHandler
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
-using Kingmaker.UnitLogic.Commands; // UnitMoveTo
 using Kingmaker.View; // ObstacleAnalyzer (navmesh Area reachability)
 using UnityEngine;
 using WrathAccess.Screens;
@@ -158,24 +158,25 @@ namespace WrathAccess.Exploration
                 Speak("Can't interact with " + name);
         }
 
-        // Walk to the shared cursor — the point planted by Home or moved by the tile-view overlay. We
-        // command the main character to move directly (the same UnitMoveTo path the game's own RunCommand
-        // uses), bypassing SelectionCharacter entirely: no SetSelected (which fires the unit's selection
-        // voice line) and no dependency on the selection list (which the game repopulates a frame late, so
-        // MoveSelectedUnitsToPoint would read an empty list and not move). A move issued while the game is
-        // paused queues and walks on unpause (Space) — the normal pause-and-queue flow.
+        // Walk to the shared cursor — the point planted by Home or moved by the tile-view overlay. Routes
+        // through the game's own MoveSelectedUnitsToPoint, so the selection decides the behaviour exactly
+        // like a mouse click: one member selected → only they go; the whole party → everyone into the set
+        // formation at the target ([[wotr-access-party-selection]]). Selection is set by the Ctrl+A /
+        // Ctrl+1..6 actions and read here synchronously. A move issued while paused queues and walks on
+        // unpause (Space). Reachability is checked from the lead selected unit.
         private static void DoMoveToCursor()
         {
             if (!Cursor.Has) { Speak("No cursor set"); return; }
-            var mc = Game.Instance?.Player?.MainCharacter.Value;
-            if (mc == null) { Speak("No character to move"); return; }
-
             var dest = Cursor.Position.Value;
             if (!OnNavmesh(dest)) { Speak("Can't move there, not walkable"); return; }
-            if (!SameArea(Geo.Live(mc), dest)) { Speak("Can't reach the cursor, no path"); return; }
-            var dir = dest - Geo.Live(mc);
-            float orient = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
-            mc.Commands.Run(new UnitMoveTo(dest, 0.3f) { Orientation = orient, CreatedByPlayer = true });
+
+            EnsureSelection(); // default to the whole party if nothing's selected yet
+            var refUnit = Game.Instance?.SelectionCharacter?.FirstSelectedUnit
+                          ?? Game.Instance?.Player?.MainCharacter.Value;
+            if (refUnit == null) { Speak("No character to move"); return; }
+            if (!SameArea(Geo.Live(refUnit), dest)) { Speak("Can't reach the cursor, no path"); return; }
+
+            ClickGroundHandler.MoveSelectedUnitsToPoint(dest);
             Speak("Moving to cursor");
         }
 
@@ -198,17 +199,16 @@ namespace WrathAccess.Exploration
         // showing where it landed. (Same 0.35 m tolerance the tile view uses to call a tile walkable.)
         private static bool OnNavmesh(Vector3 p) => NavmeshProbe.Sample(p.x, p.z, p.y).OnNavmesh;
 
-        // The interaction handlers act on the player's current selection; keyboard nav may have none, so
-        // make sure at least the main character is selected (a mouse player always has a selection).
+        // The move/interaction logic acts on the player's current selection; keyboard nav may have none
+        // (the player hasn't pressed a selection key yet), so default to the whole party — the game's own
+        // default. SelectAll goes through MultiSelect (silent, no selection voice) and writes SelectedUnits
+        // synchronously, so the move that follows sees it immediately.
         private static void EnsureSelection()
         {
             var sc = Game.Instance?.SelectionCharacter;
             if (sc == null) return;
-            var units = sc.SelectedUnits;
-            if (units != null && units.Count > 0) return;
-            var player = Game.Instance.Player;
-            var mc = player != null ? player.MainCharacter.Value : null;
-            if (mc != null) sc.SetSelected(mc);
+            if (sc.SelectedUnits != null && sc.SelectedUnits.Count > 0) return;
+            Game.Instance.UI?.SelectionManager?.SelectAll();
         }
 
         private static void SpeakCursor()

@@ -1,0 +1,80 @@
+using System.Collections.Generic;
+using Kingmaker;                              // Game
+using Kingmaker.Controllers.Clicks.Handlers;  // ClickMapObjectHandler
+using Kingmaker.EntitySystem.Entities; // MapObjectEntityData
+using Kingmaker.View.MapObjects;       // InteractionPart family, LocalMapMarkerPart
+
+namespace WrathAccess.Exploration
+{
+    /// <summary>
+    /// An interactable map object. Its categories come from the interaction parts it carries (many-to-
+    /// many — a thing that's both lootable and searchable is in Containers and Search Points); lock/trap
+    /// parts are state, not categories. Map objects rarely have a real name, so we label by the local-
+    /// map marker description if it has one, else by interaction type ("Door", "Container", …). An object
+    /// with no relevant interactions reports no categories and is excluded by the scanner.
+    /// </summary>
+    internal sealed class ProxyMapObject : ProxyEntity
+    {
+        private readonly MapObjectEntityData _obj;
+
+        public ProxyMapObject(MapObjectEntityData obj) : base(obj) { _obj = obj; }
+
+        public override IEnumerable<ScanCategory> Categories
+        {
+            get
+            {
+                var cats = new HashSet<ScanCategory>();
+                var interactions = _obj.Interactions; // InteractionPart parts only
+                for (int i = 0; i < interactions.Count; i++)
+                {
+                    switch (interactions[i])
+                    {
+                        case InteractionDoorPart _: cats.Add(ScanCategory.Doors); break;
+                        case InteractionLootPart _: cats.Add(ScanCategory.Containers); break;
+                        case InteractionSkillCheckPart _: cats.Add(ScanCategory.SearchPoints); break;
+                        case DisableTrapInteractionPart _: break;     // trap = state (see Extra), not a category
+                        default: cats.Add(ScanCategory.Other); break; // dialog, combine, button, device, bark
+                    }
+                }
+                // Area transitions and restrictions are separate entity parts, not InteractionParts.
+                if (_obj.Get<AreaTransitionPart>() != null) cats.Add(ScanCategory.Exits);
+                return cats;
+            }
+        }
+
+        public override string Name
+        {
+            get
+            {
+                var desc = _obj.Get<LocalMapMarkerPart>()?.GetDescription();
+                if (!string.IsNullOrEmpty(desc)) return desc;
+                foreach (var c in Categories) return ScanCategories.Singular(c); // first category's singular
+                return "Object";
+            }
+        }
+
+        protected override string Extra
+        {
+            get
+            {
+                var bits = new List<string>();
+                if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add("restricted");
+                if (_obj.Get<DisableTrapInteractionPart>() != null) bits.Add("trapped");
+                return bits.Count > 0 ? string.Join(", ", bits.ToArray()) : null;
+            }
+        }
+
+        // Same as clicking the object: paths to it and runs its interaction. We pass the current
+        // selection (the unit source the click uses); the interaction's SelectUnit picks the actor.
+        // forceOvertipInteractions: true — overtip interactions are hover-triggered in mouse mode and
+        // we have no hover.
+        public override bool Interact()
+        {
+            var view = _obj.View;
+            if (view == null) return false;
+            var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
+            if (units == null || units.Count == 0) return false;
+            return ClickMapObjectHandler.Interact(view.gameObject, units, forceOvertipInteractions: true);
+        }
+    }
+}

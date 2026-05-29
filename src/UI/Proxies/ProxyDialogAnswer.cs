@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Kingmaker.UI.MVVM._VM.Dialog.Dialog;
+using Kingmaker.Utility; // UIConsts.GetAnswerString
 using WrathAccess.UI.Announcements;
 
 namespace WrathAccess.UI.Proxies
@@ -24,9 +25,19 @@ namespace WrathAccess.UI.Proxies
         // OnChooseAnswer plays NextDialogLine; returning null avoids doubling it.
         public override Kingmaker.UI.UISoundType? ActivateSound => null;
 
+        // Use the game's own answer formatter so we read exactly what's drawn: the numbered prefix plus
+        // the skill-check "[Athletics 12]", alignment "(Evil)", mythic, and show-check tags — all gated by
+        // the same dialogue settings, so we surface only what's actually shown. It returns TMP rich text
+        // ((<link>)-wrapped checks); Tts strips that at speak time. The bind name matches the view's own
+        // (DialogAnswerView builds "DialogChoice{Index}"). Falls back to plain text for system answers.
         private string AnswerText()
         {
             var bp = _vm?.Answer?.Value;
+            if (bp != null)
+            {
+                try { return UIConsts.GetAnswerString(bp, "DialogChoice" + _vm.Index, _vm.Index); }
+                catch { /* fall through to the plain form */ }
+            }
             var text = bp != null ? bp.DisplayText : null;
             if (string.IsNullOrEmpty(text)) text = "Continue"; // system/continue answers carry no text
             return _vm.Index + ". " + text;

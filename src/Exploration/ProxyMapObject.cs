@@ -26,6 +26,19 @@ namespace WrathAccess.Exploration
         // undiscovered ones don't leak. (This is why we don't use the base current-visibility filter.)
         public override bool IsVisible => _obj.IsInGame && _obj.IsRevealed && _obj.IsPerceptionCheckPassed;
 
+        // Footprint from the view's collider/renderer bounds — a big object (gate, statue, wagon) spans
+        // several tiles. Half the larger XZ extent ~= an enclosing radius. Zero if there's no view yet.
+        public override float Footprint
+        {
+            get
+            {
+                var view = _obj.View;
+                if (view == null) return 0f;
+                var ext = view.GetMaxBounds().extents;
+                return UnityEngine.Mathf.Max(ext.x, ext.z);
+            }
+        }
+
         public override IEnumerable<ScanCategory> Categories
         {
             get

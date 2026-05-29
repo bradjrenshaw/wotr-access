@@ -1,8 +1,7 @@
 using System.Collections.Generic;
 using Kingmaker;
-using Kingmaker.Controllers.Clicks.Handlers; // ClickGroundHandler
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
-using Kingmaker.UI.MVVM._VM.ServiceWindows.LocalMap.Utils; // LocalMapModel
+using Kingmaker.UnitLogic.Commands; // UnitMoveTo
 using UnityEngine;
 using WrathAccess.Screens;
 
@@ -25,7 +24,6 @@ namespace WrathAccess.Exploration
 
         private static int _catIndex;   // index into ScanCategories.Order
         private static int _itemIndex;   // index into the current category's list
-        private static Vector3? _cursor;
         private static bool _entered;    // first scanner key announces the current spot without moving
 
         private static bool Active =>
@@ -37,6 +35,11 @@ namespace WrathAccess.Exploration
         }
 
         private static Vector3 Reference => Geo.Live(Leader);
+
+        // The scan list reads (and sorts) relative to the shared cursor when one is placed — so you can
+        // "look around" from the cursor or a thing you planted it on (Home), or from wherever the tile
+        // overlay last moved it. Falls back to the player when no cursor is set.
+        private static Vector3 ScanFrom => Cursor.Has ? Cursor.Position.Value : Reference;
 
         // ---- input entry points (gated) ----
         public static void NextItem() { if (Active) StepItem(1); }
@@ -57,21 +60,9 @@ namespace WrathAccess.Exploration
                 else _items[c] = new List<ScanItem>();
             }
 
-            var game = Game.Instance;
-            var state = game != null ? game.State : null;
-            if (state != null)
-            {
-                foreach (var u in state.Units) Add(new ProxyUnit(u));
-                foreach (var o in state.MapObjects) Add(new ProxyMapObject(o));
-            }
-            foreach (var m in LocalMapModel.Markers)
-            {
-                if (m == null) continue;
-                try { if (!LocalMapModel.IsInCurrentArea(m.GetPosition())) continue; } catch { }
-                Add(new ProxyMarker(m));
-            }
+            foreach (var item in WorldScan.EnumerateVisible()) Add(item);
 
-            var refPos = Reference;
+            var refPos = ScanFrom;
             foreach (var list in _items.Values)
                 list.Sort((a, b) => Geo.Distance(refPos, a.Position).CompareTo(Geo.Distance(refPos, b.Position)));
         }
@@ -130,7 +121,7 @@ namespace WrathAccess.Exploration
         private static void AnnounceItem(List<ScanItem> list) => Speak(ItemLine(list));
 
         private static string ItemLine(List<ScanItem> list) =>
-            list[_itemIndex].Describe(Reference) + ", " + (_itemIndex + 1) + " of " + list.Count;
+            list[_itemIndex].Describe(ScanFrom) + ", " + (_itemIndex + 1) + " of " + list.Count;
 
         // Cursor/interact act on the item you last navigated to (the cached selection) — no rebuild,
         // so they don't re-sort the list out from under you between hearing an item and acting on it.
@@ -138,7 +129,7 @@ namespace WrathAccess.Exploration
         {
             var sel = Selected;
             if (sel == null) { Speak("No item selected"); return; }
-            _cursor = sel.Position;
+            Cursor.Set(sel.Position); // the shared cursor — overlays move this same point
             Speak("Cursor on " + (string.IsNullOrEmpty(sel.Name) ? "item" : sel.Name) + ", " + Geo.Raw(sel.Position));
         }
 
@@ -153,13 +144,22 @@ namespace WrathAccess.Exploration
                 Speak("Can't interact with " + (string.IsNullOrEmpty(sel.Name) ? "that" : sel.Name));
         }
 
-        // Walk the selected units to the virtual cursor — mirrors right-click-to-move (the game clamps
-        // an unreachable point to the nearest accessible one). Cursor is planted with Home.
+        // Walk to the shared cursor — the point planted by Home or moved by the tile-view overlay. We
+        // command the main character to move directly (the same UnitMoveTo path the game's own RunCommand
+        // uses), bypassing SelectionCharacter entirely: no SetSelected (which fires the unit's selection
+        // voice line) and no dependency on the selection list (which the game repopulates a frame late, so
+        // MoveSelectedUnitsToPoint would read an empty list and not move). A move issued while the game is
+        // paused queues and walks on unpause (Space) — the normal pause-and-queue flow.
         private static void DoMoveToCursor()
         {
-            if (_cursor == null) { Speak("No cursor set"); return; }
-            EnsureSelection();
-            ClickGroundHandler.MoveSelectedUnitsToPoint(_cursor.Value);
+            if (!Cursor.Has) { Speak("No cursor set"); return; }
+            var mc = Game.Instance?.Player?.MainCharacter.Value;
+            if (mc == null) { Speak("No character to move"); return; }
+
+            var dest = Cursor.Position.Value;
+            var dir = dest - Geo.Live(mc);
+            float orient = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+            mc.Commands.Run(new UnitMoveTo(dest, 0.3f) { Orientation = orient, CreatedByPlayer = true });
             Speak("Moving to cursor");
         }
 
@@ -178,8 +178,8 @@ namespace WrathAccess.Exploration
 
         private static void SpeakCursor()
         {
-            if (_cursor == null) { Speak("No cursor set"); return; }
-            Speak("Cursor, " + Geo.Relative(Reference, _cursor.Value));
+            if (!Cursor.Has) { Speak("No cursor set"); return; }
+            Speak("Cursor, " + Geo.Relative(Reference, Cursor.Position.Value));
         }
 
         private static void SpeakParty()

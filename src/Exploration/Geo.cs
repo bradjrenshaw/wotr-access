@@ -29,6 +29,14 @@ namespace WrathAccess.Exploration
 
         public static float Distance(Vector3 from, Vector3 to) => GeometryUtils.MechanicsDistance(from, to);
 
+        // World space is metres; the game measures everything the player knows (speed, reach, spell
+        // ranges) in feet, at the real ratio 0.3048 m/ft (Kingmaker.Utility.Feet). So convert for any
+        // spoken distance — raw metres would read as ~1/3 of the feet the player expects. The game floors
+        // to whole feet; we round to the nearest foot to stay close to what's on screen.
+        public const float MetresPerFoot = 0.3048f;
+        public static float Feet(float metres) => metres / MetresPerFoot;
+        public static string FeetStr(float metres) => Mathf.RoundToInt(Feet(metres)) + " ft";
+
         private static readonly string[] Compass =
             { "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest" };
 
@@ -52,12 +60,12 @@ namespace WrathAccess.Exploration
 
         public static string Raw(Vector3 v) => "pos " + v.x.ToString("0.0") + " " + v.y.ToString("0.0") + " " + v.z.ToString("0.0");
 
-        /// <summary>"&lt;bearing&gt;, &lt;dist&gt;[, above/below], pos x y z" relative to a reference point.</summary>
+        /// <summary>"&lt;bearing&gt;, &lt;dist&gt; ft[, above/below], pos x y z" relative to a reference point.</summary>
         public static string Relative(Vector3 from, Vector3 to)
         {
             var bearing = Bearing(from, to);
             if (bearing == "here") return "here, " + Raw(to);
-            var s = bearing + ", " + Distance(from, to).ToString("0.0");
+            var s = bearing + ", " + FeetStr(Distance(from, to));
             var vert = Vertical(from, to);
             if (vert != null) s += ", " + vert;
             return s + ", " + Raw(to);

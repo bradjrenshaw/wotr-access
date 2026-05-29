@@ -18,6 +18,13 @@ namespace WrathAccess.Exploration
         /// <summary>Only listed when the player could actually know about it (fog/vision). Default: yes.</summary>
         public virtual bool IsVisible => true;
 
+        /// <summary>
+        /// XZ radius of the thing's footprint, in world units (metres). Large creatures/objects span
+        /// several tiles, so the tile view tests footprint-vs-tile overlap, not just the centre point.
+        /// Default 0 = a point (markers). Units use their corpulence; map objects their collider bounds.
+        /// </summary>
+        public virtual float Footprint => 0f;
+
         /// <summary>Subtype state folded into the spoken line (HP, "locked", marker type, …), or null.</summary>
         protected virtual string Extra => null;
 

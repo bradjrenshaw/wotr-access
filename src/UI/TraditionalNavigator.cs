@@ -59,6 +59,9 @@ namespace WrathAccess.UI
                     return Screen != null && Screen.InvokeAction(ActionIds.Back);
                 case "focus.tooltip":
                 {
+                    // In plain exploration Space is the pause toggle, not a tooltip key — don't consume it
+                    // here; let it bubble to the global handler (Main.TogglePauseIfExploring).
+                    if (WrathAccess.Screens.ScreenManager.Current?.Key == "ctx.ingame") return false;
                     var tpl = Current?.GetTooltipTemplate();
                     // In a grid, a cell with no tooltip of its own falls back to its row's tooltip, so
                     // Space works on any element in the row (the value, a stepper, the header).

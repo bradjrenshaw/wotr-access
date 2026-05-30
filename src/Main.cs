@@ -80,6 +80,7 @@ namespace WrathAccess
             ScreenManager.Tick();
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             OverlayManager.Tick(dt); // per-frame overlay update (continuous cursor + wall tones)
+            WrathAccess.Exploration.Sonar.Tick(); // after overlays move the cursor: fog enter/exit cues
         }
 
         // Space's exploration job: toggle the game's pause. Only when focus mode owns the keyboard AND

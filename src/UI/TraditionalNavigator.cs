@@ -42,7 +42,10 @@ namespace WrathAccess.UI
                 case "nav.next": return Tab(1);
                 case "nav.prev": return Tab(-1);
                 case "nav.primary":
-                    if (Current != null && Current.InvokeAction(ActionIds.Activate))
+                    // Nothing focused (e.g. plain exploration) → don't consume; let Enter bubble to the
+                    // global handler (Main → Scanner.InteractAtCursor = left-click the thing under the cursor).
+                    if (Current == null) return false;
+                    if (Current.InvokeAction(ActionIds.Activate))
                     {
                         var sound = Current.ActivateSound; // game plays this in the view handler we bypass
                         if (sound.HasValue) WrathAccess.UiSound.Play(sound.Value);

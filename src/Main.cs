@@ -164,7 +164,10 @@ namespace WrathAccess
             InputManager.Register("nav.down", "Navigate Down", () => OverlayManager.Move(NavDirection.Down)).AddBinding(KeyCode.DownArrow).Repeating();
             InputManager.Register("nav.left", "Navigate Left", () => OverlayManager.Move(NavDirection.Left)).AddBinding(KeyCode.LeftArrow).Repeating();
             InputManager.Register("nav.right", "Navigate Right", () => OverlayManager.Move(NavDirection.Right)).AddBinding(KeyCode.RightArrow).Repeating();
-            InputManager.Register("nav.primary", "Primary action").AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
+            // Enter activates the focused UI control; in plain exploration (no focus tree) the navigator
+            // declines and this fires instead — our "left click": interact with the thing under the cursor.
+            InputManager.Register("nav.primary", "Primary action / interact",
+                WrathAccess.Exploration.Scanner.InteractAtCursor).AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
             InputManager.Register("nav.secondary", "Secondary action").AddBinding(KeyCode.Backspace);
             InputManager.Register("nav.back", "Back").AddBinding(KeyCode.Escape);
             // Space: in a UI state it reads the focused control's tooltip (handled by the navigator); in

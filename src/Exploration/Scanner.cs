@@ -51,7 +51,10 @@ namespace WrathAccess.Exploration
         public static void CursorToSelected() { if (Active) CommitCursor(); }
         public static void AnnounceCursor() { if (Active) SpeakCursor(); }
         public static void AnnounceParty() { if (Active) SpeakParty(); }
-        public static void InteractSelected() { if (Active) DoInteract(); }
+        public static void InteractSelected() { if (Active) DoInteract(Selected, "No item selected"); }
+        // Enter = left click: interact with the object/unit the cursor is INSIDE (not the scanner's list
+        // selection). Same context-sensitive action a left click would do (select/attack/talk/open/loot).
+        public static void InteractAtCursor() { if (Active) DoInteract(CursorTarget.Inside(), "Nothing here"); }
         public static void MoveToCursor() { if (Active) DoMoveToCursor(); }
         public static void ToggleDebugShowAll()
         {
@@ -153,11 +156,10 @@ namespace WrathAccess.Exploration
             Speak("Cursor on " + (string.IsNullOrEmpty(sel.Name) ? "item" : sel.Name) + ", " + Geo.Raw(sel.Position));
         }
 
-        private static void DoInteract()
+        private static void DoInteract(ScanItem target, string noneMsg)
         {
-            var sel = Selected;
-            if (sel == null) { Speak("No item selected"); return; }
-            var name = string.IsNullOrEmpty(sel.Name) ? "that" : sel.Name;
+            if (target == null) { Speak(noneMsg); return; }
+            var name = string.IsNullOrEmpty(target.Name) ? "that" : target.Name;
             var mc = Game.Instance?.Player?.MainCharacter.Value;
             if (mc != null)
             {
@@ -166,13 +168,13 @@ namespace WrathAccess.Exploration
                 // so its centre can snap to the far side — re-test a point nudged toward the actor, which
                 // lands on our side, so we don't wrongly block walking up to open it.
                 var from = Geo.Live(mc);
-                bool reachable = SameArea(from, sel.Position)
-                                 || SameArea(from, Vector3.MoveTowards(sel.Position, from, 2f));
+                bool reachable = SameArea(from, target.Position)
+                                 || SameArea(from, Vector3.MoveTowards(target.Position, from, 2f));
                 if (!reachable) { Speak("Can't reach " + name + ", no path"); return; }
             }
             EnsureSelection();
-            if (sel.Interact())
-                Speak("Interacting with " + (string.IsNullOrEmpty(sel.Name) ? "item" : sel.Name));
+            if (target.Interact())
+                Speak("Interacting with " + (string.IsNullOrEmpty(target.Name) ? "item" : target.Name));
             else
                 Speak("Can't interact with " + name);
         }

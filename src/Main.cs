@@ -78,6 +78,7 @@ namespace WrathAccess
             if (!Enabled) return;
             InputManager.Tick();
             ScreenManager.Tick();
+            WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             OverlayManager.Tick(dt); // per-frame overlay update (continuous cursor + wall tones)
         }
 
@@ -191,6 +192,8 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.InteractSelected).AddBinding(KeyCode.I);
             InputManager.Register("scan.moveToCursor", "Scanner: move to cursor",
                 WrathAccess.Exploration.Scanner.MoveToCursor).AddBinding(KeyCode.Backspace);
+            InputManager.Register("scan.debugShowAll", "Scanner: toggle show all (debug)",
+                WrathAccess.Exploration.Scanner.ToggleDebugShowAll).AddBinding(KeyCode.F11);
 
             // Area overlays: swappable spatial views (first: virtual tile view). Arrows drive the active
             // overlay's cursor (see nav.* above). These verbs gate themselves to focus-mode exploration.

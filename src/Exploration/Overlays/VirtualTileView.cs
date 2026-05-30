@@ -180,8 +180,9 @@ namespace WrathAccess.Exploration.Overlays
         private List<string> Contents()
         {
             var names = new List<string>();
-            foreach (var item in WorldScan.EnumerateVisible())
+            foreach (var item in WorldModel.Items)
             {
+                if (!item.IsVisible) continue; // the model holds all in-area items; we surface only visible
                 var p = item.Position;
                 if (Mathf.Abs(p.y - _y) > LevelGap) continue;
                 if (!OverlapsTile(p, item.Footprint)) continue;

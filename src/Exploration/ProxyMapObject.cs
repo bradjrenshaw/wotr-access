@@ -66,6 +66,9 @@ namespace WrathAccess.Exploration
                 }
                 // Area transitions and restrictions are separate entity parts, not InteractionParts.
                 if (_obj.Get<AreaTransitionPart>() != null) cats.Add(ScanCategory.Exits);
+                // No interactable role → plain scenery (a prop). Surfaced so it can be browsed; visibility
+                // still gates whether it's listed.
+                if (cats.Count == 0) cats.Add(ScanCategory.Scenery);
                 return cats;
             }
         }

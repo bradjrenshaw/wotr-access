@@ -17,6 +17,7 @@ namespace WrathAccess.Exploration
         Exits,
         SearchPoints,
         Other,
+        Scenery,
     }
 
     internal static class ScanCategories
@@ -25,7 +26,8 @@ namespace WrathAccess.Exploration
         public static readonly ScanCategory[] Order =
         {
             ScanCategory.PointsOfInterest, ScanCategory.Party, ScanCategory.Enemies, ScanCategory.Neutrals,
-            ScanCategory.Doors, ScanCategory.Containers, ScanCategory.Exits, ScanCategory.SearchPoints, ScanCategory.Other,
+            ScanCategory.Doors, ScanCategory.Containers, ScanCategory.Exits, ScanCategory.SearchPoints,
+            ScanCategory.Other, ScanCategory.Scenery,
         };
 
         public static string Label(ScanCategory c)

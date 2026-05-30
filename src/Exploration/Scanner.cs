@@ -26,6 +26,7 @@ namespace WrathAccess.Exploration
         private static int _catIndex;   // index into ScanCategories.Order
         private static int _itemIndex;   // index into the current category's list
         private static bool _entered;    // first scanner key announces the current spot without moving
+        private static bool _debugAll;   // debug (F11): list everything, ignoring the visibility filter
 
         private static bool Active =>
             FocusMode.Active && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";
@@ -52,6 +53,12 @@ namespace WrathAccess.Exploration
         public static void AnnounceParty() { if (Active) SpeakParty(); }
         public static void InteractSelected() { if (Active) DoInteract(); }
         public static void MoveToCursor() { if (Active) DoMoveToCursor(); }
+        public static void ToggleDebugShowAll()
+        {
+            if (!Active) return;
+            _debugAll = !_debugAll;
+            Speak("Scanner debug: " + (_debugAll ? "showing all, including hidden" : "showing visible only"));
+        }
 
         private static void Rebuild()
         {
@@ -61,7 +68,7 @@ namespace WrathAccess.Exploration
                 else _items[c] = new List<ScanItem>();
             }
 
-            foreach (var item in WorldScan.EnumerateVisible()) Add(item);
+            foreach (var item in WorldModel.Items) Add(item); // Add filters to visible + buckets by category
 
             var refPos = ScanFrom;
             foreach (var list in _items.Values)
@@ -70,7 +77,8 @@ namespace WrathAccess.Exploration
 
         private static void Add(ScanItem item)
         {
-            if (item == null || !item.IsVisible) return;
+            if (item == null) return;
+            if (!_debugAll && !item.IsVisible) return; // debug (F11) lists hidden things too
             foreach (var cat in item.Categories)
                 if (_items.TryGetValue(cat, out var list)) list.Add(item);
         }
@@ -121,8 +129,12 @@ namespace WrathAccess.Exploration
 
         private static void AnnounceItem(List<ScanItem> list) => Speak(ItemLine(list));
 
-        private static string ItemLine(List<ScanItem> list) =>
-            list[_itemIndex].Describe(ScanFrom) + ", " + (_itemIndex + 1) + " of " + list.Count;
+        private static string ItemLine(List<ScanItem> list)
+        {
+            var item = list[_itemIndex];
+            var tag = (_debugAll && !item.IsVisible) ? " (hidden)" : ""; // flag fogged items in debug mode
+            return item.Describe(ScanFrom) + tag + ", " + (_itemIndex + 1) + " of " + list.Count;
+        }
 
         // Cursor/interact act on the item you last navigated to (the cached selection) — no rebuild,
         // so they don't re-sort the list out from under you between hearing an item and acting on it.

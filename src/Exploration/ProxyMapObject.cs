@@ -47,8 +47,16 @@ namespace WrathAccess.Exploration
                 var interactions = _obj.Interactions; // InteractionPart parts only
                 for (int i = 0; i < interactions.Count; i++)
                 {
-                    switch (interactions[i])
+                    var part = interactions[i];
+                    // A HiddenPart gates the object's OTHER interactions: while unrevealed it disables them
+                    // (Enabled = false) and they only turn on once a skill check is passed. Skip disabled
+                    // parts so a hidden chest reads as a search point, not a container, until it's opened.
+                    if (!part.Enabled) continue;
+                    switch (part)
                     {
+                        // Unrevealed hidden object → a search point (a skill check to reveal). Once Opened
+                        // the real parts are enabled and categorize themselves, so we add nothing here.
+                        case HiddenPart h: if (!h.Opened) cats.Add(ScanCategory.SearchPoints); break;
                         case InteractionDoorPart _: cats.Add(ScanCategory.Doors); break;
                         case InteractionLootPart _: cats.Add(ScanCategory.Containers); break;
                         case InteractionSkillCheckPart _: cats.Add(ScanCategory.SearchPoints); break;

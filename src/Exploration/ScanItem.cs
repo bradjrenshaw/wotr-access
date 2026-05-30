@@ -25,6 +25,13 @@ namespace WrathAccess.Exploration
         /// </summary>
         public virtual float Footprint => 0f;
 
+        /// <summary>
+        /// The sonar's sound name for this thing (a file under assets/audio/interactables/, without the
+        /// extension), or null = don't sonify. Default null — only interactable map objects classify a
+        /// sound (see <see cref="ProxyMapObject"/>); units/markers/scenery stay silent for now.
+        /// </summary>
+        public virtual string SonarSound => null;
+
         /// <summary>Subtype state folded into the spoken line (HP, "locked", marker type, …), or null.</summary>
         protected virtual string Extra => null;
 

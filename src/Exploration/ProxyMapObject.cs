@@ -27,15 +27,20 @@ namespace WrathAccess.Exploration
         public override bool IsVisible => _obj.IsInGame && _obj.IsRevealed && _obj.IsPerceptionCheckPassed;
 
         // Footprint from the view's collider/renderer bounds — a big object (gate, statue, wagon) spans
-        // several tiles. Half the larger XZ extent ~= an enclosing radius. Zero if there's no view yet.
+        // several tiles. Half the larger XZ extent ~= an enclosing radius. Cached: a map object's bounds
+        // are static, and the soundscape reads this per visible object every frame. Zero (uncached) until
+        // the view loads, then computed once.
+        private float _footprint = -1f;
         public override float Footprint
         {
             get
             {
+                if (_footprint >= 0f) return _footprint;
                 var view = _obj.View;
                 if (view == null) return 0f;
                 var ext = view.GetMaxBounds().extents;
-                return UnityEngine.Mathf.Max(ext.x, ext.z);
+                _footprint = UnityEngine.Mathf.Max(ext.x, ext.z);
+                return _footprint;
             }
         }
 
@@ -70,6 +75,51 @@ namespace WrathAccess.Exploration
                 // still gates whether it's listed.
                 if (cats.Count == 0) cats.Add(ScanCategory.Scenery);
                 return cats;
+            }
+        }
+
+        // The sonar cue for this object: loot sub-type / door / trap if we have one, else "unknown" for any
+        // other interactable role, else null (scenery — nothing to ping). Mirrors Categories: skips
+        // disabled parts (a HiddenPart gates the rest until searched → reads "unknown" while hidden).
+        public override string SonarSound
+        {
+            get
+            {
+                InteractionLootPart loot = null;
+                bool door = false, trap = false, other = false;
+                var interactions = _obj.Interactions;
+                for (int i = 0; i < interactions.Count; i++)
+                {
+                    var part = interactions[i];
+                    if (!part.Enabled) continue;
+                    switch (part)
+                    {
+                        case InteractionLootPart l: loot = l; break;
+                        case InteractionDoorPart _: door = true; break;
+                        case DisableTrapInteractionPart _: trap = true; break;
+                        case HiddenPart h: if (!h.Opened) other = true; break;
+                        default: other = true; break;
+                    }
+                }
+                if (_obj.Get<AreaTransitionPart>() != null) other = true;
+
+                if (loot != null) return LootSound(loot);
+                if (door) return "door";
+                if (trap) return "trap";
+                return other ? "unknown" : null;
+            }
+        }
+
+        private static string LootSound(InteractionLootPart loot)
+        {
+            switch (loot.Settings.LootContainerType) // Settings is public on InteractionPart<T>
+            {
+                case LootContainerType.Chest: return "loot-chest";
+                case LootContainerType.Unit: return "loot-corpse";
+                case LootContainerType.Environment: return "loot-environment";
+                case LootContainerType.PlayerChest: return "loot-stash";
+                case LootContainerType.OneSlot: return "loot-single";
+                default: return "loot-generic"; // DefaultLoot + anything new
             }
         }
 

@@ -79,7 +79,9 @@ namespace WrathAccess
             InputManager.Tick();
             ScreenManager.Tick();
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
-            OverlayManager.Tick(dt); // per-frame overlay update (continuous cursor + wall tones)
+            // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
+            // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
+            OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime); // continuous cursor + wall tones
             WrathAccess.Exploration.Sonar.Tick(); // after overlays move the cursor: fog enter/exit cues
         }
 

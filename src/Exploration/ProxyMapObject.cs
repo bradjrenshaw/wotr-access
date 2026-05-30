@@ -3,6 +3,7 @@ using Kingmaker;                              // Game
 using Kingmaker.Controllers.Clicks.Handlers;  // ClickMapObjectHandler
 using Kingmaker.EntitySystem.Entities; // MapObjectEntityData
 using Kingmaker.View.MapObjects;       // InteractionPart family, LocalMapMarkerPart
+using UnityEngine;                     // Bounds, Collider, Mathf
 
 namespace WrathAccess.Exploration
 {
@@ -26,21 +27,26 @@ namespace WrathAccess.Exploration
         // undiscovered ones don't leak. (This is why we don't use the base current-visibility filter.)
         public override bool IsVisible => _obj.IsInGame && _obj.IsRevealed && _obj.IsPerceptionCheckPassed;
 
-        // Footprint from the view's collider/renderer bounds — a big object (gate, statue, wagon) spans
-        // several tiles. Half the larger XZ extent ~= an enclosing radius. Cached: a map object's bounds
-        // are static, and the soundscape reads this per visible object every frame. Zero (uncached) until
-        // the view loads, then computed once.
-        private float _footprint = -1f;
+        // Footprint = half the object's larger horizontal extent (an enclosing radius for our planar
+        // cursor). Sourced from the COLLIDERS, not renderers: MapObjectView sets AutoUpdateRenderers=false,
+        // so the view never caches its renderers and GetMaxBounds() returns a zero-size box — but the
+        // colliders ARE cached (the clickable physical extent). Looked up live (objects can resize).
         public override float Footprint
         {
             get
             {
-                if (_footprint >= 0f) return _footprint;
                 var view = _obj.View;
                 if (view == null) return 0f;
-                var ext = view.GetMaxBounds().extents;
-                _footprint = UnityEngine.Mathf.Max(ext.x, ext.z);
-                return _footprint;
+                var b = new Bounds(view.transform.position, Vector3.zero);
+                bool any = false;
+                foreach (var col in view.Colliders)
+                {
+                    if (col == null) continue;
+                    b.Encapsulate(col.bounds);
+                    any = true;
+                }
+                if (!any) b = view.GetMaxBounds(); // fallback (e.g. an object with only hide-renderers)
+                return Mathf.Max(b.extents.x, b.extents.z);
             }
         }
 

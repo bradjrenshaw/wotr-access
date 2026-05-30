@@ -32,6 +32,10 @@ namespace WrathAccess.Exploration
         /// </summary>
         public virtual string SonarSound => null;
 
+        /// <summary>True for a creature/unit (vs a map object or marker). Lets the sonar treat units like
+        /// interactables for the object enter/exit cue while leaving plain scenery out.</summary>
+        public virtual bool IsUnit => false;
+
         /// <summary>Subtype state folded into the spoken line (HP, "locked", marker type, …), or null.</summary>
         protected virtual string Extra => null;
 

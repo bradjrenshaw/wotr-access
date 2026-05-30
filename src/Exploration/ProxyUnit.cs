@@ -16,6 +16,8 @@ namespace WrathAccess.Exploration
 
         public override string Name => _unit.CharacterName;
 
+        public override bool IsUnit => true;
+
         // The unit's body radius (size-scaled) — what combat reach uses for edge-to-edge distance, so a
         // Large/Huge creature correctly reports a footprint spanning several tiles.
         public override float Footprint => (_unit.View as Kingmaker.View.UnitEntityView)?.Corpulence ?? 0f;

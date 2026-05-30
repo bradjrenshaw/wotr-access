@@ -26,7 +26,11 @@ namespace WrathAccess.Exploration
         private static readonly SfxPlayer Sfx = new SfxPlayer();
         private static readonly Soundscape Scape = new Soundscape();
         private static readonly List<VoiceSpec> Specs = new List<VoiceSpec>();
-        private static bool? _wasFogged; // null = no baseline yet (don't fire on the first sample)
+        private static bool? _wasFogged;     // null = no baseline yet (don't fire on the first sample)
+        private static ScanItem _insideItem; // the object the cursor is currently inside (nearest), or null
+        private static bool _objBaselined;   // false until the first active tick (don't fire on entry)
+
+        private const float LevelGap = 3f; // metres; ignore objects on another level for "inside" tests
 
         // Distance → volume: half at RefFeet, gently falling, floored so far-but-visible things stay
         // audible (no hard range cutoff — visibility is the cutoff). Tunable; we'll iterate on scaling.
@@ -42,7 +46,11 @@ namespace WrathAccess.Exploration
 
         public static void Tick()
         {
-            if (!OverlayManager.Active || !Cursor.Has) { _wasFogged = null; Scape.Clear(); return; }
+            if (!OverlayManager.Active || !Cursor.Has)
+            {
+                _wasFogged = null; _insideItem = null; _objBaselined = false; Scape.Clear();
+                return;
+            }
             var c = Cursor.Position.Value;
 
             // Fog of war: enter/exit cue on the cursor crossing the boundary.
@@ -54,23 +62,44 @@ namespace WrathAccess.Exploration
             // Soundscape: a looping voice per visible sonifiable thing, placed relative to the cursor.
             float refDist = RefFeet * Geo.MetresPerFoot;
             float panWidth = PanWidthFeet * Geo.MetresPerFoot;
+            ScanItem insideItem = null; // nearest object the cursor is inside this frame
+            float insideBest = float.MaxValue;
             Specs.Clear();
             foreach (var it in WorldModel.Items)
             {
                 if (!it.IsVisible) continue;
-                var snd = it.SonarSound;
-                if (snd == null) continue; // not sonifiable (units/scenery/markers for now)
                 var p = it.Position;
                 float dx = p.x - c.x, dz = p.z - c.z;
                 float dist = Mathf.Sqrt(dx * dx + dz * dz);
+                float fp = it.Footprint;
+                var snd = it.SonarSound;
+
+                // Inside-an-object cue: units (corpulence) and interactables — NOT plain scenery or markers.
+                // Nearest wins; markers (footprint 0) never count anyway.
+                if ((snd != null || it.IsUnit) && dist <= fp && dist < insideBest && Mathf.Abs(p.y - c.y) <= LevelGap)
+                {
+                    insideBest = dist; insideItem = it;
+                }
+
+                // Soundscape voice: sonifiable things only (interactables for now).
+                if (snd == null) continue;
                 // Volume: within the footprint → max; outside → from the nearest surface (closest-point).
                 // Pan: lateral offset up close, bearing farther out (dx/max(dist,W)); centred when within.
-                float edge = Mathf.Max(0f, dist - it.Footprint);
+                float edge = Mathf.Max(0f, dist - fp);
                 float vol = Mathf.Clamp(refDist / (refDist + edge), MinVol, 1f);
-                float pan = dist > it.Footprint ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
+                float pan = dist > fp ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
                 Specs.Add(new VoiceSpec(it, Path.Combine(AudioDir, "interactables", snd + ".wav"), vol, pan));
             }
             Scape.Update(Specs);
+
+            // Object enter/exit cue. Enter fires whenever the object under the cursor CHANGES to a real one
+            // (including swapping straight from one object to another); exit only when leaving to none.
+            if (!_objBaselined) { _insideItem = insideItem; _objBaselined = true; }
+            else if (insideItem != _insideItem)
+            {
+                Sfx.Play(Path.Combine(AudioDir, insideItem != null ? "object_enter.wav" : "object_exit.wav"));
+                _insideItem = insideItem;
+            }
         }
     }
 }

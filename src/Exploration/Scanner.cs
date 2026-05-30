@@ -79,8 +79,15 @@ namespace WrathAccess.Exploration
         {
             if (item == null) return;
             if (!_debugAll && !item.IsVisible) return; // debug (F11) lists hidden things too
+            bool inAll = false;
             foreach (var cat in item.Categories)
+            {
                 if (_items.TryGetValue(cat, out var list)) list.Add(item);
+                // "All" aggregates the real things — not scenery-only props, not the curated POI markers
+                // (which duplicate entities). Added once, however many categories the item has.
+                if (cat != ScanCategory.Scenery && cat != ScanCategory.PointsOfInterest) inAll = true;
+            }
+            if (inAll && _items.TryGetValue(ScanCategory.All, out var all)) all.Add(item);
         }
 
         private static List<ScanItem> Current =>

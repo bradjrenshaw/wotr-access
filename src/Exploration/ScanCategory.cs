@@ -8,6 +8,7 @@ namespace WrathAccess.Exploration
     /// </summary>
     internal enum ScanCategory
     {
+        All,
         PointsOfInterest,
         Party,
         Enemies,
@@ -25,6 +26,7 @@ namespace WrathAccess.Exploration
         /// <summary>Display + cycle order for Ctrl+PageUp/Down.</summary>
         public static readonly ScanCategory[] Order =
         {
+            ScanCategory.All,
             ScanCategory.PointsOfInterest, ScanCategory.Party, ScanCategory.Enemies, ScanCategory.Neutrals,
             ScanCategory.Doors, ScanCategory.Containers, ScanCategory.Exits, ScanCategory.SearchPoints,
             ScanCategory.Other, ScanCategory.Scenery,

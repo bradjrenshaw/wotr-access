@@ -1,8 +1,15 @@
 using System.Collections.Generic;
+using System.Linq;
 using Kingmaker;                              // Game
-using Kingmaker.Controllers.Clicks.Handlers;  // ClickMapObjectHandler
+using Kingmaker.Blueprints.Root;              // BlueprintRoot
+using Kingmaker.Controllers.Clicks.Handlers;  // ClickMapObjectHandler, ClickGroundHandler
 using Kingmaker.EntitySystem.Entities; // MapObjectEntityData
-using Kingmaker.View.MapObjects;       // InteractionPart family, LocalMapMarkerPart
+using Kingmaker.GameModes;             // GameModeType
+using Kingmaker.UI.MapObjectOvertip;   // AreaTransitionController
+using Kingmaker.UI.Selection;          // SelectionManagerPC
+using Kingmaker.UnitLogic.Commands;    // AreaTransitionGroupCommand
+using Kingmaker.View;                  // EntityViewBase, ObstacleAnalyzer
+using Kingmaker.View.MapObjects;       // InteractionPart family, LocalMapMarkerPart, AreaTransitionPart
 using UnityEngine;                     // Bounds, Collider, Mathf
 
 namespace WrathAccess.Exploration
@@ -159,9 +166,38 @@ namespace WrathAccess.Exploration
         {
             var view = _obj.View;
             if (view == null) return false;
+
+            // Area transitions (area exits) aren't InteractionParts, so ClickMapObjectHandler can't act on
+            // them — that's why they read "can't interact". Trigger them the way the overtip's click does.
+            var transition = _obj.Get<AreaTransitionPart>();
+            if (transition != null) return TriggerTransition(view, transition);
+
             var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
             if (units == null || units.Count == 0) return false;
             return ClickMapObjectHandler.Interact(view.gameObject, units, forceOvertipInteractions: true);
+        }
+
+        // Mirrors AreaTransitionController.StartAreaTransition: move the party to the exit in formation,
+        // then run each unit's UnitAreaTransition (the group command loads the next area once they arrive).
+        private static bool TriggerTransition(EntityViewBase view, AreaTransitionPart transition)
+        {
+            var game = Game.Instance;
+            if (game == null || game.Player.IsInCombat || game.CurrentMode == GameModeType.Dialog) return false;
+            if (AreaTransitionController.CanNotMove(transition)) return false; // shows its own warning bark
+
+            var position = view.transform.position;
+            var party = game.Player.GetPartyCharactersForGroupCommand(position);
+            if (party.Count == 0) return false;
+
+            var groupCommand = new AreaTransitionGroupCommand(party, transition);
+            (game.UI.SelectionManager as SelectionManagerPC)?.MultiSelect(party.Select(u => u.View), canAddToSelection: false);
+            ClickGroundHandler.MoveSelectedUnitsToPoint(
+                ObstacleAnalyzer.GetDeepNavmeshPoint(position, 1.5f),
+                ClickGroundHandler.GetDefaultDirection(position),
+                preview: false, showTargetMarker: true,
+                BlueprintRoot.Instance.Formations.MinSpaceFactor, ignoreHold: true,
+                (unit, s) => AreaTransitionController.RunUnitTransitionCommand(groupCommand, unit, s.Destination, s.SpeedLimit));
+            return true;
         }
     }
 }

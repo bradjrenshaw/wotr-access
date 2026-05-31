@@ -18,6 +18,11 @@ namespace WrathAccess.Exploration
 
         public override bool IsUnit => true;
 
+        // No per-unit sounds yet, so units sonify with the generic "unknown" cue at their location, like
+        // map objects. We skip our OWN party (they cluster on the cursor and would drown out the field);
+        // enemies and neutrals drone so you can locate them. (Party still fires the object enter/exit cue.)
+        public override string SonarSound => _unit.IsPlayerFaction ? null : "unknown";
+
         // The unit's body radius (size-scaled) — what combat reach uses for edge-to-edge distance, so a
         // Large/Huge creature correctly reports a footprint spanning several tiles.
         public override float Footprint => (_unit.View as Kingmaker.View.UnitEntityView)?.Corpulence ?? 0f;

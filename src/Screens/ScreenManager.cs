@@ -91,6 +91,7 @@ namespace WrathAccess.Screens
             Register(new PredicateScreen("ctx.tacticalcombat", "Tactical Combat", 0, () => RC()?.IsTacticalCombat ?? false));
             Register(new DialogueScreen()); // in-game conversation (common DialogVM); layer 15, above contexts + service windows
             Register(new LootScreen()); // loot window (container/corpse); layer 15, above contexts + service windows
+            Register(new BookEventScreen()); // book event (storybook passage + choices); layer 15
             Register(new PredicateScreen("ctx.kingdom", "Kingdom", 0, () => RC()?.IsKingdom ?? false));
             Register(new PredicateScreen("ctx.citybuilder", "City", 0, () => RC()?.IsCityBuilder ?? false));
 

@@ -200,6 +200,8 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.MoveToCursor).AddBinding(KeyCode.Backspace);
             InputManager.Register("scan.debugShowAll", "Scanner: toggle show all (debug)",
                 WrathAccess.Exploration.Scanner.ToggleDebugShowAll).AddBinding(KeyCode.F11);
+            InputManager.Register("scan.debugDumpNames", "Scanner: dump object names to log (debug)",
+                WrathAccess.Exploration.Scanner.DumpObjectNames).AddBinding(KeyCode.F10);
 
             // Area overlays: swappable spatial views (first: virtual tile view). Arrows drive the active
             // overlay's cursor (see nav.* above). These verbs gate themselves to focus-mode exploration.

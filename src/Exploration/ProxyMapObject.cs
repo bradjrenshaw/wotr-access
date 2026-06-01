@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Kingmaker;                              // Game
 using Kingmaker.Blueprints.Root;              // BlueprintRoot
 using Kingmaker.Controllers.Clicks.Handlers;  // ClickMapObjectHandler, ClickGroundHandler
@@ -141,10 +142,36 @@ namespace WrathAccess.Exploration
             get
             {
                 var desc = _obj.Get<LocalMapMarkerPart>()?.GetDescription();
-                if (!string.IsNullOrEmpty(desc)) return desc;
+                if (!string.IsNullOrEmpty(desc)) return desc; // curated/localized marker label wins
+                var prefab = CleanName(_obj.View?.name);
+                if (!string.IsNullOrEmpty(prefab)) return prefab; // the designer's prefab name ("Bag", "Jug")
                 foreach (var c in Categories) return ScanCategories.Singular(c); // first category's singular
                 return "Object";
             }
+        }
+
+        // Turn the designer's GameObject/prefab name into a readable object name: "Loot_Bag_Big 2" → "Bag
+        // Big", "Horgus_Dialogue" → "Horgus", "Go_To_Sull" → "Go To Sull". Owlcat names map-object prefabs
+        // after the real thing, so this beats the bare category ("Container"). Strips Unity clone/instance
+        // suffixes, a few known noise prefixes/suffixes, and splits underscores/camelCase. NOTE: this is
+        // "what it is", not "what it looks like" — puzzles needing visual detail want real model
+        // descriptions later (deferred, e.g. render + vision). Tuned to observed names; extend as needed.
+        private static readonly string[] NoisePrefixes = { "Loot_" };
+        private static readonly string[] NoiseSuffixes = { "_Dialogue" };
+
+        private static string CleanName(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            var s = raw.Replace("(Clone)", "").Trim();
+            s = Regex.Replace(s, @"[ _]\d+$", "").Trim(); // Unity's duplicate suffix (" 2", "_3")
+            foreach (var p in NoisePrefixes)
+                if (s.StartsWith(p, System.StringComparison.OrdinalIgnoreCase)) { s = s.Substring(p.Length); break; }
+            foreach (var sfx in NoiseSuffixes)
+                if (s.EndsWith(sfx, System.StringComparison.OrdinalIgnoreCase)) { s = s.Substring(0, s.Length - sfx.Length); break; }
+            s = s.Replace('_', ' ');
+            s = Regex.Replace(s, @"(?<=[a-z0-9])(?=[A-Z])", " "); // split camelCase
+            s = Regex.Replace(s, @"\s+", " ").Trim();
+            return s.Length > 0 ? s : null;
         }
 
         protected override string Extra

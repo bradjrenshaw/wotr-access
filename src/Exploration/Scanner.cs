@@ -63,6 +63,31 @@ namespace WrathAccess.Exploration
             Speak("Scanner debug: " + (_debugAll ? "showing all, including hidden" : "showing visible only"));
         }
 
+        // Debug (F10): dump every map object's identity to Player.log — GameObject/prefab name, blueprint
+        // name, and the local-map marker label — to gauge whether prefab names alone give descriptive
+        // object names (the cheap "tier 1" of describing map objects). Read via the Unity Player.log.
+        public static void DumpObjectNames()
+        {
+            if (!Active) return;
+            var state = Game.Instance?.State;
+            if (state == null) { Speak("No area"); return; }
+            int n = 0;
+            Main.Log?.Log("[objdump] === map objects in current area ===");
+            foreach (var mo in state.MapObjects)
+            {
+                if (mo == null) continue;
+                var view = mo.View;
+                string go = view != null ? view.name : "(no view)";
+                var fh = view != null ? view.FactHolder : null;
+                string bp = (fh != null && fh.Blueprint != null) ? fh.Blueprint.name : "";
+                string marker = mo.Get<Kingmaker.View.MapObjects.LocalMapMarkerPart>()?.GetDescription() ?? "";
+                Main.Log?.Log("[objdump] go='" + go + "' bp='" + bp + "' marker='" + marker + "'");
+                n++;
+            }
+            Main.Log?.Log("[objdump] === " + n + " map objects ===");
+            Speak("Dumped " + n + " objects to log");
+        }
+
         private static void Rebuild()
         {
             foreach (var c in ScanCategories.Order)

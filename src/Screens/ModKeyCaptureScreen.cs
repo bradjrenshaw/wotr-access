@@ -26,7 +26,8 @@ namespace WrathAccess.Screens
         public override bool IsActive() => s_action != null;
 
         public override void OnFocus()
-            => Tts.Speak("Rebind " + (s_action != null ? s_action.Label : "") + ". Press a key, or Escape to cancel.");
+            => Tts.Speak(Message.Localized("settings", "rebind.prompt",
+                new { action = s_action != null ? s_action.Label : "" }).Resolve());
 
         public override void OnUpdate()
         {
@@ -41,7 +42,12 @@ namespace WrathAccess.Screens
                 return;
             }
 
-            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape)) { Tts.Speak("Cancelled"); s_action = null; return; }
+            if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
+            {
+                Tts.Speak(Message.Localized("settings", "rebind.cancelled").Resolve());
+                s_action = null;
+                return;
+            }
 
             // Wait for the opening key (the Enter/activate press that got us here) to release before we
             // start reading — otherwise that very press is captured as the new binding.
@@ -65,14 +71,15 @@ namespace WrathAccess.Screens
                 var conflict = FindConflict(binding, action);
                 if (conflict != null)
                 {
-                    Tts.Speak(binding.DisplayName + " is already bound to " + conflict.Label
-                        + ". Press another key, or Escape to cancel.", interrupt: true);
+                    Tts.Speak(Message.Localized("settings", "rebind.conflict",
+                        new { combo = binding.DisplayName, other = conflict.Label }).Resolve(), interrupt: true);
                     return; // keep capturing
                 }
 
                 action.ClearBindings();
                 action.AddBinding(binding); // BindingsChanged → BindingSetting auto-saves
-                Tts.Speak(action.Label + " bound to " + binding.DisplayName);
+                Tts.Speak(Message.Localized("settings", "rebind.bound",
+                    new { action = action.Label, combo = binding.DisplayName }).Resolve());
                 s_releaseKey = key;
                 s_awaitRelease = true; // close once the key is released
                 return;

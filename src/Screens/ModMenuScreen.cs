@@ -47,16 +47,20 @@ namespace WrathAccess.Screens
             yield return new ElementAction(ActionIds.Back, Message.Raw("Close"), _ => CloseMenu());
         }
 
+        // Localized menu string ("settings" table) with the English fallback.
+        private static string Loc(string key, string fallback)
+            => WrathAccess.Localization.LocalizationManager.GetOrDefault("settings", key, fallback);
+
         private void Build()
         {
             _built = true;
             Clear();
 
-            var tabs = new ListContainer("Categories");
+            var tabs = new ListContainer(Loc("menu.categories", "Categories"));
             for (int i = 0; i < CatKeys.Length; i++)
             {
                 int idx = i;
-                tabs.Add(new ProxyTab(CatLabels[i], () => _active == idx, () => _active = idx));
+                tabs.Add(new ProxyTab(Loc("category." + CatKeys[i], CatLabels[i]), () => _active == idx, () => _active = idx));
             }
             Add(tabs);
 
@@ -65,7 +69,7 @@ namespace WrathAccess.Screens
             RebuildContent();
 
             Navigation.Attach(this);
-            Tts.Speak("Mod menu"); // once, on open (Build runs the frame after focus)
+            Tts.Speak(Loc("menu.title", "Mod menu")); // once, on open (Build runs the frame after focus)
             Navigation.AnnounceCurrent();
         }
 
@@ -95,7 +99,7 @@ namespace WrathAccess.Screens
             }
             else // "ui" — announcement settings (built next)
             {
-                tree.Add(new TextElement("Announcement settings coming soon."));
+                tree.Add(new TextElement(() => Loc("ui.placeholder", "Announcement settings coming soon.")));
             }
         }
     }

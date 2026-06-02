@@ -1,0 +1,12 @@
+{
+  "menu.title": "Mod menu",
+  "menu.categories": "Categories",
+  "category.input": "Input",
+  "category.ui": "UI",
+  "ui.placeholder": "Announcement settings coming soon.",
+
+  "rebind.prompt": "Rebind {action}. Press a key, or Escape to cancel.",
+  "rebind.cancelled": "Cancelled",
+  "rebind.bound": "{action} bound to {combo}",
+  "rebind.conflict": "{combo} is already bound to {other}. Press another key, or Escape to cancel."
+}

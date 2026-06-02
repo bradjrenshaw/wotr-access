@@ -14,16 +14,17 @@ namespace WrathAccess.Screens
     /// in-game character sheet. The Complete button isn't part of this content — it's the wizard-level
     /// Next/Complete (always enabled here), handled by <see cref="CharGenScreen"/>.
     ///
-    /// Each section is one Tab-stop (Tab between, arrow within); Space on a stat/feature/class drills
-    /// into its tooltip. We mirror what the detailed view actually binds — so e.g. Size, which the VM
-    /// builds but the view doesn't show, is omitted. List sections that are empty for this character
-    /// (no DR, no spellbook, …) are skipped rather than shown blank.
+    /// The whole sheet is ONE FlowSheet (one Tab-stop): each section is a stacked region — arrow
+    /// cell-to-cell across all of it, Ctrl+Up/Down jump between sections, Space on a stat/feature/class
+    /// drills into its tooltip. We mirror what the detailed view actually binds — so e.g. Size, which the
+    /// VM builds but the view doesn't show, is omitted. Sections that are empty for this character (no DR,
+    /// no spellbook, …) add no region. The presentation is the swappable <see cref="ICharSheetSink"/>.
     /// </summary>
     public sealed class TotalPhaseContent : CharGenPhaseContent<CharGenTotalPhaseVM>
     {
-        // The accessible presentation of the stat groups. Swap this (later, from a setting) to re-shape
-        // the sheet — grid vs. flat, regrouped — without touching how the data below is assembled.
-        private readonly ICharSheetLayout _layout = new GridCharSheetLayout();
+        // The accessible presentation. Swap this (later, from a setting) to re-shape the sheet — the
+        // unified grid here, or PanelCharSheetSink's separate Tab-stops — without touching the assembly.
+        private readonly ICharSheetSink _sink = new FlowSheetCharSheetSink();
 
         public TotalPhaseContent(CharGenTotalPhaseVM phase) : base(phase) { }
 
@@ -31,7 +32,7 @@ namespace WrathAccess.Screens
 
         public override void Build(Container content)
         {
-            BuildSummary(content);
+            BuildSummary();
 
             // Ability Scores — Score + Modifier as a grid (no localized group title; the game shows an
             // unlabeled block).
@@ -39,7 +40,7 @@ namespace WrathAccess.Screens
             {
                 var g = new StatGroup("Ability Scores", "Score", "Modifier");
                 foreach (var a in Phase.AbilityScores.AbilityScores) g.Row(CharInfoStatRows.Ability(a));
-                content.Add(_layout.Build(g));
+                _sink.StatGroup(g);
             }
 
             // Skills — Rank + Modifier as a grid.
@@ -47,39 +48,41 @@ namespace WrathAccess.Screens
             {
                 var g = new StatGroup((string)S.Skills, "Rank", "Modifier");
                 foreach (var sk in Phase.SkillBlock.Skills) g.Row(CharInfoStatRows.Skill(sk));
-                content.Add(_layout.Build(g));
+                _sink.StatGroup(g);
             }
 
-            BuildDefense(content);
-            BuildAttack(content);
-            BuildCombat(content);
-            BuildClasses(content);
-            BuildFeatures(content);
-            BuildSpells(content);
-            BuildWeaponProficiency(content);
-            BuildDamageReduction(content);
-            BuildEnergyResistance(content);
+            BuildDefense();
+            BuildAttack();
+            BuildCombat();
+            BuildClasses();
+            BuildFeatures();
+            BuildSpells();
+            BuildWeaponProficiency();
+            BuildDamageReduction();
+            BuildEnergyResistance();
+
+            content.Add(_sink.Build());
         }
 
         // Race / gender / alignment and HP — free-form lines, each with the game's tooltip.
-        private void BuildSummary(Container content)
+        private void BuildSummary()
         {
-            var summary = new ListContainer((string)S.Summary);
+            var items = new List<UIElement>();
             var rga = Phase.RaceGenderAlignment;
             if (rga != null)
             {
-                summary.Add(new TextElement(() => rga.RaceValue, tooltip: () => rga.RaceTooltip));
-                summary.Add(new TextElement(() => rga.GenderValue, tooltip: () => rga.GenderTooltip));
-                summary.Add(new TextElement(() => rga.AlignmentDisplayValue, tooltip: () => rga.AlignmentTooltip));
+                items.Add(new TextElement(() => rga.RaceValue, tooltip: () => rga.RaceTooltip));
+                items.Add(new TextElement(() => rga.GenderValue, tooltip: () => rga.GenderTooltip));
+                items.Add(new TextElement(() => rga.AlignmentDisplayValue, tooltip: () => rga.AlignmentTooltip));
             }
             if (Phase.HitPoints != null)
-                summary.Add(new TextElement(() => Labeled((string)S.HP, Phase.HitPoints.HpText.Value),
+                items.Add(new TextElement(() => Labeled((string)S.HP, Phase.HitPoints.HpText.Value),
                     tooltip: () => Phase.HitPoints.Tooltip.Value));
-            content.Add(summary);
+            _sink.ListSection((string)S.Summary, items);
         }
 
         // AC / Touch / Flat-footed, the three saves, and Speed — single value each (a flat list).
-        private void BuildDefense(Container content)
+        private void BuildDefense()
         {
             var g = new StatGroup((string)S.Defense);
             var ac = Phase.ArmorClass;
@@ -97,24 +100,24 @@ namespace WrathAccess.Screens
                 g.Row(CharInfoStatRows.Value(st.Will, signed: true));
             }
             if (Phase.Speed != null) g.Row(CharInfoStatRows.Value(Phase.Speed, signed: false));
-            if (g.Rows.Count > 0) content.Add(_layout.Build(g));
+            _sink.StatGroup(g);
         }
 
         // Base attack bonus — Main / Melee / Ranged, each an attack string like "+6/+1". CharInfoBABVM
         // was skipped by the decompiler; its public members (Type, BabValue, Tooltip) come from its view.
-        private void BuildAttack(Container content)
+        private void BuildAttack()
         {
-            var list = new ListContainer((string)S.Attack);
-            AddBab(list, Phase.MainBAB, (string)S.BAB);
-            AddBab(list, Phase.MeleeBAB, (string)S.BABMelee);
-            AddBab(list, Phase.RangedBAB, (string)S.BABRanged);
-            if (list.Children.Count > 0) content.Add(list);
+            var items = new List<UIElement>();
+            AddBab(items, Phase.MainBAB, (string)S.BAB);
+            AddBab(items, Phase.MeleeBAB, (string)S.BABMelee);
+            AddBab(items, Phase.RangedBAB, (string)S.BABRanged);
+            _sink.ListSection((string)S.Attack, items);
         }
 
-        private void AddBab(ListContainer list, CharInfoBABVM bab, string label)
+        private void AddBab(List<UIElement> items, CharInfoBABVM bab, string label)
         {
             if (bab == null) return;
-            list.Add(new TextElement(() => label + ", " + BabString(bab), tooltip: () => bab.Tooltip));
+            items.Add(new TextElement(() => label + ", " + BabString(bab), tooltip: () => bab.Tooltip));
         }
 
         // Mirrors CharInfoBABView.FillData: first attack always signed; later ones show "-" when <= 0.
@@ -129,7 +132,7 @@ namespace WrathAccess.Screens
         }
 
         // Combat Maneuver (CMB / CMD), Initiative, Spell Resistance — single value each.
-        private void BuildCombat(Container content)
+        private void BuildCombat()
         {
             var g = new StatGroup((string)S.MartialQualities);
             var cm = Phase.CombatManeuver;
@@ -141,95 +144,95 @@ namespace WrathAccess.Screens
             }
             if (Phase.Initiative != null) g.Row(CharInfoStatRows.Value(Phase.Initiative, signed: true, nameOverride: (string)S.Initiative));
             if (Phase.SpellResistance != null) g.Row(CharInfoStatRows.Value(Phase.SpellResistance, signed: false));
-            if (g.Rows.Count > 0) content.Add(_layout.Build(g));
+            _sink.StatGroup(g);
         }
 
         // Classes (and mythic) — "Name level", each drilling into the class tooltip.
-        private void BuildClasses(Container content)
+        private void BuildClasses()
         {
             var vms = Phase.Classes?.ClassVMs;
             if (vms == null || vms.Count == 0) return;
-            var list = new ListContainer((string)S.Class);
+            var items = new List<UIElement>();
             foreach (var c in vms)
             {
                 var entry = c;
-                list.Add(new TextElement(() => entry.ClassName + " " + entry.Level, tooltip: () => entry.Tooltip));
+                items.Add(new TextElement(() => entry.ClassName + " " + entry.Level, tooltip: () => entry.Tooltip));
             }
-            content.Add(list);
+            _sink.ListSection((string)S.Class, items);
         }
 
         // Features, feats, traits (and, in chargen, newly-known spells) — grouped under headings in one
         // list; each feature drills into its full description tooltip.
-        private void BuildFeatures(Container content)
+        private void BuildFeatures()
         {
             var groups = Phase.Abilities?.ShowGroupList;
             if (groups == null) return;
-            var list = new ListContainer((string)S.FeaturesAndAbilitites);
+            var items = new List<UIElement>();
             foreach (var group in groups)
             {
                 if (group == null || group.IsEmpty) continue;
-                if (!string.IsNullOrEmpty(group.Label)) list.Add(new TextElement(group.Label, "heading"));
+                if (!string.IsNullOrEmpty(group.Label)) items.Add(new TextElement(group.Label, "heading"));
                 foreach (var f in group.FeatureList)
                 {
                     var feat = f;
-                    list.Add(new TextElement(() => FeatureName(feat), tooltip: () => feat.Tooltip));
+                    items.Add(new TextElement(() => FeatureName(feat), tooltip: () => feat.Tooltip));
                 }
             }
-            if (list.Children.Count > 0) content.Add(list);
+            _sink.ListSection((string)S.FeaturesAndAbilitites, items);
         }
 
         // Spells per day, by spellbook and level (cantrips are at-will). The known/prepared spells
         // themselves show under Features (the chargen "new spells" group) and the Spells phase.
-        private void BuildSpells(Container content)
+        private void BuildSpells()
         {
             var books = Phase.SpellTables?.SpellbookTables;
             if (books == null || books.Count == 0) return;
-            var list = new ListContainer((string)S.Spells);
+            var items = new List<UIElement>();
             foreach (var book in books)
             {
                 var b = book;
-                list.Add(new TextElement(() => SpellbookLine(b)));
+                items.Add(new TextElement(() => SpellbookLine(b)));
             }
-            content.Add(list);
+            _sink.ListSection((string)S.Spells, items);
         }
 
-        private void BuildWeaponProficiency(Container content)
+        private void BuildWeaponProficiency()
         {
             var data = Phase.WeaponProficiency?.Data;
             if (data == null || data.Count == 0) return;
-            var list = new ListContainer((string)S.WeaponProficiency);
+            var items = new List<UIElement>();
             foreach (var e in data)
             {
                 var entry = e;
-                list.Add(new TextElement(() => entry.DisplayName));
+                items.Add(new TextElement(() => entry.DisplayName));
             }
-            content.Add(list);
+            _sink.ListSection((string)S.WeaponProficiency, items);
         }
 
-        private void BuildDamageReduction(Container content)
+        private void BuildDamageReduction()
         {
             var data = Phase.DamageReduction?.Data;
             if (data == null || data.Count == 0) return;
-            var list = new ListContainer((string)S.DamageReduction);
+            var items = new List<UIElement>();
             foreach (var e in data)
             {
                 var entry = e;
-                list.Add(new TextElement(() => entry.Value + "/" + string.Join(", ", entry.Exceptions.ToArray())));
+                items.Add(new TextElement(() => entry.Value + "/" + string.Join(", ", entry.Exceptions.ToArray())));
             }
-            content.Add(list);
+            _sink.ListSection((string)S.DamageReduction, items);
         }
 
-        private void BuildEnergyResistance(Container content)
+        private void BuildEnergyResistance()
         {
             var data = Phase.EnergyResistance?.Data;
             if (data == null || data.Count == 0) return;
-            var list = new ListContainer((string)S.EnergyRsistance);
+            var items = new List<UIElement>();
             foreach (var e in data)
             {
                 var entry = e;
-                list.Add(new TextElement(() => entry.Immunity ? entry.Type + ", immunity" : entry.Type + " " + entry.Value));
+                items.Add(new TextElement(() => entry.Immunity ? entry.Type + ", immunity" : entry.Type + " " + entry.Value));
             }
-            content.Add(list);
+            _sink.ListSection((string)S.EnergyRsistance, items);
         }
 
         private static string FeatureName(Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Abilities.CharInfoFeatureVM f)

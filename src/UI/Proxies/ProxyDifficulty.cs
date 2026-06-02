@@ -43,7 +43,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (!Enabled) yield break;
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Open"), _ => OpenSubmenu());
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.open"), _ => OpenSubmenu());
         }
 
         public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate()

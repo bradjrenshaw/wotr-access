@@ -53,9 +53,9 @@ namespace WrathAccess.Screens
                     new TextElement(() => Signed(alloc.Bonus.Value)),
                     new TextElement(() => alloc.RaceBonus.Value.HasValue ? Signed(alloc.RaceBonus.Value.Value) : ""),
                     new ProxyStepper(() => CostLabel(alloc, raise: true), () => CanAct(alloc, raise: true),
-                        alloc.TryIncreaseValue, () => Summary(alloc), actionVerb: "Raise"),
+                        alloc.TryIncreaseValue, () => Summary(alloc), actionVerb: "raise"),
                     new ProxyStepper(() => CostLabel(alloc, raise: false), () => CanAct(alloc, raise: false),
-                        alloc.TryDecreaseValue, () => Summary(alloc), actionVerb: "Lower"),
+                        alloc.TryDecreaseValue, () => Summary(alloc), actionVerb: "lower"),
                 }, tooltip: () => alloc.TooltipTemplate()); // Space on any cell in the row → stat detail
             }
 
@@ -116,15 +116,15 @@ namespace WrathAccess.Screens
         {
             if (raise)
             {
-                if (Score(a) >= 18) return "maximum";
+                if (Score(a) >= 18) return L("value.maximum");
                 int cost = PointBuy ? Dist.GetAddCost(a.StatType) : 1;
-                if (CanAct(a, raise: true)) return cost + " points";
+                if (CanAct(a, raise: true)) return L("value.points", new { count = cost });
                 int need = cost - Points();                 // tell them how short they are
-                return cost + " points, need " + (need > 0 ? need : 1) + " more";
+                return L("value.points_need_more", new { count = cost, need = need > 0 ? need : 1 });
             }
-            if (Score(a) <= 7) return "minimum";
+            if (Score(a) <= 7) return L("value.minimum");
             int refund = PointBuy ? -Dist.GetRemoveCost(a.StatType) : 1; // GetRemoveCost is negative (points returned)
-            return refund + " points back";
+            return L("value.points_back", new { count = refund });
         }
 
         // Spoken after a step: the now-current total score (incl. racial), its modifier, and the
@@ -133,9 +133,11 @@ namespace WrathAccess.Screens
         {
             int total = Score(a) + (a.RaceBonus.Value ?? 0);
             int mod = (int)System.Math.Floor((total - 10) / 2.0);
-            return a.Name.Value + " " + total + ", " + Signed(mod) + ", " + Points() + " points left";
+            return L("value.ability_summary", new { name = a.Name.Value, total, mod = Signed(mod), points = Points() });
         }
 
         private static string Signed(int v) => v >= 0 ? "+" + v : v.ToString();
+        private static string L(string key) => Message.Localized("ui", key).Resolve();
+        private static string L(string key, object vars) => Message.Localized("ui", key, vars).Resolve();
     }
 }

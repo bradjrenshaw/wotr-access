@@ -102,14 +102,14 @@ namespace WrathAccess.UI.Proxies
                 if (!string.IsNullOrEmpty(reason)) yield return new ValueAnnouncement(Message.Raw(reason));
             }
             else if (Expanded && Children.Count > 0)
-                yield return new ValueAnnouncement(Message.Raw(Children.Count + " options")); // sub-choices revealed
+                yield return new ValueAnnouncement(Message.Localized("ui", "value.options", new { count = Children.Count })); // sub-choices revealed
             if (Expandable) yield return new RoleAnnouncement(Expanded ? "expanded" : "collapsed");
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
             if (CanSelect || IsSelected)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw("Select"), _ => Expand());
+                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.select"), _ => Expand());
         }
 
         public override TooltipBaseTemplate GetTooltipTemplate() => _vm?.TooltipTemplate();

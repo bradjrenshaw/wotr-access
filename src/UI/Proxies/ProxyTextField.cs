@@ -31,12 +31,13 @@ namespace WrathAccess.UI.Proxies
             yield return new LabelAnnouncement(Message.Raw(_label ?? ""));
             yield return new RoleAnnouncement("edit");
             string v = _value?.Invoke();
-            yield return new ValueAnnouncement(Message.Raw(string.IsNullOrEmpty(v) ? "blank" : v));
+            yield return new ValueAnnouncement(string.IsNullOrEmpty(v)
+                ? Message.Localized("ui", "value.blank") : Message.Raw(v));
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Edit"), _ =>
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.edit"), _ =>
             {
                 var field = _acquire?.Invoke();
                 if (field != null) TextEntry.Begin(field, _label);

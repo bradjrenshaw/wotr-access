@@ -34,7 +34,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (Available)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw("Select"),
+                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.select"),
                     _ => _vm.SetSelectedFromView(true));
         }
     }

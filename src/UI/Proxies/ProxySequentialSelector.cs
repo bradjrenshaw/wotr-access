@@ -38,8 +38,8 @@ namespace WrathAccess.UI.Proxies
         {
             var v = Vm;
             if (v == null) yield break;
-            yield return new ElementAction(ActionIds.Decrease, Message.Raw("Previous"), _ => v.OnLeft());
-            yield return new ElementAction(ActionIds.Increase, Message.Raw("Next"), _ => v.OnRight());
+            yield return new ElementAction(ActionIds.Decrease, Message.Localized("ui", "action.previous"), _ => v.OnLeft());
+            yield return new ElementAction(ActionIds.Increase, Message.Localized("ui", "action.next"), _ => v.OnRight());
         }
     }
 }

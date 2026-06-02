@@ -35,7 +35,7 @@ namespace WrathAccess.Screens
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Back, Message.Raw("Close"), _ => CloseTooltip());
+            yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ => CloseTooltip());
         }
 
         private void Build()

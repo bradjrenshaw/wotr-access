@@ -16,7 +16,7 @@ namespace WrathAccess.UI.Proxies
     {
         public static ProxyActionButton For(AnswerVM vm)
             => new ProxyActionButton(() => AnswerText(vm), () => vm != null && vm.Enable.Value,
-                () => vm?.OnChooseAnswer(), suppressActivateSound: true, actionVerb: "Choose");
+                () => vm?.OnChooseAnswer(), suppressActivateSound: true, actionVerb: "choose");
 
         // The bind name matches the view's own (DialogAnswerView builds "DialogChoice{Index}"). Returns TMP
         // rich text ((<link>)-wrapped checks); Tts strips that at speak time. Plain fallback for system answers.
@@ -30,7 +30,8 @@ namespace WrathAccess.UI.Proxies
                 catch { /* fall through to the plain form */ }
             }
             var text = bp != null ? bp.DisplayText : null;
-            if (string.IsNullOrEmpty(text)) text = "Continue"; // system/continue answers carry no text
+            // system/continue answers carry no text
+            if (string.IsNullOrEmpty(text)) text = Message.Localized("ui", "label.continue").Resolve();
             return vm.Index + ". " + text;
         }
     }

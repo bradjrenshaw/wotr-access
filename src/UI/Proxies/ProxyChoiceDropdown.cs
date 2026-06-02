@@ -41,7 +41,7 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Open"),
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.open"),
                 _ => ChoiceSubmenuScreen.Open(_label, _options, Current, _onSelect));
         }
     }

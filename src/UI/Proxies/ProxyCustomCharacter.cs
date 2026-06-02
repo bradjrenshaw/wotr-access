@@ -23,15 +23,14 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
-            // TODO: localize if the game exposes a Custom Character string.
-            yield return new LabelAnnouncement(Message.Raw("Custom Character"));
+            yield return new LabelAnnouncement(Message.Localized("ui", "label.custom_character"));
             yield return new RoleAnnouncement("radio button");
             yield return new SelectedAnnouncement(IsSelected);
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Select"),
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.select"),
                 _ => _phase?.SelectCreateCustomCharacter());
         }
     }

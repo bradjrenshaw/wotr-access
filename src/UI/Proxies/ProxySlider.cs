@@ -41,9 +41,9 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (!Enabled) yield break;
-            yield return new ElementAction(ActionIds.Decrease, Message.Raw("Decrease"), _ => Step(-1));
-            yield return new ElementAction(ActionIds.Increase, Message.Raw("Increase"), _ => Step(1));
-            yield return new ElementAction(ActionIds.SetValue, Message.Raw("Set value"),
+            yield return new ElementAction(ActionIds.Decrease, Message.Localized("ui", "action.decrease"), _ => Step(-1));
+            yield return new ElementAction(ActionIds.Increase, Message.Localized("ui", "action.increase"), _ => Step(1));
+            yield return new ElementAction(ActionIds.SetValue, Message.Localized("ui", "action.set_value"),
                 a => SetValue((float)ActionArgs.Get<double>(a, "value")));
         }
 

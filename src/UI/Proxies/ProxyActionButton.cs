@@ -21,14 +21,15 @@ namespace WrathAccess.UI.Proxies
         private readonly string _actionVerb;
 
         public ProxyActionButton(string label, Func<bool> enabled, Action activate,
-            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "Activate")
+            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate")
             : this(() => label, enabled, activate, canFocus, suppressActivateSound, actionVerb) { }
 
         // Live label — for buttons whose text changes (e.g. a wizard's Next → "Start"). canFocus skips
         // structural entries (e.g. a context-menu separator); suppressActivateSound is for buttons whose
-        // activation plays the game's own sound (e.g. a dialogue answer plays NextDialogLine).
+        // activation plays the game's own sound (e.g. a dialogue answer plays NextDialogLine). actionVerb
+        // is a "ui" table key under "action." (e.g. "activate", "choose").
         public ProxyActionButton(Func<string> label, Func<bool> enabled, Action activate,
-            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "Activate")
+            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate")
         {
             _label = label;
             _enabled = enabled;
@@ -55,7 +56,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (Enabled)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw(_actionVerb), _ => _activate?.Invoke());
+                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action." + _actionVerb), _ => _activate?.Invoke());
         }
     }
 }

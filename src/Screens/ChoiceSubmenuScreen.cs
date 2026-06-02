@@ -50,7 +50,7 @@ namespace WrathAccess.Screens
         public override IEnumerable<ElementAction> GetActions()
         {
             // Back closes the submenu without changing the value.
-            yield return new ElementAction(ActionIds.Back, Message.Raw("Close"), _ => CloseSubmenu());
+            yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ => CloseSubmenu());
         }
 
         private void Build()

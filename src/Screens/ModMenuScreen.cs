@@ -50,7 +50,7 @@ namespace WrathAccess.Screens
         // Escape closes the whole menu.
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Back, Message.Raw("Close"), _ => CloseMenu());
+            yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ => CloseMenu());
         }
 
         // Localized menu string ("settings" table) with the English fallback.

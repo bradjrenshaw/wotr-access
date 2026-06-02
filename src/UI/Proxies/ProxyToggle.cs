@@ -5,12 +5,12 @@ using WrathAccess.UI.Announcements;
 namespace WrathAccess.UI.Proxies
 {
     /// <summary>
-    /// A boolean setting → checkbox. Value is "checked"/"unchecked" (read live);
-    /// activate flips it. Announced "Label, checkbox, checked, [disabled]".
+    /// A boolean setting → toggle (the game's term for a checkbox). Value is "on"/"off" (read live);
+    /// activate flips it. Announced "Label, toggle, on, [disabled]".
     /// </summary>
     public sealed class ProxyToggle : UIElement
     {
-        // Shares the "checkbox" settings category + announcement order (see ProxyBoolToggle).
+        // Shares the "toggle" settings category + announcement order (see ProxyBoolToggle).
         public override System.Type AnnouncementOrderType => typeof(ProxyBoolToggle);
 
         private readonly SettingsEntityBoolVM _vm;
@@ -27,8 +27,9 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(_vm?.Title ?? ""));
-            yield return new RoleAnnouncement("checkbox");
-            yield return new ValueAnnouncement(Message.Raw(_vm != null && _vm.GetTempValue() ? "checked" : "unchecked"));
+            yield return new RoleAnnouncement("toggle");
+            yield return new ValueAnnouncement(_vm != null && _vm.GetTempValue()
+                ? Message.Localized("ui", "value.on") : Message.Localized("ui", "value.off"));
             yield return new EnabledAnnouncement(Enabled);
             yield return new TooltipAnnouncement(Message.Raw(_vm?.Description));
         }
@@ -36,7 +37,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (Enabled)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw("Toggle"), _ => _vm.ChangeValue());
+                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.toggle"), _ => _vm.ChangeValue());
         }
 
         public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate()

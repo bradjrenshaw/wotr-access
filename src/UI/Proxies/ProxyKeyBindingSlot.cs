@@ -30,13 +30,14 @@ namespace WrathAccess.UI.Proxies
 
         private bool Enabled => _vm != null && _vm.ModificationAllowed.Value;
 
-        // Mirrors the row view: GetPrettyString is empty for an unbound slot.
+        // Mirrors the row view: GetPrettyString is empty for an unbound slot. Returns null when unbound
+        // (the caller speaks the localized "not bound").
         private string KeyText()
         {
-            if (_vm == null) return "not bound";
+            if (_vm == null) return null;
             var data = _index == 0 ? _vm.TempBindingValue1.Value : _vm.TempBindingValue2.Value;
             string p = data.GetPrettyString();
-            return string.IsNullOrEmpty(p) ? "not bound" : p;
+            return string.IsNullOrEmpty(p) ? null : p;
         }
 
         public override bool ReannounceOnContext => true; // announce the new value after clearing
@@ -45,15 +46,16 @@ namespace WrathAccess.UI.Proxies
         {
             yield return new LabelAnnouncement(Message.Raw(_label));
             yield return new RoleAnnouncement("key binding");
-            yield return new ValueAnnouncement(Message.Raw(KeyText()));
+            var key = KeyText();
+            yield return new ValueAnnouncement(key != null ? Message.Raw(key) : Message.Localized("ui", "value.not_bound"));
             yield return new EnabledAnnouncement(Enabled);
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
             if (!Enabled) yield break;
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Rebind"), _ => OpenCapture());
-            yield return new ElementAction(ActionIds.Context, Message.Raw("Clear"), _ => Clear());
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.rebind"), _ => OpenCapture());
+            yield return new ElementAction(ActionIds.Context, Message.Localized("ui", "action.clear"), _ => Clear());
         }
 
         private void OpenCapture()

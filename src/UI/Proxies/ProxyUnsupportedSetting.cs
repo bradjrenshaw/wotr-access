@@ -17,7 +17,7 @@ namespace WrathAccess.UI.Proxies
         {
             yield return new LabelAnnouncement(Message.Raw(_label));
             yield return new RoleAnnouncement("setting");
-            yield return new ValueAnnouncement(Message.Raw("not accessible yet"));
+            yield return new ValueAnnouncement(Message.Localized("ui", "value.not_accessible"));
         }
     }
 }

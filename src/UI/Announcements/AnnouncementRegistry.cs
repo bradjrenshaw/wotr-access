@@ -48,7 +48,8 @@ namespace WrathAccess.UI.Announcements
         {
             var key = DeriveAnnouncementKey(annType);
             var display = DeriveDisplayName(StripSuffix(annType.Name, "Announcement"));
-            var category = ModSettingsRegistry.EnsureCategory("announcements." + key, "Announcements/" + display);
+            var category = ModSettingsRegistry.EnsureCategory("announcements." + key, "Announcements/" + display,
+                "/announcement." + key); // "announcements" root segment skipped (empty), leaf gets the loc key
 
             // Created either way (per-element overrides need it as a fallback); shown only if opted in.
             category.Hidden = annType.GetCustomAttribute<ShowInGlobalSettingsAttribute>() == null;
@@ -88,7 +89,10 @@ namespace WrathAccess.UI.Announcements
                 // element-specific (non-announcement) settings.
                 var perEl = ModSettingsRegistry.EnsureCategory(
                     "ui." + elementKey + ".announcements." + annKey,
-                    "UI/" + elementDisplay + "/Announcements/" + annDisplay);
+                    "UI/" + elementDisplay + "/Announcements/" + annDisplay,
+                    // "ui" root segment skipped (empty); element node, the Announcements subnode, and the
+                    // per-announcement leaf each get a "settings"-table loc key (English fallback if absent).
+                    "/element." + elementKey + "/announcements_group/announcement." + annKey);
 
                 foreach (var child in global.Children)
                 {

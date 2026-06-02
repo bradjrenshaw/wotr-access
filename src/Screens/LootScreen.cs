@@ -71,7 +71,7 @@ namespace WrathAccess.Screens
         {
             var vm = Vm();
             if (vm != null)
-                yield return new ElementAction(ActionIds.Back, Message.Raw("Close"), _ => vm.Close());
+                yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ => vm.Close());
         }
     }
 }

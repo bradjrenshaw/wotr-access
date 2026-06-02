@@ -36,11 +36,10 @@ namespace WrathAccess.UI.Proxies
             yield return new RoleAnnouncement("tab");
 
             // State (current/completed) + the live summary, as one value; "locked" reads via Enabled.
-            string state = IsCurrent ? "current" : (IsCompleted ? "completed" : null);
-            string sum = _summary?.Invoke();
-            string val = state;
-            if (!string.IsNullOrEmpty(sum)) val = string.IsNullOrEmpty(val) ? sum : val + ", " + sum;
-            if (!string.IsNullOrEmpty(val)) yield return new ValueAnnouncement(Message.Raw(val));
+            Message state = IsCurrent ? Message.Localized("ui", "value.current")
+                : IsCompleted ? Message.Localized("ui", "value.completed") : null;
+            var value = Message.Join(", ", state, Message.MaybeRaw(_summary?.Invoke()));
+            if (!value.IsEmpty) yield return new ValueAnnouncement(value);
 
             yield return new EnabledAnnouncement(Available);
         }
@@ -49,7 +48,7 @@ namespace WrathAccess.UI.Proxies
         {
             // Can't "go to" the phase you're already on; locked phases can't be jumped to.
             if (Available && !IsCurrent)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw("Go to step"),
+                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.go_to_step"),
                     _ => _vm.SetSelectedFromView(true));
         }
     }

@@ -26,14 +26,16 @@ namespace WrathAccess.UI.Proxies
         {
             yield return new LabelAnnouncement(Message.Raw(_action.Label));
             yield return new RoleAnnouncement("key binding");
-            yield return new ValueAnnouncement(Message.Raw(_action.BindingsDisplay)); // "Ctrl+Shift+A" / "(none)"
+            // Unbound reads the localized "not bound" (shared with ProxyKeyBindingSlot); otherwise the combo.
+            yield return new ValueAnnouncement(_action.Bindings.Count == 0
+                ? Message.Localized("ui", "value.not_bound") : Message.Raw(_action.BindingsDisplay));
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Rebind"),
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.rebind"),
                 _ => ModKeyCaptureScreen.Open(_action));
-            yield return new ElementAction(ActionIds.Context, Message.Raw("Clear"),
+            yield return new ElementAction(ActionIds.Context, Message.Localized("ui", "action.clear"),
                 _ => _action.ClearBindings());
         }
     }

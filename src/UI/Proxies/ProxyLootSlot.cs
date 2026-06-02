@@ -51,7 +51,7 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Take"),
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.take"),
                 _ => _loot.HandleTryCollectLootSlot(_slot));
         }
     }

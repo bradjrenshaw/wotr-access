@@ -9,11 +9,11 @@ namespace WrathAccess.UI.Proxies
     /// tied to SettingsEntityBoolVM). Reads its value live and activates via a supplied toggle
     /// action — e.g. the Story phase's "Last Azlanti" mode (StoryVM.SwitchLastAzlanti).
     /// </summary>
-    // Canonical "checkbox": ProxyToggle / ProxyOverrideToggle share this settings category +
-    // announcement order. The order is the union across all three (Tooltip comes from ProxyToggle).
+    // Canonical "toggle" (the game's term for a checkbox): ProxyToggle / ProxyOverrideToggle share this
+    // settings category + announcement order (the union across all three — Tooltip comes from ProxyToggle).
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
-    [ElementSettingsKey("checkbox")]
+    [ElementSettingsKey("toggle")]
     public sealed class ProxyBoolToggle : UIElement
     {
         private readonly string _label;
@@ -39,22 +39,22 @@ namespace WrathAccess.UI.Proxies
         // appears/disappears as the dependency changes without a rebuild.
         public override bool CanFocus => !_hideWhenDisabled || Enabled;
 
-        public override bool ReannounceOnActivate => true; // flips in place → re-announce "checked"/"unchecked"
+        public override bool ReannounceOnActivate => true; // flips in place → re-announce "on"/"off"
         public override Kingmaker.UI.UISoundType? ActivateSound => Kingmaker.UI.UISoundType.SettingsSwitchToggle;
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(_label ?? ""));
-            yield return new RoleAnnouncement("checkbox");
-            yield return new ValueAnnouncement(Message.Raw(
-                _isChecked != null && _isChecked() ? "checked" : "unchecked"));
+            yield return new RoleAnnouncement("toggle");
+            yield return new ValueAnnouncement(_isChecked != null && _isChecked()
+                ? Message.Localized("ui", "value.on") : Message.Localized("ui", "value.off"));
             yield return new EnabledAnnouncement(Enabled);
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
             if (Enabled)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw("Toggle"), _ => _onToggle?.Invoke());
+                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.toggle"), _ => _onToggle?.Invoke());
         }
     }
 }

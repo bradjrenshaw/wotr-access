@@ -46,7 +46,7 @@ namespace WrathAccess.UI.Announcements
             _selected ? Message.Localized("ui", "state.selected") : Message.Empty;
     }
 
-    /// <summary>The control's current value/state: "checked"/"unchecked", a slider amount, a dropdown option.</summary>
+    /// <summary>The control's current value/state: "on"/"off", a slider amount, a dropdown option.</summary>
     [ShowInGlobalSettings]
     public sealed class ValueAnnouncement : Announcement
     {

@@ -9,6 +9,27 @@
   "ann.enabled": "Announce",
   "ann.suffix": "Include suffix punctuation",
 
+  "announcements_group": "Announcements",
+
+  "element.button": "Button",
+  "element.toggle": "Toggle",
+  "element.combo_box": "Combo box",
+  "element.tab": "Tab",
+  "element.slider": "Slider",
+  "element.radio_button": "Radio button",
+  "element.key_binding": "Key binding",
+  "element.loot_slot": "Loot slot",
+  "element.text_field": "Text field",
+
+  "announcement.label": "Label",
+  "announcement.role": "Role",
+  "announcement.value": "Value",
+  "announcement.selected": "Selected",
+  "announcement.enabled": "Enabled",
+  "announcement.tooltip": "Tooltip",
+  "announcement.position": "Position",
+  "announcement.count": "Count",
+
   "rebind.prompt": "Rebind {action}. Press a key, or Escape to cancel.",
   "rebind.cancelled": "Cancelled",
   "rebind.bound": "{action} bound to {combo}",

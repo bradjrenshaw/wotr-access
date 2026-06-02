@@ -36,7 +36,7 @@ namespace WrathAccess.UI.Proxies
             // SetSelectedFromView(true) is exactly what the tab button calls on click:
             // SetSelected → IsSelected (group updates SelectedEntity) → DoSelectMe → SetSettingsList.
             // So we replicate the game's own click flow rather than poking VM state ourselves.
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Select"),
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.select"),
                 _ => _tab?.SetSelectedFromView(true));
         }
     }

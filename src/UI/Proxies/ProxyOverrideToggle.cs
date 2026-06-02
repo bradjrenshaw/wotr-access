@@ -12,7 +12,7 @@ namespace WrathAccess.UI.Proxies
     /// </summary>
     public sealed class ProxyOverrideToggle : UIElement
     {
-        // Shares the "checkbox" settings category + announcement order (see ProxyBoolToggle).
+        // Shares the "toggle" settings category + announcement order (see ProxyBoolToggle).
         public override System.Type AnnouncementOrderType => typeof(ProxyBoolToggle);
 
         private readonly NullableBoolSetting _setting;
@@ -26,15 +26,16 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(_setting.Label));
-            yield return new RoleAnnouncement("checkbox");
-            var value = (_setting.Resolved ? "checked" : "unchecked") + (_setting.IsOverridden ? ", overridden" : "");
-            yield return new ValueAnnouncement(Message.Raw(value));
+            yield return new RoleAnnouncement("toggle");
+            yield return new ValueAnnouncement(Message.Join(", ",
+                _setting.Resolved ? Message.Localized("ui", "value.on") : Message.Localized("ui", "value.off"),
+                _setting.IsOverridden ? Message.Localized("ui", "value.overridden") : null));
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Raw("Toggle"), _ => _setting.ToggleExplicit());
-            yield return new ElementAction(ActionIds.Context, Message.Raw("Reset to default"), _ => _setting.Reset());
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.toggle"), _ => _setting.ToggleExplicit());
+            yield return new ElementAction(ActionIds.Context, Message.Localized("ui", "action.reset"), _ => _setting.Reset());
         }
     }
 }

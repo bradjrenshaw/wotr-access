@@ -23,8 +23,9 @@ namespace WrathAccess.UI.Proxies
         private readonly Func<string> _summary;
         private readonly string _actionVerb;
 
+        // actionVerb is a "ui" table key under "action." (e.g. "step", "raise", "lower").
         public ProxyStepper(Func<string> label, Func<bool> enabled, Action act, Func<string> summary,
-            string actionVerb = "Step")
+            string actionVerb = "step")
         {
             _label = label;
             _enabled = enabled;
@@ -48,7 +49,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (Enabled)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw(_actionVerb), _ => _act?.Invoke());
+                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action." + _actionVerb), _ => _act?.Invoke());
         }
     }
 }

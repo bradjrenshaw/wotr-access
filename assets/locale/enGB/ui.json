@@ -10,6 +10,7 @@
   "role.setting": "setting",
   "role.item": "item",
   "role.list": "list",
+  "role.group": "group",
   "role.table": "table",
   "role.heading": "heading",
   "role.key binding": "key binding",

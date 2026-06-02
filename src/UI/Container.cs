@@ -54,7 +54,7 @@ namespace WrathAccess.UI
                 count++;
                 if (_children[i] == child) ci = count;
             }
-            return ci < 0 ? null : Message.Raw(ci + " of " + count);
+            return ci < 0 ? null : Message.Localized("ui", "nav.position", new { index = ci, count });
         }
 
         // Unlabeled structural containers stay silent; labeled ones announce name (+ a role: a Tree

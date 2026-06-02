@@ -29,6 +29,8 @@
     <!-- Use UMM's Harmony (the instance UMM loads at runtime), not the game's older copy. -->
     <Reference Include="0Harmony"><HintPath>$(ManagedDir)\UnityModManager\0Harmony.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Assembly-CSharp"><HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <!-- Newtonsoft.Json: ships with the game; used to parse our locale JSON. Reference only (already loaded). -->
+    <Reference Include="Newtonsoft.Json"><HintPath>$(ManagedDir)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
     <!-- A* Pathfinding Project: the navmesh. We read walkable surfaces/levels via NNInfo/GraphNode. -->
     <Reference Include="AstarPathfindingProject"><HintPath>$(ManagedDir)\AstarPathfindingProject.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Owlcat.Runtime.UI"><HintPath>$(ManagedDir)\Owlcat.Runtime.UI.dll</HintPath><Private>false</Private></Reference>

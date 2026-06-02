@@ -1,0 +1,22 @@
+{
+  "role.button": "button",
+  "role.checkbox": "checkbox",
+  "role.combo box": "combo box",
+  "role.option": "option",
+  "role.tab": "tab",
+  "role.slider": "slider",
+  "role.edit": "edit",
+  "role.setting": "setting",
+  "role.item": "item",
+  "role.list": "list",
+  "role.table": "table",
+  "role.heading": "heading",
+  "role.expanded": "expanded",
+  "role.collapsed": "collapsed",
+
+  "state.disabled": "disabled",
+  "state.selected": "selected",
+
+  "nav.position": "{index} of {count}",
+  "count.items": "{count} items"
+}

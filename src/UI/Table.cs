@@ -140,7 +140,7 @@ namespace WrathAccess.UI
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             if (!string.IsNullOrEmpty(Label)) yield return new LabelAnnouncement(Message.Raw(Label));
-            yield return new RoleAnnouncement("table, " + RowCount + " rows by " + ColCount + " columns");
+            yield return new RoleAnnouncement("table"); // localized via "ui"/"role.table" (dims dropped, matching FlowSheet)
         }
 
         /// <summary>A focusable empty cell — read as "blank" by the grid navigator.</summary>

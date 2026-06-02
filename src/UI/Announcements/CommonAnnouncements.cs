@@ -15,7 +15,9 @@ namespace WrathAccess.UI.Announcements
         private readonly string _role;
         public RoleAnnouncement(string role) { _role = role; }
         public override string Key => "role";
-        public override Message Render(AnnouncementContext ctx) => Message.Raw(_role);
+        // The role word is the key ("ui" table, "role.<word>"): proxies keep passing "button"/"combo box"/…
+        // unchanged, and the English file supplies the fallback so untranslated languages still read English.
+        public override Message Render(AnnouncementContext ctx) => Message.Localized("ui", "role." + _role);
     }
 
     /// <summary>
@@ -29,7 +31,7 @@ namespace WrathAccess.UI.Announcements
         public EnabledAnnouncement(bool enabled) { _enabled = enabled; }
         public override string Key => "enabled";
         public override Message Render(AnnouncementContext ctx) =>
-            _enabled ? Message.Empty : Message.Raw("disabled");
+            _enabled ? Message.Empty : Message.Localized("ui", "state.disabled");
     }
 
     /// <summary>Selection state. Speaks "selected" only when selected (else silent) — like Enabled.</summary>
@@ -39,7 +41,7 @@ namespace WrathAccess.UI.Announcements
         public SelectedAnnouncement(bool selected) { _selected = selected; }
         public override string Key => "selected";
         public override Message Render(AnnouncementContext ctx) =>
-            _selected ? Message.Raw("selected") : Message.Empty;
+            _selected ? Message.Localized("ui", "state.selected") : Message.Empty;
     }
 
     /// <summary>The control's current value/state: "checked"/"unchecked", a slider amount, a dropdown option.</summary>
@@ -79,6 +81,6 @@ namespace WrathAccess.UI.Announcements
         private readonly int _count;
         public CountAnnouncement(int count) { _count = count; }
         public override string Key => "count";
-        public override Message Render(AnnouncementContext ctx) => Message.Raw(_count + " items");
+        public override Message Render(AnnouncementContext ctx) => Message.Localized("ui", "count.items", new { count = _count });
     }
 }

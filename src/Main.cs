@@ -35,6 +35,7 @@ namespace WrathAccess
             try
             {
                 Tts.Initialize();
+                WrathAccess.Localization.LocalizationManager.Initialize(); // wire Message's resolver early
                 _harmony = new Harmony(modEntry.Info.Id);
                 _harmony.PatchAll(Assembly.GetExecutingAssembly());
                 RegisterInput();
@@ -76,6 +77,7 @@ namespace WrathAccess
         private static void OnUpdate(UnityModManager.ModEntry modEntry, float dt)
         {
             if (!Enabled) return;
+            WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
             InputManager.Tick();
             ScreenManager.Tick();
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it

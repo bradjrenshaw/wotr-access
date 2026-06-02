@@ -1,3 +1,4 @@
+using System.Linq;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Pregen;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
@@ -21,7 +22,15 @@ namespace WrathAccess.Screens
         {
             var list = new ListContainer();
             foreach (var item in Phase.PregenSelectionGroup.EntitiesCollection)
-                list.Add(new ProxyPregenItem(item, Phase));
+            {
+                var it = item; // capture for the live closures
+                // Label = name, race, class, role (skipping blanks). Details (class description +
+                // features) are the selected character's, shown by the phase's InfoVM as a drill-in.
+                list.Add(new ProxySelectionItem(it,
+                    () => string.Join(", ", new[] { it.CharacterName.Value, it.Race.Value, it.Class.Value, it.Role.Value }
+                        .Where(p => !string.IsNullOrWhiteSpace(p))),
+                    tooltip: () => it.IsSelected.Value && Phase.InfoVM != null ? Phase.InfoVM.CurrentTooltip : null));
+            }
             list.Add(new ProxyCustomCharacter(Phase)); // last entry, in the list itself
             content.Add(list);
 

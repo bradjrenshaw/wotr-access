@@ -23,7 +23,10 @@ namespace WrathAccess.Screens
         {
             var tabs = new ListContainer("Tabs");
             foreach (var tab in Phase.TabSelector.EntitiesCollection)
-                tabs.Add(new ProxyPortraitTab(tab));
+            {
+                var t = tab; // capture for the live closure
+                tabs.Add(new ProxySelectionItem(t, () => t.Tab.ToString(), role: "tab"));
+            }
             content.Add(tabs);
 
             _portraitPanel = new Panel("Portraits");
@@ -48,7 +51,15 @@ namespace WrathAccess.Screens
             foreach (var portrait in CurrentPortraits())
             {
                 if (portrait == null || portrait.CustomPortraitCreatorItem) continue; // skip "create new"
-                list.Add(new ProxyPortraitItem(portrait, "Portrait " + index));
+                var p = portrait; var positional = "Portrait " + index; // capture for the live closure
+                // No display name on portraits — use the blueprint's asset name (codey but distinguishing),
+                // falling back to the positional label. Portraits play their own selection sound off the VM path.
+                list.Add(new ProxySelectionItem(p, () =>
+                {
+                    var bp = p.GetBlueprintPortrait();
+                    var n = bp != null ? bp.name : null;
+                    return !string.IsNullOrEmpty(n) ? n : positional;
+                }, suppressActivateSound: true));
                 index++;
             }
             if (list.Children.Count == 0) list.Add(new TextElement("No portraits."));

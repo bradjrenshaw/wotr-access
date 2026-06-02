@@ -11,7 +11,7 @@ namespace WrathAccess.Screens
     /// voices. The selector holds both genders, but the game shows one at a time, defaulting to the
     /// character's; we mirror that with a "Voice gender" chooser defaulting to the character's gender.
     /// Selecting a voice chooses it and plays a sample (the game plays off the resulting Barks), and
-    /// re-selecting the current one replays it — see <see cref="ProxyVoiceItem"/>. The selector is built
+    /// re-selecting the current one replays it (see the onActivate at the call site). The selector is built
     /// lazily (once gender is known), so we (re)build the list when it materializes.
     /// </summary>
     public sealed class VoicePhaseContent : CharGenPhaseContent<CharGenVoicePhaseVM>
@@ -60,7 +60,17 @@ namespace WrathAccess.Screens
             // Mirror EntityComparer: empty voices sort to the end.
             visible.Sort((a, b) => a.IsEmptyVoice == b.IsEmptyVoice ? 0 : a.IsEmptyVoice ? 1 : -1);
 
-            foreach (var v in visible) list.Add(new ProxyVoiceItem(v));
+            // Activate mirrors the game's item view: re-activating the current voice replays its sample
+            // (PlayPreview); picking a new one selects it (the game plays the sample off the resulting Barks).
+            foreach (var v in visible)
+            {
+                var voice = v; // capture for the live closure
+                list.Add(new ProxySelectionItem(voice, () => voice.DisplayName, onActivate: () =>
+                {
+                    if (voice.IsSelected.Value) voice.Barks?.PlayPreview();
+                    else voice.SetSelectedFromView(true);
+                }));
+            }
             if (list.Children.Count > 0) _listPanel.Add(list);
         }
 

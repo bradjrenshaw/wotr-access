@@ -65,10 +65,13 @@ namespace WrathAccess.Screens
 
         private static void BuildStory(Container content, NewGamePhaseStoryVM story)
         {
-            // Campaign choices (unlabeled list → reads as "<name>, option, selected, N of M").
+            // Campaign choices (unlabeled list → reads as "<name>, radio button, selected, N of M").
             var campaigns = new ListContainer();
             foreach (var e in story.SelectionGroup.EntitiesCollection)
-                campaigns.Add(new ProxyScenario(e));
+            {
+                var ent = e; // capture for the live closure
+                campaigns.Add(new ProxySelectionItem(ent, () => ent.Title));
+            }
             content.Add(campaigns);
 
             // Live description of the currently-selected campaign (updates as you pick).

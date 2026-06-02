@@ -102,7 +102,12 @@ namespace WrathAccess.Screens
             foreach (var it in items)
             {
                 var item = it; // capture for the live closures
-                table.AddDataRow(new ProxySpellItem(item), new UIElement[]
+                // A checkbox in a multi-select group (slot budget): toggle via the same OnClick the view
+                // uses — SetSelectedFromView(!IsSelected), gated on IsAvailable (AllowSwitchOff is true).
+                table.AddDataRow(
+                    new ProxySelectionItem(item, () => item.DisplayName, role: "checkbox",
+                        onActivate: () => item.SetSelectedFromView(!item.IsSelected.Value)),
+                    new UIElement[]
                 {
                     new TextElement(() => item.Level.ToString()),
                     new TextElement(() => School(item)),

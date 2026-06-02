@@ -25,7 +25,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(_vm?.DisplayName ?? ""));
-            yield return new RoleAnnouncement("option");
+            yield return new RoleAnnouncement("radio button");
             yield return new SelectedAnnouncement(IsSelected);
             yield return new EnabledAnnouncement(Available);
         }

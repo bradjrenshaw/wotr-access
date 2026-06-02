@@ -24,7 +24,7 @@ namespace WrathAccess.UI.Proxies
         {
             // TODO: localize if the game exposes a Custom Character string.
             yield return new LabelAnnouncement(Message.Raw("Custom Character"));
-            yield return new RoleAnnouncement("option");
+            yield return new RoleAnnouncement("radio button");
             yield return new SelectedAnnouncement(IsSelected);
         }
 

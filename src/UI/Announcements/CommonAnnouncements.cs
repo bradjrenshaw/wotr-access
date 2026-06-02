@@ -1,6 +1,7 @@
 namespace WrathAccess.UI.Announcements
 {
     /// <summary>The element's name/label.</summary>
+    [ShowInGlobalSettings]
     public sealed class LabelAnnouncement : Announcement
     {
         private readonly Message _text;
@@ -10,6 +11,7 @@ namespace WrathAccess.UI.Announcements
     }
 
     /// <summary>The control type: "button", "toggle", "slider", "list"…</summary>
+    [ShowInGlobalSettings]
     public sealed class RoleAnnouncement : Announcement
     {
         private readonly string _role;
@@ -45,6 +47,7 @@ namespace WrathAccess.UI.Announcements
     }
 
     /// <summary>The control's current value/state: "checked"/"unchecked", a slider amount, a dropdown option.</summary>
+    [ShowInGlobalSettings]
     public sealed class ValueAnnouncement : Announcement
     {
         private readonly Message _text;
@@ -58,6 +61,7 @@ namespace WrathAccess.UI.Announcements
     /// entity's TooltipDescription). Read just before position; empty when there's none, so it
     /// self-skips. (The rich, brick/glossary-link tooltips are a separate later feature.)
     /// </summary>
+    [ShowInGlobalSettings]
     public sealed class TooltipAnnouncement : Announcement
     {
         private readonly Message _text;
@@ -67,6 +71,7 @@ namespace WrathAccess.UI.Announcements
     }
 
     /// <summary>Position within the parent container, e.g. "2 of 8". Injected by GetFocusMessage.</summary>
+    [ShowInGlobalSettings]
     public sealed class PositionAnnouncement : Announcement
     {
         private readonly Message _pos;

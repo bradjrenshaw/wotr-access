@@ -144,12 +144,9 @@ namespace WrathAccess
                 bindings.Add(new WrathAccess.Settings.BindingSetting(a));
             WrathAccess.Settings.ModSettings.Root.Add(bindings);
 
-            var ui = new WrathAccess.Settings.CategorySetting("announcements", "UI", localizationKey: "category.ui");
-            ui.Add(new WrathAccess.Settings.BoolSetting("role", "Announce control types", true, "ann.role"));
-            ui.Add(new WrathAccess.Settings.BoolSetting("value", "Announce control values", true, "ann.value"));
-            ui.Add(new WrathAccess.Settings.BoolSetting("tooltip", "Announce tooltips", true, "ann.tooltip"));
-            ui.Add(new WrathAccess.Settings.BoolSetting("position", "Announce list position", true, "ann.position"));
-            WrathAccess.Settings.ModSettings.Root.Add(ui);
+            // UI = per-announcement settings (global toggles) + per-element-type overrides, discovered
+            // by reflection. Creates "announcements" + "ui" categories under the settings Root.
+            WrathAccess.UI.Announcements.AnnouncementRegistry.RegisterDefaults();
         }
 
         private static void RegisterInput()

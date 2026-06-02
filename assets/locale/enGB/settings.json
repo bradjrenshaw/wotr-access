@@ -4,10 +4,10 @@
   "category.input": "Input",
   "category.ui": "UI",
 
-  "ann.role": "Announce control types",
-  "ann.value": "Announce control values",
-  "ann.tooltip": "Announce tooltips",
-  "ann.position": "Announce list position",
+  "global.group": "Global",
+
+  "ann.enabled": "Announce",
+  "ann.suffix": "Include suffix punctuation",
 
   "rebind.prompt": "Rebind {action}. Press a key, or Escape to cancel.",
   "rebind.cancelled": "Cancelled",

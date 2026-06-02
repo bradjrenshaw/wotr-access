@@ -38,8 +38,10 @@ namespace WrathAccess.UI.Announcements
             {
                 if (!ctx.ResolveBool(a.Key, "enabled", true)) continue;
                 var text = a.Render(ctx)?.Resolve();
-                if (!string.IsNullOrEmpty(text))
-                    rendered.Add(new KeyValuePair<string, string>(text, a.Suffix));
+                if (string.IsNullOrEmpty(text)) continue;
+                // include_suffix off → drop this part's trailing punctuation (parts stay space-joined).
+                var suffix = ctx.ResolveBool(a.Key, "include_suffix", true) ? a.Suffix : "";
+                rendered.Add(new KeyValuePair<string, string>(text, suffix));
             }
 
             if (rendered.Count == 0) return Message.Empty;

@@ -29,13 +29,13 @@ namespace WrathAccess.Screens
         private bool _built;
         private Container _content; // wraps the active category's treeview; refilled on tab switch
 
-        // The menu's tabs ARE the top-level setting categories (Input, UI, …).
-        private static List<CategorySetting> Categories()
+        // Explicit tabs (the settings Root holds bindings/announcements/ui, which don't map 1:1 to tabs:
+        // the UI tab composes the global announcement settings + the per-element-type overrides).
+        private static readonly (string key, string label, string loc)[] Tabs =
         {
-            var list = new List<CategorySetting>();
-            foreach (var c in ModSettings.Root.Children) if (c is CategorySetting cat) list.Add(cat);
-            return list;
-        }
+            ("input", "Input", "category.input"),
+            ("ui", "UI", "category.ui"),
+        };
 
         public override void OnPush() { _priorFocus = FocusMode.Active; FocusMode.Set(true); _active = 0; _built = false; }
         public override void OnPop() { Clear(); _content = null; FocusMode.Set(_priorFocus); }
@@ -61,12 +61,11 @@ namespace WrathAccess.Screens
             _built = true;
             Clear();
 
-            var cats = Categories();
             var tabs = new ListContainer(Loc("menu.categories", "Categories"));
-            for (int i = 0; i < cats.Count; i++)
+            for (int i = 0; i < Tabs.Length; i++)
             {
                 int idx = i;
-                tabs.Add(new ProxyTab(cats[i].Label, () => _active == idx, () => _active = idx));
+                tabs.Add(new ProxyTab(Loc(Tabs[i].loc, Tabs[i].label), () => _active == idx, () => _active = idx));
             }
             Add(tabs);
 
@@ -89,27 +88,56 @@ namespace WrathAccess.Screens
             // Unlabeled = the structural tree root (silent, never focused as a node); only real sub-groups
             // announce expand/collapse. The category is already conveyed by the selected tab.
             var tree = new TreeGroup();
-            var cats = Categories();
-            if (_active >= 0 && _active < cats.Count)
-                foreach (var s in cats[_active].Children) BuildSettingNode(tree, s);
+            BuildTab(tree, _active >= 0 && _active < Tabs.Length ? Tabs[_active].key : null);
             _content.Add(tree);
+        }
+
+        private void BuildTab(TreeGroup tree, string key)
+        {
+            if (key == "input")
+            {
+                var bindings = ModSettings.Root.Get<CategorySetting>("bindings");
+                if (bindings != null)
+                    foreach (var s in bindings.Children) BuildSettingNode(tree, s);
+            }
+            else if (key == "ui")
+            {
+                // Global per-announcement-type settings in one collapsible node at the top (only the
+                // [ShowInGlobalSettings] types are non-hidden).
+                var ann = ModSettings.Root.Get<CategorySetting>("announcements");
+                if (ann != null)
+                {
+                    var global = new TreeGroup(Loc("global.group", "Global"));
+                    foreach (var s in ann.Children) BuildSettingNode(global, s);
+                    if (global.Children.Count > 0) tree.Add(global);
+                }
+
+                // Each element type as its own root-level node, alongside (after) Global.
+                var ui = ModSettings.Root.Get<CategorySetting>("ui");
+                if (ui != null)
+                    foreach (var s in ui.Children) BuildSettingNode(tree, s);
+            }
         }
 
         // Map a setting to a navigable control; categories recurse into collapsible tree groups.
         private static void BuildSettingNode(Container parent, Setting s)
         {
+            if (s.Hidden) return; // hidden globals (no [ShowInGlobalSettings]) + hidden state settings
             switch (s)
             {
                 case CategorySetting cat:
                     var group = new TreeGroup(cat.Label);
                     foreach (var c in cat.Children) BuildSettingNode(group, c);
-                    parent.Add(group);
+                    if (group.Children.Count > 0) parent.Add(group); // skip empty groups
                     break;
                 case BindingSetting bs:
                     parent.Add(new ProxyModBinding(bs.Action));
                     break;
                 case BoolSetting b:
                     parent.Add(new ProxyBoolToggle(b.Label, b.Get, () => b.Set(!b.Get())));
+                    break;
+                case NullableBoolSetting nb:
+                    parent.Add(new ProxyOverrideToggle(nb));
                     break;
             }
         }

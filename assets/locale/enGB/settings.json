@@ -3,7 +3,11 @@
   "menu.categories": "Categories",
   "category.input": "Input",
   "category.ui": "UI",
-  "ui.placeholder": "Announcement settings coming soon.",
+
+  "ann.role": "Announce control types",
+  "ann.value": "Announce control values",
+  "ann.tooltip": "Announce tooltips",
+  "ann.position": "Announce list position",
 
   "rebind.prompt": "Rebind {action}. Press a key, or Escape to cancel.",
   "rebind.cancelled": "Cancelled",

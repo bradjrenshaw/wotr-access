@@ -39,12 +39,9 @@ namespace WrathAccess
                 _harmony = new Harmony(modEntry.Info.Id);
                 _harmony.PatchAll(Assembly.GetExecutingAssembly());
                 RegisterInput();
-                // Mod settings: wrap every input action as a persistent, rebindable binding, then load the
-                // saved config (which overrides the in-code default bindings). Stored under the game's
-                // persistent data dir so it survives a mod redeploy.
-                var bindings = new WrathAccess.Settings.CategorySetting("bindings", "Key bindings");
-                foreach (var a in InputManager.Actions) bindings.Add(new WrathAccess.Settings.BindingSetting(a));
-                WrathAccess.Settings.ModSettings.Root.Add(bindings);
+                // Mod settings tree (the mod menu's tabs are its top-level categories). Built before load
+                // so saved config (settings.json under the persistent data dir) overrides the defaults.
+                BuildSettings();
                 WrathAccess.Settings.ModSettings.Initialize(
                     System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "WrathAccess"));
                 ScreenManager.Initialize();
@@ -137,6 +134,24 @@ namespace WrathAccess
         /// Temporary proof-of-life bindings for the input/speech/suppression slice.
         /// These get replaced by real navigation + a rebindable action set.
         /// </summary>
+        // The mod settings tree (its top-level categories become the mod menu's tabs): Input — every
+        // input action as a rebindable BindingSetting — and UI — announcement-verbosity toggles the
+        // AnnouncementComposer consults live (off → that part is no longer spoken anywhere).
+        private static void BuildSettings()
+        {
+            var bindings = new WrathAccess.Settings.CategorySetting("bindings", "Input", localizationKey: "category.input");
+            foreach (var a in InputManager.Actions)
+                bindings.Add(new WrathAccess.Settings.BindingSetting(a));
+            WrathAccess.Settings.ModSettings.Root.Add(bindings);
+
+            var ui = new WrathAccess.Settings.CategorySetting("announcements", "UI", localizationKey: "category.ui");
+            ui.Add(new WrathAccess.Settings.BoolSetting("role", "Announce control types", true, "ann.role"));
+            ui.Add(new WrathAccess.Settings.BoolSetting("value", "Announce control values", true, "ann.value"));
+            ui.Add(new WrathAccess.Settings.BoolSetting("tooltip", "Announce tooltips", true, "ann.tooltip"));
+            ui.Add(new WrathAccess.Settings.BoolSetting("position", "Announce list position", true, "ann.position"));
+            WrathAccess.Settings.ModSettings.Root.Add(ui);
+        }
+
         private static void RegisterInput()
         {
             // Global hotkeys (fire when the navigator doesn't consume them).

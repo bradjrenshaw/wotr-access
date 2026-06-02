@@ -23,27 +23,28 @@ namespace WrathAccess.Screens
             AccessTools.Field(typeof(CharGenPhaseBaseVM), "m_LevelUpController");
 
         private readonly LevelUpController _controller;
-        private Panel _racePanel;
-        private bool _raceShown;
+        private FlowSheet _sheet;
+        private ListRegion _raceRegion; // present only when the race offers a bonus choice
 
         public AbilityScoresPhaseContent(CharGenAbilityScoresVM phase) : base(phase)
             => _controller = ControllerField?.GetValue(phase) as LevelUpController;
 
+        // One FlowSheet, three regions (one Tab-stop): a status line, the abilities grid, and — when the
+        // race offers a +2 choice — a racial-bonus selector. Arrows move cell-to-cell across all three;
+        // Ctrl+Up/Down jump between regions.
         public override void Build(Container content)
         {
-            content.Add(new TextElement(() => "Points remaining: " + Points()));
+            _sheet = new FlowSheet();
 
-            var table = new Table("Ability scores");
-            table.AddHeaderRow(new TextElement("Ability", "heading"), new UIElement[]
-            {
-                new TextElement("Score"), new TextElement("Modifier"),
-                new TextElement("Race bonus"), new TextElement("Raise"), new TextElement("Lower"),
-            });
+            _sheet.List(null) // unlabelled status line (self-describing, single cell)
+                .Item(new TextElement(() => "Points remaining: " + Points()));
+
+            var table = _sheet.Table("Ability scores", "Score", "Modifier", "Race bonus", "Raise", "Lower");
             foreach (var a in Phase.AbilityScoreAllocators)
             {
                 if (a == null) continue;
                 var alloc = a; // capture for the live closures
-                table.AddDataRow(new TextElement(() => alloc.Name.Value), new UIElement[]
+                table.Row(new TextElement(() => alloc.Name.Value), new UIElement[]
                 {
                     // The game's "Scores"/Modifier/Race bonus are the live total (incl. racial), the
                     // ability modifier of that total, and the racial component — read on focus (settled),
@@ -53,30 +54,42 @@ namespace WrathAccess.Screens
                     new TextElement(() => alloc.RaceBonus.Value.HasValue ? Signed(alloc.RaceBonus.Value.Value) : ""),
                     new ProxyAbilityStep(alloc, _controller, raise: true),
                     new ProxyAbilityStep(alloc, _controller, raise: false),
-                }, rowTooltip: () => alloc.TooltipTemplate()); // Space on any cell in the row → stat detail
+                }, tooltip: () => alloc.TooltipTemplate()); // Space on any cell in the row → stat detail
             }
-            content.Add(table);
 
-            _racePanel = new Panel();
-            content.Add(_racePanel);
-            FillRace();
+            UpdateRace();   // adds the race region if applicable
+            _sheet.Reflow();
+            content.Add(_sheet);
         }
 
         public override void Tick()
         {
-            bool show = Phase.RaceBonusAvailable != null && Phase.RaceBonusAvailable.Value;
-            if (show != _raceShown) FillRace();
+            // Add/remove the race region as availability changes; reflow re-lays the matrix while keeping
+            // the other regions' cells (so a focused ability cell survives the change).
+            if (UpdateRace()) _sheet.Reflow();
         }
 
         // The race ability-bonus chooser only exists for races that let you pick where the +2 goes.
-        private void FillRace()
+        // Returns true if the region set changed (caller reflows).
+        private bool UpdateRace()
         {
-            _raceShown = Phase.RaceBonusAvailable != null && Phase.RaceBonusAvailable.Value;
-            if (_racePanel == null) return;
-            _racePanel.Clear();
-            if (!_raceShown) return;
-            _racePanel.Add(new ProxySequentialSelector("Racial ability bonus",
-                () => Phase.RaceBonusSelector != null ? Phase.RaceBonusSelector.Value : null));
+            bool show = Phase.RaceBonusAvailable != null && Phase.RaceBonusAvailable.Value;
+            bool has = _raceRegion != null && _sheet.HasRegion(_raceRegion);
+            if (show && !has)
+            {
+                _raceRegion = new ListRegion("Racial ability bonus");
+                _raceRegion.Item(new ProxySequentialSelector("Racial ability bonus",
+                    () => Phase.RaceBonusSelector != null ? Phase.RaceBonusSelector.Value : null));
+                _sheet.AddRegion(_raceRegion);
+                return true;
+            }
+            if (!show && has)
+            {
+                _sheet.RemoveRegion(_raceRegion);
+                _raceRegion = null;
+                return true;
+            }
+            return false;
         }
 
         // Live reads from the point-buy model (falling back to the allocator's reactive only when not in

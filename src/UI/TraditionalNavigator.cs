@@ -41,6 +41,9 @@ namespace WrathAccess.UI
                 case "nav.right": return Arrow(NavDirection.Right);
                 case "nav.next": return Tab(1);
                 case "nav.prev": return Tab(-1);
+                // Ctrl+Up/Down jump between FlowSheet regions; ignored (bubble) when not in a sheet.
+                case "nav.regionPrev": return Current?.Parent is FlowSheet sp && RegionJump(sp, -1);
+                case "nav.regionNext": return Current?.Parent is FlowSheet sn && RegionJump(sn, 1);
                 case "nav.primary":
                     // Nothing focused (e.g. plain exploration) → don't consume; let Enter bubble to the
                     // global handler (Main → Scanner.InteractAtCursor = left-click the thing under the cursor).
@@ -69,6 +72,7 @@ namespace WrathAccess.UI
                     // In a grid, a cell with no tooltip of its own falls back to its row's tooltip, so
                     // Space works on any element in the row (the value, a stepper, the header).
                     if (tpl == null && Current?.Parent is Table grid) tpl = grid.RowTooltipForCell(Current);
+                    if (tpl == null && Current?.Parent is FlowSheet sheet) tpl = sheet.RowTooltipForCell(Current);
                     if (tpl != null) WrathAccess.Screens.TooltipScreen.Open(tpl);
                     else Speak("No tooltip");
                     return true;
@@ -99,6 +103,9 @@ namespace WrathAccess.UI
 
             // Table (grid): 2-D cursor with Excel-style header+cell announce.
             if (Current.Parent is Table grid) return GridArrow(dir, grid);
+
+            // FlowSheet (regioned grid): 2-D cursor across stacked regions, region/header announce.
+            if (Current.Parent is FlowSheet sheet) return FlowArrow(dir, sheet);
 
             // Treeview region: Up/Down over expanded nodes (DFS); Right/Left expand/collapse/descend/ascend.
             var root = TreeRootOf(Current);
@@ -243,6 +250,76 @@ namespace WrathAccess.UI
             WrathAccess.UiSound.Hover(); // a focus move, like AnnounceDelta's interrupt path
             Speak(string.Join(", ", parts), interrupt: true);
             return true;
+        }
+
+        // Move the cell cursor in a FlowSheet. Left/Right step to the next visitable cell in the row;
+        // Up/Down step a row, landing on the same column or — if it isn't visitable there (a narrower
+        // region below) — the furthest-left visitable cell of that row. Announce: the region when it
+        // changes (entry), the column header when the column changed, the row label when the row changed
+        // (unless we're on the label cell itself), then the cell ("blank" if empty).
+        private bool FlowArrow(NavDirection dir, FlowSheet sheet)
+        {
+            if (!sheet.TryCoords(Current, out int r, out int c)) return false;
+            int nr = r, nc = c;
+            UIElement next = null;
+            switch (dir)
+            {
+                case NavDirection.Right:
+                    for (int cc = c + 1; cc < sheet.ColCount; cc++)
+                        if (sheet.Visitable(r, cc)) { nc = cc; next = sheet.CellAt(r, cc); break; }
+                    break;
+                case NavDirection.Left:
+                    for (int cc = c - 1; cc >= 0; cc--)
+                        if (sheet.Visitable(r, cc)) { nc = cc; next = sheet.CellAt(r, cc); break; }
+                    break;
+                case NavDirection.Down:
+                case NavDirection.Up:
+                    nr = dir == NavDirection.Down ? r + 1 : r - 1;
+                    if (nr < 0 || nr >= sheet.RowCount) return true; // edge → consume
+                    if (sheet.Visitable(nr, c)) { nc = c; next = sheet.CellAt(nr, c); }
+                    else
+                    {
+                        int lc = sheet.LeftmostVisitable(nr);
+                        if (lc < 0) return true;
+                        nc = lc; next = sheet.CellAt(nr, lc);
+                    }
+                    break;
+            }
+            if (next == null) return true; // no neighbour that way → consume (no wrap)
+
+            BuildPathTo(next);
+            AnnounceFlowCell(sheet, r, c, nr, nc, next, regionEntry: false);
+            return true;
+        }
+
+        // Ctrl+Up/Down: jump to the previous/next region's first landable cell.
+        private bool RegionJump(FlowSheet sheet, int dir)
+        {
+            if (!sheet.TryCoords(Current, out int r, out int c)) return false;
+            var target = sheet.StepRegion(sheet.RegionAt(r), dir);
+            if (target == null) return true; // no region that way → consume
+            int fr = sheet.RegionFirstRow(target);
+            int fc = fr >= 0 ? sheet.LeftmostVisitable(fr) : -1;
+            if (fc < 0) return true;
+            var cell = sheet.CellAt(fr, fc);
+            BuildPathTo(cell);
+            AnnounceFlowCell(sheet, r, c, fr, fc, cell, regionEntry: true);
+            return true;
+        }
+
+        private void AnnounceFlowCell(FlowSheet sheet, int r, int c, int nr, int nc, UIElement next, bool regionEntry)
+        {
+            var parts = new List<string>();
+            var region = sheet.RegionAt(nr);
+            if ((regionEntry || region != sheet.RegionAt(r)) && region != null && !string.IsNullOrEmpty(region.Label))
+                parts.Add(region.Label + ", " + region.TypeName);
+            if (nc != c) { var h = sheet.ColumnHeader(nr, nc); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
+            if (nr != r && nc != 0) { var rl = sheet.RowLabel(nr); if (!string.IsNullOrEmpty(rl)) parts.Add(rl); }
+            if (!string.IsNullOrEmpty(next.Role)) parts.Add(next.Role);
+            var text = next.GetLabelText();
+            parts.Add(string.IsNullOrWhiteSpace(text) ? "blank" : text);
+            WrathAccess.UiSound.Hover(); // a focus move
+            Speak(string.Join(", ", parts), interrupt: true);
         }
 
         private bool Tab(int step)

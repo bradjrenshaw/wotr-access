@@ -177,6 +177,10 @@ namespace WrathAccess
                 TogglePauseIfExploring).AddBinding(KeyCode.Space);
             InputManager.Register("nav.next", "Next (Tab)").AddBinding(KeyCode.Tab).Repeating();
             InputManager.Register("nav.prev", "Previous (Shift+Tab)").AddBinding(KeyCode.Tab, shift: true).Repeating();
+            // Ctrl+Up/Down jump between regions of a FlowSheet (handled by the navigator only when focus is
+            // inside one; unbound elsewhere in UI screens, so no collision).
+            InputManager.Register("nav.regionPrev", "Previous region").AddBinding(KeyCode.UpArrow, ctrl: true).Repeating();
+            InputManager.Register("nav.regionNext", "Next region").AddBinding(KeyCode.DownArrow, ctrl: true).Repeating();
 
             // Exploration scanner: a categorized, distance-sorted list of things in the current area.
             // Active only in the in-game context while focus mode owns the keyboard (Scanner gates itself).

@@ -52,8 +52,10 @@ namespace WrathAccess.Screens
                     new TextElement(() => alloc.StatValue.Value.ToString()),
                     new TextElement(() => Signed(alloc.Bonus.Value)),
                     new TextElement(() => alloc.RaceBonus.Value.HasValue ? Signed(alloc.RaceBonus.Value.Value) : ""),
-                    new ProxyAbilityStep(alloc, _controller, raise: true),
-                    new ProxyAbilityStep(alloc, _controller, raise: false),
+                    new ProxyStepper(() => CostLabel(alloc, raise: true), () => CanAct(alloc, raise: true),
+                        alloc.TryIncreaseValue, () => Summary(alloc), actionVerb: "Raise"),
+                    new ProxyStepper(() => CostLabel(alloc, raise: false), () => CanAct(alloc, raise: false),
+                        alloc.TryDecreaseValue, () => Summary(alloc), actionVerb: "Lower"),
                 }, tooltip: () => alloc.TooltipTemplate()); // Space on any cell in the row → stat detail
             }
 
@@ -98,6 +100,41 @@ namespace WrathAccess.Screens
         private bool PointBuy => Dist != null && Dist.Available;
 
         private int Points() => PointBuy ? Dist.Points : (_controller != null ? _controller.State.AttributePoints : 0);
+
+        // The live point-buy score for one ability (base, pre-racial) — from StatsDistribution, which
+        // updates synchronously with AddStatPoint (the allocator's reactive only catches up on LateUpdate).
+        private int Score(CharGenAbilityScoreAllocatorVM a)
+            => (PointBuy && Dist.StatValues.TryGetValue(a.StatType, out var v)) ? v : a.StatValue.Value;
+
+        private bool CanAct(CharGenAbilityScoreAllocatorVM a, bool raise) => raise
+            ? (PointBuy ? Dist.CanAdd(a.StatType) : (_controller != null && _controller.State.AttributePoints > 0))
+            : (PointBuy ? Dist.CanRemove(a.StatType) : a.CanRemove.Value);
+
+        // The point cost shown on the stepper — or, when you can't raise, why ("maximum" at 18, or
+        // "N points, need M more"); lowering shows the refund ("minimum" at 7, or "N points back").
+        private string CostLabel(CharGenAbilityScoreAllocatorVM a, bool raise)
+        {
+            if (raise)
+            {
+                if (Score(a) >= 18) return "maximum";
+                int cost = PointBuy ? Dist.GetAddCost(a.StatType) : 1;
+                if (CanAct(a, raise: true)) return cost + " points";
+                int need = cost - Points();                 // tell them how short they are
+                return cost + " points, need " + (need > 0 ? need : 1) + " more";
+            }
+            if (Score(a) <= 7) return "minimum";
+            int refund = PointBuy ? -Dist.GetRemoveCost(a.StatType) : 1; // GetRemoveCost is negative (points returned)
+            return refund + " points back";
+        }
+
+        // Spoken after a step: the now-current total score (incl. racial), its modifier, and the
+        // remaining pool — computed from the live base + racial so it's fresh the instant you step.
+        private string Summary(CharGenAbilityScoreAllocatorVM a)
+        {
+            int total = Score(a) + (a.RaceBonus.Value ?? 0);
+            int mod = (int)System.Math.Floor((total - 10) / 2.0);
+            return a.Name.Value + " " + total + ", " + Signed(mod) + ", " + Points() + " points left";
+        }
 
         private static string Signed(int v) => v >= 0 ? "+" + v : v.ToString();
     }

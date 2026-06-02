@@ -19,13 +19,16 @@ namespace WrathAccess.UI.Proxies
         private readonly Func<bool> _enabled;
         private readonly Action _act;
         private readonly Func<string> _summary;
+        private readonly string _actionVerb;
 
-        public ProxyStepper(Func<string> label, Func<bool> enabled, Action act, Func<string> summary)
+        public ProxyStepper(Func<string> label, Func<bool> enabled, Action act, Func<string> summary,
+            string actionVerb = "Step")
         {
             _label = label;
             _enabled = enabled;
             _act = act;
             _summary = summary;
+            _actionVerb = actionVerb;
         }
 
         public override bool ReannounceOnActivate => true;
@@ -43,7 +46,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             if (Enabled)
-                yield return new ElementAction(ActionIds.Activate, Message.Raw("Step"), _ => _act?.Invoke());
+                yield return new ElementAction(ActionIds.Activate, Message.Raw(_actionVerb), _ => _act?.Invoke());
         }
     }
 }

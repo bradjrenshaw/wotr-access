@@ -191,6 +191,9 @@ namespace WrathAccess
             // inside one; unbound elsewhere in UI screens, so no collision).
             InputManager.Register("nav.regionPrev", "Previous region").AddBinding(KeyCode.UpArrow, ctrl: true).Repeating();
             InputManager.Register("nav.regionNext", "Next region").AddBinding(KeyCode.DownArrow, ctrl: true).Repeating();
+            // Mod menu — Ctrl+M, available everywhere (a global hotkey, fires in either focus mode).
+            InputManager.Register("mod.menu", "Open mod menu",
+                () => WrathAccess.Screens.ModMenuScreen.Toggle()).AddBinding(KeyCode.M, ctrl: true);
 
             // Exploration scanner: a categorized, distance-sorted list of things in the current area.
             // Active only in the in-game context while focus mode owns the keyboard (Scanner gates itself).

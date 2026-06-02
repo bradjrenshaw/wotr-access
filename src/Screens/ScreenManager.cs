@@ -112,6 +112,8 @@ namespace WrathAccess.Screens
             Register(new KeyBindCaptureScreen()); // key-binding capture, layer 27 (raw-input passthrough)
             Register(new TutorialScreen()); // modal tutorial popup (movement/camera etc.), layer 28
             Register(new MessageModalScreen()); // generic confirm/message modal, layer 30
+            Register(new ModMenuScreen()); // mod settings menu (Ctrl+M), layer 35
+            Register(new ModKeyCaptureScreen()); // mod key-binding capture, layer 36 (raw-input passthrough)
             Register(new TooltipScreen()); // on-demand brick-tooltip reader, layer 40 (top)
 
             Main.Log?.Log("ScreenManager: " + _registered.Count + " screens registered.");

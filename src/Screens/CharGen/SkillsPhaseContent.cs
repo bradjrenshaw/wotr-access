@@ -25,28 +25,31 @@ namespace WrathAccess.Screens
         public SkillsPhaseContent(CharGenSkillsPhaseVM phase) : base(phase)
             => _controller = ControllerField?.GetValue(phase) as LevelUpController;
 
+        // One FlowSheet (one Tab-stop): a status line region, then the skills grid. Arrows move
+        // cell-to-cell across both; Ctrl+Up/Down jump between them.
         public override void Build(Container content)
         {
-            content.Add(new TextElement(() => "Skill points remaining: " + Points() + ", max rank " + MaxRank()));
+            var sheet = new FlowSheet();
 
-            var table = new Table("Skills");
-            table.AddHeaderRow(new TextElement("Skill", "heading"), new UIElement[]
-            {
-                new TextElement("Rank"), new TextElement("Modifier"), new TextElement("Raise"), new TextElement("Lower"),
-            });
+            sheet.List(null) // unlabelled status line
+                .Item(new TextElement(() => "Skill points remaining: " + Points() + ", max rank " + MaxRank()));
+
+            var table = sheet.Table("Skills", "Rank", "Modifier", "Raise", "Lower");
             foreach (var s in Phase.SkillAllocators)
             {
                 if (s == null) continue;
                 var sk = s; // capture for the live closures
-                table.AddDataRow(new TextElement(() => RowName(sk)), new UIElement[]
+                table.Row(new TextElement(() => RowName(sk)), new UIElement[]
                 {
                     new TextElement(() => Rank(sk).ToString()),
                     new TextElement(() => Signed(Total(sk))),
                     new ProxyStepper(() => RaiseLabel(sk), () => CanAdd(sk), sk.TryIncreaseValue, () => Summary(sk)),
                     new ProxyStepper(() => LowerLabel(sk), () => CanRemove(sk), sk.TryDecreaseValue, () => Summary(sk)),
-                }, rowTooltip: () => sk.TooltipTemplate()); // Space on any cell in the row → skill detail
+                }, tooltip: () => sk.TooltipTemplate()); // Space on any cell in the row → skill detail
             }
-            content.Add(table);
+
+            sheet.Reflow();
+            content.Add(sheet);
         }
 
         // Live reads (synchronous with Spend/UnspendSkillPoint), mirroring the allocator's own sources.

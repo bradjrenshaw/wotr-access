@@ -85,11 +85,11 @@ namespace WrathAccess.Screens
             if (vm.Answers.Value != null && vm.Answers.Value.Count > 0)
             {
                 foreach (var a in vm.Answers.Value)
-                    if (a != null) answers.Add(new ProxyDialogAnswer(a));
+                    if (a != null) answers.Add(DialogAnswerButton.For(a));
             }
             else if (vm.SystemAnswer.Value != null)
             {
-                answers.Add(new ProxyDialogAnswer(vm.SystemAnswer.Value));
+                answers.Add(DialogAnswerButton.For(vm.SystemAnswer.Value));
             }
             if (answers.Children.Count > 0) Add(answers);
 

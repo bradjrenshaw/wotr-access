@@ -11,7 +11,7 @@ namespace WrathAccess.Screens
     /// A book event (<see cref="BookEventVM"/>) — the illustrated storybook page with a passage of
     /// narrative and numbered choices (e.g. the Areelu vision). It's a <c>DialogType.Book</c> conversation,
     /// so it rides the SAME in-game HUD VM as ordinary dialogue (<c>DialogContextVM.BookEventVM</c>, beside
-    /// <c>DialogVM</c>) and reuses the dialogue <c>AnswerVM</c> → <see cref="ProxyDialogAnswer"/>.
+    /// <c>DialogVM</c>) and reuses the dialogue <c>AnswerVM</c> → <see cref="WrathAccess.UI.Proxies.DialogAnswerButton"/>.
     ///
     /// A page carries several cues (the paragraphs, shown together) plus the answers; we read the whole
     /// passage when a new page appears (keyed on <c>BlueprintBookPage</c>, like the dialogue cue), and the
@@ -60,7 +60,7 @@ namespace WrathAccess.Screens
             var list = vm.Answers.Value;
             if (list != null)
                 foreach (var a in list)
-                    if (a != null) answers.Add(new ProxyDialogAnswer(a));
+                    if (a != null) answers.Add(DialogAnswerButton.For(a));
             if (answers.Children.Count > 0) Add(answers);
 
             Navigation.Attach(this); // re-bind to the rebuilt tree (silent; focus → the passage)

@@ -51,14 +51,14 @@ namespace WrathAccess.Screens
             // Sidebar entries live in a labeled list, so focusing into it announces
             // "Main Menu" (the container) then the first entry — exercising the path diff.
             var list = new ListContainer("Main Menu");
-            list.Add(new ProxyMainMenuButton(sidebar.ContinueVm));
-            list.Add(new ProxyMainMenuButton(sidebar.NewGameVm));
-            list.Add(new ProxyMainMenuButton(sidebar.LoadVm));
-            list.Add(new ProxyMainMenuButton(sidebar.DLCManagerVm));
-            list.Add(new ProxyMainMenuButton(sidebar.OptionsVm));
-            list.Add(new ProxyMainMenuButton(sidebar.CreditVm));
-            list.Add(new ProxyMainMenuButton(sidebar.LicenseVm));
-            list.Add(new ProxyMainMenuButton(sidebar.ExitVm));
+            list.Add(MainMenuButton.For(sidebar.ContinueVm));
+            list.Add(MainMenuButton.For(sidebar.NewGameVm));
+            list.Add(MainMenuButton.For(sidebar.LoadVm));
+            list.Add(MainMenuButton.For(sidebar.DLCManagerVm));
+            list.Add(MainMenuButton.For(sidebar.OptionsVm));
+            list.Add(MainMenuButton.For(sidebar.CreditVm));
+            list.Add(MainMenuButton.For(sidebar.LicenseVm));
+            list.Add(MainMenuButton.For(sidebar.ExitVm));
             Add(list);
         }
 

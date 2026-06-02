@@ -60,13 +60,16 @@ namespace WrathAccess.Input
                     fire = true;
                     action.NextRepeatTime = now + initialDelay;
                 }
-                else if (action.Repeats && held && now >= action.NextRepeatTime)
+                else if (action.Repeats && held && action.NextRepeatTime > 0f && now >= action.NextRepeatTime)
                 {
-                    // Held past the delay → auto-repeat. Catch up at most one step per frame.
+                    // Held past the delay → auto-repeat. Catch up at most one step per frame. The
+                    // NextRepeatTime > 0 guard means we only repeat an action that was actually JustPressed
+                    // this hold — NOT one that just became held because a shared key's modifier was released
+                    // (e.g. releasing Shift while holding Tab must not fire a stray forward Tab).
                     fire = true;
                     action.NextRepeatTime = now + repeatInterval;
                 }
-                if (!held) action.NextRepeatTime = 0f; // reset on release
+                if (!held) action.NextRepeatTime = 0f; // reset on release (disarms repeat until next press)
 
                 if (!fire) continue;
                 bool consumed = FocusMode.Active && WrathAccess.UI.Navigation.DispatchJustPressed(action);

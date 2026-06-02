@@ -10,8 +10,11 @@ namespace WrathAccess.UI.Proxies
     /// One binding slot of a key-binding row (index 0 = primary, 1 = secondary). Value is the
     /// bound key. Primary action rebinds it (opens the capture dialog); secondary clears it.
     /// </summary>
+    // Canonical "key binding": ProxyModBinding (the mod's own rebindable bindings) shares this
+    // settings category + announcement order — both are a label + current-combo value + Rebind/Clear row.
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(EnabledAnnouncement))]
+        typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
+    [ElementSettingsKey("key_binding")]
     public sealed class ProxyKeyBindingSlot : UIElement
     {
         private readonly SettingEntityKeyBindingVM _vm;
@@ -41,7 +44,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(_label));
-            yield return new RoleAnnouncement("button");
+            yield return new RoleAnnouncement("key binding");
             yield return new ValueAnnouncement(Message.Raw(KeyText()));
             yield return new EnabledAnnouncement(Enabled);
         }

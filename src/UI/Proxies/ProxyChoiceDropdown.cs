@@ -10,10 +10,11 @@ namespace WrathAccess.UI.Proxies
     /// like the game's dropdowns. Generic (not bound to a game settings VM), driven by delegates: a
     /// live current-index getter and an on-select callback. Used e.g. for the feat tag filter.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(EnabledAnnouncement))]
     public sealed class ProxyChoiceDropdown : UIElement
     {
+        // Shares the "combo box" settings category + announcement order (see ProxyDropdown).
+        public override System.Type AnnouncementOrderType => typeof(ProxyDropdown);
+
         private readonly string _label;
         private readonly List<string> _options;
         private readonly Func<int> _current;

@@ -10,10 +10,11 @@ namespace WrathAccess.UI.Proxies
     /// secondary action (Backspace) resets it to inherit the global. Announces "overridden" when it carries
     /// an explicit value, so you can tell it apart from following the global.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyOverrideToggle : UIElement
     {
+        // Shares the "checkbox" settings category + announcement order (see ProxyBoolToggle).
+        public override System.Type AnnouncementOrderType => typeof(ProxyBoolToggle);
+
         private readonly NullableBoolSetting _setting;
 
         public ProxyOverrideToggle(NullableBoolSetting setting) { _setting = setting; }

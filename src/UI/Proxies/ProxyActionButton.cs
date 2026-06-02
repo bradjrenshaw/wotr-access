@@ -5,8 +5,12 @@ using WrathAccess.UI.Announcements;
 namespace WrathAccess.UI.Proxies
 {
     /// <summary>A generic button driven by delegates — for Apply / Close / etc.</summary>
+    // Canonical "button": ProxyStepper shares this settings category + announcement order
+    // (it sets AnnouncementOrderType => typeof(ProxyActionButton)). ProxyKeyBindingSlot is
+    // deliberately kept separate (its key-rebind announcements are tuned on their own).
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
         typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
+    [ElementSettingsKey("button")]
     public sealed class ProxyActionButton : UIElement
     {
         private readonly Func<string> _label;

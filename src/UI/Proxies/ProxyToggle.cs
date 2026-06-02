@@ -8,10 +8,11 @@ namespace WrathAccess.UI.Proxies
     /// A boolean setting → checkbox. Value is "checked"/"unchecked" (read live);
     /// activate flips it. Announced "Label, checkbox, checked, [disabled]".
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
-        typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyToggle : UIElement
     {
+        // Shares the "checkbox" settings category + announcement order (see ProxyBoolToggle).
+        public override System.Type AnnouncementOrderType => typeof(ProxyBoolToggle);
+
         private readonly SettingsEntityBoolVM _vm;
 
         public ProxyToggle(SettingsEntityBoolVM vm) { _vm = vm; }

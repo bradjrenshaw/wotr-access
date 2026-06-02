@@ -10,8 +10,11 @@ namespace WrathAccess.UI.Proxies
     /// change it). It deliberately does NOT advertise Left/Right adjust: in a treeview those mean
     /// collapse/ascend, and stealing them for inline cycling is unintuitive. Value = current option.
     /// </summary>
+    // Canonical "combo box": ProxyChoiceDropdown / ProxyDifficulty share this settings category +
+    // announcement order (this VM's order is the union across the three).
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
+    [ElementSettingsKey("combo_box")]
     public sealed class ProxyDropdown : UIElement
     {
         private readonly SettingsEntityDropdownVM _vm;

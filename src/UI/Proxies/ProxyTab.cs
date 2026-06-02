@@ -11,8 +11,10 @@ namespace WrathAccess.UI.Proxies
     /// which is the feedback — the screen swaps the detail content on the next tick. Mirrors how the game's
     /// settings tabs read. Pattern: a list of these + a separate content region the active tab fills.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(SelectedAnnouncement), typeof(PositionAnnouncement))]
+    // Canonical "tab": ProxySettingsTab / ProxyRoadmapEntry share this settings category +
+    // announcement order (this is the union across the three — Value/Enabled come from those two).
+    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
+        typeof(SelectedAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyTab : UIElement
     {
         private readonly string _label;

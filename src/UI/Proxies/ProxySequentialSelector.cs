@@ -10,10 +10,11 @@ namespace WrathAccess.UI.Proxies
     /// Decrease/Increase), reading the label + current value. Used for the race ability-bonus chooser
     /// (which stat gets the racial +2). The VM is fetched live since it's created on demand.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(EnabledAnnouncement))]
     public sealed class ProxySequentialSelector : UIElement
     {
+        // Reads as a slider (Left/Right cycles) — share the "slider" settings category + order.
+        public override System.Type AnnouncementOrderType => typeof(ProxySlider);
+
         private readonly string _label;
         private readonly Func<StringSequentialSelectorVM> _vm;
 

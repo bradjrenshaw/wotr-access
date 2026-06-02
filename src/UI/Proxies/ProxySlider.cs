@@ -10,6 +10,8 @@ namespace WrathAccess.UI.Proxies
     /// A numeric setting → slider. Left/Right step by the game's own SetNextValue;
     /// setValue sets directly. Value read live and formatted by IsInt/DecimalPlaces.
     /// </summary>
+    // Canonical "slider" (key auto-derives from the class name): ProxySequentialSelector shares this
+    // settings category + announcement order.
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxySlider : UIElement

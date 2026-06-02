@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using WrathAccess.Settings;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
@@ -112,10 +113,12 @@ namespace WrathAccess.Screens
                     if (global.Children.Count > 0) tree.Add(global);
                 }
 
-                // Each element type as its own root-level node, alongside (after) Global.
+                // Each element type as its own root-level node, after Global — sorted alphabetically by
+                // label (Global already sits on top, added above) so the list is easy to scan.
                 var ui = ModSettings.Root.Get<CategorySetting>("ui");
                 if (ui != null)
-                    foreach (var s in ui.Children) BuildSettingNode(tree, s);
+                    foreach (var s in ui.Children.OrderBy(c => c.Label, System.StringComparer.CurrentCultureIgnoreCase))
+                        BuildSettingNode(tree, s);
             }
         }
 

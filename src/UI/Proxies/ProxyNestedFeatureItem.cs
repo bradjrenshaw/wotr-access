@@ -21,10 +21,15 @@ namespace WrathAccess.UI.Proxies
     /// child registers with the game). Selecting collapses the sibling that was open. Left (Collapse)
     /// only flips our view flag, never the game's state, so the pick persists when you close it.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(SelectedAnnouncement),
-        typeof(EnabledAnnouncement), typeof(ValueAnnouncement))]
+    // Shares the "radio button" settings category + announcement order (see ProxySelectionItem).
+    // It's a Container, whose [AnnouncementOrder] is Inherited=true; the explicit ElementSettingsKey
+    // routes its (inherited) registry entry into the shared "radio_button" category instead of a
+    // separate "nested_feature_item" one.
+    [ElementSettingsKey("radio_button")]
     public sealed class ProxyNestedFeatureItem : Container
     {
+        public override System.Type AnnouncementOrderType => typeof(ProxySelectionItem);
+
         private readonly CharGenFeatureSelectorItemVM _vm;
         private readonly NestedSelectionGroupRadioVM<CharGenFeatureSelectorItemVM> _selector;
 

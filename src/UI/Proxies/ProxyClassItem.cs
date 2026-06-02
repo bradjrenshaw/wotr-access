@@ -9,10 +9,11 @@ namespace WrathAccess.UI.Proxies
     /// SetSelectedFromView); reads "disabled" when unavailable or forbidden by prerequisites.
     /// (Archetypes — the nested sub-options — come in a follow-up.)
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(SelectedAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyClassItem : UIElement
     {
+        // Shares the "radio button" settings category + announcement order (see ProxySelectionItem).
+        public override System.Type AnnouncementOrderType => typeof(ProxySelectionItem);
+
         private readonly CharGenClassSelectorItemVM _vm;
 
         public ProxyClassItem(CharGenClassSelectorItemVM vm) { _vm = vm; }

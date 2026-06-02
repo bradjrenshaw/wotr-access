@@ -17,8 +17,11 @@ namespace WrathAccess.UI.Proxies
     /// multi-select toggle, or replaying a voice sample when already chosen). (Class still uses
     /// <see cref="ProxyClassItem"/> — its VM is a NestedSelectionGroupEntityVM, a different base.)
     /// </summary>
+    // Canonical "radio button": ProxyChoiceOption / ProxyClassItem / ProxyCustomCharacter /
+    // ProxyNestedFeatureItem share this settings category + announcement order.
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(SelectedAnnouncement),
         typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
+    [ElementSettingsKey("radio_button")]
     public sealed class ProxySelectionItem : UIElement
     {
         private readonly SelectionGroupEntityVM _vm;

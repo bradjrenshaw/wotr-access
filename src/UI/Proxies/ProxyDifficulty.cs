@@ -11,10 +11,11 @@ namespace WrathAccess.UI.Proxies
     /// reads "Title. Description" per option. Like <see cref="ProxyDropdown"/>, it opens via primary
     /// and does NOT advertise Left/Right adjust (those are tree collapse/ascend).
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
-        typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyDifficulty : UIElement
     {
+        // Shares the "combo box" settings category + announcement order (see ProxyDropdown).
+        public override System.Type AnnouncementOrderType => typeof(ProxyDropdown);
+
         private readonly SettingsEntityDropdownGameDifficultyVM _vm;
 
         public ProxyDifficulty(SettingsEntityDropdownGameDifficultyVM vm) { _vm = vm; }

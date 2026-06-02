@@ -9,8 +9,11 @@ namespace WrathAccess.UI.Proxies
     /// tied to SettingsEntityBoolVM). Reads its value live and activates via a supplied toggle
     /// action — e.g. the Story phase's "Last Azlanti" mode (StoryVM.SwitchLastAzlanti).
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
+    // Canonical "checkbox": ProxyToggle / ProxyOverrideToggle share this settings category +
+    // announcement order. The order is the union across all three (Tooltip comes from ProxyToggle).
+    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
+        typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]
+    [ElementSettingsKey("checkbox")]
     public sealed class ProxyBoolToggle : UIElement
     {
         private readonly string _label;

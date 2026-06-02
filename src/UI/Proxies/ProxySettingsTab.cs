@@ -6,10 +6,11 @@ using WrathAccess.UI.Announcements;
 namespace WrathAccess.UI.Proxies
 {
     /// <summary>A settings tab (Game / Controls / Graphics / Sound). Activate switches to it.</summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
-        typeof(SelectedAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxySettingsTab : UIElement
     {
+        // Shares the "tab" settings category + announcement order (see ProxyTab).
+        public override System.Type AnnouncementOrderType => typeof(ProxyTab);
+
         private readonly SettingsMenuEntityVM _tab;
         private readonly SettingsVM _settings;
 

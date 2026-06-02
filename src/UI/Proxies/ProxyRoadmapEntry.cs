@@ -12,10 +12,11 @@ namespace WrathAccess.UI.Proxies
     /// Activating jumps to that phase: the phases radio group's selected entity is CurrentPhaseVM, so
     /// SetSelectedFromView navigates there — gated on availability, exactly like the game's roadmap.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyRoadmapEntry : UIElement
     {
+        // A roadmap step reads as a tab — share the "tab" settings category + announcement order.
+        public override System.Type AnnouncementOrderType => typeof(ProxyTab);
+
         private readonly CharGenPhaseBaseVM _vm;
         private readonly Func<string> _summary;
 

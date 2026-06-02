@@ -12,9 +12,11 @@ namespace WrathAccess.UI.Proxies
     /// stepper (skill ranks, and reusable at level-up); the caller supplies live reads so values are
     /// fresh the instant you step.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(ValueAnnouncement), typeof(EnabledAnnouncement))]
     public sealed class ProxyStepper : UIElement
     {
+        // A stepper reads as a button — share the "button" settings category + announcement order.
+        public override System.Type AnnouncementOrderType => typeof(ProxyActionButton);
+
         private readonly Func<string> _label;
         private readonly Func<bool> _enabled;
         private readonly Action _act;

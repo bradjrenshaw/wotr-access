@@ -8,10 +8,11 @@ namespace WrathAccess.UI.Proxies
     /// The "Custom Character" entry in the pregen list — selecting it (instead of a premade) branches
     /// into the full custom chargen flow. Sits in the premade list as a final option.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(SelectedAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyCustomCharacter : UIElement
     {
+        // A radio peer in the pregen list — share the "radio button" settings category + order.
+        public override System.Type AnnouncementOrderType => typeof(ProxySelectionItem);
+
         private readonly CharGenPregenPhaseVM _phase;
 
         public ProxyCustomCharacter(CharGenPregenPhaseVM phase) { _phase = phase; }

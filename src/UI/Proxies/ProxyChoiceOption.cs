@@ -5,10 +5,11 @@ using WrathAccess.UI.Announcements;
 namespace WrathAccess.UI.Proxies
 {
     /// <summary>One option row in a choice submenu (e.g. a dropdown's options). Activate selects it.</summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(SelectedAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyChoiceOption : UIElement
     {
+        // Shares the "radio button" settings category + announcement order (see ProxySelectionItem).
+        public override System.Type AnnouncementOrderType => typeof(ProxySelectionItem);
+
         private readonly string _label;
         private readonly bool _selected;
         private readonly Action _select;

@@ -11,10 +11,11 @@ namespace WrathAccess.UI.Proxies
     /// action (Backspace) clears it. Clearing re-announces the now-empty value; rebinding is announced by
     /// the capture screen, so we don't re-announce on activate.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
-        typeof(ValueAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyModBinding : UIElement
     {
+        // Shares the "key binding" settings category + announcement order (see ProxyKeyBindingSlot).
+        public override System.Type AnnouncementOrderType => typeof(ProxyKeyBindingSlot);
+
         private readonly InputAction _action;
 
         public ProxyModBinding(InputAction action) { _action = action; }

@@ -72,6 +72,18 @@ namespace WrathAccess.Localization
             return null;
         }
 
+        /// <summary>Like <see cref="Get"/> but quiet (no missing-string warning) and returns the supplied
+        /// fallback instead of null — for callers that intentionally carry a default (e.g. setting labels).</summary>
+        public static string GetOrDefault(string table, string key, string fallback)
+        {
+            if (_language != Fallback
+                && _tables.TryGetValue(table, out var t) && t.TryGetValue(key, out var v))
+                return v;
+            if (_fallbackTables.TryGetValue(table, out var ft) && ft.TryGetValue(key, out var fv))
+                return fv;
+            return fallback;
+        }
+
         private static string CurrentGameLanguage()
         {
             // The game's localization may not be ready at mod load — fall back to English; the per-frame

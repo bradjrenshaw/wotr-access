@@ -47,5 +47,29 @@ namespace WrathAccess.Input
                 return s + Key;
             }
         }
+
+        public override string Type => "keyboard";
+
+        // "A|ctrl,shift" — the KeyCode, then a comma-list of held modifiers (omitted if none).
+        public override string Serialize()
+        {
+            var mods = new System.Collections.Generic.List<string>();
+            if (Ctrl) mods.Add("ctrl");
+            if (Shift) mods.Add("shift");
+            if (Alt) mods.Add("alt");
+            return mods.Count == 0 ? Key.ToString() : Key + "|" + string.Join(",", mods);
+        }
+
+        public static KeyboardBinding Deserialize(string data)
+        {
+            if (string.IsNullOrEmpty(data)) return null;
+            var parts = data.Split('|');
+            if (!System.Enum.TryParse(parts[0], out KeyCode key)) return null;
+            bool ctrl = false, shift = false, alt = false;
+            if (parts.Length > 1)
+                foreach (var m in parts[1].Split(','))
+                    switch (m) { case "ctrl": ctrl = true; break; case "shift": shift = true; break; case "alt": alt = true; break; }
+            return new KeyboardBinding(key, ctrl, shift, alt);
+        }
     }
 }

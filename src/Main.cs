@@ -39,6 +39,14 @@ namespace WrathAccess
                 _harmony = new Harmony(modEntry.Info.Id);
                 _harmony.PatchAll(Assembly.GetExecutingAssembly());
                 RegisterInput();
+                // Mod settings: wrap every input action as a persistent, rebindable binding, then load the
+                // saved config (which overrides the in-code default bindings). Stored under the game's
+                // persistent data dir so it survives a mod redeploy.
+                var bindings = new WrathAccess.Settings.CategorySetting("bindings", "Key bindings");
+                foreach (var a in InputManager.Actions) bindings.Add(new WrathAccess.Settings.BindingSetting(a));
+                WrathAccess.Settings.ModSettings.Root.Add(bindings);
+                WrathAccess.Settings.ModSettings.Initialize(
+                    System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "WrathAccess"));
                 ScreenManager.Initialize();
                 GameLogReader.Initialize(); // read barks + narrative log lines (no dialogue window)
 

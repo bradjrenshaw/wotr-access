@@ -22,6 +22,9 @@ namespace WrathAccess.Input
         /// <summary>Fired on JustPressed when not consumed by the navigator.</summary>
         public event Action Performed;
 
+        /// <summary>Fired whenever the binding set changes (add/clear) — BindingSetting saves on this.</summary>
+        public event Action BindingsChanged;
+
         public string BindingsDisplay =>
             _bindings.Count == 0 ? "(none)" : string.Join(", ", _bindings.Select(b => b.DisplayName));
 
@@ -34,11 +37,19 @@ namespace WrathAccess.Input
         public InputAction AddBinding(InputBinding binding)
         {
             _bindings.Add(binding);
+            BindingsChanged?.Invoke();
             return this;
         }
 
         public InputAction AddBinding(KeyCode key, bool ctrl = false, bool shift = false, bool alt = false)
             => AddBinding(new KeyboardBinding(key, ctrl, shift, alt));
+
+        /// <summary>Drop all bindings (a rebind replaces them, or a saved config reloads them).</summary>
+        public void ClearBindings()
+        {
+            _bindings.Clear();
+            BindingsChanged?.Invoke();
+        }
 
         public bool JustPressed { get { for (int i = 0; i < _bindings.Count; i++) if (_bindings[i].JustPressed()) return true; return false; } }
         public bool Held { get { for (int i = 0; i < _bindings.Count; i++) if (_bindings[i].Held()) return true; return false; } }

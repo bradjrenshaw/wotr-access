@@ -1,0 +1,53 @@
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace WrathAccess.Exploration.Overlays
+{
+    /// <summary>
+    /// The overlay's point of attention — a world position plus the <see cref="MovementMode"/>s that move
+    /// it. Movement lives here (not in systems) so multiple modes on different input slots can drive one
+    /// cursor; systems only describe wherever it lands.
+    ///
+    /// <see cref="Position"/> is backed by the shared <see cref="WrathAccess.Exploration.Cursor"/> (the one
+    /// point the scanner plants and move-to-cursor walks to), so browsing tiles and then walking to the
+    /// current spot keeps working, and a jump made elsewhere (the scanner's Home) is honoured automatically.
+    /// </summary>
+    internal sealed class Cursor
+    {
+        private readonly List<MovementMode> _modes = new List<MovementMode>();
+
+        // The single shared world point. Falls back to the player when nothing's set it yet.
+        public Vector3 Position
+        {
+            get => WrathAccess.Exploration.Cursor.Has ? WrathAccess.Exploration.Cursor.Position.Value : PlayerPosition;
+            set => WrathAccess.Exploration.Cursor.Set(value);
+        }
+
+        public IReadOnlyList<MovementMode> Modes => _modes;
+        public void AddMode(MovementMode mode) { if (mode != null) _modes.Add(mode); }
+
+        /// <summary>The movement mode bound to a slot, or null. (One mode per slot in practice.)</summary>
+        public MovementMode ModeFor(MovementSlot slot)
+        {
+            foreach (var m in _modes) if (m.Slot == slot) return m;
+            return null;
+        }
+
+        public void Recenter() => Position = PlayerPosition;
+
+        public void Tick(float dt, Overlay overlay) { foreach (var m in _modes) m.Tick(dt, overlay); }
+        public void OnEnter(Overlay overlay) { foreach (var m in _modes) m.OnEnter(overlay); }
+        public void OnExit(Overlay overlay) { foreach (var m in _modes) m.OnExit(overlay); }
+
+        /// <summary>The party leader's live position — the origin for relative readouts.</summary>
+        public static Vector3 PlayerPosition
+        {
+            get
+            {
+                var p = Kingmaker.Game.Instance?.Player;
+                var u = p != null ? p.MainCharacter.Value : null;
+                return WrathAccess.Exploration.Geo.Live(u);
+            }
+        }
+    }
+}

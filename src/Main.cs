@@ -88,8 +88,9 @@ namespace WrathAccess
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
-            OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime); // continuous cursor + wall tones
-            WrathAccess.Exploration.Sonar.Tick(); // after overlays move the cursor: fog enter/exit cues
+            // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
+            // wall tones, fog/object cues) read the fresh position.
+            OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime);
         }
 
         // Space's exploration job: toggle the game's pause. Only when focus mode owns the keyboard AND
@@ -182,10 +183,10 @@ namespace WrathAccess
             // Movement actions auto-repeat while held (Repeating); activation keys do not.
             // The arrows' Performed handler fires only when the navigator DIDN'T consume them — i.e.
             // in-game with no UI focus tree — where it drives the active area overlay's cursor instead.
-            InputManager.Register("nav.up", "Navigate Up", () => OverlayManager.Move(NavDirection.Up)).AddBinding(KeyCode.UpArrow).Repeating();
-            InputManager.Register("nav.down", "Navigate Down", () => OverlayManager.Move(NavDirection.Down)).AddBinding(KeyCode.DownArrow).Repeating();
-            InputManager.Register("nav.left", "Navigate Left", () => OverlayManager.Move(NavDirection.Left)).AddBinding(KeyCode.LeftArrow).Repeating();
-            InputManager.Register("nav.right", "Navigate Right", () => OverlayManager.Move(NavDirection.Right)).AddBinding(KeyCode.RightArrow).Repeating();
+            InputManager.Register("nav.up", "Navigate Up", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Up)).AddBinding(KeyCode.UpArrow).Repeating();
+            InputManager.Register("nav.down", "Navigate Down", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Down)).AddBinding(KeyCode.DownArrow).Repeating();
+            InputManager.Register("nav.left", "Navigate Left", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Left)).AddBinding(KeyCode.LeftArrow).Repeating();
+            InputManager.Register("nav.right", "Navigate Right", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Right)).AddBinding(KeyCode.RightArrow).Repeating();
             // Enter activates the focused UI control; in plain exploration (no focus tree) the navigator
             // declines and this fires instead — our "left click": interact with the thing under the cursor.
             InputManager.Register("nav.primary", "Primary action / interact",

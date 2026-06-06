@@ -2,6 +2,7 @@ using System.Reflection;
 using HarmonyLib;
 using Kingmaker;
 using Kingmaker.GameModes;
+using Kingmaker.UI.Common; // UIUtility.SkillCheckText
 using Kingmaker.UI.MVVM._VM.Dialog.Dialog;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
@@ -100,6 +101,16 @@ namespace WrathAccess.Screens
         {
             var cue = vm.Cue.Value;
             var text = cue != null ? cue.BaseText : null;
+
+            // The check result ("[Failed an Athletics check]") is a runtime prefix the cue view composes
+            // from the cue's SkillChecks — it's NOT part of BaseText — so prepend it the same way the game
+            // does (UIUtility.SkillCheckText). Tts strips the rich-text colour at speak time.
+            if (cue != null && cue.SkillChecks != null && cue.SkillChecks.Count > 0)
+            {
+                var check = UIUtility.SkillCheckText(cue.SkillChecks);
+                if (!string.IsNullOrEmpty(check)) text = string.IsNullOrEmpty(text) ? check : check + " " + text;
+            }
+
             var speaker = vm.SpeakerName.Value;
             if (string.IsNullOrEmpty(text)) return speaker;
             return string.IsNullOrEmpty(speaker) ? text : speaker + ": " + text;

@@ -88,6 +88,7 @@ namespace WrathAccess
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
             InputManager.Tick();
             ScreenManager.Tick();
+            TickPause(); // announce the game's pause state whenever it changes (ours OR the game's own)
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
@@ -105,11 +106,28 @@ namespace WrathAccess
             if (!FocusMode.Active) return;
             var current = ScreenManager.Current;
             if (current == null || current.Key != "ctx.ingame") return;
+            // Just toggle; TickPause announces the resulting state change (PauseBind is async, and the game
+            // also pauses on its own — e.g. combat start — so we react to the state, not this keypress).
+            Game.Instance?.PauseBind();
+        }
+
+        // Announce pause/unpause whenever the game's real pause state flips during gameplay — catching the
+        // game's own auto-pauses (e.g. combat start), not just our Space toggle. Gated on the active screen
+        // being a play context, so menus/dialogue that auto-pause don't redundantly say "Paused" (they
+        // announce themselves). Nullable baseline: don't fire on the first sample, and reset out of play so
+        // re-entry is silent.
+        private static bool? _wasPaused;
+        private static void TickPause()
+        {
             var game = Game.Instance;
-            if (game == null) return;
-            bool wasPaused = game.IsPaused;
-            game.PauseBind();
-            Tts.Speak(wasPaused ? "Unpaused" : "Paused");
+            var key = ScreenManager.Current?.Key;
+            bool inPlay = game != null
+                && (key == "ctx.ingame" || key == "ctx.tacticalcombat" || key == "ctx.globalmap");
+            if (!inPlay) { _wasPaused = null; return; }
+            bool paused = game.IsPaused;
+            if (_wasPaused.HasValue && paused != _wasPaused.Value)
+                Tts.Speak(paused ? "Paused" : "Unpaused");
+            _wasPaused = paused;
         }
 
         // Game modes where a quick-save is sensible — normal play, paused, world/global map, kingdom, and

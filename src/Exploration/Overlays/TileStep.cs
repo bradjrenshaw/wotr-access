@@ -14,8 +14,11 @@ namespace WrathAccess.Exploration.Overlays
     /// </summary>
     internal sealed class TileStep : MovementMode
     {
+        private readonly MovementSlot _slot;
+        public TileStep(MovementSlot slot) { _slot = slot; }
+
         public override string Name => "Tile stepping";
-        public override MovementSlot Slot => MovementSlot.Primary;
+        public override MovementSlot Slot => _slot;
         public override AnnouncementContext Context => AnnouncementContext.Tile;
 
         private static float Cell(Overlay overlay)

@@ -12,33 +12,38 @@ namespace WrathAccess.Exploration.Overlays
     /// <see cref="OverlayManager.Active"/> (mutes when a menu's up); loads its tone set on enter, releases
     /// it on exit.
     /// </summary>
-    internal sealed class WallToneSystem : OverlaySystem
+    internal sealed class WallToneSystem : AudioSystem
     {
         public override string Name => "Wall tones";
+        public override string Key => "walltones";
 
-        private const float RangeFeet = 10f;
-        private static float Range => RangeFeet * Geo.MetresPerFoot;
-        private int _set = 1; // assets/audio/walltones/<set>/
-
+        private float Range => Int("range", 10) * Geo.MetresPerFoot;
         private WallToneEngine _engine;
+        private string _loadedSet; // which set the engine has loaded, so a tone_set change reloads
 
-        private string SetDir => Path.Combine(OverlayAudio.Dir, "walltones", _set.ToString());
+        private string ToneSet => ChoiceId("tone_set", "1");
+        private string SetDir => Path.Combine(OverlayAudio.Dir, "walltones", ToneSet);
 
-        public override void OnEnter(Overlay overlay)
+        protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
-            if (_engine == null) _engine = new WallToneEngine();
-            if (!_engine.IsLoaded) _engine.Load(SetDir);
+            cat.Add(new WrathAccess.Settings.IntSetting("range", "Range (feet)", 10, 1, 40, 1, "overlay.walltones.range"));
+            cat.Add(new WrathAccess.Settings.ChoiceSetting("tone_set", "Tone set",
+                new[] { new WrathAccess.Settings.Choice("1", "Set 1") }, "1", "overlay.walltones.tone_set"));
         }
+
+        public override void OnEnter(Overlay overlay) => EnsureLoaded();
 
         public override void OnExit(Overlay overlay)
         {
             _engine?.Dispose();
             _engine = null;
+            _loadedSet = null;
         }
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active) { _engine?.Mute(); return; }
+            if (!OverlayManager.Active || !Enabled) { _engine?.Mute(); return; }
+            EnsureLoaded();
             if (_engine == null || !_engine.IsLoaded) return;
 
             var c = overlay.Cursor.Position;
@@ -47,6 +52,16 @@ namespace WrathAccess.Exploration.Overlays
                 WallVolume(c, Vector3.back),    // -Z south
                 WallVolume(c, Vector3.right),   // +X east
                 WallVolume(c, Vector3.left));   // -X west
+        }
+
+        // Load the configured tone set on demand; rebuild the engine if the user picked a different one.
+        private void EnsureLoaded()
+        {
+            if (_engine != null && _engine.IsLoaded && _loadedSet == ToneSet) return;
+            if (_engine != null && _loadedSet != ToneSet) { _engine.Dispose(); _engine = null; }
+            if (_engine == null) _engine = new WallToneEngine();
+            if (!_engine.IsLoaded) _engine.Load(SetDir);
+            _loadedSet = ToneSet;
         }
 
         // 0 (no wall within range) → 1 (right at the wall), curved so it bites close in.

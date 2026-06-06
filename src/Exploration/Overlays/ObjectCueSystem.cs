@@ -9,9 +9,10 @@ namespace WrathAccess.Exploration.Overlays
     /// nearest wins). Enter fires on a change to a real object (including swapping straight from one to
     /// another); exit fires only when leaving to none. Self-gates on <see cref="OverlayManager.Active"/>.
     /// </summary>
-    internal sealed class ObjectCueSystem : OverlaySystem
+    internal sealed class ObjectCueSystem : AudioSystem
     {
         public override string Name => "Object cue";
+        public override string Key => "object";
 
         private readonly SfxPlayer _sfx = new SfxPlayer();
         private ScanItem _inside;   // the object the cursor is currently inside (nearest), or null
@@ -23,7 +24,7 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active) { _inside = null; _baselined = false; return; }
+            if (!OverlayManager.Active || !Enabled) { _inside = null; _baselined = false; return; }
 
             var c = overlay.Cursor.Position;
             ScanItem inside = null;

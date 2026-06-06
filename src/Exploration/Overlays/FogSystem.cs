@@ -9,9 +9,10 @@ namespace WrathAccess.Exploration.Overlays
     /// <see cref="OverlayManager.Active"/>; the baseline resets when inactive so re-activating doesn't fire
     /// a spurious cue. (The spoken "fog of war" status lives in the tile readout for now.)
     /// </summary>
-    internal sealed class FogSystem : OverlaySystem
+    internal sealed class FogSystem : AudioSystem
     {
         public override string Name => "Fog cue";
+        public override string Key => "fog";
 
         private readonly SfxPlayer _sfx = new SfxPlayer();
         private bool? _wasFogged; // null = no baseline yet (don't fire on the first sample)
@@ -20,7 +21,7 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active) { _wasFogged = null; return; }
+            if (!OverlayManager.Active || !Enabled) { _wasFogged = null; return; }
 
             var c = overlay.Cursor.Position;
             bool fogged = FogOfWarController.IsInFogOfWar(c);

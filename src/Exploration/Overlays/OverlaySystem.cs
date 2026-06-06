@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using WrathAccess.Settings;
 
 namespace WrathAccess.Exploration.Overlays
 {
@@ -8,22 +9,39 @@ namespace WrathAccess.Exploration.Overlays
     /// moves the cursor or owns movement keys (that's <see cref="MovementMode"/>), which is what lets a
     /// tiled-space system and a continuous-space system coexist on one overlay. Exactly one of each
     /// concrete type per overlay, so siblings can be looked up by type.
+    ///
+    /// Each system is data-driven: it declares its tunables in <see cref="RegisterSettings"/> and reads them
+    /// LIVE through the bound category (via <see cref="Bool"/>/<see cref="Int"/>/<see cref="ChoiceId"/>), so
+    /// editing a setting takes effect immediately. The universal <c>enabled</c> toggle is added by the
+    /// registry; a disabled system self-gates (no announcements, no Tick work).
     /// </summary>
     internal abstract class OverlaySystem
     {
         public abstract string Name { get; }
+        public abstract string Key { get; } // settings-path segment, e.g. "grid"
 
-        /// <summary>The overlay became / stopped being active. Acquire/release resources (e.g. audio).</summary>
+        private CategorySetting _settings;
+        public void Bind(CategorySetting settings) => _settings = settings;
+
+        /// <summary>Add this system's tunables to its settings category (the <c>enabled</c> toggle and the
+        /// audio <c>volume</c> are added for you — see the registry / <see cref="AudioSystem"/>).</summary>
+        public virtual void RegisterSettings(CategorySetting cat) { }
+
+        public bool Enabled => Bool("enabled", true);
+
+        protected bool Bool(string key, bool fallback) => _settings?.Get<BoolSetting>(key)?.Get() ?? fallback;
+        protected int Int(string key, int fallback) => _settings?.Get<IntSetting>(key)?.Get() ?? fallback;
+        protected string ChoiceId(string key, string fallback) => _settings?.Get<ChoiceSetting>(key)?.Current?.Id ?? fallback;
+
         public virtual void OnEnter(Overlay overlay) { }
         public virtual void OnExit(Overlay overlay) { }
 
-        /// <summary>Per-frame work while an overlay is selected (continuous audio, event cues). The system
-        /// self-gates on <see cref="OverlayManager.Active"/> so it idles/mutes when a menu's up.</summary>
+        /// <summary>Per-frame work while an overlay is selected; self-gates on
+        /// <see cref="OverlayManager.Active"/> and <see cref="Enabled"/>.</summary>
         public virtual void Tick(float dt, Overlay overlay) { }
 
         /// <summary>The announcements this system contributes (each tagged with its
-        /// <see cref="AnnouncementContext"/>); empty if none. The overlay filters by the requested
-        /// context.</summary>
+        /// <see cref="AnnouncementContext"/>); empty if disabled or none.</summary>
         public virtual IEnumerable<OverlayAnnouncement> Announce(OverlayContext ctx)
         {
             yield break;

@@ -13,28 +13,16 @@ namespace WrathAccess.Exploration.Overlays
     /// </summary>
     internal static class OverlayManager
     {
-        private static readonly List<Overlay> _overlays = BuildOverlays();
+        private static List<Overlay> _overlays = new List<Overlay>();
         private static int _active = -1; // -1 = overlays off
 
-        // The two built-in overlays, expressed as feature compositions. Sonar / fog / object cues run under
-        // both (as before); wall tones are continuous-only; the tile readout is tile-only.
-        private static List<Overlay> BuildOverlays() => new List<Overlay>
+        /// <summary>Install the overlays built from settings (see <see cref="OverlaySettingsRegistry"/>).
+        /// Resets selection to off.</summary>
+        public static void SetOverlays(List<Overlay> overlays)
         {
-            new Overlay("Tile view")
-                .With(new TileStep())
-                .With(new GridSystem())
-                .With(new SonarSystem())
-                .With(new FogSystem())
-                .With(new ObjectCueSystem()),
-
-            new Overlay("Continuous mode")
-                .With(new ContinuousGlide())
-                .With(new SpatialSystem())
-                .With(new WallToneSystem())
-                .With(new SonarSystem())
-                .With(new FogSystem())
-                .With(new ObjectCueSystem()),
-        };
+            _overlays = overlays ?? new List<Overlay>();
+            _active = -1;
+        }
 
         private static bool InExploration =>
             FocusMode.Active && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";

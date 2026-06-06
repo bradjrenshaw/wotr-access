@@ -1,25 +1,35 @@
 using Kingmaker.View; // ObstacleAnalyzer.TraceAlongNavmesh
 using UnityEngine;
 using WrathAccess.Input;
+using WrathAccess.Settings;
 
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
-    /// A precise, free-moving cursor: hold the arrows to glide the world point continuously at a fixed
-    /// ft/sec. It traces from the current point toward the intended one along the navmesh each frame
-    /// (<see cref="ObstacleAnalyzer.TraceAlongNavmesh"/>) and stops at the first wall/ledge, so it can't
-    /// leave walkable ground. Feedback is audio (wall tones / sonar), so it doesn't speak on move —
-    /// describing the exact point is the Point-context job of <c>SpatialSystem</c>.
+    /// A precise, free-moving cursor: hold the arrows to glide the world point continuously at a
+    /// configurable ft/sec. It traces from the current point toward the intended one along the navmesh
+    /// each frame (<see cref="ObstacleAnalyzer.TraceAlongNavmesh"/>) and stops at the first wall/ledge, so
+    /// it can't leave walkable ground. Feedback is audio (wall tones / sonar), so it doesn't speak on
+    /// move — describing the exact point is the Point-context job of <c>SpatialSystem</c>. Speed reads live
+    /// from the cursor slot's settings.
     /// </summary>
     internal sealed class ContinuousGlide : MovementMode
     {
+        private readonly MovementSlot _slot;
+        private readonly CategorySetting _settings; // cursor.<slot> — holds "speed"
+
+        public ContinuousGlide(MovementSlot slot, CategorySetting settings)
+        {
+            _slot = slot;
+            _settings = settings;
+        }
+
         public override string Name => "Continuous glide";
-        public override MovementSlot Slot => MovementSlot.Primary;
+        public override MovementSlot Slot => _slot;
         public override AnnouncementContext Context => AnnouncementContext.Point;
         public override bool AnnouncesOnMove => false; // audio-driven, not per-frame speech
 
-        private const float SpeedFeet = 15f; // ft/sec
-        private static float Speed => SpeedFeet * Geo.MetresPerFoot;
+        private float Speed => (_settings?.Get<IntSetting>("speed")?.Get() ?? 15) * Geo.MetresPerFoot;
 
         public override void OnEnter(Overlay overlay)
         {
@@ -30,7 +40,8 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active) return; // menu up / focus off → don't move
+            if (!OverlayManager.Active) return;            // menu up / focus off → don't move
+            if (_slot != MovementSlot.Primary) return;     // only the primary slot's keys (nav.*) are wired yet
 
             float dx = 0f, dz = 0f;
             if (InputManager.Held("nav.up")) dz += 1f;     // +Z = north

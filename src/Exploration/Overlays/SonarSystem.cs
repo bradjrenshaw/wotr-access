@@ -12,25 +12,30 @@ namespace WrathAccess.Exploration.Overlays
     /// not range-capped, so volume keeps distant-but-revealed things audible. Self-gates on
     /// <see cref="OverlayManager.Active"/> (silence when a menu's up).
     /// </summary>
-    internal sealed class SonarSystem : OverlaySystem
+    internal sealed class SonarSystem : AudioSystem
     {
         public override string Name => "Sonar";
+        public override string Key => "sonar";
 
         private readonly Soundscape _scape = new Soundscape();
         private readonly List<VoiceSpec> _specs = new List<VoiceSpec>();
 
-        private const float RefFeet = 10f;     // distance at which volume is ~half
         private const float MinVol = 0.08f;    // floor so far-but-visible things stay audible
         private const float PanWidthFeet = 10f; // pan crossover (lateral close, bearing far)
+
+        protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
+        {
+            cat.Add(new WrathAccess.Settings.IntSetting("ref_distance", "Reference distance (feet)", 10, 1, 60, 1, "overlay.sonar.ref_distance"));
+        }
 
         public override void OnExit(Overlay overlay) => _scape.Clear();
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active) { _scape.Clear(); return; }
+            if (!OverlayManager.Active || !Enabled) { _scape.Clear(); return; }
 
             var c = overlay.Cursor.Position;
-            float refDist = RefFeet * Geo.MetresPerFoot;
+            float refDist = Int("ref_distance", 10) * Geo.MetresPerFoot;
             float panWidth = PanWidthFeet * Geo.MetresPerFoot;
 
             _specs.Clear();

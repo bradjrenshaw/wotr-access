@@ -148,6 +148,10 @@ namespace WrathAccess
             // UI = per-announcement settings (global toggles) + per-element-type overrides, discovered
             // by reflection. Creates "announcements" + "ui" categories under the settings Root.
             WrathAccess.UI.Announcements.AnnouncementRegistry.RegisterDefaults();
+
+            // Overlays = the data-driven area-overlay configs (one settings subtree per overlay); also
+            // builds the live Overlay objects and installs them in OverlayManager.
+            WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Register();
         }
 
         private static void RegisterInput()

@@ -21,12 +21,11 @@ namespace WrathAccess.UI
             Container node = Screen;
             while (node != null)
             {
-                var child = (node.FocusedChild != null && node.FocusedChild.CanFocus)
-                    ? node.FocusedChild
-                    : node.FirstFocusable();
+                var child = RepresentativeChild(node);
                 if (child == null) break;
                 node.SetFocusedChild(child);
                 Path.Add(child);
+                if (node.Shape == ContainerShape.Tree) break; // landed on a top-level tree node; don't descend in
                 node = child as Container;
             }
         }

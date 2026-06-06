@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using WrathAccess.Input;
 using WrathAccess.Screens;
+using WrathAccess.UI.Announcements;
 
 namespace WrathAccess.UI
 {
@@ -54,7 +55,9 @@ namespace WrathAccess.UI
             AnnounceDelta(snapshot);
         }
 
-        /// <summary>Append an element to the path; if it's a container, descend to its first leaf.</summary>
+        /// <summary>Append an element to the path; if it's a container, descend to its representative leaf.
+        /// Descent STOPS at a tree node (focus lands on the top-level node; its children are reached by
+        /// expanding/arrowing, not by descending into them).</summary>
         protected void AppendWithDescend(UIElement element)
         {
             while (element != null)
@@ -62,9 +65,55 @@ namespace WrathAccess.UI
                 Path.Add(element);
                 var container = element as Container;
                 if (container == null) return;
-                container.SetFocusedChild(container.FirstFocusable());
-                element = container.FirstFocusable();
+                var next = RepresentativeChild(container);
+                container.SetFocusedChild(next);
+                if (container.Shape == ContainerShape.Tree)
+                {
+                    if (next != null) Path.Add(next); // land ON the top-level node; don't descend into it
+                    return;
+                }
+                element = next;
             }
+        }
+
+        /// <summary>The child to land on when first focusing a container: the remembered focus, else — for a
+        /// single-select <b>list or tree</b> (radio buttons, tabs, the deity tree) — the currently-selected
+        /// DIRECT child, else the first focusable. Only the top level is considered: descent stops at a tree
+        /// node, and tree stepping/expanding never prefers selected, so expanding a node won't yank focus to
+        /// a selected descendant. Panels/grids don't prefer selected.</summary>
+        protected static UIElement RepresentativeChild(Container c)
+        {
+            if (c == null) return null;
+            if (c.FocusedChild != null && c.FocusedChild.CanFocus) return c.FocusedChild;
+            if (c.Shape == ContainerShape.VerticalList || c.Shape == ContainerShape.HorizontalList
+                || c.Shape == ContainerShape.Tree)
+            {
+                var selected = SelectedChild(c);
+                if (selected != null) return selected;
+            }
+            return c.FirstFocusable();
+        }
+
+        private static UIElement SelectedChild(Container c)
+        {
+            foreach (var child in c.Children)
+                if (child.CanFocus && ReportsSelected(child)) return child;
+            return null;
+        }
+
+        // An element is "selected" if it yields a SelectedAnnouncement that renders non-empty (single-select
+        // controls render "selected" only when selected). Checkboxes/toggles use ValueAnnouncement, not
+        // SelectedAnnouncement, so they never count here.
+        private static bool ReportsSelected(UIElement e)
+        {
+            var ctx = new AnnouncementContext(e);
+            foreach (var a in e.GetFocusAnnouncements())
+                if (a is SelectedAnnouncement)
+                {
+                    var m = a.Render(ctx);
+                    if (m != null && !m.IsEmpty) return true;
+                }
+            return false;
         }
 
         /// <summary>
@@ -137,7 +186,7 @@ namespace WrathAccess.UI
         {
             if (c.Shape != ContainerShape.Panel)
             {
-                var item = (c.FocusedChild != null && c.FocusedChild.CanFocus) ? c.FocusedChild : c.FirstFocusable();
+                var item = RepresentativeChild(c);
                 if (item != null) stops.Add(item);
                 return;
             }

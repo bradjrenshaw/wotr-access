@@ -16,7 +16,7 @@ namespace WrathAccess.Exploration.Overlays
         private readonly List<OverlaySystem> _systems = new List<OverlaySystem>(); // ordered (readout order)
         private readonly Dictionary<Type, OverlaySystem> _byType = new Dictionary<Type, OverlaySystem>();
 
-        public string Name { get; }
+        public string Name { get; set; } // settable so a live rename updates the spoken cycle name
         public Cursor Cursor { get; } = new Cursor();
 
         public Overlay(string name) { Name = name; }

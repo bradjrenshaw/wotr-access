@@ -99,7 +99,18 @@ namespace WrathAccess.Exploration.Overlays
 
         /// <summary>The live display name of an overlay (its hidden name setting), falling back to the id.</summary>
         public static string OverlayName(string id)
-            => ModSettings.Root.Get<CategorySetting>("overlays")?.Get<CategorySetting>(id)?.Get<StringSetting>("name")?.Get() ?? id;
+            => NameSetting(id)?.Get() ?? id;
+
+        /// <summary>Rename an overlay (persists, and updates the live object's spoken name).</summary>
+        public static void SetOverlayName(string id, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return;
+            NameSetting(id)?.Set(name); // StringSetting.Set auto-saves
+            if (_objects.TryGetValue(id, out var o)) o.Name = name;
+        }
+
+        private static StringSetting NameSetting(string id)
+            => ModSettings.Root.Get<CategorySetting>("overlays")?.Get<CategorySetting>(id)?.Get<StringSetting>("name");
 
         /// <summary>Whether this overlay is the standard one (first in the list).</summary>
         public static bool IsStandard(string id)

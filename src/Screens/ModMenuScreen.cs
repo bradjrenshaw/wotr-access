@@ -163,6 +163,7 @@ namespace WrathAccess.Screens
                         ? " " + Loc("overlay.standard_tag", "(standard)") : "")
             };
             foreach (var c in oCat.Children) BuildSettingNode(group, c); // hidden "name" is skipped
+            group.Add(new ProxyActionButton(Loc("overlay.rename", "Rename overlay"), null, () => RenameOverlay(id)));
             group.Add(new ProxyActionButton(Loc("overlay.make_standard", "Make standard"), null, () => MakeStandard(id)));
             group.Add(new ProxyActionButton(Loc("overlay.remove", "Remove overlay"), null, () => RemoveOverlay(id)));
             _overlayNodes[id] = group;
@@ -194,6 +195,18 @@ namespace WrathAccess.Screens
             UIElement target = kids.Count == 0 ? null : kids[idx < kids.Count ? idx : kids.Count - 1];
             Tts.Speak(Loc("overlay.removed", "Overlay removed"));
             Navigation.Focus(target);
+        }
+
+        private void RenameOverlay(string id)
+        {
+            var current = WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayName(id);
+            ModTextEntryScreen.Open(Loc("overlay.rename", "Rename overlay"), current, name =>
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SetOverlayName(id, name);
+                // The node's label is a live LabelProvider, so it already reflects the new name.
+                Tts.Speak(Loc("overlay.renamed", "Renamed to") + " " + name);
+            });
         }
 
         private void MakeStandard(string id)

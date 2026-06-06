@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using WrathAccess.UI.Announcements;
 
@@ -39,7 +40,11 @@ namespace WrathAccess.UI
 
         public void Collapse() => Expanded = false;
 
-        public override string Label => _label;
+        /// <summary>Live label override (wins over the static label) — for nodes whose name changes
+        /// without a rebuild, e.g. an overlay node that shows "(standard)" based on live order.</summary>
+        public Func<string> LabelProvider { get; set; }
+
+        public override string Label => LabelProvider != null ? LabelProvider() : _label;
 
         /// <summary>Lists/grids/trees announce their children's position; panels (pure structure) don't.</summary>
         public virtual bool AnnouncePosition => Shape != ContainerShape.Panel;
@@ -85,6 +90,28 @@ namespace WrathAccess.UI
             element.Parent = this;
             _children.Add(element);
         }
+
+        /// <summary>Insert a child at a position (clamped). For live tree mutation — no full rebuild.</summary>
+        public void Insert(int index, UIElement element)
+        {
+            if (element == null) return;
+            element.Parent = this;
+            if (index < 0) index = 0;
+            if (index > _children.Count) index = _children.Count;
+            _children.Insert(index, element);
+        }
+
+        /// <summary>Remove a child (live tree mutation). Clears the remembered focus if it was this child.</summary>
+        public void Remove(UIElement element)
+        {
+            if (element != null && _children.Remove(element))
+            {
+                element.Parent = null;
+                if (FocusedChild == element) FocusedChild = null;
+            }
+        }
+
+        public int IndexOf(UIElement element) => _children.IndexOf(element);
 
         public void Clear()
         {

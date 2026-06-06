@@ -73,6 +73,17 @@ namespace WrathAccess.Settings
             catch (Exception e) { Main.Log?.Error("[settings] load failed (using defaults): " + e.Message); }
         }
 
+        /// <summary>Apply previously-unknown saved keys to settings that now exist (e.g. dynamic overlay
+        /// subtrees created after the initial Load). Call after creating the new settings + Reindex.</summary>
+        public static void ReapplyUnknown()
+        {
+            if (_unknownKeys.Count == 0) return;
+            var applied = new List<string>();
+            foreach (var kv in _unknownKeys)
+                if (_byPath.TryGetValue(kv.Key, out var s)) { s.LoadValue(kv.Value); applied.Add(kv.Key); }
+            foreach (var k in applied) _unknownKeys.Remove(k);
+        }
+
         public static void Save()
         {
             _dirty = false;

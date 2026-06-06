@@ -44,6 +44,16 @@ namespace WrathAccess.UI
         /// </summary>
         public void AnnounceCurrent() => AnnounceDelta(EmptyPath);
 
+        /// <summary>Move focus to a specific element (e.g. a node just inserted into the tree) and announce
+        /// the change. Queues (doesn't interrupt) so a preceding feedback line still plays.</summary>
+        public void Focus(UIElement target)
+        {
+            if (target == null) return;
+            var snapshot = new List<UIElement>(Path);
+            BuildPathTo(target);
+            AnnounceDelta(snapshot);
+        }
+
         /// <summary>Append an element to the path; if it's a container, descend to its first leaf.</summary>
         protected void AppendWithDescend(UIElement element)
         {

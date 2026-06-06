@@ -24,6 +24,12 @@ namespace WrathAccess.Settings
             return this;
         }
 
+        /// <summary>Remove a child (e.g. deleting a user-created overlay's subtree). Reindex + save after.</summary>
+        public void Remove(Setting child)
+        {
+            if (child != null && _children.Remove(child)) child.Parent = null;
+        }
+
         public T Get<T>(string key) where T : Setting
             => _children.OfType<T>().FirstOrDefault(c => c.Key == key);
 

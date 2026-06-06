@@ -17,5 +17,7 @@ namespace WrathAccess.UI
             Active != null && Active.OnInputJustPressed(action);
 
         public static void AnnounceCurrent() => Active?.AnnounceCurrent();
+
+        public static void Focus(UIElement element) => Active?.Focus(element);
     }
 }

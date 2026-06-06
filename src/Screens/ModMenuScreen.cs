@@ -30,6 +30,12 @@ namespace WrathAccess.Screens
         private bool _built;
         private Container _content; // wraps the active category's treeview; refilled on tab switch
 
+        // Overlays tab: the live tree + the Add button + id→node map, so add/remove/reorder mutate the tree
+        // in place (no destructive rebuild) and focus the affected node.
+        private Container _overlaysTree;
+        private UIElement _addButton;
+        private readonly Dictionary<string, Container> _overlayNodes = new Dictionary<string, Container>();
+
         // Explicit tabs (the settings Root holds bindings/announcements/ui, which don't map 1:1 to tabs:
         // the UI tab composes the global announcement settings + the per-element-type overrides).
         private static readonly (string key, string label, string loc)[] Tabs =
@@ -77,7 +83,7 @@ namespace WrathAccess.Screens
             RebuildContent();
 
             Navigation.Attach(this);
-            Tts.Speak(Loc("menu.title", "Mod menu")); // once, on open (Build runs the frame after focus)
+            Tts.Speak(Loc("menu.title", "Mod menu")); // once, on open (Build runs only on open now)
             Navigation.AnnounceCurrent();
         }
 
@@ -88,6 +94,7 @@ namespace WrathAccess.Screens
             _builtActive = _active;
             if (_content == null) return;
             _content.Clear();
+            _overlaysTree = null; _overlayNodes.Clear(); // (re)set when the overlays tab builds
             // Unlabeled = the structural tree root (silent, never focused as a node); only real sub-groups
             // announce expand/collapse. The category is already conveyed by the selected tab.
             var tree = new TreeGroup();
@@ -124,16 +131,84 @@ namespace WrathAccess.Screens
             }
             else if (key == "overlays")
             {
-                // Each overlay is a root node (Cursor + its systems nested beneath).
+                // Each overlay is a root node (Cursor + systems + Make-standard + Remove); the Add button at
+                // the bottom appends one. Add/remove/reorder mutate this live tree in place — see
+                // BuildOverlayNode / AddOverlay / RemoveOverlay / MakeStandard (no destructive rebuild).
+                _overlaysTree = tree;
                 var overlays = ModSettings.Root.Get<CategorySetting>("overlays");
-                if (overlays != null)
-                    foreach (var o in overlays.Children) BuildSettingNode(tree, o);
+                foreach (var id in WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayIds())
+                {
+                    var oc = overlays?.Get<CategorySetting>(id);
+                    if (oc != null) tree.Add(BuildOverlayNode(oc, id));
+                }
+                _addButton = new ProxyActionButton(Loc("overlay.add", "Add overlay"), null, AddOverlay);
+                tree.Add(_addButton);
             }
             else if (key == "audio")
             {
                 var audio = ModSettings.Root.Get<CategorySetting>("audio");
                 if (audio != null)
                     foreach (var s in audio.Children) BuildSettingNode(tree, s);
+            }
+        }
+
+        // One overlay = a collapsible node (Cursor + systems) with a LIVE "(standard)" tag, plus always-on
+        // Make-standard + Remove actions. Returned (not added) so the caller can add or insert it.
+        private Container BuildOverlayNode(CategorySetting oCat, string id)
+        {
+            var group = new TreeGroup("")
+            {
+                LabelProvider = () => WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayName(id)
+                    + (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsStandard(id)
+                        ? " " + Loc("overlay.standard_tag", "(standard)") : "")
+            };
+            foreach (var c in oCat.Children) BuildSettingNode(group, c); // hidden "name" is skipped
+            group.Add(new ProxyActionButton(Loc("overlay.make_standard", "Make standard"), null, () => MakeStandard(id)));
+            group.Add(new ProxyActionButton(Loc("overlay.remove", "Remove overlay"), null, () => RemoveOverlay(id)));
+            _overlayNodes[id] = group;
+            return group;
+        }
+
+        // ---- incremental overlay add / remove / reorder (mutate the live tree, no rebuild) ----
+
+        private void AddOverlay()
+        {
+            var id = WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Add();
+            var oc = ModSettings.Root.Get<CategorySetting>("overlays")?.Get<CategorySetting>(id);
+            if (oc == null || _overlaysTree == null) return;
+            var node = BuildOverlayNode(oc, id);
+            int at = _addButton != null ? _overlaysTree.IndexOf(_addButton) : _overlaysTree.Children.Count;
+            _overlaysTree.Insert(at, node);
+            Tts.Speak(Loc("overlay.added", "Overlay added"));
+            Navigation.Focus(node);
+        }
+
+        private void RemoveOverlay(string id)
+        {
+            if (_overlaysTree == null || !_overlayNodes.TryGetValue(id, out var node)) return;
+            if (!WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Remove(id)) return;
+            int idx = _overlaysTree.IndexOf(node);
+            _overlaysTree.Remove(node);
+            _overlayNodes.Remove(id);
+            var kids = _overlaysTree.Children;
+            UIElement target = kids.Count == 0 ? null : kids[idx < kids.Count ? idx : kids.Count - 1];
+            Tts.Speak(Loc("overlay.removed", "Overlay removed"));
+            Navigation.Focus(target);
+        }
+
+        private void MakeStandard(string id)
+        {
+            if (!WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.MakeDefault(id))
+            {
+                Tts.Speak(Loc("overlay.already_standard", "Already standard"));
+                return;
+            }
+            Tts.Speak(Loc("overlay.made_standard", "Set as standard"));
+            if (_overlaysTree != null && _overlayNodes.TryGetValue(id, out var node))
+            {
+                _overlaysTree.Remove(node);      // move to front; the live "(standard)" tags auto-update
+                _overlaysTree.Insert(0, node);
+                Navigation.Focus(node);
             }
         }
 

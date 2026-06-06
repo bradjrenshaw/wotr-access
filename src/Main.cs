@@ -44,6 +44,9 @@ namespace WrathAccess
                 BuildSettings();
                 WrathAccess.Settings.ModSettings.Initialize(
                     System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "WrathAccess"));
+                // Overlays are built AFTER load: the saved overlay-id list (incl. user-added ones) is only
+                // known once settings have loaded, then their saved values are re-applied to the new subtrees.
+                WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.BuildOverlays();
                 ScreenManager.Initialize();
                 GameLogReader.Initialize(); // read barks + narrative log lines (no dialogue window)
 

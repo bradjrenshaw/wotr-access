@@ -43,7 +43,9 @@ namespace WrathAccess.Screens
             if (phase is NewGamePhaseStoryVM story)
                 BuildStory(content, story);
             else if (phase is NewGamePhaseDifficultyVM difficulty)
-                SettingsEntityBuilder.BuildInto(content, difficulty.SettingEntities); // same VMs as Settings
+                // Same VMs as the Settings screen — build them as a treeview (collapsible header groups,
+                // one Tab-stop each, arrow within) to match it, rather than a flat wall of Tab-stops.
+                SettingsEntityBuilder.BuildInto(content, difficulty.SettingEntities, tree: true);
             else
                 content.Add(new TextElement("This step is not accessible yet."));
         }

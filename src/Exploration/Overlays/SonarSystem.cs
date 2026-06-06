@@ -50,7 +50,7 @@ namespace WrathAccess.Exploration.Overlays
                 float fp = it.Footprint;
                 // Volume: within the footprint → max; outside → from the nearest surface (closest-point).
                 float edge = Mathf.Max(0f, dist - fp);
-                float vol = Mathf.Clamp(refDist / (refDist + edge), MinVol, 1f);
+                float vol = Mathf.Clamp(refDist / (refDist + edge), MinVol, 1f) * EffectiveVolume;
                 // Pan: lateral offset up close, bearing farther out; centred when within.
                 float pan = dist > fp ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
                 _specs.Add(new VoiceSpec(it, Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"), vol, pan));

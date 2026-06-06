@@ -26,7 +26,7 @@ namespace WrathAccess.Exploration.Overlays
             var c = overlay.Cursor.Position;
             bool fogged = FogOfWarController.IsInFogOfWar(c);
             if (_wasFogged.HasValue && fogged != _wasFogged.Value)
-                _sfx.Play(Path.Combine(OverlayAudio.Dir, fogged ? "fog_enter.wav" : "fog_exit.wav"));
+                _sfx.Play(Path.Combine(OverlayAudio.Dir, fogged ? "fog_enter.wav" : "fog_exit.wav"), EffectiveVolume);
             _wasFogged = fogged;
         }
     }

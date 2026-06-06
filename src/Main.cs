@@ -152,6 +152,11 @@ namespace WrathAccess
             // Overlays = the data-driven area-overlay configs (one settings subtree per overlay); also
             // builds the live Overlay objects and installs them in OverlayManager.
             WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Register();
+
+            // Audio = settings-wide master volume (every overlay sound system scales by it).
+            var audio = new WrathAccess.Settings.CategorySetting("audio", "Audio", localizationKey: "category.audio");
+            audio.Add(new WrathAccess.Settings.IntSetting("master_volume", "Master volume", 100, 0, 100, 5, "audio.master_volume"));
+            WrathAccess.Settings.ModSettings.Root.Add(audio);
         }
 
         private static void RegisterInput()

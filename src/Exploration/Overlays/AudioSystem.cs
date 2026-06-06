@@ -18,7 +18,10 @@ namespace WrathAccess.Exploration.Overlays
 
         protected virtual void RegisterAudioSettings(CategorySetting cat) { }
 
-        /// <summary>This system's volume as a 0..1 fraction (master is applied by the engines).</summary>
+        /// <summary>This system's own volume as a 0..1 fraction.</summary>
         protected float Volume => Int("volume", 100) / 100f;
+
+        /// <summary>Per-system volume scaled by the global master — what the engine should actually use.</summary>
+        protected float EffectiveVolume => Volume * OverlayAudio.Master;
     }
 }

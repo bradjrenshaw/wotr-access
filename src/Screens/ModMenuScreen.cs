@@ -36,6 +36,8 @@ namespace WrathAccess.Screens
         {
             ("input", "Input", "category.input"),
             ("ui", "UI", "category.ui"),
+            ("overlays", "Overlays", "category.overlays"),
+            ("audio", "Audio", "category.audio"),
         };
 
         public override void OnPush() { _priorFocus = FocusMode.Active; FocusMode.Set(true); _active = 0; _built = false; }
@@ -120,6 +122,19 @@ namespace WrathAccess.Screens
                     foreach (var s in ui.Children.OrderBy(c => c.Label, System.StringComparer.CurrentCultureIgnoreCase))
                         BuildSettingNode(tree, s);
             }
+            else if (key == "overlays")
+            {
+                // Each overlay is a root node (Cursor + its systems nested beneath).
+                var overlays = ModSettings.Root.Get<CategorySetting>("overlays");
+                if (overlays != null)
+                    foreach (var o in overlays.Children) BuildSettingNode(tree, o);
+            }
+            else if (key == "audio")
+            {
+                var audio = ModSettings.Root.Get<CategorySetting>("audio");
+                if (audio != null)
+                    foreach (var s in audio.Children) BuildSettingNode(tree, s);
+            }
         }
 
         // Map a setting to a navigable control; categories recurse into collapsible tree groups.
@@ -142,7 +157,23 @@ namespace WrathAccess.Screens
                 case NullableBoolSetting nb:
                     parent.Add(new ProxyOverrideToggle(nb));
                     break;
+                case IntSetting i:
+                    parent.Add(new ProxyIntSetting(i));
+                    break;
+                case ChoiceSetting c:
+                    parent.Add(new ProxyChoiceDropdown(c.Label,
+                        c.Choices.Select(ch => ch.Label).ToList(),
+                        () => IndexOfChoice(c),
+                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); }));
+                    break;
             }
+        }
+
+        private static int IndexOfChoice(ChoiceSetting c)
+        {
+            for (int i = 0; i < c.Choices.Count; i++)
+                if (c.Choices[i].Id == c.ValueId) return i;
+            return -1;
         }
     }
 }

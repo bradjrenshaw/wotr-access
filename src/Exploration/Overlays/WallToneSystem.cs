@@ -47,11 +47,12 @@ namespace WrathAccess.Exploration.Overlays
             if (_engine == null || !_engine.IsLoaded) return;
 
             var c = overlay.Cursor.Position;
+            float v = EffectiveVolume;
             _engine.SetVolumes(
-                WallVolume(c, Vector3.forward), // +Z north
-                WallVolume(c, Vector3.back),    // -Z south
-                WallVolume(c, Vector3.right),   // +X east
-                WallVolume(c, Vector3.left));   // -X west
+                WallVolume(c, Vector3.forward) * v, // +Z north
+                WallVolume(c, Vector3.back) * v,    // -Z south
+                WallVolume(c, Vector3.right) * v,   // +X east
+                WallVolume(c, Vector3.left) * v);   // -X west
         }
 
         // Load the configured tone set on demand; rebuild the engine if the user picked a different one.

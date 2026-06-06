@@ -13,6 +13,10 @@ namespace WrathAccess.UI
 
         public static void Attach(Screen screen) => Active?.Attach(screen);
 
+        /// <summary>True when something is focused (the navigator owns the keys). False in an unfocused
+        /// screen like exploration, where arrows bubble to the overlay.</summary>
+        public static bool HasFocus => Active != null && Active.Current != null;
+
         public static bool DispatchJustPressed(InputAction action) =>
             Active != null && Active.OnInputJustPressed(action);
 

@@ -33,6 +33,12 @@ namespace WrathAccess.Screens
         /// <summary>Is this screen currently showing? Evaluated every frame.</summary>
         public abstract bool IsActive();
 
+        /// <summary>When true, the screen starts with NO focused element — input (arrows) bubbles to the
+        /// global handlers (e.g. the exploration overlay), and Tab ENTERS the screen's element tree (the
+        /// HUD). Tabbing past the ends returns to this unfocused state. Used by the in-game screen so
+        /// exploration keeps the arrows and Tab brings up the HUD regions.</summary>
+        public virtual bool StartUnfocused => false;
+
         /// <summary>
         /// When true (and this is the focused screen), InputManager stops dispatching so raw
         /// keys reach the game (e.g. the key-binding capture dialog, which reads input itself).

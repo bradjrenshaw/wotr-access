@@ -15,6 +15,12 @@ namespace WrathAccess.UI
     {
         protected override void BuildInitialFocus()
         {
+            // An unfocused screen (exploration) starts with nothing focused — arrows bubble to the overlay,
+            // and Tab enters the HUD. But if it has remembered focus (you were in the HUD and a sub-screen
+            // covered it, e.g. the log), restore it instead of dropping back to exploration. Tabbing out of
+            // the HUD clears that remembered focus, so a fresh entry stays unfocused.
+            if (Screen != null && Screen.StartUnfocused && Screen.FocusedChild == null) return;
+
             // Restore remembered focus (each container's FocusedChild), falling back to the
             // first focusable. So returning to a screen (e.g. after closing a submenu) lands
             // back where you were, not at the top.
@@ -331,9 +337,28 @@ namespace WrathAccess.UI
             int idx = -1;
             for (var e = Current; e != null && idx < 0; e = e.Parent)
                 idx = stops.IndexOf(e);
-            int ni = (idx < 0) ? 0 : idx + step;
+
+            // Unfocused (e.g. exploration): Tab enters the HUD at the first/last stop.
+            if (idx < 0)
+            {
+                var snap = new List<UIElement>(Path);
+                BuildPathTo(stops[step >= 0 ? 0 : stops.Count - 1]);
+                AnnounceDelta(snap, interrupt: true);
+                return true;
+            }
+
+            int ni = idx + step;
             if (ni < 0 || ni >= stops.Count)
             {
+                // On an unfocused-capable screen, tabbing off either end drops back to the unfocused
+                // state (exploration owns the arrows again) rather than sticking at the edge.
+                if (Screen != null && Screen.StartUnfocused)
+                {
+                    Path.Clear();
+                    Screen.SetFocusedChild(null); // truly unfocused → a later re-entry stays in exploration
+                    if (!string.IsNullOrEmpty(Screen.ScreenName)) Speak(Screen.ScreenName, interrupt: true);
+                    return true;
+                }
                 if (Screen != null && Screen.Wrap)
                     ni = ((ni % stops.Count) + stops.Count) % stops.Count; // wrap
                 else

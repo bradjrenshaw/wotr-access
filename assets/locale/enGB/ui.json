@@ -61,5 +61,9 @@
   "label.continue": "Continue",
 
   "nav.position": "{index} of {count}",
-  "count.items": "{count} items"
+  "count.items": "{count} items",
+
+  "log.title": "Log",
+  "log.channels": "Channels",
+  "log.empty": "No messages."
 }

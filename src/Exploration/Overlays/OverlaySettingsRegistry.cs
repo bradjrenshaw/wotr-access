@@ -76,9 +76,17 @@ namespace WrathAccess.Exploration.Overlays
                 overlay.With(sys);
             }
 
-            overlay.With(BuildMode(MovementSlot.Primary, primaryCat));
-            overlay.With(BuildMode(MovementSlot.Secondary, secondaryCat));
+            // Movement modes come from the cursor slot choices; re-resolve live when they change.
+            overlay.Cursor.SetSlots(primaryCat, secondaryCat);
+            WireModeChange(primaryCat, overlay);
+            WireModeChange(secondaryCat, overlay);
             return overlay;
+        }
+
+        private static void WireModeChange(CategorySetting slotCat, Overlay overlay)
+        {
+            var mode = slotCat?.Get<ChoiceSetting>("mode");
+            if (mode != null) mode.Changed += _ => overlay.Cursor.ResolveModes();
         }
 
         private static CategorySetting BuildSlot(string basePath, string overlayName, string key, string label, string defaultMode)
@@ -89,14 +97,6 @@ namespace WrathAccess.Exploration.Overlays
             if (cat.GetByKey("speed") == null)
                 cat.Add(new IntSetting("speed", "Speed (feet/sec)", 15, 1, 60, 1, "overlay.speed"));
             return cat;
-        }
-
-        private static MovementMode BuildMode(MovementSlot slot, CategorySetting slotCat)
-        {
-            var id = slotCat.Get<ChoiceSetting>("mode")?.Current?.Id ?? "none";
-            if (id == "continuous") return new ContinuousGlide(slot, slotCat);
-            if (id == "tiled") return new TileStep(slot);
-            return null;
         }
     }
 }

@@ -38,7 +38,7 @@ namespace WrathAccess.Screens
 
         public override string Key => "overlay.choicesubmenu";
         public override string ScreenName => s_title;
-        public override int Layer => 26; // above Settings (25)
+        public override int Layer => 37; // above the game Settings (25) AND the mod menu (35) / key capture (36), below the tooltip reader (40)
         public override bool IsActive() => s_options != null;
 
         private List<string> _builtFor;

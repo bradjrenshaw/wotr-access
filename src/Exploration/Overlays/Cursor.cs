@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using WrathAccess.Settings;
 
 namespace WrathAccess.Exploration.Overlays
 {
@@ -25,6 +26,32 @@ namespace WrathAccess.Exploration.Overlays
 
         public IReadOnlyList<MovementMode> Modes => _modes;
         public void AddMode(MovementMode mode) { if (mode != null) _modes.Add(mode); }
+
+        // Movement is driven by each slot's "mode" choice setting; the cursor (re)builds its modes from
+        // them, so a mode change in the menu takes effect live (the registry also wires the choice's
+        // Changed event to ResolveModes).
+        private CategorySetting _primarySlot, _secondarySlot;
+
+        public void SetSlots(CategorySetting primary, CategorySetting secondary)
+        {
+            _primarySlot = primary;
+            _secondarySlot = secondary;
+            ResolveModes();
+        }
+
+        public void ResolveModes()
+        {
+            _modes.Clear();
+            AddResolved(MovementSlot.Primary, _primarySlot);
+            AddResolved(MovementSlot.Secondary, _secondarySlot);
+        }
+
+        private void AddResolved(MovementSlot slot, CategorySetting slotCat)
+        {
+            var id = slotCat?.Get<ChoiceSetting>("mode")?.Current?.Id ?? "none";
+            if (id == "continuous") _modes.Add(new ContinuousGlide(slot, slotCat));
+            else if (id == "tiled") _modes.Add(new TileStep(slot));
+        }
 
         /// <summary>The movement mode bound to a slot, or null. (One mode per slot in practice.)</summary>
         public MovementMode ModeFor(MovementSlot slot)

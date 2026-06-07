@@ -106,6 +106,7 @@ namespace WrathAccess
             if (!FocusMode.Active) return;
             var current = ScreenManager.Current;
             if (current == null || current.Key != "ctx.ingame") return;
+            if (WrathAccess.UI.Navigation.HasFocus) return; // focused in the HUD → Space is a UI key, not pause
             // Just toggle; TickPause announces the resulting state change (PauseBind is async, and the game
             // also pauses on its own — e.g. combat start — so we react to the state, not this keypress).
             Game.Instance?.PauseBind();

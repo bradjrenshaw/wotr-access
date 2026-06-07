@@ -2,16 +2,24 @@ using System.Collections.Generic;
 using System.Text;
 using System.Linq;
 using Kingmaker;
+using Kingmaker.Blueprints.Root.Strings; // UIStrings / UITextCharSheet (localized labels)
 using Kingmaker.UI.Common; // UIUtility.AddSign, UIUtilityItem.AttackData
 using Kingmaker.UI.MVVM._PCView.ServiceWindows.CharacterInfo; // CharInfoComponentType, CharInfoPageType (enums)
 using Kingmaker.UI.MVVM._VM.ServiceWindows;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Abilities;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Alignment;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.BuffsAndConditions;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.LevelClassScores;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.Attack;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.BAB;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.Defence;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.NameAndPortrait;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Progression.Main; // UnitProgressionVM
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Skills;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Stories;
+using Kingmaker.UI.MVVM._VM.Tooltip.Templates; // TooltipTemplateGlossary (section-header glossary tooltips)
 using WrathAccess.UI;
 using WrathAccess.UI.CharSheet;
 using WrathAccess.UI.Proxies;
@@ -24,8 +32,9 @@ namespace WrathAccess.Screens
     /// content area built from the live component blocks the game populated for the current page
     /// (<c>CharacterInfoVM.ComponentVMs</c>). Stat rendering reuses our CharSheet sink (the chargen "Total"
     /// screen is the same sheet). Tabs are stable; only the content refills on a page switch, so tab focus
-    /// survives. Summary blocks + Skills are rendered; the remaining blocks are placeholders pending per-block
-    /// work. Escape closes the window.
+    /// survives. Blocks are rendered in the game's real per-page order/set via
+    /// <see cref="CharInfoWindowUtility.GetComponentsList"/> (unit-type-aware); the two identical attack
+    /// blocks the Martial page carries are de-duplicated. Escape closes the window.
     /// </summary>
     public sealed class CharacterInfoScreen : Screen
     {
@@ -57,19 +66,6 @@ namespace WrathAccess.Screens
                 _ => ServiceWindows()?.HandleCloseAll());
         }
 
-        // Visual block order from the prefab (CharacterScreen sibling order; Attack+Defence sit in the
-        // AttackDefenceMain sub-container). tools/charinfo_layout.py dumps this.
-        private static readonly CharInfoComponentType[] BlockOrder =
-        {
-            CharInfoComponentType.NameAndPortrait, CharInfoComponentType.LevelClassScores,
-            CharInfoComponentType.AttackMain, CharInfoComponentType.DefenceMain, CharInfoComponentType.Skills,
-            CharInfoComponentType.BuffsAndConditions, CharInfoComponentType.Abilities, CharInfoComponentType.Martial,
-            CharInfoComponentType.AttackMartial, CharInfoComponentType.AlignmentWheel,
-            CharInfoComponentType.AlignmentHistory, CharInfoComponentType.Stories,
-            CharInfoComponentType.NameFullPortrait, CharInfoComponentType.BiographyAlignmentHistory,
-            CharInfoComponentType.Progression, CharInfoComponentType.BiographyStories,
-        };
-
         private static CharacterInfoVM Vm()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM?.CharacterInfoVM?.Value;
 
@@ -78,10 +74,28 @@ namespace WrathAccess.Screens
 
         private static string ComponentSig(CharacterInfoVM vm)
         {
+            // Keyed on the current page + which component VMs are live, so the content refills exactly when
+            // the page (and thus its block set + order) changes, but not on every frame.
             var sb = new StringBuilder();
+            sb.Append((int)(vm.CurrentPage?.Value ?? CharInfoPageType.None)).Append(':');
             foreach (var kv in vm.ComponentVMs)
                 if (kv.Value?.Value != null) sb.Append((int)kv.Key).Append(',');
             return sb.ToString();
+        }
+
+        // The blocks shown on the current page, in the game's real order. CharInfoWindowUtility.PagesContent
+        // is the source of truth (decoded from its static cctor): pages Summary/Abilities/Martial/Progression
+        // all lead with the persistent summary panel [NameAndPortrait, LevelClassScores, AttackMain,
+        // DefenceMain] then add page-specific blocks; the set is also unit-type-aware (Summary appends
+        // AlignmentWheel for the PC, Stories for a companion, Martial for a pet). We call the game's own
+        // GetComponentsList rather than a hand-built order so it stays faithful (e.g. Biography is
+        // NameFullPortrait → AlignmentWheel → history, not the enum order).
+        private static List<CharInfoComponentType> PageComponents(CharacterInfoVM vm)
+        {
+            var unit = vm.UnitDescriptor?.Value;
+            if (unit == null) return new List<CharInfoComponentType>();
+            var page = vm.CurrentPage?.Value ?? CharInfoPageType.None;
+            return CharInfoWindowUtility.GetComponentsList(page, unit) ?? new List<CharInfoComponentType>();
         }
 
         private void BuildShell(CharacterInfoVM vm)
@@ -113,12 +127,26 @@ namespace WrathAccess.Screens
             if (_content == null) return;
             _content.Clear();
             var sink = new FlowSheetCharSheetSink();
-            // Render in the prefab's visual top-to-bottom order (verified via tools/charinfo_layout.py),
-            // not the dictionary's iteration order.
-            foreach (var type in BlockOrder)
-                if (vm.ComponentVMs.TryGetValue(type, out var rp) && rp?.Value != null)
-                    RenderBlock(type, rp.Value, sink);
-            _content.Add(sink.Build());
+            UIElement progression = null; // the Progression block is its own FlowSheet (own Tab-stop), not a sink section
+            bool attacksShown = false;    // Martial has both AttackMain (summary) + AttackMartial (detail), same VM/data — show once
+            // Render in the game's real per-page order (CharInfoWindowUtility.GetComponentsList).
+            foreach (var type in PageComponents(vm))
+            {
+                if (!vm.ComponentVMs.TryGetValue(type, out var rp) || rp?.Value == null) continue;
+                var block = rp.Value;
+                if (block is CharInfoAttacksBlockVM)
+                {
+                    if (attacksShown) continue;
+                    attacksShown = true;
+                }
+                if (block is UnitProgressionVM prog)
+                    progression = ProgressionGrid.Build(prog, null, new ProgressionGrid.Options { AllClassBands = true });
+                else
+                    RenderBlock(type, block, sink);
+            }
+            // Only add the sheet if a section was actually rendered (the Progression page has no sink blocks).
+            if (sink.Build() is FlowSheet sheet && sheet.RowCount > 0) _content.Add(sheet);
+            if (progression != null) _content.Add(progression);
         }
 
         private static void RenderBlock(CharInfoComponentType type, CharInfoComponentVM block, ICharSheetSink sink)
@@ -130,9 +158,58 @@ namespace WrathAccess.Screens
                 case CharInfoAttacksBlockVM atk: RenderAttacks(atk, sink); break;
                 case CharInfoDefenceBlockVM def: RenderDefence(def, sink); break;
                 case CharInfoSkillsBlockVM sk: RenderSkills(sk, sink); break;
-                case CharInfoAbilitiesVM ab: RenderAbilities(ab, sink); break;
+                case CharInfoAbilitiesVM ab: RenderFeatureGroups(ab.ShowGroupList, "Abilities", sink); break;
+                case CharInfoBuffsAndConditionsVM bc: RenderFeatureGroups(bc.ShowGroupList, "Buffs and conditions", sink); break;
+                case CharInfoMartialVM mt: RenderMartial(mt, sink); break;
+                case CharInfoAlignmentVM al: RenderAlignment(type, al, sink); break;
+                case CharInfoStoriesVM st: RenderStories(st, sink); break;
                 default: sink.ListSection(type.ToString(), new[] { new TextElement("Not shown yet.") }); break;
             }
+        }
+
+        // CharInfoAlignmentVM backs three blocks: the wheel (current alignment + mythic level) and the
+        // history list (AlignmentHistory + the Biography page's copy). We mirror each view's bound text —
+        // the wheel shows GetAlignmentName/AlignmentUndetectable + MythicLevel (Deity/BirthDay are computed
+        // but read by no view, so omitted); the history shows "Alignment shifted <direction>: <description>".
+        private static void RenderAlignment(CharInfoComponentType type, CharInfoAlignmentVM al, ICharSheetSink sink)
+        {
+            if (type == CharInfoComponentType.AlignmentWheel)
+            {
+                var items = new List<UIElement>();
+                items.Add(new TextElement(() => "Alignment: " + AlignmentText(al)));
+                if (!string.IsNullOrEmpty(al.MythicLevel)) items.Add(new TextElement(() => "Mythic: " + al.MythicLevel));
+                sink.ListSection("Alignment", items);
+                return;
+            }
+            // History (AlignmentHistory / BiographyAlignmentHistory).
+            var hist = al.AlignmentHistory;
+            if (hist == null || hist.Count == 0) return;
+            var lines = new List<UIElement>();
+            string shifted = (string)S.AlignmentShifted;
+            foreach (var rec in hist)
+            {
+                var r = rec;
+                lines.Add(new TextElement(() => shifted + " " + (string)UIUtility.GetAlignmentShiftDirectionText(r.Direction)
+                    + (string.IsNullOrEmpty(r.Description) ? "" : ": " + r.Description)));
+            }
+            sink.ListSection((string)S.History, lines);
+        }
+
+        private static string AlignmentText(CharInfoAlignmentVM al)
+            => al.IsUndetectable ? (string)S.AlignmentUndetectable : (string)UIUtility.GetAlignmentName(al.CurrentAlignment);
+
+        // Companion stories — each a title (heading) + its text. Matches CharInfoStoriesVM.Stories.
+        private static void RenderStories(CharInfoStoriesVM st, ICharSheetSink sink)
+        {
+            if (st.Stories == null || st.Stories.Count == 0) return;
+            var items = new List<UIElement>();
+            foreach (var story in st.Stories)
+            {
+                var s = story;
+                if (!string.IsNullOrEmpty(s.Title)) items.Add(new TextElement(s.Title, "heading"));
+                if (!string.IsNullOrEmpty(s.StoryText)) items.Add(new TextElement(() => s.StoryText));
+            }
+            if (items.Count > 0) sink.ListSection("Stories", items);
         }
 
         private static void RenderNamePortrait(CharInfoNameAndPortraitVM np, ICharSheetSink sink)
@@ -248,11 +325,84 @@ namespace WrathAccess.Screens
             sink.StatGroup(g);
         }
 
-        // Features / feats / special abilities — grouped under headings; each drills into its tooltip.
-        // Same shape as chargen's BuildFeatures (CharInfoFeatureGroupVM list).
-        private static void RenderAbilities(CharInfoAbilitiesVM ab, ICharSheetSink sink)
+        private static UITextCharSheet S => UIStrings.Instance.CharacterSheet;
+
+        // The Martial page's composite block. We mirror CharInfoMartialPCView.RefreshView's bind order
+        // exactly (it does NOT bind the VM's DefenceBlock — defence shows as its own DefenceMain block):
+        // BAB (main/melee/ranged), Initiative, Spell Resistance, Combat Maneuver, Weapon Proficiency,
+        // Damage Reduction, Energy Resistance. BAB/proficiency/DR/resistance reuse the chargen patterns.
+        private static void RenderMartial(CharInfoMartialVM m, ICharSheetSink sink)
         {
-            var groups = ab.ShowGroupList;
+            var bab = new List<UIElement>();
+            AddBab(bab, m.MainBab, (string)S.BAB);
+            AddBab(bab, m.MeleeBab, (string)S.BABMelee);
+            AddBab(bab, m.RangedBab, (string)S.BABRanged);
+            if (bab.Count > 0) sink.ListSection((string)S.Attack, bab);
+
+            var g = new StatGroup((string)S.MartialQualities);
+            g.Row(CharInfoStatRows.Value(m.Initiative, signed: true));
+            g.Row(CharInfoStatRows.Value(m.SpellResistance, signed: false));
+            var cm = m.CombatManeuver;
+            if (cm != null)
+            {
+                // The VM names CMB/CMD just "Bonus"/"Defense"; prefix so they're unambiguous out of context.
+                g.Row(CharInfoStatRows.Value(cm.CMB, signed: true, nameOverride: (string)S.CombatManeuver + ", " + (string)S.Bonus));
+                g.Row(CharInfoStatRows.Value(cm.CMD, signed: false, nameOverride: (string)S.CombatManeuver + ", " + (string)S.Defense));
+            }
+            sink.StatGroup(g);
+
+            // Each of these sections' only tooltip in-game is a glossary on its header label
+            // (m_Label.SetGlossaryTooltip — "WeaponProficiency"/"DR"/"ER"); the entries themselves carry no
+            // per-row tooltip and their per-feature description is deliberately not rendered (m_Description
+            // unwired). The FlowSheet has no focusable header, so we surface the category glossary as each
+            // entry's drill-in (the real glossary key, not invented text).
+            var wp = m.WeaponProficiency?.Data;
+            if (wp != null && wp.Count > 0)
+            {
+                var items = new List<UIElement>();
+                foreach (var e in wp) { var entry = e; items.Add(new TextElement(() => entry.DisplayName, tooltip: () => new TooltipTemplateGlossary("WeaponProficiency"))); }
+                sink.ListSection((string)S.WeaponProficiency, items);
+            }
+
+            var dr = m.DamageReduction?.Data;
+            if (dr != null && dr.Count > 0)
+            {
+                var items = new List<UIElement>();
+                foreach (var e in dr) { var entry = e; items.Add(new TextElement(() => entry.Value + "/" + string.Join(", ", entry.Exceptions.ToArray()), tooltip: () => new TooltipTemplateGlossary("DR"))); }
+                sink.ListSection((string)S.DamageReduction, items);
+            }
+
+            var er = m.EnergyResistance?.Data;
+            if (er != null && er.Count > 0)
+            {
+                var items = new List<UIElement>();
+                foreach (var e in er) { var entry = e; items.Add(new TextElement(() => entry.Immunity ? entry.Type + ", immunity" : entry.Type + " " + entry.Value, tooltip: () => new TooltipTemplateGlossary("ER"))); }
+                sink.ListSection((string)S.EnergyRsistance, items);
+            }
+        }
+
+        private static void AddBab(List<UIElement> items, CharInfoBABVM bab, string label)
+        {
+            if (bab == null) return;
+            items.Add(new TextElement(() => label + ", " + BabString(bab), tooltip: () => bab.Tooltip));
+        }
+
+        // Mirrors CharInfoBABView.FillData: first attack always signed; later ones show "-" when <= 0.
+        private static string BabString(CharInfoBABVM bab)
+        {
+            var vals = bab.BabValue;
+            if (vals == null || vals.Count == 0) return "+0";
+            var parts = new List<string>(vals.Count);
+            for (int i = 0; i < vals.Count; i++)
+                parts.Add((vals[i] <= 0 && i != 0) ? "-" : (vals[i] >= 0 ? "+" + vals[i] : vals[i].ToString()));
+            return string.Join("/", parts);
+        }
+
+        // Features / feats / special abilities / buffs — grouped under headings; each drills into its tooltip.
+        // Same shape as chargen's BuildFeatures (CharInfoFeatureGroupVM list). Abilities and Buffs &
+        // Conditions both render this way (both expose ShowGroupList of CharInfoFeatureGroupVM).
+        private static void RenderFeatureGroups(List<CharInfoFeatureGroupVM> groups, string label, ICharSheetSink sink)
+        {
             if (groups == null) return;
             var items = new List<UIElement>();
             foreach (var group in groups)
@@ -265,7 +415,7 @@ namespace WrathAccess.Screens
                     items.Add(new TextElement(() => FeatureName(feat), tooltip: () => feat.Tooltip));
                 }
             }
-            if (items.Count > 0) sink.ListSection("Abilities", items);
+            if (items.Count > 0) sink.ListSection(label, items);
         }
 
         private static string FeatureName(CharInfoFeatureVM f) // rank shows only when stacked (>1), like the badge

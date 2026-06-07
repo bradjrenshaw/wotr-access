@@ -41,6 +41,11 @@ namespace WrathAccess.Screens
             /// <summary>Shared progressions (background, race-shared tracks, etc.). Prefab field:
             /// <c>m_WidgetListSharedProgressions</c>.</summary>
             public bool IncludeShared { get; set; } = true;
+            /// <summary>Render every class band rather than selecting one by blueprint. The in-game
+            /// character sheet's UnitProgressionView draws all of <c>ClassProgressionVms</c> unfiltered
+            /// (a real multiclass unit has a band per class); chargen's preview keeps the stale-band
+            /// filtering (default off). When on, <c>selectedClass</c> is ignored.</summary>
+            public bool AllClassBands { get; set; }
         }
 
         // Each ClassProgressionVM keeps its class/archetype private; we reflect them to compute the
@@ -61,9 +66,16 @@ namespace WrathAccess.Screens
             // second band (it holds the last two classes touched, newest first), even though the preview
             // unit itself has only the current class. Render only the band for the selected class; fall
             // back to the first (newest) band if we can't match by blueprint.
-            var bands = options.IncludeClasses
-                ? new List<ClassProgressionVM>(SelectBands(prog.ClassProgressionVms, selectedClass))
-                : new List<ClassProgressionVM>();
+            var bands = new List<ClassProgressionVM>();
+            if (options.IncludeClasses)
+            {
+                if (options.AllClassBands)
+                {
+                    if (prog.ClassProgressionVms != null)
+                        foreach (var c in prog.ClassProgressionVms) if (c != null) bands.Add(c);
+                }
+                else bands.AddRange(SelectBands(prog.ClassProgressionVms, selectedClass));
+            }
 
             var sheet = new FlowSheet("Progression");
 

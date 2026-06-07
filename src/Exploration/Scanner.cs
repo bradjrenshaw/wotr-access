@@ -240,6 +240,13 @@ namespace WrathAccess.Exploration
             if (!SameArea(Geo.Live(refUnit), dest)) { Speak("Can't reach the cursor, no path"); return; }
 
             ClickGroundHandler.MoveSelectedUnitsToPoint(dest);
+            // Engage the game's camera follower on the lead unit so the camera tracks it as it walks (and,
+            // because IsOn is persistent and TryFollow re-targets to the selected unit every frame, through
+            // later moves/selections too). The move flow itself never touches the camera — in the base game
+            // follow-mode is engaged separately (double-click portrait / FollowUnit key), which our keyboard
+            // selection doesn't do. Follow() internally honours the CameraFollowsUnit setting, so this is a
+            // no-op when the player has follow turned off.
+            Game.Instance?.CameraController?.Follower?.Follow(refUnit);
             Speak("Moving to cursor");
         }
 

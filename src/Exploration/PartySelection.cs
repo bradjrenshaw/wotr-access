@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Kingmaker;
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
-using Kingmaker.UI; // UISoundType
+using Kingmaker.UI.Common; // UIUtilityUnit.SetCharacterSelected (the game's own select path)
 using WrathAccess.Screens;
 
 namespace WrathAccess.Exploration
@@ -42,9 +42,8 @@ namespace WrathAccess.Exploration
 
         private static void DoSelectMember(int index)
         {
-            var sm = Game.Instance?.UI?.SelectionManager;
             var ring = BuildRing(index);
-            if (sm == null || ring.Count == 0)
+            if (ring.Count == 0)
             {
                 Tts.Speak("No party member " + (index + 1), interrupt: true);
                 return;
@@ -57,15 +56,14 @@ namespace WrathAccess.Exploration
             int pos = (current != null) ? ring.IndexOf(current) : -1;
             var unit = ring[(pos >= 0) ? (pos + 1) % ring.Count : 0];
 
-            // The portrait click plays this select sound before selecting (GroupCharacter.SelectUnit), so
-            // we replay it for parity. (Select-all plays no sound, so Ctrl+A stays silent, matching.)
-            UiSound.Play(UISoundType.CharacterSelect);
-            // single: true clears the rest and selects only this unit. ask: true mirrors the game's own
-            // portrait/world-click select: it lets the unit's "Selected" voice bark fire through the game's
-            // logic (Asks.Selected.Schedule), gated by the player's VoicedAskFrequency setting + the bark
-            // cooldown/chance — exactly as for a sighted player. We don't suppress or de-dupe it; our
-            // "X selected" announce just adds the name (the voice line doesn't reliably say who it is).
-            sm.SelectUnit(unit.View, single: true, sendEvent: true, ask: true);
+            // Route through the game's OWN single-character select — exactly what the "select character N"
+            // keybinding and a portrait click do (PartyCharacterVM.SetCharacterSelected → this). It both
+            // updates the SelectedUnit reactive (so the character sheet/inventory/etc. follow) AND the
+            // SelectedUnits set (via SwitchSelectionUnitInGroup), then scrolls the camera to the unit. Our
+            // old sm.SelectUnit only did the SelectedUnits half, so SelectedUnit stayed stale and the sheet
+            // never updated. follow:false matches the keybinding (recenter, not continuous follow). The
+            // unit's "selected" voice bark still fires through SelectUnit's ask path.
+            UIUtilityUnit.SetCharacterSelected(unit, follow: false);
             Tts.Speak(unit.CharacterName + " selected", interrupt: true);
         }
 

@@ -153,10 +153,10 @@ namespace WrathAccess.Screens
         {
             switch (block)
             {
-                case CharInfoNameAndPortraitVM np: RenderNamePortrait(np, sink); break;
-                case CharInfoLevelClassScoresVM lcs: RenderLevelClassScores(lcs, sink); break;
-                case CharInfoAttacksBlockVM atk: RenderAttacks(atk, sink); break;
-                case CharInfoDefenceBlockVM def: RenderDefence(def, sink); break;
+                case CharInfoNameAndPortraitVM np: CharSheetBlocks.NamePortrait(np, sink); break;
+                case CharInfoLevelClassScoresVM lcs: CharSheetBlocks.LevelClassScores(lcs, sink); break;
+                case CharInfoAttacksBlockVM atk: CharSheetBlocks.Attacks(atk, sink); break;
+                case CharInfoDefenceBlockVM def: CharSheetBlocks.Defence(def, sink); break;
                 case CharInfoSkillsBlockVM sk: RenderSkills(sk, sink); break;
                 case CharInfoAbilitiesVM ab: RenderFeatureGroups(ab.ShowGroupList, "Abilities", sink); break;
                 case CharInfoBuffsAndConditionsVM bc: RenderFeatureGroups(bc.ShowGroupList, "Buffs and conditions", sink); break;
@@ -210,111 +210,6 @@ namespace WrathAccess.Screens
                 if (!string.IsNullOrEmpty(s.StoryText)) items.Add(new TextElement(() => s.StoryText));
             }
             if (items.Count > 0) sink.ListSection("Stories", items);
-        }
-
-        private static void RenderNamePortrait(CharInfoNameAndPortraitVM np, ICharSheetSink sink)
-        {
-            var items = new List<UIElement> { new TextElement(() => "Name: " + np.UnitName) };
-            var mythic = np.MythicName?.Value;
-            if (!string.IsNullOrEmpty(mythic)) items.Add(new TextElement(() => "Mythic: " + np.MythicName.Value));
-            if (np.HitPoints != null)
-                items.Add(new TextElement(() => "Hit points: " + np.HitPoints.HpText.Value,
-                    tooltip: () => np.HitPoints.Tooltip.Value));
-            sink.ListSection("Character", items);
-        }
-
-        private static void RenderLevelClassScores(CharInfoLevelClassScoresVM lcs, ICharSheetSink sink)
-        {
-            // Visual order: header info (level, race/gender/alignment) reads first, then the block's
-            // ability scores, then the class list (prefab puts AbilityScores above ClassesList).
-            var xp = lcs.Experience;
-            if (xp != null)
-            {
-                var items = new List<UIElement> { new TextElement(() => "Level: " + xp.Level) };
-                items.Add(new TextElement(() => "Experience: " + xp.CurrentExp + " / " + xp.NextLevelExp));
-                if (xp.NegativeLevels > 0) items.Add(new TextElement(() => "Negative levels: " + xp.NegativeLevels));
-                sink.ListSection("Level", items);
-            }
-
-            var rga = lcs.RaceGenderAlignment;
-            if (rga != null)
-                sink.ListSection("Race", new List<UIElement>
-                {
-                    new TextElement(() => "Race: " + rga.RaceValue, tooltip: () => rga.RaceTooltip),
-                    new TextElement(() => "Gender: " + rga.GenderValue),
-                    new TextElement(() => "Alignment: " + rga.AlignmentDisplayValue, tooltip: () => rga.AlignmentTooltip),
-                });
-
-            if (lcs.AbilityScores?.AbilityScores != null)
-            {
-                var g = new StatGroup("Ability Scores", "Score", "Modifier");
-                foreach (var a in lcs.AbilityScores.AbilityScores) g.Row(CharInfoStatRows.Ability(a)); // carries the stat tooltip
-                sink.StatGroup(g);
-            }
-
-            var classes = lcs.Classes?.ClassVMs;
-            if (classes != null && classes.Count > 0)
-            {
-                var items = new List<UIElement>();
-                foreach (var c in classes) { var cc = c; items.Add(new TextElement(() => cc.ClassName + " " + cc.Level, tooltip: () => cc.Tooltip)); }
-                sink.ListSection("Classes", items);
-            }
-        }
-
-        private static void RenderAttacks(CharInfoAttacksBlockVM atk, ICharSheetSink sink)
-        {
-            var g = new StatGroup("Attacks", "Attack", "Damage", "Crit"); // prefab columns: weapon, attack, damage, crit
-            AddAttackRow(g, atk.MainHandAttack);
-            AddAttackRow(g, atk.OffHandAttack);
-            if (atk.AdditionalAttackEntities != null)
-                foreach (var a in atk.AdditionalAttackEntities) AddAttackRow(g, a);
-            if (g.Rows.Count > 0) sink.StatGroup(g);
-            else sink.ListSection("Attacks", new[] { new TextElement("No attacks.") });
-        }
-
-        private static void AddAttackRow(StatGroup g, CharInfoAttackEntityVM a)
-        {
-            if (a == null || string.IsNullOrEmpty(a.AttackName)) return;
-            // The *Label properties are the column labels; the actual values live in AttackData (the view
-            // does SetData(AttackData) for the value + SetLabel(*Label) for the heading).
-            g.Row(new StatRow(() => a.AttackName,
-                new System.Func<string>[] { () => Attacks(a.AttackData), () => a.AttackData?.Damage ?? "", () => Crit(a.AttackData) },
-                () => a.AttackTooltip));
-        }
-
-        private static string Attacks(UIUtilityItem.AttackData d) // e.g. "+6/+1"
-            => d?.Attacks == null ? "" : string.Join("/", d.Attacks.Select(n => UIUtility.AddSign(n)));
-
-        private static string Crit(UIUtilityItem.AttackData d) // threat range + multiplier, e.g. "19-20 x2"
-        {
-            if (d == null) return "";
-            var s = d.CritChance ?? "";
-            if (!string.IsNullOrEmpty(d.CritDamage)) s = (s.Length > 0 ? s + " " : "") + d.CritDamage;
-            return s;
-        }
-
-        private static void RenderDefence(CharInfoDefenceBlockVM def, ICharSheetSink sink)
-        {
-            var g = new StatGroup("Defense");
-            var ac = def.ArmorClass?.Value;
-            if (ac != null)
-            {
-                // Prefab order: AC, Flat-footed, Touch (verified via the layout dump).
-                g.Row(CharInfoStatRows.Value(ac.AC, signed: false));
-                g.Row(CharInfoStatRows.Value(ac.FlatFooted, signed: false));
-                g.Row(CharInfoStatRows.Value(ac.Touch, signed: false));
-            }
-            var st = def.SavingThrow?.Value;
-            if (st != null)
-            {
-                g.Row(CharInfoStatRows.Value(st.Fortitude, signed: true));
-                g.Row(CharInfoStatRows.Value(st.Reflex, signed: true));
-                g.Row(CharInfoStatRows.Value(st.Will, signed: true));
-            }
-            g.Row(CharInfoStatRows.Value(def.Initiative?.Value, signed: true));
-            g.Row(CharInfoStatRows.Value(def.Speed?.Value, signed: false));
-            g.Row(CharInfoStatRows.Value(def.Size?.Value, signed: false));
-            sink.StatGroup(g);
         }
 
         private static void RenderSkills(CharInfoSkillsBlockVM sk, ICharSheetSink sink)

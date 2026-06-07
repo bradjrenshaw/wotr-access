@@ -318,7 +318,22 @@ namespace WrathAccess.UI
         {
             var parts = new List<string>();
             var region = sheet.RegionAt(nr);
-            if ((regionEntry || region != sheet.RegionAt(r)) && region != null && !string.IsNullOrEmpty(region.Label))
+            bool entered = regionEntry || region != sheet.RegionAt(r);
+
+            // A bar reads each cell as its own full focus message (so a radio button announces as one), with
+            // the group label only on entry and only when it isn't just the control's own label repeated.
+            if (region != null && region.ReadCellFocusMessage)
+            {
+                if (entered && !string.IsNullOrEmpty(region.Label) && region.Label != next.GetLabelText())
+                    parts.Add(region.Label);
+                var msg = next.GetFocusMessage().Resolve();
+                parts.Add(string.IsNullOrWhiteSpace(msg) ? "blank" : msg);
+                WrathAccess.UiSound.Hover();
+                Speak(string.Join(", ", parts), interrupt: true);
+                return;
+            }
+
+            if (entered && region != null && !string.IsNullOrEmpty(region.Label))
                 parts.Add(region.Label + ", " + region.TypeName);
             if (nc != c) { var h = sheet.ColumnHeader(nr, nc); if (!string.IsNullOrEmpty(h)) parts.Add(h); }
             if (nr != r && nc != 0) { var rl = sheet.RowLabel(nr); if (!string.IsNullOrEmpty(rl)) parts.Add(rl); }

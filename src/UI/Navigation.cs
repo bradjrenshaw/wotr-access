@@ -22,6 +22,6 @@ namespace WrathAccess.UI
 
         public static void AnnounceCurrent() => Active?.AnnounceCurrent();
 
-        public static void Focus(UIElement element) => Active?.Focus(element);
+        public static void Focus(UIElement element, bool announce = true) => Active?.Focus(element, announce);
     }
 }

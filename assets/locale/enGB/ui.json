@@ -40,6 +40,7 @@
   "action.raise": "Raise",
   "action.lower": "Lower",
   "action.choose": "Choose",
+  "action.menu": "Actions",
   "action.edit": "Edit",
 
   "value.on": "on",
@@ -56,6 +57,8 @@
   "value.points_back": "{count} points back",
   "value.ability_summary": "{name} {total}, {mod}, {points} points left",
   "value.blank": "blank",
+  "inventory.sort": "Sort",
+  "inventory.search": "Search",
   "value.options": "{count} options",
   "value.targeting": "targeting",
   "value.amount": "{count} {unit}",

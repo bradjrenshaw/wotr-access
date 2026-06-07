@@ -34,6 +34,11 @@ namespace WrathAccess.UI
         /// <summary>The column header announced when the cursor enters data column <paramref name="col"/>
         /// (0-based across the row), or null. Metadata — not a focusable cell.</summary>
         public virtual string ColumnHeader(int col) => null;
+
+        /// <summary>When true, the navigator reads each cell as its own full focus message (label, role,
+        /// selected/value, …) instead of the table-style region/column-header/row-label framing — so a row
+        /// of controls (a <see cref="BarRegion"/>) announces them as the controls they are.</summary>
+        public virtual bool ReadCellFocusMessage => false;
     }
 
     /// <summary>A grid block: column-0 is the row label, columns 1..n are named data columns.</summary>
@@ -74,6 +79,27 @@ namespace WrathAccess.UI
         }
     }
 
+    /// <summary>A horizontal bar: ONE row of cells (a filter toggle row, a sort/swap control bar). Cells
+    /// read as their own full focus message — "Weapon, radio button, selected" — not table cells, so the
+    /// controls announce as what they are and nothing reads as a "table". Pads/empties are skipped.</summary>
+    public sealed class BarRegion : Region
+    {
+        private readonly List<UIElement> _cells = new List<UIElement>();
+        public override string TypeName => "bar";
+        public override bool ReadCellFocusMessage => true;
+        public BarRegion(string label) : base(label) => Blanks = BlankFill.Skip;
+
+        /// <summary>Append a control to the bar's single row.</summary>
+        public BarRegion Cell(UIElement element)
+        {
+            _cells.Add(element);
+            Rows.Clear(); RowTooltips.Clear();   // the bar is one row, rebuilt as cells are added
+            Rows.Add(_cells.ToArray());
+            RowTooltips.Add(null);               // each control supplies its own tooltip
+            return this;
+        }
+    }
+
     /// <summary>
     /// A customizable 2-D grid built from stacked <see cref="Region"/>s — the unified replacement for a
     /// screen's bundle of tabbed lists/tables. The whole sheet is ONE Tab-stop; arrows move a cell cursor
@@ -85,7 +111,7 @@ namespace WrathAccess.UI
     /// </summary>
     public sealed class FlowSheet : Container
     {
-        private struct GCell { public UIElement Element; public Region Region; public bool Blank; }
+        private struct GCell { public UIElement Element; public Region Region; public bool Blank; public bool Pad; }
 
         private readonly List<Region> _regions = new List<Region>();
         private readonly List<List<GCell>> _grid = new List<List<GCell>>();      // [row][col]
@@ -100,6 +126,7 @@ namespace WrathAccess.UI
             var r = new TableRegion(label, columns); _regions.Add(r); return r;
         }
         public ListRegion List(string label) { var r = new ListRegion(label); _regions.Add(r); return r; }
+        public BarRegion Bar(string label) { var r = new BarRegion(label); _regions.Add(r); return r; }
         public void AddRegion(Region r) { if (r != null) _regions.Add(r); }
         public void RemoveRegion(Region r) { _regions.Remove(r); }
         public bool HasRegion(Region r) => _regions.Contains(r);
@@ -129,13 +156,17 @@ namespace WrathAccess.UI
                     if (row.Count > _cols) _cols = row.Count;
                 }
             }
-            for (int r = 0; r < _grid.Count; r++) // pad ragged rows to the widest, so positions are landable
+            // Pad rows narrower than the widest so the matrix is rectangular. These pads exist only because
+            // ANOTHER region is wider (e.g. a filter bar over a 5-column item table); they're filler, not
+            // real cells, so they're never landable (Pad). Explicit in-row blanks (a null cell for column
+            // alignment WITHIN a table) are a different thing and stay visitable in a Visit region.
+            for (int r = 0; r < _grid.Count; r++)
             {
                 var region = _grid[r].Count > 0 ? _grid[r][0].Region : null;
                 while (_grid[r].Count < _cols)
                 {
                     var b = new BlankCell(); Add(b);
-                    _grid[r].Add(new GCell { Element = b, Region = region, Blank = true });
+                    _grid[r].Add(new GCell { Element = b, Region = region, Blank = true, Pad = true });
                 }
             }
         }
@@ -156,6 +187,7 @@ namespace WrathAccess.UI
         {
             if (r < 0 || r >= _grid.Count || c < 0 || c >= _grid[r].Count) return false;
             var cell = _grid[r][c];
+            if (cell.Pad) return false; // width-normalizing filler — never a target
             if (cell.Region != null && cell.Region.Blanks == BlankFill.Skip)
                 return !cell.Blank && cell.Element != null && cell.Element.CanFocus;
             return true;

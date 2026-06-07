@@ -1,10 +1,14 @@
 using System.Collections.Generic;
 using System.Text;
+using System.Linq;
 using Kingmaker;
+using Kingmaker.UI.Common; // UIUtility.AddSign, UIUtilityItem.AttackData
 using Kingmaker.UI.MVVM._PCView.ServiceWindows.CharacterInfo; // CharInfoComponentType, CharInfoPageType (enums)
 using Kingmaker.UI.MVVM._VM.ServiceWindows;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Abilities;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.LevelClassScores;
+using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.Attack;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.Defence;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.NameAndPortrait;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Skills;
@@ -123,8 +127,10 @@ namespace WrathAccess.Screens
             {
                 case CharInfoNameAndPortraitVM np: RenderNamePortrait(np, sink); break;
                 case CharInfoLevelClassScoresVM lcs: RenderLevelClassScores(lcs, sink); break;
+                case CharInfoAttacksBlockVM atk: RenderAttacks(atk, sink); break;
                 case CharInfoDefenceBlockVM def: RenderDefence(def, sink); break;
                 case CharInfoSkillsBlockVM sk: RenderSkills(sk, sink); break;
+                case CharInfoAbilitiesVM ab: RenderAbilities(ab, sink); break;
                 default: sink.ListSection(type.ToString(), new[] { new TextElement("Not shown yet.") }); break;
             }
         }
@@ -134,7 +140,9 @@ namespace WrathAccess.Screens
             var items = new List<UIElement> { new TextElement(() => "Name: " + np.UnitName) };
             var mythic = np.MythicName?.Value;
             if (!string.IsNullOrEmpty(mythic)) items.Add(new TextElement(() => "Mythic: " + np.MythicName.Value));
-            if (np.HitPoints != null) items.Add(new TextElement(() => "Hit points: " + np.HitPoints.HpText.Value));
+            if (np.HitPoints != null)
+                items.Add(new TextElement(() => "Hit points: " + np.HitPoints.HpText.Value,
+                    tooltip: () => np.HitPoints.Tooltip.Value));
             sink.ListSection("Character", items);
         }
 
@@ -155,15 +163,15 @@ namespace WrathAccess.Screens
             if (rga != null)
                 sink.ListSection("Race", new List<UIElement>
                 {
-                    new TextElement(() => "Race: " + rga.RaceValue),
+                    new TextElement(() => "Race: " + rga.RaceValue, tooltip: () => rga.RaceTooltip),
                     new TextElement(() => "Gender: " + rga.GenderValue),
-                    new TextElement(() => "Alignment: " + rga.AlignmentDisplayValue),
+                    new TextElement(() => "Alignment: " + rga.AlignmentDisplayValue, tooltip: () => rga.AlignmentTooltip),
                 });
 
             if (lcs.AbilityScores?.AbilityScores != null)
             {
                 var g = new StatGroup("Ability Scores", "Score", "Modifier");
-                foreach (var a in lcs.AbilityScores.AbilityScores) g.Row(CharInfoStatRows.Ability(a));
+                foreach (var a in lcs.AbilityScores.AbilityScores) g.Row(CharInfoStatRows.Ability(a)); // carries the stat tooltip
                 sink.StatGroup(g);
             }
 
@@ -171,9 +179,41 @@ namespace WrathAccess.Screens
             if (classes != null && classes.Count > 0)
             {
                 var items = new List<UIElement>();
-                foreach (var c in classes) { var cc = c; items.Add(new TextElement(() => cc.ClassName + " " + cc.Level)); }
+                foreach (var c in classes) { var cc = c; items.Add(new TextElement(() => cc.ClassName + " " + cc.Level, tooltip: () => cc.Tooltip)); }
                 sink.ListSection("Classes", items);
             }
+        }
+
+        private static void RenderAttacks(CharInfoAttacksBlockVM atk, ICharSheetSink sink)
+        {
+            var g = new StatGroup("Attacks", "Attack", "Damage", "Crit"); // prefab columns: weapon, attack, damage, crit
+            AddAttackRow(g, atk.MainHandAttack);
+            AddAttackRow(g, atk.OffHandAttack);
+            if (atk.AdditionalAttackEntities != null)
+                foreach (var a in atk.AdditionalAttackEntities) AddAttackRow(g, a);
+            if (g.Rows.Count > 0) sink.StatGroup(g);
+            else sink.ListSection("Attacks", new[] { new TextElement("No attacks.") });
+        }
+
+        private static void AddAttackRow(StatGroup g, CharInfoAttackEntityVM a)
+        {
+            if (a == null || string.IsNullOrEmpty(a.AttackName)) return;
+            // The *Label properties are the column labels; the actual values live in AttackData (the view
+            // does SetData(AttackData) for the value + SetLabel(*Label) for the heading).
+            g.Row(new StatRow(() => a.AttackName,
+                new System.Func<string>[] { () => Attacks(a.AttackData), () => a.AttackData?.Damage ?? "", () => Crit(a.AttackData) },
+                () => a.AttackTooltip));
+        }
+
+        private static string Attacks(UIUtilityItem.AttackData d) // e.g. "+6/+1"
+            => d?.Attacks == null ? "" : string.Join("/", d.Attacks.Select(n => UIUtility.AddSign(n)));
+
+        private static string Crit(UIUtilityItem.AttackData d) // threat range + multiplier, e.g. "19-20 x2"
+        {
+            if (d == null) return "";
+            var s = d.CritChance ?? "";
+            if (!string.IsNullOrEmpty(d.CritDamage)) s = (s.Length > 0 ? s + " " : "") + d.CritDamage;
+            return s;
         }
 
         private static void RenderDefence(CharInfoDefenceBlockVM def, ICharSheetSink sink)
@@ -207,6 +247,29 @@ namespace WrathAccess.Screens
             foreach (var s in sk.Skills) g.Row(CharInfoStatRows.Skill(s));
             sink.StatGroup(g);
         }
+
+        // Features / feats / special abilities — grouped under headings; each drills into its tooltip.
+        // Same shape as chargen's BuildFeatures (CharInfoFeatureGroupVM list).
+        private static void RenderAbilities(CharInfoAbilitiesVM ab, ICharSheetSink sink)
+        {
+            var groups = ab.ShowGroupList;
+            if (groups == null) return;
+            var items = new List<UIElement>();
+            foreach (var group in groups)
+            {
+                if (group == null || group.IsEmpty) continue;
+                if (!string.IsNullOrEmpty(group.Label)) items.Add(new TextElement(group.Label, "heading"));
+                foreach (var f in group.FeatureList)
+                {
+                    var feat = f;
+                    items.Add(new TextElement(() => FeatureName(feat), tooltip: () => feat.Tooltip));
+                }
+            }
+            if (items.Count > 0) sink.ListSection("Abilities", items);
+        }
+
+        private static string FeatureName(CharInfoFeatureVM f) // rank shows only when stacked (>1), like the badge
+            => f.Rank.HasValue && f.Rank.Value > 1 ? f.DisplayName + " " + f.Rank.Value : f.DisplayName;
 
         private static string PageName(CharInfoPageType p)
         {

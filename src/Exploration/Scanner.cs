@@ -51,11 +51,28 @@ namespace WrathAccess.Exploration
         public static void CursorToSelected() { if (Active) CommitCursor(); }
         public static void AnnounceCursor() { if (Active) SpeakCursor(); }
         public static void AnnounceParty() { if (Active) SpeakParty(); }
-        public static void InteractSelected() { if (Active) DoInteract(Selected, "No item selected"); }
+        // While aiming an ability, the act-on-target inputs commit the cast instead of their normal job:
+        // I → cast on the selected scanner item, Enter → cast at the cursor, Backspace → cancel aim.
+        public static void InteractSelected()
+        {
+            if (!Active) return;
+            if (Targeting.Aiming) { Targeting.CommitOn(Selected); return; }
+            DoInteract(Selected, "No item selected");
+        }
         // Enter = left click: interact with the object/unit the cursor is INSIDE (not the scanner's list
         // selection). Same context-sensitive action a left click would do (select/attack/talk/open/loot).
-        public static void InteractAtCursor() { if (Active) DoInteract(CursorTarget.Inside(), "Nothing here"); }
-        public static void MoveToCursor() { if (Active) DoMoveToCursor(); }
+        public static void InteractAtCursor()
+        {
+            if (!Active) return;
+            if (Targeting.Aiming) { Targeting.CommitAtCursor(); return; }
+            DoInteract(CursorTarget.Inside(), "Nothing here");
+        }
+        public static void MoveToCursor()
+        {
+            if (!Active) return;
+            if (Targeting.Aiming) { Targeting.Cancel(); return; }
+            DoMoveToCursor();
+        }
         public static void ToggleDebugShowAll()
         {
             if (!Active) return;

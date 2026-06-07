@@ -49,6 +49,7 @@ namespace WrathAccess
                 WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.BuildOverlays();
                 ScreenManager.Initialize();
                 GameLogReader.Initialize(); // read barks + narrative log lines (no dialogue window)
+                WarningReader.Initialize(); // speak the game's "can't do that" warnings (refusal reasons)
 
                 Log.Log("WrathAccess initialized. " + BuildStamp());
                 Tts.Speak("Wrath Access loaded.");
@@ -223,7 +224,11 @@ namespace WrathAccess
             InputManager.Register("nav.primary", "Primary action / interact",
                 WrathAccess.Exploration.Scanner.InteractAtCursor).AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
             InputManager.Register("nav.secondary", "Secondary action").AddBinding(KeyCode.Backspace);
-            InputManager.Register("nav.back", "Back").AddBinding(KeyCode.Escape);
+            // Escape: the navigator consumes it as Back inside a UI screen; in plain exploration it bubbles
+            // here, where it cancels ability targeting if we're aiming (otherwise a no-op).
+            InputManager.Register("nav.back", "Back",
+                () => { if (WrathAccess.Exploration.Targeting.Aiming) WrathAccess.Exploration.Targeting.Cancel(); })
+                .AddBinding(KeyCode.Escape);
             // Space: in a UI state it reads the focused control's tooltip (handled by the navigator); in
             // plain exploration the navigator stands down and this fires instead — the game's pause toggle,
             // matching the game's own Space binding. (A move queued while paused only walks once unpaused.)

@@ -18,6 +18,7 @@
   "role.collapsed": "collapsed",
 
   "state.disabled": "disabled",
+  "state.enabled": "enabled",
   "state.selected": "selected",
 
   "action.select": "Select",

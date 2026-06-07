@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using UnityEngine;
 
 namespace WrathAccess.Exploration
@@ -17,6 +18,9 @@ namespace WrathAccess.Exploration
 
         /// <summary>Only listed when the player could actually know about it (fog/vision). Default: yes.</summary>
         public virtual bool IsVisible => true;
+
+        /// <summary>The unit this item represents, for ability targeting (null = target its point instead).</summary>
+        public virtual UnitEntityData TargetUnit => null;
 
         /// <summary>
         /// XZ radius of the thing's footprint, in world units (metres). Large creatures/objects span

@@ -18,6 +18,8 @@ namespace WrathAccess.Exploration
 
         public override bool IsUnit => true;
 
+        public override UnitEntityData TargetUnit => _unit; // ability targeting picks this unit
+
         // No per-unit sounds yet, so units sonify with the generic "unknown" cue at their location, like
         // map objects. We skip our OWN party (they cluster on the cursor and would drown out the field);
         // enemies and neutrals drone so you can locate them. (Party still fires the object enter/exit cue.)

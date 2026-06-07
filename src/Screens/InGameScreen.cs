@@ -32,30 +32,36 @@ namespace WrathAccess.Screens
 
         private UIElement _watchedSlot;
         private string _watchedToggle;
+        private bool _watchedEnabled;
 
         public override void OnUpdate()
         {
-            WatchToggle();
+            WatchSlot();
             if (Navigation.HasFocus) return; // can't rebuild under the user (the proxies read live anyway)
             Build();
         }
 
-        // While a toggle slot is focused, announce when its state (on / off / targeting) actually changes —
-        // this reflects the SETTLED state, including the game's async revert (e.g. Saddle Up flips to
-        // targeting then reverts to off with no mount). Baseline (silent) on each new focus; the focus
-        // announcement already speaks the initial state. Only toggles are watched (ToggleStateKey is null
-        // otherwise), so cooldowns/charges don't chatter.
-        private void WatchToggle()
+        // While an action-bar slot is focused, announce when its live state changes under you — the toggle
+        // on/off/targeting (incl. the game's async settle/revert, e.g. Saddle Up), and the enabled/disabled
+        // gate (e.g. Charge becoming usable once mounted). Baseline (silent) on each new focus; the focus
+        // announcement already spoke the initial state. Only the focused slot is watched, so it never chatters.
+        private void WatchSlot()
         {
             var slot = Navigation.Active?.Current as ProxyActionBarSlot;
-            if (slot == null) { _watchedSlot = null; _watchedToggle = null; return; }
-            string state = slot.ToggleStateKey;
-            if (!ReferenceEquals(slot, _watchedSlot)) { _watchedSlot = slot; _watchedToggle = state; return; }
-            if (state != _watchedToggle)
+            if (slot == null) { _watchedSlot = null; return; }
+            string toggle = slot.ToggleStateKey;
+            bool enabled = slot.Enabled;
+            if (!ReferenceEquals(slot, _watchedSlot)) { _watchedSlot = slot; _watchedToggle = toggle; _watchedEnabled = enabled; return; }
+            if (toggle != _watchedToggle)
             {
-                _watchedToggle = state;
-                if (state != null)
-                    Tts.Speak(LocalizationManager.GetOrDefault("ui", state, state), interrupt: false);
+                _watchedToggle = toggle;
+                if (toggle != null) Tts.Speak(LocalizationManager.GetOrDefault("ui", toggle, toggle), interrupt: false);
+            }
+            if (enabled != _watchedEnabled)
+            {
+                _watchedEnabled = enabled;
+                Tts.Speak(LocalizationManager.GetOrDefault("ui", enabled ? "state.enabled" : "state.disabled",
+                    enabled ? "enabled" : "disabled"), interrupt: false);
             }
         }
 

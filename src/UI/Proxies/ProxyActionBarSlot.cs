@@ -48,6 +48,13 @@ namespace WrathAccess.UI.Proxies
             get { var s = Slot; return s != null && !(s is MechanicActionBarSlotEmpty) && !s.IsBad(); }
         }
 
+        /// <summary>Live "can use it now" — mirrors the game's own enabled/disabled gate exactly
+        /// (<c>IsPossibleActive</c>, the same value the game greys the slot by). The screen watches this while
+        /// focused so a slot becoming castable/uncastable is announced. We deliberately do NOT invent an
+        /// "enabled" state the game doesn't show (e.g. a charge that's only usable in combat reads disabled
+        /// out of combat, just as the game greys it).</summary>
+        public bool Enabled { get { var s = Slot; return s != null && s.IsPossibleActive(); } }
+
         public override TooltipBaseTemplate GetTooltipTemplate() => Slot?.GetTooltipTemplate();
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
@@ -72,7 +79,7 @@ namespace WrathAccess.UI.Proxies
                         : new ValueAnnouncement(Message.Raw(res.ToString()));
                 }
             }
-            yield return new EnabledAnnouncement(s.IsPossibleActive());
+            yield return new EnabledAnnouncement(Enabled); // delegation-aware (mounted charge etc.)
         }
 
         // The resource-count's unit, by slot kind (singular base; caller adds "s" for plural). Null = bare
@@ -88,7 +95,7 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.activate"),
-                _ => _vm?.OnMainClick());
+                _ => WrathAccess.Exploration.Targeting.Activate(_vm)); // branches: self-cast / aim / toggle
         }
     }
 }

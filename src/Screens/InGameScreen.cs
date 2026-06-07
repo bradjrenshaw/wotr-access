@@ -1,5 +1,7 @@
 using Kingmaker;
+using Kingmaker.UI.Common; // UIUtility.GetServiceWindowsLabel
 using Kingmaker.UI.MVVM._VM.ActionBar;
+using Kingmaker.UI.MVVM._VM.ServiceWindows; // ServiceWindowsVM, ServiceWindowsType
 using Kingmaker.UI.UnitSettings; // MechanicActionBarSlotEmpty
 using WrathAccess.Localization;
 using WrathAccess.UI;
@@ -83,6 +85,32 @@ namespace WrathAccess.Screens
             Add(bar);
 
             Add(new ProxyActionButton("Log", () => true, ModLogScreen.Open));
+
+            // Service-window buttons (the game's bottom bar): one Tab-stop list after Log. Activating one
+            // calls the game's own open path (HandleOpenWindowOfType, which creates the menu + toggles the
+            // window), labeled with the game's own localized name.
+            var windows = new ListContainer("Windows");
+            foreach (var type in ServiceButtons)
+            {
+                var t = type; // capture for the live closures
+                windows.Add(new ProxyActionButton(() => UIUtility.GetServiceWindowsLabel(t), () => true,
+                    () => ServiceWindows()?.HandleOpenWindowOfType(t), actionVerb: "open"));
+            }
+            Add(windows);
+        }
+
+        // The service windows we expose (in-game). Mythic / Equipment / SmartItem are conditional — added
+        // later with their availability checks.
+        private static readonly ServiceWindowsType[] ServiceButtons =
+        {
+            ServiceWindowsType.CharacterInfo, ServiceWindowsType.Inventory, ServiceWindowsType.Spellbook,
+            ServiceWindowsType.Journal, ServiceWindowsType.Encyclopedia, ServiceWindowsType.LocalMap,
+        };
+
+        private static ServiceWindowsVM ServiceWindows()
+        {
+            var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
+            return rc?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
         }
 
         private static ActionBarVM ActionBar()

@@ -98,7 +98,7 @@ namespace WrathAccess.Screens
 
             // Service windows (layer 10) — one at a time, via CurrentServiceWindow.
             RegisterServiceWindow("Inventory", ServiceWindowsType.Inventory, ServiceWindowsType.Equipment, ServiceWindowsType.SmartItem);
-            RegisterServiceWindow("Character", ServiceWindowsType.CharacterInfo);
+            Register(new CharacterInfoScreen()); // character sheet (CharacterInfo window), navigable; layer 10
             RegisterServiceWindow("Mythic Path", ServiceWindowsType.Mythic);
             RegisterServiceWindow("Spellbook", ServiceWindowsType.Spellbook);
             RegisterServiceWindow("Journal", ServiceWindowsType.Journal);

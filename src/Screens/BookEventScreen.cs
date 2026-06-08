@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Kingmaker;
 using Kingmaker.DialogSystem.Blueprints; // BlueprintBookPage
 using Kingmaker.UI.MVVM._VM.Dialog.BookEvent; // BookEventVM
+using Kingmaker.UI.MVVM._VM.Dialog.Interchapter; // InterchapterVM (a BookEventVM subclass)
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
 
@@ -16,8 +17,12 @@ namespace WrathAccess.Screens
     /// A page carries several cues (the paragraphs, shown together) plus the answers; we read the whole
     /// passage when a new page appears (keyed on <c>BlueprintBookPage</c>, like the dialogue cue), and the
     /// passage is the first focusable element so you can re-read it. Choosing an answer advances to the next
-    /// page in place (new passage + choices) until the book closes. The skill-check "choose a character"
-    /// sub-step and Interchapter/Epilogue narration are separate and deferred for now.
+    /// page in place (new passage + choices) until the book closes.
+    ///
+    /// Interchapter/epilogue narration (e.g. "Trapped in the Darkness") is the same thing — <see
+    /// cref="InterchapterVM"/> derives from BookEventVM, just stored in a separate context slot and carrying
+    /// a page <c>Title</c> — so we pick that VM up too and read its title ahead of the passage. The
+    /// skill-check "choose a character" sub-step is still deferred.
     /// </summary>
     public sealed class BookEventScreen : Screen
     {
@@ -30,8 +35,9 @@ namespace WrathAccess.Screens
 
         private static BookEventVM Vm()
         {
-            var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
-            return rc?.InGameVM?.StaticPartVM?.DialogContextVM?.BookEventVM?.Value;
+            var ctx = Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.DialogContextVM;
+            // Interchapter/epilogue is a BookEventVM subclass in its own slot; treat it the same.
+            return ctx?.BookEventVM?.Value ?? ctx?.InterchapterVM?.Value;
         }
 
         public override bool IsActive() => Vm() != null;
@@ -66,10 +72,12 @@ namespace WrathAccess.Screens
             Navigation.Attach(this); // re-bind to the rebuilt tree (silent; focus → the passage)
         }
 
-        // All the page's cues (paragraphs) joined — the plain text, no speaker formatting.
+        // All the page's cues (paragraphs) joined — the plain text, no speaker formatting. Interchapter pages
+        // also carry a title ("Trapped in the Darkness"), read first.
         private static string Passage(BookEventVM vm)
         {
             var parts = new List<string>();
+            if (vm is InterchapterVM ic && !string.IsNullOrWhiteSpace(ic.Title.Value)) parts.Add(ic.Title.Value);
             foreach (var cue in vm.Cues)
             {
                 var t = cue?.BaseText;

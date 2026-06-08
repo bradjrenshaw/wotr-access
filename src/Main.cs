@@ -6,6 +6,7 @@ using Kingmaker;
 using Kingmaker.GameModes; // GameModeType
 using UnityEngine;
 using UnityModManagerNet;
+using WrathAccess.Audio;
 using WrathAccess.Exploration.Overlays;
 using WrathAccess.Input;
 using WrathAccess.Screens;
@@ -90,6 +91,7 @@ namespace WrathAccess
             InputManager.Tick();
             ScreenManager.Tick();
             TickPause(); // announce the game's pause state whenever it changes (ours OR the game's own)
+            TickControl(); // chime when a cutscene/scripted event takes or returns control of the party
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
@@ -130,6 +132,24 @@ namespace WrathAccess
             if (_wasPaused.HasValue && paused != _wasPaused.Value)
                 Tts.Speak(paused ? "Paused" : "Unpaused");
             _wasPaused = paused;
+        }
+
+        // Chime when control of the party is lost to / regained from a cutscene or scripted event. The
+        // authoritative signal is Game.Instance.CutsceneLock.Active (set by the cutscene "Lock Controls"
+        // command) — the same flag the game uses to hide the HUD and stop camera-follow. Gated to being in a
+        // local area (menus leave the lock false, so opening windows never chimes); nullable baseline so we
+        // don't chime on the first sample or across area loads (entering mid-intro-cutscene chimes "gained"
+        // only when it ends).
+        private static readonly SfxPlayer _controlSfx = new SfxPlayer();
+        private static bool? _hadControl;
+        private static void TickControl()
+        {
+            var game = Game.Instance;
+            if (game == null || game.RootUiContext == null || !game.RootUiContext.IsInGame) { _hadControl = null; return; }
+            bool hasControl = !game.CutsceneLock.Active;
+            if (_hadControl.HasValue && hasControl != _hadControl.Value)
+                _controlSfx.Play(System.IO.Path.Combine(OverlayAudio.Dir, hasControl ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
+            _hadControl = hasControl;
         }
 
         // Game modes where a quick-save is sensible — normal play, paused, world/global map, kingdom, and

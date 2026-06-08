@@ -14,6 +14,11 @@ namespace WrathAccess
     {
         private static WarningReader _instance;
 
+        /// <summary>Bumped each time the game raises a warning — callers snapshot it before an action and
+        /// compare after to tell whether the game already explained a refusal (so they can supply a generic
+        /// fallback only when it stayed silent).</summary>
+        public static int Count { get; private set; }
+
         public static void Initialize()
         {
             if (_instance != null) return;
@@ -23,10 +28,13 @@ namespace WrathAccess
 
         // Enum form: resolve to the game's localized text (same source the on-screen warnings use).
         public void HandleWarning(WarningNotificationType warningType, bool addToLog = true)
-            => Speak(LocalizedTexts.Instance?.WarningNotification?.GetText(warningType));
+        {
+            Count++;
+            Speak(LocalizedTexts.Instance?.WarningNotification?.GetText(warningType));
+        }
 
         // Text form: already the reason text (e.g. an ability target restriction's message).
-        public void HandleWarning(string text, bool addToLog = true) => Speak(text);
+        public void HandleWarning(string text, bool addToLog = true) { Count++; Speak(text); }
 
         private static void Speak(string text)
         {

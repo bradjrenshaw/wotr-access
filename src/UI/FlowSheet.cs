@@ -97,6 +97,9 @@ namespace WrathAccess.UI
     public sealed class ListRegion : Region
     {
         public override string TypeName => "list";
+        // A list is a column of controls, not a column-table — read each as its own full focus message
+        // (label, role, on/off, value…) so a control's state isn't dropped to a table-style label+role.
+        public override bool ReadCellFocusMessage => true;
         public ListRegion(string label) : base(label) => Blanks = BlankFill.Skip;
 
         public ListRegion Item(UIElement element, Func<TooltipBaseTemplate> tooltip = null)
@@ -128,6 +131,73 @@ namespace WrathAccess.UI
         }
     }
 
+    /// <summary>A region you can fold up: collapsed it's just a header button ("Abilities, group,
+    /// collapsed"); activating the header expands its contents on the rows below (and collapses again).
+    /// Toggling reflows the owning sheet. Used for the action bar's spell/ability/item group flyouts.</summary>
+    public sealed class CollapsibleRegion : Region
+    {
+        private readonly List<UIElement> _content = new List<UIElement>();
+        private readonly CollapsibleHeader _header;
+        public override string TypeName => "group";
+        public override bool ReadCellFocusMessage => true; // header + contents read as their full focus message
+        public bool Expanded { get; private set; }
+        internal Action OnToggle; // wired by FlowSheet.Collapsible to reflow the sheet
+
+        public CollapsibleRegion(string label) : base(label)
+        {
+            Blanks = BlankFill.Skip;
+            _header = new CollapsibleHeader(this);
+            Rebuild();
+        }
+
+        /// <summary>Add a content row (single cell), shown only while expanded.</summary>
+        public CollapsibleRegion Item(UIElement element)
+        {
+            if (element != null) { _content.Add(element); Rebuild(); }
+            return this;
+        }
+
+        public void Toggle()
+        {
+            Expanded = !Expanded;
+            Rebuild();
+            OnToggle?.Invoke();
+        }
+
+        private void Rebuild()
+        {
+            Rows.Clear(); RowTooltips.Clear();
+            Rows.Add(new[] { (UIElement)_header }); RowTooltips.Add(null);
+            if (Expanded)
+                foreach (var e in _content) { Rows.Add(new[] { e }); RowTooltips.Add(null); }
+        }
+    }
+
+    /// <summary>The header button of a <see cref="CollapsibleRegion"/>: label + expanded/collapsed state;
+    /// Enter toggles the region (reflowing the sheet — this header instance is reused so focus stays put).</summary>
+    internal sealed class CollapsibleHeader : UIElement
+    {
+        private readonly CollapsibleRegion _region;
+        public CollapsibleHeader(CollapsibleRegion region) => _region = region;
+
+        public override bool CanFocus => true;
+        public override bool ReannounceOnActivate => true; // speak the new expanded/collapsed state in place
+
+        public override IEnumerable<Announcement> GetFocusAnnouncements()
+        {
+            yield return new LabelAnnouncement(Message.Raw(_region.Label));
+            yield return new RoleAnnouncement("group");
+            yield return new ValueAnnouncement(Message.Localized("ui", _region.Expanded ? "value.expanded" : "value.collapsed"));
+        }
+
+        public override IEnumerable<ElementAction> GetActions()
+        {
+            yield return new ElementAction(ActionIds.Activate,
+                Message.Localized("ui", _region.Expanded ? "action.collapse" : "action.expand"),
+                _ => _region.Toggle());
+        }
+    }
+
     /// <summary>
     /// A customizable 2-D grid built from stacked <see cref="Region"/>s — the unified replacement for a
     /// screen's bundle of tabbed lists/tables. The whole sheet is ONE Tab-stop; arrows move a cell cursor
@@ -154,9 +224,11 @@ namespace WrathAccess.UI
             var r = new TableRegion(label, columns); _regions.Add(r); return r;
         }
         public ListRegion List(string label) { var r = new ListRegion(label); _regions.Add(r); return r; }
+        public CollapsibleRegion Collapsible(string label) { var r = new CollapsibleRegion(label) { OnToggle = Reflow }; _regions.Add(r); return r; }
         public BarRegion Bar(string label) { var r = new BarRegion(label); _regions.Add(r); return r; }
         public void AddRegion(Region r) { if (r != null) _regions.Add(r); }
         public void RemoveRegion(Region r) { _regions.Remove(r); }
+        public void ClearRegions() => _regions.Clear(); // rebuild a sheet in place (keeps the instance/tab-stop)
         public bool HasRegion(Region r) => _regions.Contains(r);
 
         /// <summary>(Re)build the matrix + child set from the regions' current cells. Cell instances are

@@ -94,8 +94,24 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.activate"),
-                _ => WrathAccess.Exploration.Targeting.Activate(_vm)); // branches: self-cast / aim / toggle
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.activate"), _ => Activate());
+        }
+
+        private void Activate()
+        {
+            var s = Slot;
+            // A click does nothing useful when the slot can neither be activated nor (for a toggle)
+            // deactivated — mirrors the game's own gate.
+            bool blocked = s != null && !s.IsPossibleActive()
+                && !(s is MechanicActionBarSlotActivableAbility act && act.IsPossibleDeactivate());
+            int warnings = WarningReader.Count;
+            WrathAccess.Exploration.Targeting.Activate(_vm); // branches: self-cast / aim / toggle
+
+            // The game raises a warning only for some refusals (e.g. turn-based "not enough actions"); for a
+            // plainly-disabled ability it just plays a sound and reports no text. Give a spoken fallback when
+            // it stayed silent, so Enter on a greyed slot always says something.
+            if (blocked && WarningReader.Count == warnings)
+                Tts.Speak(Message.Localized("ui", "action.cant_use").Resolve(), interrupt: true);
         }
     }
 }

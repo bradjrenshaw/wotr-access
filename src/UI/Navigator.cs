@@ -143,14 +143,19 @@ namespace WrathAccess.UI
                         if (!string.IsNullOrEmpty(label) && label == Path[j + 1].GetLabelText())
                             continue;
                     }
-                    var d = Path[j].GetFocusMessage().Resolve();
+                    // The leaf cell of an associated-element table reads as the whole row (element focus +
+                    // columns), so first-focus / focus-restore match arrowing. Its FlowSheet container is
+                    // already a path node above, so the region label is omitted here.
+                    var d = (j == Path.Count - 1 ? (Path[j].Parent as FlowSheet)?.ComposeAssociatedReadout(Path[j], false) : null)
+                            ?? Path[j].GetFocusMessage().Resolve();
                     if (!string.IsNullOrEmpty(d)) sb.Add(d);
                 }
                 if (sb.Count > 0) Speak(string.Join(", ", sb), interrupt);
             }
             else if (Current != null)
             {
-                Speak(Current.GetFocusMessage().Resolve(), interrupt); // ascended: announce the now-innermost focus
+                var ar = (Current.Parent as FlowSheet)?.ComposeAssociatedReadout(Current, false);
+                Speak(ar ?? Current.GetFocusMessage().Resolve(), interrupt); // ascended: announce the now-innermost focus
             }
         }
 

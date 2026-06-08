@@ -52,18 +52,13 @@ namespace WrathAccess.UI
                 case "nav.primary":
                     // Nothing focused (e.g. plain exploration) → don't consume; let Enter bubble to the
                     // global handler (Main → Scanner.InteractAtCursor = left-click the thing under the cursor).
+                    // A cell with no action of its own falls through to its row's associated element (a table
+                    // value cell → the row's radio/control); a cell that owns an action keeps priority.
                     if (Current == null) return false;
-                    if (Current.InvokeAction(ActionIds.Activate))
-                    {
-                        var sound = Current.ActivateSound; // game plays this in the view handler we bypass
-                        if (sound.HasValue) WrathAccess.UiSound.Play(sound.Value);
-                        if (Current.ReannounceOnActivate)
-                            Speak(Current.GetStateMessage().Resolve(), interrupt: true); // just the changed state, not the whole control/path
-                    }
+                    if (!TryActivate(Current)) TryActivate(Associated(Current));
                     return true;
                 case "nav.secondary":
-                    if (Current != null && Current.InvokeAction(ActionIds.Context) && Current.ReannounceOnContext)
-                        Speak(Current.GetStateMessage().Resolve(), interrupt: true); // e.g. "not bound" after clearing
+                    if (Current != null && !TryContext(Current)) TryContext(Associated(Current));
                     return true;
                 case "nav.back":
                     // Screen-level back/close (e.g. Settings → Close). Consume only if the screen handles it.
@@ -75,11 +70,12 @@ namespace WrathAccess.UI
                     // Once focused in the HUD (Current != null, still the ctx.ingame screen) Space reads the
                     // tooltip instead, so it must NOT bubble to pause.
                     if (Current == null) return false;
-                    var tpl = Current?.GetTooltipTemplate();
-                    // In a grid, a cell with no tooltip of its own falls back to its row's tooltip, so
-                    // Space works on any element in the row (the value, a stepper, the header).
-                    if (tpl == null && Current?.Parent is Table grid) tpl = grid.RowTooltipForCell(Current);
-                    if (tpl == null && Current?.Parent is FlowSheet sheet) tpl = sheet.RowTooltipForCell(Current);
+                    var tpl = Current.GetTooltipTemplate();
+                    // A cell with no tooltip of its own falls back to its row's associated element (the
+                    // control the row defers to), then to the row's tooltip — so Space works on any cell.
+                    if (tpl == null) { var assoc = Associated(Current); if (assoc != null && assoc != Current) tpl = assoc.GetTooltipTemplate(); }
+                    if (tpl == null && Current.Parent is Table grid) tpl = grid.RowTooltipForCell(Current);
+                    if (tpl == null && Current.Parent is FlowSheet sheet) tpl = sheet.RowTooltipForCell(Current);
                     if (tpl != null) WrathAccess.Screens.TooltipScreen.Open(tpl);
                     else Speak("No tooltip");
                     return true;
@@ -314,6 +310,27 @@ namespace WrathAccess.UI
             return true;
         }
 
+        // Run an element's primary action with its sound + in-place reannounce; returns whether it handled it.
+        private bool TryActivate(UIElement e)
+        {
+            if (e == null || !e.InvokeAction(ActionIds.Activate)) return false;
+            var sound = e.ActivateSound; // game plays this in the view handler we bypass
+            if (sound.HasValue) WrathAccess.UiSound.Play(sound.Value);
+            if (e.ReannounceOnActivate) Speak(e.GetStateMessage().Resolve(), interrupt: true);
+            return true;
+        }
+
+        private bool TryContext(UIElement e)
+        {
+            if (e == null || !e.InvokeAction(ActionIds.Context)) return false;
+            if (e.ReannounceOnContext) Speak(e.GetStateMessage().Resolve(), interrupt: true);
+            return true;
+        }
+
+        // The interactive element a cell defers to — its row's associated element in a table — or null.
+        private static UIElement Associated(UIElement cell)
+            => cell?.Parent is FlowSheet fs ? fs.AssociatedElementForCell(cell) : null;
+
         private void AnnounceFlowCell(FlowSheet sheet, int r, int c, int nr, int nc, UIElement next, bool regionEntry)
         {
             var parts = new List<string>();
@@ -331,6 +348,16 @@ namespace WrathAccess.UI
                 WrathAccess.UiSound.Hover();
                 Speak(string.Join(", ", parts), interrupt: true);
                 return;
+            }
+
+            // An associated-element table: on a ROW change (up/down, or region entry) announce the row's
+            // element focus + the column data (see FlowSheet.ComposeAssociatedReadout). Same-row moves
+            // (left/right) fall through to the normal header+value framing below, so column headers still
+            // read on column change.
+            if (nr != r)
+            {
+                var assoc = sheet.ComposeAssociatedReadout(next, withRegionLabel: entered);
+                if (assoc != null) { WrathAccess.UiSound.Hover(); Speak(assoc, interrupt: true); return; }
             }
 
             if (entered && region != null && !string.IsNullOrEmpty(region.Label))

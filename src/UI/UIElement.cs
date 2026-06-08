@@ -95,6 +95,28 @@ namespace WrathAccess.UI
             return null;
         }
 
+        /// <summary>This element's focus announcements rendered to comma-joined text, optionally limited to
+        /// certain announcement types (null = all, in declared order). Used by a table's associated-element
+        /// readout to speak the row's control ("Fireball, radio button, selected") on up/down.</summary>
+        public string GetFocusText(System.Type[] include = null)
+        {
+            var ctx = new AnnouncementContext(this);
+            var parts = new List<Message>();
+            foreach (var a in GetFocusAnnouncements())
+            {
+                if (include != null)
+                {
+                    bool keep = false;
+                    foreach (var t in include) if (t != null && t.IsInstanceOfType(a)) { keep = true; break; }
+                    if (!keep) continue;
+                }
+                var m = a.Render(ctx);
+                if (m != null) parts.Add(m);
+            }
+            var joined = Message.Join(", ", parts.ToArray());
+            return joined != null ? joined.Resolve() : null;
+        }
+
         /// <summary>The composed spoken focus message (parts + parent-supplied position).</summary>
         public Message GetFocusMessage()
         {

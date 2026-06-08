@@ -47,10 +47,38 @@ namespace WrathAccess.UI
         private readonly string[] _columns; // data column names (column 0 is the row label, unnamed)
         public override string TypeName => "table";
 
+        // Optional "associated element" column: the column whose cell holds each row's interactive control
+        // (e.g. a radio). Input/tooltip on any cell in the row falls through to it, and arrowing UP/DOWN
+        // announces its focus string instead of the plain cell value — so the control reads as what it is.
+        public int AssociatedColumn { get; private set; } = -1;
+        public Type[] AssociatedAnnouncements { get; private set; } // which element announcement types to read (null = all)
+        private int[] _extraColumns;                                 // columns the element column appends (null = all others)
+
         public TableRegion(string label, string[] columns) : base(label) => _columns = columns ?? new string[0];
 
         public override string ColumnHeader(int col)
             => (col >= 1 && col - 1 < _columns.Length) ? _columns[col - 1] : null;
+
+        /// <summary>Mark which column holds each row's interactive element. <paramref name="announcements"/>
+        /// limits which of the element's announcement types are read on up/down (null = all);
+        /// <paramref name="extraColumns"/> are the columns the element column appends on up/down
+        /// (null = every other column, in order).</summary>
+        public TableRegion Associate(int column, Type[] announcements = null, int[] extraColumns = null)
+        {
+            AssociatedColumn = column;
+            AssociatedAnnouncements = announcements;
+            _extraColumns = extraColumns;
+            return this;
+        }
+
+        /// <summary>The columns the element column appends on up/down — the configured list, or all others.</summary>
+        public IEnumerable<int> ExtraColumns(int totalCols)
+        {
+            if (_extraColumns != null) return _extraColumns;
+            var list = new List<int>();
+            for (int i = 0; i < totalCols; i++) if (i != AssociatedColumn) list.Add(i);
+            return list;
+        }
 
         /// <summary>A data row: the row label, then one cell per data column (null → blank). Optional
         /// row-level tooltip (Space on a cell with none of its own drills into it, resolved live).</summary>
@@ -180,6 +208,52 @@ namespace WrathAccess.UI
 
         public Region RegionAt(int r)
             => (r >= 0 && r < _grid.Count && _grid[r].Count > 0) ? _grid[r][0].Region : null;
+
+        /// <summary>The interactive element a cell defers to: its row's associated-element cell, in a table
+        /// that declared one (<see cref="TableRegion.Associate"/>). Null otherwise (or for the element itself
+        /// it returns itself). Lets input/tooltip on a plain value cell fall through to the row's control.</summary>
+        public UIElement AssociatedElementForCell(UIElement cell)
+        {
+            if (!TryCoords(cell, out int r, out _)) return null;
+            var region = RegionAt(r) as TableRegion;
+            if (region == null || region.AssociatedColumn < 0) return null;
+            return CellAt(r, region.AssociatedColumn);
+        }
+
+        /// <summary>The up/down spoken readout for a cell in an associated-element table, or null if the cell
+        /// isn't in one. On the element column: the element's focus (configured announcements) + the appended
+        /// columns ("Fireball, toggle, on, Level 1, School evocation"). On any other column: that cell's value
+        /// FIRST, then the element focus ("3, Fireball, toggle, on") — so you hear the column value you came
+        /// for, then the row's identity. Used by both arrow-nav and first-focus so they read the same.</summary>
+        public string ComposeAssociatedReadout(UIElement cell, bool withRegionLabel)
+        {
+            if (!TryCoords(cell, out int r, out int c)) return null;
+            var tr = RegionAt(r) as TableRegion;
+            if (tr == null || tr.AssociatedColumn < 0) return null;
+
+            var parts = new List<string>();
+            if (withRegionLabel && !string.IsNullOrEmpty(tr.Label)) parts.Add(tr.Label + ", " + tr.TypeName);
+            var elem = CellAt(r, tr.AssociatedColumn);
+            var et = elem != null ? elem.GetFocusText(tr.AssociatedAnnouncements) : null;
+
+            if (c == tr.AssociatedColumn)
+            {
+                if (!string.IsNullOrEmpty(et)) parts.Add(et);
+                foreach (int col in tr.ExtraColumns(_cols))
+                {
+                    var h = ColumnHeader(r, col);
+                    var v = CellAt(r, col)?.GetLabelText();
+                    if (!string.IsNullOrWhiteSpace(v)) parts.Add(string.IsNullOrEmpty(h) ? v : h + " " + v);
+                }
+            }
+            else
+            {
+                var v = CellAt(r, c)?.GetLabelText();
+                if (!string.IsNullOrWhiteSpace(v)) parts.Add(v);     // the column value you arrowed to, first
+                if (!string.IsNullOrEmpty(et)) parts.Add(et);        // then the row's element identity
+            }
+            return parts.Count > 0 ? string.Join(", ", parts) : null;
+        }
 
         /// <summary>Can the cursor land on (r, c)? Skip-regions only allow real focusable cells; Visit-
         /// regions allow every position (empties/pads read "blank") so table columns stay aligned.</summary>

@@ -7,6 +7,7 @@ using Kingmaker.UI.MVVM._VM.Other; // RecommendationType
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.Switchers; // SpellbookLevelSwitcherEntityVM
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.KnownSpells; // AbilityDataVM
 using WrathAccess.UI;
+using WrathAccess.UI.Announcements; // LabelAnnouncement, RoleAnnouncement, ValueAnnouncement (associated readout)
 using WrathAccess.UI.Proxies;
 
 namespace WrathAccess.Screens
@@ -94,17 +95,17 @@ namespace WrathAccess.Screens
             var items = selector.EntitiesCollection.OrderBy(v => v, Order).ToList();
             if (items.Count == 0) return;
 
-            var table = new Table("Choose spells");
-            table.AddHeaderRow(new TextElement("Spell", "heading"), new UIElement[]
-            {
-                new TextElement("Level"), new TextElement("School"), new TextElement("Recommendation"),
-            });
+            // A FlowSheet with an associated-element table: column 0 holds each spell's toggle (the row's
+            // element), columns 1-3 are data. Up/Down reads the toggle's focus string + the column data
+            // ("Fireball, toggle, on, Level 1, School evocation, …"); Left/Right reads normally; Enter/Space
+            // on any cell fall through to the toggle. A toggle in a multi-select group (slot budget):
+            // SetSelectedFromView(!IsSelected), the same OnClick the view uses.
+            var sheet = new FlowSheet("Choose spells");
+            var table = sheet.Table("Choose spells", "Level", "School", "Recommendation");
             foreach (var it in items)
             {
                 var item = it; // capture for the live closures
-                // A toggle in a multi-select group (slot budget): toggle via the same OnClick the view
-                // uses — SetSelectedFromView(!IsSelected), gated on IsAvailable (AllowSwitchOff is true).
-                table.AddDataRow(
+                table.Row(
                     new ProxySelectionItem(item, () => item.DisplayName, role: "toggle",
                         onActivate: () => item.SetSelectedFromView(!item.IsSelected.Value)),
                     new UIElement[]
@@ -112,9 +113,11 @@ namespace WrathAccess.Screens
                     new TextElement(() => item.Level.ToString()),
                     new TextElement(() => School(item)),
                     new TextElement(() => RecLabel(item)),
-                }, rowTooltip: () => item.TooltipTemplate()); // Space anywhere in the row → spell detail
+                }, tooltip: () => item.TooltipTemplate()); // Space anywhere in the row → spell detail
             }
-            _selectorPanel.Add(table);
+            table.Associate(0, new[] { typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement) });
+            sheet.Reflow();
+            _selectorPanel.Add(sheet);
         }
 
         // ----- the known-spells reference (mirrors the game's spellbook panel) -----

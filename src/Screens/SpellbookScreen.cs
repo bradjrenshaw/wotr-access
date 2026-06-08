@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using System.Text;
 using Kingmaker;
+using Kingmaker.Blueprints.Root.Strings; // UIStrings (spellbook labels)
 using Kingmaker.UI.MVVM._VM.ServiceWindows;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook; // SpellbookVM
+using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.MemorizingPanel; // SpellbookMemorizingPanelVM, SpellbookMemorizeSlotVM
 using WrathAccess.UI;
 using WrathAccess.UI.CharSheet;
 using WrathAccess.UI.Proxies;
@@ -65,7 +67,17 @@ namespace WrathAccess.Screens
             sb.Append(vm.CurrentSpellbookLevel?.Value?.Level ?? -1).Append('|');
             var known = vm.SpellbookKnownSpellsVM?.KnownSpells;
             if (known != null) foreach (var s in known) if (s != null) sb.Append(s.DisplayName).Append(',');
+            // Memorized slots fill/empty as you memorize/forget — fold them in so that triggers a refresh.
+            var panel = vm.SpellbookMemorizingPanelVM;
+            if (panel != null) { AppendMem(sb, panel.CommonMemorizedSpells); AppendMem(sb, panel.SpecialMemorizedSpells); }
             return sb.ToString();
+        }
+
+        private static void AppendMem(StringBuilder sb, List<SpellbookMemorizeSlotVM> slots)
+        {
+            sb.Append('|');
+            if (slots == null) return;
+            foreach (var s in slots) sb.Append(s?.SpellData != null ? s.DisplayName : "-").Append(',');
         }
 
         private void BuildShell(SpellbookVM vm)
@@ -146,7 +158,50 @@ namespace WrathAccess.Screens
             }
 
             BuildKnownSpells(vm);
+            BuildMemorize(vm);
             RestoreFocus(cap);
+        }
+
+        // The memorizing panel (prepared casters): the special (domain/favorite) and common memorized slots
+        // for the current level — Enter on a filled slot forgets it; empty slots are filled from the known
+        // list — plus a spells-per-day / status readout.
+        private void BuildMemorize(SpellbookVM vm)
+        {
+            var panel = vm.SpellbookMemorizingPanelVM;
+            if (panel == null) return;
+            var sheet = new FlowSheet(WithLevel("Memorize", vm));
+
+            if (panel.IsCorrectLevelValue && panel.HasAnySlot)
+            {
+                if (panel.HasSpecialSlots && panel.SpecialMemorizedSpells != null)
+                {
+                    var r = sheet.List(SpecialLabel(panel));
+                    foreach (var s in panel.SpecialMemorizedSpells) if (s != null) r.Item(new ProxyMemorizeSlot(s));
+                }
+                if (panel.HasCommonSlots && panel.CommonMemorizedSpells != null)
+                {
+                    var r = sheet.List((string)UIStrings.Instance.SpellBookTexts.MemorizedSpells);
+                    foreach (var s in panel.CommonMemorizedSpells) if (s != null) r.Item(new ProxyMemorizeSlot(s));
+                }
+            }
+
+            var info = sheet.List("Spell slots");
+            info.Item(new TextElement(() => Message.Localized("ui", "spellbook.spells_per_day").Resolve() + ": " + panel.SpellsPerDay));
+            if (panel.IsSpontaneous)
+                info.Item(new TextElement(() => Message.Localized("ui", "spellbook.remaining").Resolve() + ": " + panel.RemainingSpontaneousSpells));
+            if (panel.NeedToSleep) info.Item(new TextElement((string)UIStrings.Instance.SpellBookTexts.NeedToSleep));
+
+            sheet.Reflow();
+            if (sheet.RowCount > 0) _content.Add(sheet);
+        }
+
+        // The special-slots heading: an explicit name if the book sets one, else Domain / Favorite school.
+        private static string SpecialLabel(SpellbookMemorizingPanelVM panel)
+        {
+            if (!string.IsNullOrEmpty(panel.SpecialSlotsName)) return panel.SpecialSlotsName;
+            return panel.HasDomainSlots
+                ? (string)UIStrings.Instance.SpellBookTexts.DomainSlots
+                : (string)UIStrings.Instance.SpellBookTexts.FavoriteSchoolSlots;
         }
 
         // The known spells at the current level as an associated-element table: column 0 is the spell (name +
@@ -155,7 +210,7 @@ namespace WrathAccess.Screens
         {
             var known = vm.SpellbookKnownSpellsVM?.KnownSpells;
             var unit = vm.UnitDescriptor?.Value;
-            var sheet = new FlowSheet();
+            var sheet = new FlowSheet(WithLevel("Spells", vm));
             var t = sheet.Table("Spells", "School");
             bool any = false;
             if (known != null)
@@ -173,6 +228,14 @@ namespace WrathAccess.Screens
         }
 
         private static string LevelName(int level) => level == 0 ? "Cantrips" : "Level " + level;
+
+        // The memorize/known sections are filtered to the current spell level (the level switcher drives both),
+        // so put the level in their headers — otherwise it's only known from the switcher region.
+        private static string WithLevel(string label, SpellbookVM vm)
+        {
+            int lvl = vm.CurrentSpellbookLevel?.Value?.Level ?? -1;
+            return lvl < 0 ? label : label + ", " + LevelName(lvl);
+        }
 
         // (contentChildIndex, row, col) of the focused cell, or child = -1 when focus is outside the content.
         private (int child, int row, int col) CaptureFocus()

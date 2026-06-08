@@ -262,6 +262,10 @@ namespace WrathAccess.Screens
                 }
             }
 
+            // Associated-element table: column 0 is the item (ProxyInventoryItem — name + tooltip + actions),
+            // the rest are value columns. Up/Down reads the item + columns; a value column leads with its
+            // value; Enter/secondary/Space on any cell fall through to the item (so the row tooltip is the
+            // item's own — no separate row tooltip needed).
             var items = sheet.Table("Stash", "Type", "Qty", "Weight", "Value");
             bool any = false;
             if (group?.VisibleCollection != null)
@@ -276,9 +280,10 @@ namespace WrathAccess.Screens
                         new TextElement(() => s.Count.Value > 1 ? s.Count.Value.ToString() : "1"),
                         new TextElement(() => Weight(s.Weight.Value)),
                         new TextElement(() => s.Cost.Value.ToString()),
-                    }, tooltip: () => Tip(s.Tooltip.Value));
+                    });
                 }
             if (!any) items.Row(new TextElement("No items."), new UIElement[0]);
+            items.Associate(0); // column 0 (the item) is the row's element
 
             sheet.Reflow();
             _content.Add(sheet);
@@ -300,8 +305,5 @@ namespace WrathAccess.Screens
         }
 
         private static string Weight(float w) => w <= 0f ? "0" : w.ToString("0.#");
-
-        private static Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate Tip(List<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> t)
-            => t != null && t.Count > 0 ? t[0] : null;
     }
 }

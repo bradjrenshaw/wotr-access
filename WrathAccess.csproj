@@ -35,6 +35,7 @@
     <Reference Include="AstarPathfindingProject"><HintPath>$(ManagedDir)\AstarPathfindingProject.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Owlcat.Runtime.UI"><HintPath>$(ManagedDir)\Owlcat.Runtime.UI.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Owlcat.Runtime.Core"><HintPath>$(ManagedDir)\Owlcat.Runtime.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Owlcat.Runtime.UniRx"><HintPath>$(ManagedDir)\Owlcat.Runtime.UniRx.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UniRx"><HintPath>$(ManagedDir)\UniRx.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(ManagedDir)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>

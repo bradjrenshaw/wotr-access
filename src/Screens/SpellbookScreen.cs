@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Kingmaker;
+using Kingmaker.Blueprints.Classes.Spells; // CantripsType
 using Kingmaker.Blueprints.Root.Strings; // UIStrings (spellbook labels)
 using Kingmaker.UI.MVVM._VM.ServiceWindows;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook; // SpellbookVM
@@ -171,7 +172,10 @@ namespace WrathAccess.Screens
             if (panel == null) return;
             var sheet = new FlowSheet(WithLevel("Memorize", vm));
 
-            if (panel.IsCorrectLevelValue && panel.HasAnySlot)
+            // Like the game: show the memorize slots when there are any at this level, else a substitute
+            // line (spontaneous spells-per-day, cantrips "cast at will", not-enough-stat/level, …).
+            bool hasSlots = panel.IsCorrectLevelValue && panel.HasAnySlot;
+            if (hasSlots)
             {
                 if (panel.HasSpecialSlots && panel.SpecialMemorizedSpells != null)
                 {
@@ -185,14 +189,42 @@ namespace WrathAccess.Screens
                 }
             }
 
-            var info = sheet.List("Spell slots");
-            info.Item(new TextElement(() => Message.Localized("ui", "spellbook.spells_per_day").Resolve() + ": " + panel.SpellsPerDay));
-            if (panel.IsSpontaneous)
-                info.Item(new TextElement(() => Message.Localized("ui", "spellbook.remaining").Resolve() + ": " + panel.RemainingSpontaneousSpells));
-            if (panel.NeedToSleep) info.Item(new TextElement((string)UIStrings.Instance.SpellBookTexts.NeedToSleep));
+            var info = new List<UIElement>();
+            if (!hasSlots) info.Add(new TextElement(() => SubstituteText(panel))); // live (spontaneous count changes on cast)
+            if (panel.NeedToSleep) info.Add(new TextElement((string)UIStrings.Instance.SpellBookTexts.NeedToSleep));
+            if (info.Count > 0) { var r = sheet.List("Spell slots"); foreach (var e in info) r.Item(e); }
 
             sheet.Reflow();
             if (sheet.RowCount > 0) _content.Add(sheet);
+        }
+
+        // Mirrors SpellbookMemorizingPanelView.SetupSubstituteText: the line shown in place of slots — the
+        // spontaneous daily count, the cantrip/orison "cast at will" note, or a can't-cast/no-slots reason.
+        private static string SubstituteText(SpellbookMemorizingPanelVM p)
+        {
+            var t = UIStrings.Instance.SpellBookTexts;
+            if (p.IsCorrectLevelValue && !p.IsCantripLevel)
+            {
+                if (p.IsSpontaneous)
+                {
+                    if (p.NotEnoughStat) return string.Format((string)t.NotEnoughAbilityScore, p.CasterStat, p.CasterStatMin);
+                    if (p.HasAnyKnownSpells) return string.Format((string)t.SpontaneuseSpellsPreDay, p.RemainingSpontaneousSpells, p.SpellsPerDay);
+                    return (string)t.CanNotCastSpellsOfLevel;
+                }
+                if (!p.HasCommonSlots && !p.HasSpecialSlots)
+                {
+                    if (p.NotEnoughStat) return string.Format((string)t.NotEnoughAbilityScore, p.CasterStat, p.CasterStatMin);
+                    if (p.NotEnoughLevel) return (string)t.CanNotCastSpellsOfLevel;
+                    return (string)t.CharacterHasNotSlots;
+                }
+                return (string)t.CanNotCastSpellsOfLevel;
+            }
+            if (p.IsCorrectLevelValue && p.IsCantripLevel)
+            {
+                if (!p.HasCantrips) return (string)t.CanNotCastSpellsOfLevel;
+                return p.CantripsType == CantripsType.Orisions ? (string)t.MemorizePanelOrisons : (string)t.MemorizePanelCantrips;
+            }
+            return (string)t.DontHaveSpellsInBook;
         }
 
         // The special-slots heading: an explicit name if the book sets one, else Domain / Favorite school.

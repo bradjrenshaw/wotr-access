@@ -65,7 +65,7 @@
   "spellbook.memorize": "Memorize",
   "spellbook.forget": "Forget",
   "spellbook.empty_slot": "Empty slot",
-  "spellbook.used": "used",
+  "spellbook.needs_rest": "needs rest",
   "spellbook.spells_per_day": "Spells per day",
   "spellbook.remaining": "Remaining",
   "spellbook.add_to_bar": "Add to action bar",

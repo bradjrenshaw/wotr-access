@@ -9,10 +9,12 @@ namespace WrathAccess.UI.Proxies
 {
     /// <summary>
     /// One memorize slot (<see cref="SpellbookMemorizeSlotVM"/>, an AbilityDataVM) in a prepared caster's
-    /// memorizing panel. Filled = the memorized spell (with "used" when it's been cast and needs rest);
-    /// empty = an open slot you fill from the known-spell list (Enter on a known spell memorizes into the
-    /// next free slot). Enter on a filled slot forgets it (the game's double-click → ISpellbookHandler.
-    /// TryForget). Empty slots carry no action.
+    /// memorizing panel. Filled = the PREPARED spell (the slot's SpellShell); empty = an open slot you fill
+    /// from the known-spell list (Enter on a known spell memorizes into the next free slot). A slot reads
+    /// "needs rest" when it isn't castable right now (NeedRestToRestore = SpellShell present but !Available —
+    /// i.e. cast/spent, or just re-prepared and awaiting rest); otherwise it's castable now. Enter on a
+    /// filled slot forgets it (the game's double-click → ISpellbookHandler.TryForget). Empty slots carry no
+    /// action.
     /// </summary>
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyMemorizeSlot : UIElement
@@ -25,18 +27,15 @@ namespace WrathAccess.UI.Proxies
 
         private bool Filled => _vm?.SpellData != null;
 
-        private string Name()
-        {
-            if (!Filled) return Message.Localized("ui", "spellbook.empty_slot").Resolve();
-            var n = _vm.DisplayName;
-            if (_vm.NeedRestToRestore) n += " (" + Message.Localized("ui", "spellbook.used").Resolve() + ")";
-            return n;
-        }
+        private string Name() => Filled ? _vm.DisplayName : Message.Localized("ui", "spellbook.empty_slot").Resolve();
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(Name()));
             yield return new RoleAnnouncement("spell");
+            // Castable now vs prepared-but-pending-rest (spent, or re-prepared and not yet rested).
+            if (Filled && _vm.NeedRestToRestore)
+                yield return new ValueAnnouncement(Message.Localized("ui", "spellbook.needs_rest"));
         }
 
         public override TooltipBaseTemplate GetTooltipTemplate() => Filled ? _vm.Tooltip : null;

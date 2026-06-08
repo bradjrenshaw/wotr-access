@@ -100,7 +100,7 @@ namespace WrathAccess.Screens
             Register(new InventoryScreen()); // inventory window (Inventory/Equipment/SmartItem), navigable; layer 10
             Register(new CharacterInfoScreen()); // character sheet (CharacterInfo window), navigable; layer 10
             RegisterServiceWindow("Mythic Path", ServiceWindowsType.Mythic);
-            RegisterServiceWindow("Spellbook", ServiceWindowsType.Spellbook);
+            Register(new SpellbookScreen()); // spellbook window (known spells + add to action bar), navigable; layer 10
             RegisterServiceWindow("Journal", ServiceWindowsType.Journal);
             RegisterServiceWindow("Encyclopedia", ServiceWindowsType.Encyclopedia);
             RegisterServiceWindow("Map", ServiceWindowsType.LocalMap);

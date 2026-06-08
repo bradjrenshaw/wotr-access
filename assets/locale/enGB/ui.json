@@ -98,6 +98,8 @@
   "nav.position": "{index} of {count}",
   "count.items": "{count} items",
 
+  "encyclopedia.topics": "Topics",
+
   "journal.active": "active",
   "journal.completed": "completed",
   "journal.failed": "failed",

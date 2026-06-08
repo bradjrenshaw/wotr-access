@@ -106,7 +106,7 @@ namespace WrathAccess.Screens
             RegisterServiceWindow("Mythic Path", ServiceWindowsType.Mythic);
             Register(new SpellbookScreen()); // spellbook window (known spells + add to action bar), navigable; layer 10
             Register(new JournalScreen()); // journal window (grouped quests + objectives), navigable; layer 10
-            RegisterServiceWindow("Encyclopedia", ServiceWindowsType.Encyclopedia);
+            Register(new EncyclopediaScreen()); // encyclopedia window (chapters + page text + child links), navigable; layer 10
             RegisterServiceWindow("Map", ServiceWindowsType.LocalMap);
 
             // Overlays (can sit on top of a context/window). Settings lives on the

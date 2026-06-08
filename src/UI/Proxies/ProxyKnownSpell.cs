@@ -62,9 +62,8 @@ namespace WrathAccess.UI.Proxies
             yield return new ElementAction(ActionIds.Context, Message.Localized("ui", "action.menu"), _ => OpenMenu());
         }
 
-        // The spell's action menu — the game's right-click set: Cast (when castable now) + Add to action bar.
-        // The metamagic / magic-hack removals are tied to the (deferred) metamagic mixer and only apply to
-        // spells that already carry metamagic, so they join here with that slice.
+        // The spell's action menu — the game's right-click set: Cast (when castable now), Add to action bar,
+        // and Apply metamagic (opens the builder for this spell, when the book supports metamagic).
         private void OpenMenu()
         {
             var labels = new List<string>();
@@ -73,10 +72,26 @@ namespace WrathAccess.UI.Proxies
 
             Add(CanCast, Message.Localized("ui", "spellbook.cast").Resolve(), Cast);
             Add(NotKingdomOrMap, Message.Localized("ui", "spellbook.add_to_bar").Resolve(), AddToActionBar);
+            Add(MetamagicAvailable, Message.Localized("ui", "metamagic.apply").Resolve(), ApplyMetamagic);
 
             if (labels.Count == 0) { Tts.Speak("No actions", interrupt: true); return; }
             var actions = runs;
             ChoiceSubmenuScreen.Open(_vm.DisplayName, labels, -1, idx => { if (idx >= 0 && idx < actions.Count) actions[idx]?.Invoke(); });
+        }
+
+        private static SpellbookVM Book()
+            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM?.SpellbookVM?.Value;
+
+        private static bool MetamagicAvailable => Book()?.MetamagicAvailable.Value ?? false;
+
+        // Enter the metamagic builder for this spell: select it, then flip the builder mode (the SpellbookVM
+        // creates the mixer from the selected spell). SpellbookScreen renders the builder while it's active.
+        private void ApplyMetamagic()
+        {
+            var book = Book();
+            if (book == null) return;
+            book.CurrentSelectedSpell.Value = _vm;
+            book.MetamagicBuilderMode.Value = true;
         }
 
         // The spell's mechanic action-bar slot — memorized / spontaneous / converted by the same rules the

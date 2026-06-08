@@ -5,6 +5,7 @@ using Kingmaker.Blueprints.Classes.Spells; // CantripsType
 using Kingmaker.Blueprints.Root.Strings; // UIStrings (spellbook labels)
 using Kingmaker.UI.MVVM._VM.ServiceWindows;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook; // SpellbookVM
+using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.KnownSpells; // AbilityDataVM
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.MemorizingPanel; // SpellbookMemorizingPanelVM, SpellbookMemorizeSlotVM
 using WrathAccess.UI;
 using WrathAccess.UI.CharSheet;
@@ -31,10 +32,11 @@ namespace WrathAccess.Screens
 
         private Container _content;
         private bool _built;
+        private bool _wasMixer;
         private string _sig;
         private string _lastRestoreLabel;
 
-        public override void OnPush() { _built = false; _sig = null; _lastRestoreLabel = null; }
+        public override void OnPush() { _built = false; _wasMixer = false; _sig = null; _lastRestoreLabel = null; }
         public override void OnPop() { Clear(); _content = null; _built = false; }
 
         public override void OnUpdate()
@@ -49,9 +51,17 @@ namespace WrathAccess.Screens
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"),
-                _ => ServiceWindows()?.HandleCloseAll());
+            // In the metamagic builder, Back leaves the builder (not the whole window).
+            yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ =>
+            {
+                var vm = Vm();
+                if (vm != null && vm.MetamagicBuilderMode.Value) vm.MetamagicBuilderMode.Value = false;
+                else ServiceWindows()?.HandleCloseAll();
+            });
         }
+
+        private static bool MixerActive(SpellbookVM vm)
+            => vm.MetamagicBuilderMode.Value && vm.SpellbookMetamagicMixerVM != null;
 
         private static SpellbookVM Vm()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM?.SpellbookVM?.Value;
@@ -64,6 +74,19 @@ namespace WrathAccess.Screens
         {
             var sb = new StringBuilder();
             sb.Append(Game.Instance?.SelectionCharacter?.SelectedUnit?.Value.Value?.CharacterName).Append('|');
+
+            // Metamagic builder mode: a wholly different content set. Refresh on the applied set / result level.
+            if (MixerActive(vm))
+            {
+                sb.Append("MIX|").Append(vm.CurrentSelectedSpell?.Value?.DisplayName).Append('|');
+                var sel = vm.SpellbookMetamagicMixerVM.SpellbookMetamagicSelector;
+                if (sel?.MetamagicItems != null)
+                    foreach (var i in sel.MetamagicItems) if (i != null) sb.Append(i.Feature?.Name).Append(i.IsSelected ? '+' : '-').Append(',');
+                sb.Append('|').Append(sel?.SpellbookSpellLevelSelector?.ResultSpellLevel.Value ?? -1);
+                sb.Append('|').Append(vm.SpellbookMetamagicMixerVM.CanWriteSpell.Value);
+                return sb.ToString();
+            }
+
             sb.Append(vm.CurrentSpellbook?.Value?.Blueprint?.name).Append('|');
             sb.Append(vm.CurrentSpellbookLevel?.Value?.Level ?? -1).Append('|');
             var known = vm.SpellbookKnownSpellsVM?.KnownSpells;
@@ -108,14 +131,21 @@ namespace WrathAccess.Screens
         {
             if (_content == null) return;
             var cap = CaptureFocus();
+            // Entering/leaving the metamagic builder is a full content swap (and the context menu intervened),
+            // so a position restore is meaningless — drop focus onto the first cell instead.
+            bool mixer = MixerActive(vm);
+            bool modeChanged = mixer != _wasMixer;
+            _wasMixer = mixer;
             _content.Clear();
 
             if (!vm.HasSpellbooks.Value)
             {
                 _content.Add(new TextElement("This character has no spells."));
-                RestoreFocus(cap);
+                Settle(cap, modeChanged);
                 return;
             }
+
+            if (mixer) { BuildMixer(vm); Settle(cap, modeChanged); return; }
 
             // Spellbook (caster) switcher — only when there's more than one.
             var books = vm.SpellbookSwitcherVM;
@@ -160,7 +190,30 @@ namespace WrathAccess.Screens
 
             BuildKnownSpells(vm);
             BuildMemorize(vm);
-            RestoreFocus(cap);
+            Settle(cap, modeChanged);
+        }
+
+        private void Settle((int child, int row, int col) cap, bool modeChanged)
+        {
+            if (modeChanged) FocusFirstCell();
+            else RestoreFocus(cap);
+        }
+
+        // Drop focus onto the first cell of the first non-empty FlowSheet (used when the content mode flips so
+        // there's no meaningful prior position to restore) — so the grid is entered, not just labelled.
+        private void FocusFirstCell()
+        {
+            foreach (var ch in _content.Children)
+            {
+                if (ch is FlowSheet fs && fs.RowCount > 0)
+                {
+                    int c = fs.LeftmostVisitable(0);
+                    var cell = c >= 0 ? fs.CellAt(0, c) : null;
+                    if (cell != null) { _lastRestoreLabel = cell.GetLabelText(); Navigation.Focus(cell, announce: true); return; }
+                }
+            }
+            var f = _content.FirstFocusable();
+            if (f != null) { _lastRestoreLabel = f.GetLabelText(); Navigation.Focus(f, announce: true); }
         }
 
         // The memorizing panel (prepared casters): the special (domain/favorite) and common memorized slots
@@ -225,6 +278,59 @@ namespace WrathAccess.Screens
                 return p.CantripsType == CantripsType.Orisions ? (string)t.MemorizePanelOrisons : (string)t.MemorizePanelCantrips;
             }
             return (string)t.DontHaveSpellsInBook;
+        }
+
+        // The metamagic builder (entered via a known spell's "Apply metamagic"): the base spell, the known
+        // metamagic feats as toggles, the Heighten level stepper (when applicable), the resulting spell
+        // (name + level + whether it's castable), and "Write spell" — which creates the metamagic'd custom
+        // spell and leaves the builder. Back leaves the builder.
+        private void BuildMixer(SpellbookVM vm)
+        {
+            var mixer = vm.SpellbookMetamagicMixerVM;
+            var sel = mixer.SpellbookMetamagicSelector;
+            var baseSpell = vm.CurrentSelectedSpell?.Value;
+            var sheet = new FlowSheet("Metamagic");
+
+            if (baseSpell != null)
+            {
+                var bs = baseSpell;
+                sheet.List("Spell").Item(new TextElement(() => bs.DisplayName, null, () => bs.Tooltip));
+            }
+
+            var feats = sel?.MetamagicItems;
+            if (feats != null && feats.Count > 0)
+            {
+                var r = sheet.List("Metamagic");
+                foreach (var item in feats) if (item != null) r.Item(new ProxyMetamagicToggle(item));
+            }
+            else
+            {
+                sheet.List("Metamagic").Item(new TextElement("No metamagic feats known."));
+            }
+
+            var lvl = sel?.SpellbookSpellLevelSelector;
+            if (lvl != null && lvl.CanChangeLevel.Value)
+                sheet.List("Heighten").Item(new ProxyMetamagicLevel(lvl));
+
+            var result = sheet.List("Result");
+            int resultLevel = lvl?.ResultSpellLevel.Value ?? 0;
+            bool castable = lvl?.CanUseSpell ?? true;
+            result.Item(new TextElement(ResultLine(baseSpell, resultLevel, castable)));
+            // Always show Write (greyed when you can't write yet — no metamagic applied, or the result level
+            // exceeds your castable slots), mirroring the game's Interactable = CanWriteSpell button.
+            result.Item(new ProxyActionButton(() => Message.Localized("ui", "metamagic.write").Resolve(),
+                () => mixer.CanWriteSpell.Value, () => mixer.TryWriteNewSpell()));
+
+            sheet.Reflow();
+            _content.Add(sheet);
+        }
+
+        private static string ResultLine(AbilityDataVM baseSpell, int level, bool castable)
+        {
+            var s = Message.Localized("ui", "metamagic.result").Resolve() + ": "
+                + (baseSpell?.DisplayName ?? "") + ", " + LevelName(level);
+            if (!castable) s += " (" + Message.Localized("ui", "metamagic.too_high").Resolve() + ")";
+            return s;
         }
 
         // The special-slots heading: an explicit name if the book sets one, else Domain / Favorite school.

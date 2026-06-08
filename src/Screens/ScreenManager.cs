@@ -29,6 +29,10 @@ namespace WrathAccess.Screens
             Dispatch(_stack, next);
             _stack = next;
             Current?.OnUpdate();
+            // Standardized first-focus: once the focused screen has built its content (some build lazily in
+            // OnUpdate), make sure something is focused. No-op when focus already exists or the screen is
+            // intentionally unfocused (exploration).
+            WrathAccess.UI.Navigation.EnsureFocus();
         }
 
         /// <summary>Active screens, ordered bottom (low layer) → top (high layer).</summary>
@@ -101,7 +105,7 @@ namespace WrathAccess.Screens
             Register(new CharacterInfoScreen()); // character sheet (CharacterInfo window), navigable; layer 10
             RegisterServiceWindow("Mythic Path", ServiceWindowsType.Mythic);
             Register(new SpellbookScreen()); // spellbook window (known spells + add to action bar), navigable; layer 10
-            RegisterServiceWindow("Journal", ServiceWindowsType.Journal);
+            Register(new JournalScreen()); // journal window (grouped quests + objectives), navigable; layer 10
             RegisterServiceWindow("Encyclopedia", ServiceWindowsType.Encyclopedia);
             RegisterServiceWindow("Map", ServiceWindowsType.LocalMap);
 

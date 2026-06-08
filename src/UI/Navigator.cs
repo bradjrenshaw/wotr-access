@@ -32,6 +32,34 @@ namespace WrathAccess.UI
 
         protected abstract void BuildInitialFocus();
 
+        /// <summary>
+        /// Re-establish initial focus when the focused screen has focusable content but nothing is focused.
+        /// Screens that build their content lazily (an empty shell at <see cref="Attach"/>, filled a frame
+        /// later in OnUpdate) have nothing to focus when first attached; without this they'd sit unfocused
+        /// until the user tabbed in. <see cref="BuildInitialFocus"/> bows out for StartUnfocused screens
+        /// (exploration), so they stay unfocused. Called once per frame after the screen updates; announces
+        /// the landing when focus mode owns the keyboard. A no-op once something is focused.
+        /// </summary>
+        public void EnsureFocus()
+        {
+            if (Screen == null) return;
+            // "No real focus" = nothing focused, OR focus stranded on a transparent Panel — which happens when
+            // initial focus ran before a lazily-built screen filled its content panel (a Panel reports
+            // focusable, so the descent stops on it). In both cases re-establish focus now that content exists.
+            bool stranded = Current is Container c && c.Shape == ContainerShape.Panel;
+            if (Current != null && !stranded) return;
+
+            BuildInitialFocus();          // descends through the (now-populated) panels to a real leaf/cell
+            var target = Current;
+            Path.Clear();
+            // Still no real target (content not built yet, or screen intentionally unfocused) — retry next
+            // frame; don't announce or leave focus parked on a Panel.
+            if (target == null || (target is Container tc && tc.Shape == ContainerShape.Panel)) return;
+            // Re-seat through Focus so every intermediate cursor (e.g. a grid's cell) is set. Announce only
+            // when focus mode owns the keyboard.
+            Focus(target, announce: FocusMode.Active);
+        }
+
         public abstract bool OnInputJustPressed(InputAction action);
         public virtual bool OnInputHeld(InputAction action) => false;
         public virtual bool OnInputReleased(InputAction action) => false;

@@ -22,6 +22,10 @@ namespace WrathAccess.UI
 
         public static void AnnounceCurrent() => Active?.AnnounceCurrent();
 
+        /// <summary>Re-establish initial focus if the focused screen has focusable content but nothing is
+        /// focused yet (e.g. a screen that built its content lazily after attach). Ticked each frame.</summary>
+        public static void EnsureFocus() => Active?.EnsureFocus();
+
         public static void Focus(UIElement element, bool announce = true) => Active?.Focus(element, announce);
     }
 }

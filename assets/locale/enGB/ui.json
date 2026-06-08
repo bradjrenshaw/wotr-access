@@ -98,6 +98,11 @@
   "nav.position": "{index} of {count}",
   "count.items": "{count} items",
 
+  "journal.active": "active",
+  "journal.completed": "completed",
+  "journal.failed": "failed",
+  "journal.updated": "updated",
+
   "log.title": "Log",
   "log.channels": "Channels",
   "log.empty": "No messages."

@@ -21,13 +21,13 @@ namespace WrathAccess.Audio
         private MixingSampleProvider _mixer;
         private readonly Dictionary<string, float[]> _cache = new Dictionary<string, float[]>();
 
-        public void Play(string path, float volume = 1f)
+        public void Play(string path, float volume = 1f, float pan = 0f)
         {
             try
             {
                 EnsureStarted();
                 var buf = Get(path);
-                if (buf != null && buf.Length > 0) _mixer.AddMixerInput(new OneShot(buf, Rate, volume));
+                if (buf != null && buf.Length > 0) _mixer.AddMixerInput(new OneShot(buf, Rate, volume, pan));
             }
             catch (Exception e) { Main.Log?.Error("[sfx] play failed: " + path + " — " + e); }
         }
@@ -79,13 +79,17 @@ namespace WrathAccess.Audio
         private sealed class OneShot : ISampleProvider
         {
             private readonly float[] _buf;
-            private readonly float _vol;
+            private readonly float _gainL, _gainR;
             private int _pos;
 
-            public OneShot(float[] buf, int rate, float vol)
+            public OneShot(float[] buf, int rate, float vol, float pan)
             {
                 _buf = buf;
-                _vol = vol;
+                // Constant-power pan: -1 full left, +1 full right, 0 centred (0.707 each). The buffer is
+                // interleaved stereo (index parity = channel), so apply the per-channel gain by parity.
+                float t = (pan + 1f) * 0.5f * (float)(Math.PI / 2.0);
+                _gainL = vol * (float)Math.Cos(t);
+                _gainR = vol * (float)Math.Sin(t);
                 WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(rate, 2);
             }
 
@@ -95,7 +99,8 @@ namespace WrathAccess.Audio
             {
                 int remaining = _buf.Length - _pos;
                 int n = Math.Min(count, remaining);
-                for (int i = 0; i < n; i++) buffer[offset + i] = _buf[_pos + i] * _vol;
+                for (int i = 0; i < n; i++)
+                    buffer[offset + i] = _buf[_pos + i] * (((_pos + i) & 1) == 0 ? _gainL : _gainR);
                 _pos += n;
                 return n;
             }

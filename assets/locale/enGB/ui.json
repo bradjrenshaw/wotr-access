@@ -59,6 +59,8 @@
   "value.blank": "blank",
   "inventory.sort": "Sort",
   "inventory.search": "Search",
+  "inventory.grip": "Grip",
+  "inventory.toggle_grip": "Toggle grip",
   "value.options": "{count} options",
   "value.targeting": "targeting",
   "value.amount": "{count} {unit}",

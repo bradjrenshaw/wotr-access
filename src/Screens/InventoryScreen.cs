@@ -97,6 +97,10 @@ namespace WrathAccess.Screens
         {
             var sb = new StringBuilder();
             sb.Append(Game.Instance?.SelectionCharacter?.SelectedUnit?.Value.Value?.CharacterName).Append('|');
+            // Weapon-set switch / grip toggle change the equipped hands without touching the stash, so fold
+            // them in to trigger a rebuild (the hand slots are grabbed from the current set at build time).
+            var set = vm.DollVM?.CurrentSet?.Value;
+            if (set != null) sb.Append("set:").Append(set.Index).Append(':').Append((int)set.Grip.Value).Append('|');
             var vis = vm.StashVM?.ItemSlotsGroup?.VisibleCollection;
             if (vis != null)
                 foreach (var s in vis)
@@ -150,6 +154,7 @@ namespace WrathAccess.Screens
             if (sink.Build() is FlowSheet stats && stats.RowCount > 0) _content.Add(stats);
 
             BuildEquipment(vm.DollVM);
+            BuildLoad(vm.StashVM);
             BuildStash(vm);
 
             RestoreFocus(cap);
@@ -167,12 +172,23 @@ namespace WrathAccess.Screens
             return (-1, 0, 0);
         }
 
-        // The equipment doll as a flat list, one "Slot: item" line per slot (each value is just one item,
-        // so a table would be a wasted column). Tooltip + actions ride on the line itself.
+        // The equipment doll: a "Weapon sets" bar (each set a radio; Enter activates, secondary toggles
+        // grip) over a flat "Slot: item" list of the worn gear. Weapon sets sit here because they drive the
+        // hand slots below.
         private void BuildEquipment(InventoryDollVM doll)
         {
             if (doll == null) return;
             var sheet = new FlowSheet();
+
+            if (doll.WeaponSets != null && doll.WeaponSets.Count > 0)
+            {
+                // Grip toggle for the active set, above the sets (only landable when the weapon can re-grip).
+                sheet.Bar("Grip").Cell(new ProxyGripToggle(() => doll.CurrentSet?.Value));
+                var sets = sheet.Bar("Weapon sets");
+                foreach (var ws in doll.WeaponSets)
+                    if (ws != null) sets.Cell(new ProxyWeaponSet(ws));
+            }
+
             var list = sheet.List("Equipment");
             var set = doll.CurrentSet?.Value;
             AddSlot(list, "Primary hand", set?.Primary);
@@ -198,6 +214,23 @@ namespace WrathAccess.Screens
         private static void AddSlot(ListRegion list, string name, EquipSlotVM slot)
         {
             if (slot != null) list.Item(new ProxyEquipSlot(name, slot));
+        }
+
+        // Party-wide readout: carry weight + load status (with the encumbrance breakdown tooltip) and gold.
+        // These live on the shared stash, so they sit between the per-character equipment and the stash list.
+        private void BuildLoad(InventoryStashVM stash)
+        {
+            if (stash == null) return;
+            var sheet = new FlowSheet();
+            var list = sheet.List("Inventory");
+            var enc = stash.EncumbranceVM;
+            if (enc != null)
+                list.Item(new TextElement(() => "Encumbrance: " + enc.LoadWeight.Value
+                        + (string.IsNullOrEmpty(enc.LoadStatus.Value) ? "" : ", " + enc.LoadStatus.Value)),
+                    tooltip: () => stash.EncumbranceTooltip);
+            list.Item(new TextElement(() => "Gold: " + stash.Money.Value));
+            sheet.Reflow();
+            if (sheet.RowCount > 0) _content.Add(sheet);
         }
 
         // The stash panel — ONE FlowSheet so Up/Down walks the bars and the table: search box on top, then

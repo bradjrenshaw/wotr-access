@@ -20,10 +20,10 @@ namespace WrathAccess.Exploration
 
         public override UnitEntityData TargetUnit => _unit; // ability targeting picks this unit
 
-        // No per-unit sounds yet, so units sonify with the generic "unknown" cue at their location, like
-        // map objects. We skip our OWN party (they cluster on the cursor and would drown out the field);
-        // enemies and neutrals drone so you can locate them. (Party still fires the object enter/exit cue.)
-        public override string SonarSound => _unit.IsPlayerFaction ? null : "unknown";
+        // Sonar cue by faction — the same split the scanner uses (Party / Enemies / Neutrals): your party are
+        // allies, hostiles are enemies, everyone else neutral.
+        public override string SonarSound =>
+            _unit.IsPlayerFaction ? "units-ally" : _unit.IsPlayersEnemy ? "units-enemy" : "units-neutral";
 
         // The unit's body radius (size-scaled) — what combat reach uses for edge-to-edge distance, so a
         // Large/Huge creature correctly reports a footprint spanning several tiles.

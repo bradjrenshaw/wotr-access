@@ -92,15 +92,16 @@ namespace WrathAccess.Exploration
             }
         }
 
-        // The sonar cue for this object: loot sub-type / door / trap if we have one, else "unknown" for any
-        // other interactable role, else null (scenery — nothing to ping). Mirrors Categories: skips
-        // disabled parts (a HiddenPart gates the rest until searched → reads "unknown" while hidden).
+        // The sonar cue for this object, by interactable role: loot sub-type / door / trap / area transition /
+        // generic mechanism (lever, switch, usable). "unknown" is reserved for a not-yet-found HiddenPart
+        // (there's something here, but you haven't searched it out); plain scenery returns null. Skips
+        // disabled parts.
         public override string SonarSound
         {
             get
             {
                 InteractionLootPart loot = null;
-                bool door = false, trap = false, other = false;
+                bool door = false, trap = false, hidden = false, mechanism = false;
                 var interactions = _obj.Interactions;
                 for (int i = 0; i < interactions.Count; i++)
                 {
@@ -111,16 +112,18 @@ namespace WrathAccess.Exploration
                         case InteractionLootPart l: loot = l; break;
                         case InteractionDoorPart _: door = true; break;
                         case DisableTrapInteractionPart _: trap = true; break;
-                        case HiddenPart h: if (!h.Opened) other = true; break;
-                        default: other = true; break;
+                        case HiddenPart h: if (!h.Opened) hidden = true; break;
+                        default: mechanism = true; break;
                     }
                 }
-                if (_obj.Get<AreaTransitionPart>() != null) other = true;
+                bool transition = _obj.Get<AreaTransitionPart>() != null;
 
                 if (loot != null) return LootSound(loot);
                 if (door) return "door";
                 if (trap) return "trap";
-                return other ? "unknown" : null;
+                if (transition) return "transition";
+                if (mechanism) return "mechanism";
+                return hidden ? "unknown" : null;
             }
         }
 

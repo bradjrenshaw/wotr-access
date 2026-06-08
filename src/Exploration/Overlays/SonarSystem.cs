@@ -31,6 +31,7 @@ namespace WrathAccess.Exploration.Overlays
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
             cat.Add(new WrathAccess.Settings.IntSetting("ref_distance", "Reference distance (feet)", 10, 1, 60, 1, "overlay.sonar.ref_distance"));
+            cat.Add(new WrathAccess.Settings.IntSetting("max_distance", "Maximum distance (feet)", 40, 10, 120, 5, "overlay.sonar.max_distance"));
             cat.Add(new WrathAccess.Settings.IntSetting("gap_min", "Minimum ping gap (ms)", 100, 30, 400, 10, "overlay.sonar.gap_min"));
             cat.Add(new WrathAccess.Settings.IntSetting("gap_max", "Maximum ping gap (ms)", 200, 50, 600, 10, "overlay.sonar.gap_max"));
             cat.Add(new WrathAccess.Settings.IntSetting("rest", "Rest between sweeps (ms)", 400, 0, 1500, 50, "overlay.sonar.rest"));
@@ -59,15 +60,24 @@ namespace WrathAccess.Exploration.Overlays
 
         private void ResetSweep() { _sweep.Clear(); _index = 0; _timer = 0f; }
 
-        // Visible sonifiable things, ordered left→right by lateral offset from the cursor so the pan glides
-        // across the sweep (two same-type things read as "left … right", not a centred average).
+        // Visible sonifiable things within the sense radius of the cursor, ordered left→right by lateral
+        // offset so the pan glides across the sweep (two same-type things read as "left … right", not a
+        // centred average). The radius cap stops a far-but-revealed thing from flooring at min volume and
+        // sounding deceptively close — out past it, it simply drops from the sweep.
         private void Snapshot(Overlay overlay)
         {
-            float cx = overlay.Cursor.Position.x;
+            var c = overlay.Cursor.Position;
+            float maxDist = Int("max_distance", 40) * Geo.MetresPerFoot;
             _sweep.Clear();
             foreach (var it in WorldModel.Items)
-                if (it.IsVisible && it.SonarSound != null) _sweep.Add(it);
-            _sweep.Sort((a, b) => (a.Position.x - cx).CompareTo(b.Position.x - cx));
+            {
+                if (!it.IsVisible || it.SonarSound == null) continue;
+                float dx = it.Position.x - c.x, dz = it.Position.z - c.z;
+                float edge = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - it.Footprint);
+                if (edge > maxDist) continue;
+                _sweep.Add(it);
+            }
+            _sweep.Sort((a, b) => (a.Position.x - c.x).CompareTo(b.Position.x - c.x));
         }
 
         private void FirePing(ScanItem item, Overlay overlay)

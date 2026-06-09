@@ -4,8 +4,8 @@ using System.Reflection;
 using HarmonyLib;
 using Kingmaker;
 using Kingmaker.GameModes; // GameModeType
+using Kingmaker.Modding; // OwlcatModification (the game's native mod system)
 using UnityEngine;
-using UnityModManagerNet;
 using WrathAccess.Audio;
 using WrathAccess.Exploration.Overlays;
 using WrathAccess.Input;
@@ -15,29 +15,45 @@ using WrathAccess.UI; // NavDirection
 namespace WrathAccess
 {
     /// <summary>
-    /// Unity Mod Manager entry point. UMM finds <c>WrathAccess.Main.Load</c>
-    /// (declared in Info.json's EntryMethod) and calls it once at game start.
+    /// Entry point for the game's NATIVE mod system (Kingmaker.Modding — no Unity Mod Manager). The game
+    /// loads every assembly under <c>Modifications/WrathAccess/Assemblies/</c> and invokes the
+    /// <c>[OwlcatModificationEnterPoint]</c> method during boot (GameStarter, before the main menu),
+    /// passing our <c>OwlcatModification</c>. Install = copy the mod folder + list "WrathAccess" in
+    /// <c>OwlcatModificationManagerSettings.json</c> (+ Tolk natives next to Wrath.exe) — pure file
+    /// operations, no third-party installer. The native system has no per-frame hook, so we spawn our own
+    /// persistent <see cref="Ticker"/> MonoBehaviour to drive the input/screen/overlay loops.
     /// </summary>
     public static class Main
     {
-        public static UnityModManager.ModEntry.ModLogger Log;
+        public static ModLogger Log;
 
-        /// <summary>Master switch, flipped from UMM's mod list (OnToggle).</summary>
+        /// <summary>Master switch, flipped from the game's Modifications window (OnSetEnabled).</summary>
         public static bool Enabled = true;
+
+        /// <summary>The mod's install folder (assets live at its root, the DLL under Assemblies/).</summary>
+        public static string ModDir { get; private set; }
 
         private static Harmony _harmony;
 
-        public static bool Load(UnityModManager.ModEntry modEntry)
+        [OwlcatModificationEnterPoint]
+        public static void Load(OwlcatModification modification)
         {
-            Log = modEntry.Logger;
-            modEntry.OnToggle = OnToggle;
-            modEntry.OnUpdate = OnUpdate;
+            Log = new ModLogger();
+            ModDir = modification.Path;
+            // Wire the game's enable/disable plumbing to our master switch.
+            modification.IsEnabled = () => Enabled;
+            modification.OnSetEnabled = enabled =>
+            {
+                Enabled = enabled;
+                if (!enabled) FocusMode.Set(false);
+                Log.Log("WrathAccess " + (enabled ? "enabled" : "disabled"));
+            };
 
             try
             {
                 Tts.Initialize();
                 WrathAccess.Localization.LocalizationManager.Initialize(); // wire Message's resolver early
-                _harmony = new Harmony(modEntry.Info.Id);
+                _harmony = new Harmony("WrathAccess");
                 _harmony.PatchAll(Assembly.GetExecutingAssembly());
                 // Verify the pointer-cursor patch actually attached (this class of bug has bitten us before).
                 var tick = HarmonyLib.AccessTools.Method(typeof(Kingmaker.Controllers.Clicks.PointerController), "Tick");
@@ -58,20 +74,23 @@ namespace WrathAccess
                 // Overlays.LogSystem (per-overlay, per-message-type toggles) fed by the LogFeed Harmony tap.
                 WarningReader.Initialize(); // speak the game's "can't do that" warnings (refusal reasons)
 
+                // The native mod system has no per-frame callback — drive our loops from our own
+                // persistent MonoBehaviour (survives scene loads via DontDestroyOnLoad).
+                var ticker = new GameObject("WrathAccess.Ticker");
+                UnityEngine.Object.DontDestroyOnLoad(ticker);
+                ticker.AddComponent<Ticker>();
+
                 Log.Log("WrathAccess initialized. " + BuildStamp());
                 Tts.Speak(Loc.T("app.loaded"));
             }
             catch (Exception e)
             {
                 Log.Error("Initialization failed: " + e);
-                return false;
             }
-
-            return true;
         }
 
         // The loaded DLL's build time + path, logged at startup so we can confirm from Player.log which
-        // build is actually running (UMM loads the assembly at launch — code changes need a game restart).
+        // build is actually running (the game loads the assembly at boot — code changes need a restart).
         private static string BuildStamp()
         {
             try
@@ -82,15 +101,17 @@ namespace WrathAccess
             catch { return "Build ?"; }
         }
 
-        private static bool OnToggle(UnityModManager.ModEntry modEntry, bool value)
+        /// <summary>Our per-frame driver (the native mod system has no update hook of its own). The
+        /// negative execution order runs us BEFORE the game's scripts each frame — UMM's dispatcher got
+        /// that position implicitly by being created at injection time, before any game object existed;
+        /// created mid-boot we'd otherwise run after them, adding a frame of input latency.</summary>
+        [DefaultExecutionOrder(-10000)]
+        private sealed class Ticker : MonoBehaviour
         {
-            Enabled = value;
-            if (!value) FocusMode.Set(false);
-            Log.Log("WrathAccess " + (value ? "enabled" : "disabled"));
-            return true;
+            private void Update() { try { OnFrame(); } catch (Exception e) { Log?.Error("[tick] " + e); } }
         }
 
-        private static void OnUpdate(UnityModManager.ModEntry modEntry, float dt)
+        private static void OnFrame()
         {
             if (!Enabled) return;
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap

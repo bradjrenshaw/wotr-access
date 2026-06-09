@@ -35,8 +35,10 @@ namespace WrathAccess.Localization
 
         public static string Language => _language;
 
+        // Assets live at the MOD ROOT (a sibling of Assemblies/ — anything under Assemblies/ would be
+        // Assembly.LoadFrom'd by the game's mod loader). Falls back to the DLL's folder for a loose copy.
         private static string Root =>
-            Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "assets", "locale");
+            Path.Combine(Main.ModDir ?? Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "assets", "locale");
 
         public static void Initialize()
         {

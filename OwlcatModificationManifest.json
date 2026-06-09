@@ -1,0 +1,10 @@
+{
+  "UniqueName": "WrathAccess",
+  "Version": "0.1.0",
+  "DisplayName": "Wrath Access",
+  "Description": "Screen-reader accessibility for Pathfinder: Wrath of the Righteous — speaks menus, dialogue, exploration, and combat via Tolk.",
+  "Author": "Bradley Renshaw",
+  "Repository": "https://github.com/bradjrenshaw/wotr-access",
+  "HomePage": "https://github.com/bradjrenshaw/wotr-access",
+  "Dependencies": []
+}

@@ -12,13 +12,27 @@ SayTheSpire / SayTheSpire2; reuse those patterns where they fit.
   - `Assembly-CSharp.dll` — game code, `Kingmaker.*` namespace.
   - `Owlcat.Runtime.UI.dll` — UI controls + the **console navigation / focus** system.
   - `0Harmony.dll` ships with the game.
-- **Modding framework**: **Unity Mod Manager (UMM)**. WotR has first-class UMM support.
-- **Target framework**: `net48`. (Must match/exceed net4.8 because UMM's bundled
-  `0Harmony` 2.3.6 is built against net4.8; targeting net472 makes MSBuild drop the
-  UnityModManager reference.) Needs the .NET Framework 4.8 targeting pack to build.
-- **Harmony**: reference UMM's `0Harmony.dll` from
-  `<Managed>\UnityModManager\0Harmony.dll` (the instance UMM loads at runtime),
-  not the game's older bundled copy.
+- **Modding framework**: the game's **native mod system** (`Kingmaker.Modding`,
+  "Owlcat modifications") — NO Unity Mod Manager. Mods live in
+  `%LocalLow%\Owlcat Games\Pathfinder Wrath Of The Righteous\Modifications\<Name>\`
+  and must be listed in `EnabledModifications` in
+  `<LocalLow root>\OwlcatModificationManagerSettings.json`. Install = pure file
+  copies + one JSON edit (the point: UMM's installer is inaccessible).
+  - Layout: `OwlcatModificationManifest.json` + `OwlcatModificationSettings.json`
+    (**required even when empty `{}`** — the loader throws if missing, killing the
+    mod before its entry point) + `Assemblies\` (managed dlls ONLY — every file in
+    there is `Assembly.LoadFrom`'d) + `assets\` at the root (resolved via
+    `Main.ModDir`) + empty `Bundles\` + `Blueprints\` (loader throws if absent).
+  - Entry: `[OwlcatModificationEnterPoint]` static method, invoked during boot
+    (`GameStarter`, before the main menu) with our `OwlcatModification`.
+  - No native per-frame hook → our own `Ticker` MonoBehaviour drives the loops,
+    pinned `[DefaultExecutionOrder(-10000)]` (before all game scripts; matches the
+    frame position UMM's dispatcher had implicitly).
+  - Native mods set `IsAnyModActive` → Steam achievements are disabled (UMM was
+    invisible to the game). Accepted; may revisit with a patch later.
+- **Target framework**: `net48`. Needs the .NET Framework 4.8 targeting pack to build.
+- **Harmony**: the game's own bundled `0Harmony.dll` (**2.0.4**) from `<Managed>` —
+  the only Harmony in the process. Keep patches within 2.0.x API.
 
 ## Decompiled reference (not in this repo)
 - `../wotr-decompiled/Assembly-CSharp-full/` — **COMPLETE** (~10,070 types). Game
@@ -41,20 +55,20 @@ capturing the rest. ~100 restarts is normal.
 ```
 dotnet build
 ```
-Debug build compiles `WrathAccess.dll` and copies it + `Info.json` +
-`TolkDotNet.dll` into `<Game>\Mods\WrathAccess\`, and the native Tolk dlls next
-to `Wrath.exe`. Then restart the game. Release does **not** deploy.
-
-Prerequisite: **UMM must be installed into the game first** (it provides
-`UnityModManager.dll`, referenced by the csproj at
-`<Managed>\UnityModManager\UnityModManager.dll`). If your install put UMM
-elsewhere, override `-p:UmmDll=...`. UMM is installed here via the **doorstop**
-method: `winhttp.dll` + `doorstop_config.ini` in the game root, manager binaries
-+ `Config.xml` in `<Managed>\UnityModManager\`.
+Debug build compiles `WrathAccess.dll` and deploys the full native-mod layout to
+`%LocalLow%\...\Modifications\WrathAccess\` (manifest + settings json + dlls
+under `Assemblies\` + `assets\`), and the native Tolk dlls next to `Wrath.exe`
+(**game must be closed** or the Tolk.dll copy fails; `dotnet build -c Release`
+compiles without deploying). Then restart the game. The mod must be enabled once
+in `OwlcatModificationManagerSettings.json` (already done on this machine).
 
 ## Logs
-UMM log: `<Game>\Mods\UnityModManager.log` (and the in-game UMM console).
-Our lines go through `Main.Log` (UMM's logger).
+Our lines go through `Main.Log` (our `ModLogger`) → Unity's debug log with a
+`[WrathAccess]` prefix → **Player.log**
+(`%LocalLow%\Owlcat Games\Pathfinder Wrath Of The Righteous\Player.log`).
+The game's MOD LOADER logs to the **GameLog**, not Player.log — read
+`<LocalLow root>\GameLogFull.txt` (grep `Mods]`) to diagnose load failures
+("Apply modification", "Load assembly", "Enter point not found", exceptions).
 
 ## Navigation strategy (decided)
 **Custom keyboard navigation in Mouse mode** — NOT the gamepad/console-nav system.
@@ -66,8 +80,9 @@ jumps) and reshapes the whole UI. Instead we build our own nav over the live
 `Game.Instance.Keyboard.Disabled` while our focus mode owns the keyboard.
 
 ## Architecture (current — input substrate)
-- `src/Main.cs` — UMM entry (`Load`). Boots Tolk, Harmony, registers input,
-  ticks `InputManager` from `OnUpdate`; `Enabled` master switch.
+- `src/Main.cs` — native-mod entry (`[OwlcatModificationEnterPoint] Load`). Boots
+  Tolk, Harmony, registers input; the `Ticker` MonoBehaviour drives the per-frame
+  loops; `Enabled` master switch (wired to the game's mod enable/disable).
 - `src/Tts.cs` — Tolk wrapper. Never interrupts by default (SayTheSpire preference).
 - `src/Input/` — ported SayTheSpire2 input framework, Unity-backed:
   `InputManager` (registry + per-frame poll), `InputAction`, `InputBinding` +

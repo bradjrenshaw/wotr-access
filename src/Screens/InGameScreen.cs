@@ -1,10 +1,14 @@
 using System.Collections.Generic;
 using System.Text;
 using Kingmaker;
+using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UI.Common; // UIUtility.GetServiceWindowsLabel
 using Kingmaker.UI.MVVM._VM.ActionBar;
 using Kingmaker.UI.MVVM._VM.ServiceWindows; // ServiceWindowsVM, ServiceWindowsType
 using Kingmaker.UI.UnitSettings; // MechanicActionBarSlotEmpty
+using Kingmaker.UnitLogic; // GetRider / IsSummoned extensions
+using Kingmaker.UnitLogic.Parts; // UnitPartInsideAnotherCreature
+using WrathAccess.Exploration; // CombatMode
 using WrathAccess.Localization;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
@@ -32,11 +36,13 @@ namespace WrathAccess.Screens
         public override bool StartUnfocused => true; // exploration owns the arrows; Tab brings up the HUD
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
 
-        public override void OnPush() { BuildShell(); _sig = null; _lastRestoreLabel = null; }
-        public override void OnPop() { Clear(); _bar = null; }
+        public override void OnPush() { BuildShell(); _sig = null; _initSig = null; _lastRestoreLabel = null; }
+        public override void OnPop() { Clear(); _bar = null; _initiative = null; }
 
         private FlowSheet _bar;        // the action-bar FlowSheet (a stable child; only its regions rebuild)
+        private ListContainer _initiative; // turn-based initiative order (a stable child; empty out of combat)
         private string _sig;          // last action-bar content signature
+        private string _initSig;      // last initiative-order membership signature
         private string _lastRestoreLabel; // dedupe the restore announce across a multi-frame settle
         private UIElement _watchedSlot;
         private string _watchedToggle;
@@ -49,6 +55,7 @@ namespace WrathAccess.Screens
             var sig = Sig();
             if (sig != _sig) { _sig = sig; RefreshBar(); }
             else _lastRestoreLabel = null; // settled: the next change announces its landing
+            RefreshInitiative();
         }
 
         // While an action-bar slot is focused, announce when its live state changes under you — the toggle
@@ -82,6 +89,12 @@ namespace WrathAccess.Screens
             Clear();
             _bar = new FlowSheet("Action bar");
             Add(_bar);
+
+            // Turn-based initiative order: a stable tab-stop right after the action bar. Populated only in
+            // turn-based combat (RefreshInitiative); while empty it has no focusable children, so the Tab
+            // cycle skips it entirely.
+            _initiative = new ListContainer("Initiative order");
+            Add(_initiative);
 
             Add(new ProxyActionButton("Log", () => true, ModLogScreen.Open));
 
@@ -141,6 +154,70 @@ namespace WrathAccess.Screens
             bool announce = label != _lastRestoreLabel; // suppress the repeat while a change settles over frames
             _lastRestoreLabel = label;
             Navigation.Focus(cell, announce);
+        }
+
+        // Rebuild the initiative list only when its membership/order changes (units join, die, or delay).
+        // Entry labels are LIVE (name, initiative, active marker), so the marker moving each turn needs no
+        // rebuild — and no focus juggling. If a rebuild does land while focus is inside the list, restore to
+        // the same unit's entry (or the first, if it's gone).
+        private void RefreshInitiative()
+        {
+            if (_initiative == null) return;
+            var units = InitiativeUnits();
+            var sb = new StringBuilder();
+            foreach (var u in units) sb.Append(u.UniqueId).Append('|');
+            var sig = sb.ToString();
+            if (sig == _initSig) return;
+            _initSig = sig;
+
+            var focusedUnit = (Navigation.Active?.Current as InitiativeEntry)?.Unit;
+            _initiative.Clear();
+            foreach (var u in units) _initiative.Add(new InitiativeEntry(u));
+            if (focusedUnit == null) return; // focus wasn't in the list — nothing to restore
+            UIElement target = null;
+            foreach (var child in _initiative.Children)
+                if (child is InitiativeEntry e && e.Unit == focusedUnit) { target = e; break; }
+            target = target ?? _initiative.FirstFocusable();
+            // Same unit → silent restore (its live label already reads current); unit gone → announce the landing.
+            if (target != null) Navigation.Focus(target, announce: (target as InitiativeEntry)?.Unit != focusedUnit);
+        }
+
+        // The units in initiative order, mirroring the game's own tracker (InitiativeTrackerVM.UpdateUnits):
+        // SortedUnits is kept sorted by the game (surprise-round actors first, then initiative descending);
+        // skip unprepared units and mounts (the rider represents the pair), and hide invisible units unless
+        // they're the current unit, summoned, or inside another creature that isn't hidden.
+        private static List<UnitEntityData> InitiativeUnits()
+        {
+            var list = new List<UnitEntityData>();
+            if (!CombatMode.InTurnBased) return list;
+            var tb = Game.Instance?.TurnBasedCombatController;
+            if (tb == null) return list;
+            var current = tb.CurrentTurn?.Rider;
+            foreach (var u in tb.SortedUnits)
+            {
+                if (u == null || !u.CombatState.Prepared || u.GetRider() != null) continue;
+                if (!u.IsVisibleForPlayer && u != current && !u.IsSummoned())
+                {
+                    var inside = u.Get<UnitPartInsideAnotherCreature>();
+                    if (inside == null || (bool)inside.Owner.State.Features.Hidden) continue;
+                }
+                list.Add(u);
+            }
+            return list;
+        }
+
+        // One initiative row — live text, so the active marker follows the turn without a rebuild.
+        private sealed class InitiativeEntry : TextElement
+        {
+            public readonly UnitEntityData Unit;
+            public InitiativeEntry(UnitEntityData unit) : base(() => Render(unit)) { Unit = unit; }
+
+            private static string Render(UnitEntityData u)
+            {
+                string s = u.CharacterName + ", " + u.CombatState.Initiative;
+                if (Game.Instance?.TurnBasedCombatController?.CurrentTurn?.Rider == u) s += ", active";
+                return s;
+            }
         }
 
         // The action bar's content fingerprint: the selected unit + the titles of the usable slots in each

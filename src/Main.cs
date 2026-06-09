@@ -39,6 +39,11 @@ namespace WrathAccess
                 WrathAccess.Localization.LocalizationManager.Initialize(); // wire Message's resolver early
                 _harmony = new Harmony(modEntry.Info.Id);
                 _harmony.PatchAll(Assembly.GetExecutingAssembly());
+                // Verify the pointer-cursor patch actually attached (this class of bug has bitten us before).
+                var tick = HarmonyLib.AccessTools.Method(typeof(Kingmaker.Controllers.Clicks.PointerController), "Tick");
+                var pinfo = tick != null ? Harmony.GetPatchInfo(tick) : null;
+                Log.Log("[patch] PointerController.Tick found=" + (tick != null)
+                    + " postfixes=" + (pinfo?.Postfixes?.Count ?? 0));
                 RegisterInput();
                 // Mod settings tree (the mod menu's tabs are its top-level categories). Built before load
                 // so saved config (settings.json under the persistent data dir) overrides the defaults.
@@ -92,6 +97,7 @@ namespace WrathAccess
             ScreenManager.Tick();
             TickPause(); // announce the game's pause state whenever it changes (ours OR the game's own)
             TickControl(); // chime when a cutscene/scripted event takes or returns control of the party
+            WrathAccess.Exploration.CombatMode.TickTurn(); // announce whose turn it is in turn-based combat
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
@@ -172,6 +178,21 @@ namespace WrathAccess
             if (!QuickSaveModes.Contains(game.CurrentMode)) { Tts.Speak("Can't quick save now"); return; }
             try { game.MakeQuickSave(); Tts.Speak("Quick saving"); }
             catch (Exception e) { Log.Error("[quicksave] " + e); Tts.Speak("Quick save failed"); }
+        }
+
+        // Flip the game's real-time-with-pause <-> turn-based combat mode. We only flip the EnableTurnBasedMode
+        // setting — the game's GameSettingsController hooks its OnValueChanged and applies every state change
+        // (combat mode switch, etc.), so we mirror the game's own toggle exactly rather than driving state.
+        private static void ToggleCombatMode()
+        {
+            var rc = Game.Instance?.RootUiContext;
+            if (rc == null || !rc.IsInGame) return; // only in a loaded area (where combat happens)
+            var setting = Kingmaker.Settings.SettingsRoot.Game.TurnBased.EnableTurnBasedMode;
+            bool nowTurnBased = !setting; // the mode we're switching TO
+            // The game's own mode-change cue for the target mode, then flip (it confirms + propagates).
+            UiSound.Play(nowTurnBased ? Kingmaker.UI.UISoundType.ChangeModeTBM : Kingmaker.UI.UISoundType.ChangeModeRTWP);
+            setting.SetValueAndConfirm(nowTurnBased);
+            Tts.Speak(nowTurnBased ? "Turn-based mode" : "Real-time mode");
         }
 
         /// <summary>
@@ -263,6 +284,11 @@ namespace WrathAccess
             // Mod menu — Ctrl+M, available everywhere (a global hotkey, fires in either focus mode).
             InputManager.Register("mod.menu", "Open mod menu",
                 () => WrathAccess.Screens.ModMenuScreen.Toggle()).AddBinding(KeyCode.M, ctrl: true);
+
+            // Ctrl+T: toggle the game's combat mode (real-time-with-pause <-> turn-based). Ctrl+T is free in
+            // normal play (the game's Ctrl+T "LocalTeleport" is a cheat-only binding).
+            InputManager.Register("combat.toggleMode", "Toggle turn-based / real-time",
+                ToggleCombatMode).AddBinding(KeyCode.T, ctrl: true);
 
             // Exploration scanner: a categorized, distance-sorted list of things in the current area.
             // Active only in the in-game context while focus mode owns the keyboard (Scanner gates itself).

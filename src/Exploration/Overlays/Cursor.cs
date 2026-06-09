@@ -66,13 +66,16 @@ namespace WrathAccess.Exploration.Overlays
         public void OnEnter(Overlay overlay) { foreach (var m in _modes) m.OnEnter(overlay); }
         public void OnExit(Overlay overlay) { foreach (var m in _modes) m.OnExit(overlay); }
 
-        /// <summary>The party leader's live position — the origin for relative readouts.</summary>
+        /// <summary>The reference unit's live position — the origin for relative readouts and recenter. In
+        /// turn-based that's the acting unit (so "c" lands on whoever's turn it is); otherwise the main
+        /// character.</summary>
         public static Vector3 PlayerPosition
         {
             get
             {
                 var p = Kingmaker.Game.Instance?.Player;
-                var u = p != null ? p.MainCharacter.Value : null;
+                var u = WrathAccess.Exploration.CombatMode.ReferenceUnit
+                    ?? (p != null ? p.MainCharacter.Value : null);
                 return WrathAccess.Exploration.Geo.Live(u);
             }
         }

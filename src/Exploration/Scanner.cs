@@ -31,9 +31,11 @@ namespace WrathAccess.Exploration
         private static bool Active =>
             FocusMode.Active && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";
 
+        // The reference unit for distances/bearings: in turn-based the acting unit (so readouts are relative
+        // to whoever's turn it is), otherwise the main character.
         private static UnitEntityData Leader
         {
-            get { var p = Game.Instance?.Player; return p != null ? p.MainCharacter.Value : null; }
+            get { var p = Game.Instance?.Player; return CombatMode.ReferenceUnit ?? (p != null ? p.MainCharacter.Value : null); }
         }
 
         private static Vector3 Reference => Geo.Live(Leader);
@@ -239,6 +241,16 @@ namespace WrathAccess.Exploration
             if (refUnit == null) { Speak("No character to move"); return; }
             if (!SameArea(Geo.Live(refUnit), dest)) { Speak("Can't reach the cursor, no path"); return; }
 
+            // Turn-based: don't move to the raw cursor point — drive the game's own pathfinding to our cursor
+            // and move to that path's endpoint. The prediction system that normally produces this path is
+            // mouse-driven and won't fire for us, so issuing a raw UnitMoveTo just instant-completes.
+            if (CombatMode.InTurnBased)
+            {
+                var ep = CombatMode.PathEndpointToward(dest);
+                if (!ep.HasValue) { Speak("No path to cursor"); return; }
+                dest = ep.Value;
+            }
+
             ClickGroundHandler.MoveSelectedUnitsToPoint(dest);
             // Engage the game's camera follower on the lead unit so the camera tracks it as it walks (and,
             // because IsOn is persistent and TryFollow re-targets to the selected unit every frame, through
@@ -278,6 +290,7 @@ namespace WrathAccess.Exploration
             var sc = Game.Instance?.SelectionCharacter;
             if (sc == null) return;
             if (sc.SelectedUnits != null && sc.SelectedUnits.Count > 0) return;
+            if (CombatMode.InTurnBased) return; // TB: the game keeps the acting unit selected; never SelectAll
             Game.Instance.UI?.SelectionManager?.SelectAll();
         }
 

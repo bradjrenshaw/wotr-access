@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Kingmaker;
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UI.Common; // UIUtilityUnit.SetCharacterSelected (the game's own select path)
+using TurnBased.Controllers; // CombatController (turn-based state)
 using WrathAccess.Screens;
 
 namespace WrathAccess.Exploration
@@ -28,8 +29,19 @@ namespace WrathAccess.Exploration
         private static bool Active =>
             FocusMode.Active && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";
 
-        public static void SelectWholeParty() { if (Active) DoSelectAll(); }
-        public static void SelectMember(int index) { if (Active) DoSelectMember(index); }
+        public static void SelectWholeParty() { if (Active && !TurnBasedBlocks()) DoSelectAll(); }
+        public static void SelectMember(int index) { if (Active && !TurnBasedBlocks()) DoSelectMember(index); }
+
+        // In turn-based combat the acting unit is fixed by initiative and the game keeps it selected, so
+        // switching party members (or selecting all) doesn't apply — you act with one unit per turn. Stand
+        // down and announce whose turn it is instead of fighting the game's selection.
+        private static bool TurnBasedBlocks()
+        {
+            if (!CombatController.IsInTurnBasedCombat()) return false;
+            var cur = CombatController.SelectedUnit;
+            Tts.Speak(cur != null ? cur.CharacterName + "'s turn" : "Turn-based mode", interrupt: true);
+            return true;
+        }
 
         private static void DoSelectAll()
         {

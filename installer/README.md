@@ -1,38 +1,29 @@
 # Wrath Access installer
 
-An accessible wxPython GUI installer for the mod, compiled with **Nuitka
-`--onefile`** with the mod payload embedded — the entire release is ONE
-`WrathAccessInstaller.exe` (~15 MB). Onefile self-extracts to temp at runtime
-(the classic antivirus-heuristic pattern), so Defender behaviour is verified by
-testers per release; the local on-demand Defender scan of the first build was
-clean. If flags ever appear: `python installer/build.py --folder` builds the
-standalone-folder fallback (no self-extraction; zip it), and the durable
-escalation is code signing (SignPath's free OSS program / Azure Trusted
-Signing).
+An accessible **Rust + wxdragon** (native wxWidgets controls) GUI installer —
+the same proven approach as the SayTheSpire2 installer: compiles to a small
+ordinary exe with no self-extraction or runtime unpacking, so it doesn't trip
+antivirus heuristics the way packaged Python does (the Python/Nuitka attempt
+got `Wacatac.H!ml`-flagged mid-build and was abandoned).
 
 ## What it does
-- Detects the game install (default Steam paths + every Steam library via the
-  registry and `libraryfolders.vdf`), with a Browse fallback.
-- **Install**: copies `payload/WrathAccess` into
-  `%LocalLow%\Owlcat Games\Pathfinder Wrath Of The Righteous\Modifications\`,
-  recreates the empty `Bundles`/`Blueprints` dirs the game's loader requires,
-  adds `WrathAccess` to `EnabledModifications` in
-  `OwlcatModificationManagerSettings.json`, and copies the Tolk native DLLs next
-  to `Wrath.exe`.
-- **Uninstall**: reverses all of it; the user's Wrath Access settings are kept.
+- Detects the game across Steam libraries (`libraryfolders.vdf`), Browse fallback.
+- **Install / Update**: downloads the chosen release's `WrathAccess.zip` from
+  GitHub (version picker incl. pre-releases, release notes shown first) and
+  extracts it: `WrathAccess/` into the game's LocalLow `Modifications\` folder
+  (replaced wholesale), `game/` (Tolk natives) next to `Wrath.exe`; recreates
+  the empty `Assemblies`/`Bundles`/`Blueprints` dirs the loader requires; adds
+  `WrathAccess` to `EnabledModifications` in
+  `OwlcatModificationManagerSettings.json` (other mods' entries preserved).
+- **Install from file**: the same from a local zip (testers / offline).
+- **Uninstall**: reverses everything; the user's Wrath Access settings are kept.
+- `--cli` flag: a fully keyboard/console flow instead of the GUI.
 
-## Building a release
+## Building
 ```
-pip install wxPython nuitka
-python installer/build.py            # single-file exe (payload embedded)
-python installer/build.py --folder   # standalone-folder fallback (zip it)
+cargo build --release          # in installer/
 ```
-Output: `installer/build/WrathAccessInstaller.exe` — that exe IS the release.
-
-## Developing / testing the GUI without compiling
-```
-pip install wxPython
-python installer/installer.py
-```
-(The payload folder only needs to exist for the Install button — run
-`build.py` once, or point a junction at a staged payload.)
+Release artifacts (payload zip + installer exe): `python scripts/release.py`,
+then `gh release create vX.Y.Z dist/WrathAccess.zip dist/WrathAccessInstaller.exe`.
+Keep the tag in sync with `Version` in `OwlcatModificationManifest.json` — the
+installer compares it against release tags to offer updates.

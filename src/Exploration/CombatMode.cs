@@ -33,6 +33,33 @@ namespace WrathAccess.Exploration
         /// </summary>
         public static Vector3? PathEndpointToward(Vector3 point, float approachRadius = 0.3f)
         {
+            var pts = ComputePath(point, approachRadius);
+            if (pts == null || pts.Count == 0) return null;
+            return pts[pts.Count - 1];
+        }
+
+        /// <summary>
+        /// Path facts for an announcement: the walk length to <paramref name="point"/>, how far short of it
+        /// the path ends (a partial path to the closest reachable node = the spot itself is unreachable),
+        /// and the current unit's remaining movement this turn — all in metres. False if no path at all.
+        /// </summary>
+        public static bool TryPathInfo(Vector3 point, out float lengthMeters, out float endGapMeters, out float remainingMeters)
+        {
+            lengthMeters = endGapMeters = remainingMeters = 0f;
+            var cu = CurrentUnit;
+            var pts = ComputePath(point, 0.3f);
+            if (cu == null || pts == null || pts.Count == 0) return false;
+            for (int i = 1; i < pts.Count; i++) lengthMeters += Vector3.Distance(pts[i - 1], pts[i]);
+            var end = pts[pts.Count - 1];
+            float dx = end.x - point.x, dz = end.z - point.z;
+            endGapMeters = Mathf.Sqrt(dx * dx + dz * dz);
+            // total: both actions spent on movement — "can I get there at all this turn".
+            remainingMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: true, singleActionMove: false);
+            return true;
+        }
+
+        private static System.Collections.Generic.List<Vector3> ComputePath(Vector3 point, float approachRadius)
+        {
             if (!InTurnBased) return null;
             var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
             var cu = CurrentUnit;
@@ -48,7 +75,7 @@ namespace WrathAccess.Exploration
 
             var path = pv.CurrentPathForUnit(cu.View);
             if (path == null || path.vectorPath == null || path.vectorPath.Count == 0) return null;
-            return path.vectorPath[path.vectorPath.Count - 1];
+            return path.vectorPath;
         }
 
         /// <summary>

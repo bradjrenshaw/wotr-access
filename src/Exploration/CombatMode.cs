@@ -60,11 +60,33 @@ namespace WrathAccess.Exploration
         public static UnitEntityData ReferenceUnit => InTurnBased ? CurrentUnit : null;
 
         // Announce whose turn it is when the active unit changes — the cue to act (your unit) or wait (an
-        // enemy). Ticked from Main.OnUpdate.
+        // enemy) — and when a player unit's turn ENDS. The end cue watches the game's own end-turn signal:
+        // every end path (Space/ForceToEnd, auto-end on exhausted actions, AI) goes through
+        // TurnController.End() → Status = Ended, so we track the live turn object and fire on that
+        // transition (the ITurnBasedUnitTurnEndedHandler EventBus interface is never raised by the game).
+        // Enemy turn-ends stay silent — the next "X's turn" cue already covers them. Ticked from Main.OnUpdate.
         private static UnitEntityData _lastTurn;
+        private static TurnController _trackedTurn;
+        private static UnitEntityData _trackedUnit;
         public static void TickTurn()
         {
-            if (!InTurnBased) { _lastTurn = null; return; }
+            if (!InTurnBased) { _lastTurn = null; _trackedTurn = null; _trackedUnit = null; return; }
+
+            var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
+            // The tracked turn finished (reached Ended, or was disposed/replaced between frames).
+            if (_trackedTurn != null && (turn != _trackedTurn || _trackedTurn.Status == TurnController.TurnStatus.Ended))
+            {
+                if (_trackedUnit != null && _trackedUnit.IsDirectlyControllable)
+                    Tts.Speak(_trackedUnit.CharacterName + "'s turn ended");
+                _trackedTurn = null;
+                _trackedUnit = null;
+            }
+            if (turn != null && _trackedTurn == null && turn.Status != TurnController.TurnStatus.Ended)
+            {
+                _trackedTurn = turn;
+                _trackedUnit = turn.Rider; // the turn's owner (stable), not the selection-dependent SelectedUnit
+            }
+
             var cur = CurrentUnit;
             if (cur == _lastTurn) return;
             _lastTurn = cur;

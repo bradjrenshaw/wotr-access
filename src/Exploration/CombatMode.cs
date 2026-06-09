@@ -31,7 +31,7 @@ namespace WrathAccess.Exploration
         /// agent (<c>AgentASP.FindPath</c> + <c>BlockUntilCalculated</c>) and populates the current path. The
         /// move/attack we then issue walks that path (the turn-based execution clamps it to the budget).
         /// </summary>
-        public static Vector3? PathEndpointToward(Vector3 point)
+        public static Vector3? PathEndpointToward(Vector3 point, float approachRadius = 0.3f)
         {
             if (!InTurnBased) return null;
             var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
@@ -42,7 +42,7 @@ namespace WrathAccess.Exploration
             var actionsState = GetActionsStatesMethod.Invoke(turn, new object[] { cu }) as ActionsState;
             if (actionsState == null) return null;
             actionsState.ApproachPoint = point;
-            actionsState.ApproachRadius = 0.3f; // small tolerance, like UnitMoveTo
+            actionsState.ApproachRadius = approachRadius; // 0.3 ~= exact (move); the attack reach for an approach
             actionsState.NeedLOS = false;
             pv.CalculatePathForCommand(cu, actionsState, updateActionsState: true);
 

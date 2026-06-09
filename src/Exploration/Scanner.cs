@@ -59,7 +59,7 @@ namespace WrathAccess.Exploration
         {
             if (!Active) return;
             if (Targeting.Aiming) { Targeting.CommitOn(Selected); return; }
-            DoInteract(Selected, "No item selected");
+            DoInteract(Selected, Loc.T("scan.no_item"));
         }
         // Enter = left click: interact with the object/unit the cursor is INSIDE (not the scanner's list
         // selection). Same context-sensitive action a left click would do (select/attack/talk/open/loot).
@@ -67,7 +67,7 @@ namespace WrathAccess.Exploration
         {
             if (!Active) return;
             if (Targeting.Aiming) { Targeting.CommitAtCursor(); return; }
-            DoInteract(CursorTarget.Inside(), "Nothing here");
+            DoInteract(CursorTarget.Inside(), Loc.T("scan.nothing_here"));
         }
         public static void MoveToCursor()
         {
@@ -162,7 +162,7 @@ namespace WrathAccess.Exploration
             if (list == null || list.Count == 0)
             {
                 _entered = true;
-                Speak(ScanCategories.Label(ScanCategories.Order[_catIndex]) + ", empty");
+                Speak(Loc.T("scan.category_empty", new { label = ScanCategories.Label(ScanCategories.Order[_catIndex]) }));
                 return;
             }
             _itemIndex = Mathf.Clamp(_itemIndex, 0, list.Count - 1);
@@ -176,7 +176,9 @@ namespace WrathAccess.Exploration
             var cat = ScanCategories.Order[_catIndex];
             var list = Current;
             int count = list != null ? list.Count : 0;
-            var msg = ScanCategories.Label(cat) + ", " + count + (count == 1 ? " item" : " items");
+            var msg = count == 1
+                ? Loc.T("scan.category_one", new { label = ScanCategories.Label(cat) })
+                : Loc.T("scan.category_many", new { label = ScanCategories.Label(cat), count });
             if (count > 0) { _itemIndex = Mathf.Clamp(_itemIndex, 0, count - 1); msg += ". " + ItemLine(list); }
             Speak(msg);
         }
@@ -187,7 +189,7 @@ namespace WrathAccess.Exploration
         {
             var item = list[_itemIndex];
             var tag = (_debugAll && !item.IsVisible) ? " (hidden)" : ""; // flag fogged items in debug mode
-            return item.Describe(ScanFrom) + tag + ", " + (_itemIndex + 1) + " of " + list.Count;
+            return item.Describe(ScanFrom) + tag + ", " + Loc.T("nav.position", new { index = _itemIndex + 1, count = list.Count });
         }
 
         // Cursor/interact act on the item you last navigated to (the cached selection) — no rebuild,
@@ -195,15 +197,15 @@ namespace WrathAccess.Exploration
         private static void CommitCursor()
         {
             var sel = Selected;
-            if (sel == null) { Speak("No item selected"); return; }
+            if (sel == null) { Speak(Loc.T("scan.no_item")); return; }
             Cursor.Set(sel.Position); // the shared cursor — overlays move this same point
-            Speak("Cursor on " + (string.IsNullOrEmpty(sel.Name) ? "item" : sel.Name) + ", " + Geo.Raw(sel.Position));
+            Speak(Loc.T("scan.cursor_on", new { name = string.IsNullOrEmpty(sel.Name) ? Loc.T("scan.item_fallback") : sel.Name, pos = Geo.Raw(sel.Position) }));
         }
 
         private static void DoInteract(ScanItem target, string noneMsg)
         {
             if (target == null) { Speak(noneMsg); return; }
-            var name = string.IsNullOrEmpty(target.Name) ? "that" : target.Name;
+            var name = string.IsNullOrEmpty(target.Name) ? Loc.T("scan.that_fallback") : target.Name;
             var mc = Game.Instance?.Player?.MainCharacter.Value;
             if (mc != null)
             {
@@ -214,13 +216,13 @@ namespace WrathAccess.Exploration
                 var from = Geo.Live(mc);
                 bool reachable = SameArea(from, target.Position)
                                  || SameArea(from, Vector3.MoveTowards(target.Position, from, 2f));
-                if (!reachable) { Speak("Can't reach " + name + ", no path"); return; }
+                if (!reachable) { Speak(Loc.T("scan.cant_reach", new { name })); return; }
             }
             EnsureSelection();
             if (target.Interact())
-                Speak("Interacting with " + (string.IsNullOrEmpty(target.Name) ? "item" : target.Name));
+                Speak(Loc.T("scan.interacting", new { name = string.IsNullOrEmpty(target.Name) ? Loc.T("scan.item_fallback") : target.Name }));
             else
-                Speak("Can't interact with " + name);
+                Speak(Loc.T("scan.cant_interact", new { name }));
         }
 
         // Walk to the shared cursor — the point planted by Home or moved by the tile-view overlay. Routes
@@ -231,15 +233,15 @@ namespace WrathAccess.Exploration
         // unpause (Space). Reachability is checked from the lead selected unit.
         private static void DoMoveToCursor()
         {
-            if (!Cursor.Has) { Speak("No cursor set"); return; }
+            if (!Cursor.Has) { Speak(Loc.T("scan.no_cursor")); return; }
             var dest = Cursor.Position.Value;
-            if (!OnNavmesh(dest)) { Speak("Can't move there, not walkable"); return; }
+            if (!OnNavmesh(dest)) { Speak(Loc.T("scan.not_walkable")); return; }
 
             EnsureSelection(); // default to the whole party if nothing's selected yet
             var refUnit = Game.Instance?.SelectionCharacter?.FirstSelectedUnit
                           ?? Game.Instance?.Player?.MainCharacter.Value;
-            if (refUnit == null) { Speak("No character to move"); return; }
-            if (!SameArea(Geo.Live(refUnit), dest)) { Speak("Can't reach the cursor, no path"); return; }
+            if (refUnit == null) { Speak(Loc.T("scan.no_character")); return; }
+            if (!SameArea(Geo.Live(refUnit), dest)) { Speak(Loc.T("scan.cursor_unreachable")); return; }
 
             // Turn-based: don't move to the raw cursor point — drive the game's own pathfinding to our cursor
             // and move to that path's endpoint. The prediction system that normally produces this path is
@@ -247,7 +249,7 @@ namespace WrathAccess.Exploration
             if (CombatMode.InTurnBased)
             {
                 var ep = CombatMode.PathEndpointToward(dest);
-                if (!ep.HasValue) { Speak("No path to cursor"); return; }
+                if (!ep.HasValue) { Speak(Loc.T("scan.no_path_cursor")); return; }
                 dest = ep.Value;
             }
 
@@ -259,7 +261,7 @@ namespace WrathAccess.Exploration
             // selection doesn't do. Follow() internally honours the CameraFollowsUnit setting, so this is a
             // no-op when the player has follow turned off.
             Game.Instance?.CameraController?.Follower?.Follow(refUnit);
-            Speak("Moving to cursor");
+            Speak(Loc.T("scan.moving"));
         }
 
         private const uint NoArea = 999999u; // ObstacleAnalyzer.GetArea's sentinel when no node is near
@@ -296,20 +298,20 @@ namespace WrathAccess.Exploration
 
         private static void SpeakCursor()
         {
-            if (!Cursor.Has) { Speak("No cursor set"); return; }
-            Speak("Cursor, " + Geo.Relative(Reference, Cursor.Position.Value));
+            if (!Cursor.Has) { Speak(Loc.T("scan.no_cursor")); return; }
+            Speak(Loc.T("scan.cursor_at", new { rel = Geo.Relative(Reference, Cursor.Position.Value) }));
         }
 
         private static void SpeakParty()
         {
             var player = Game.Instance?.Player;
             var members = player != null ? player.PartyAndPets : null;
-            if (members == null || members.Count == 0) { Speak("No party"); return; }
+            if (members == null || members.Count == 0) { Speak(Loc.T("scan.no_party")); return; }
             var refPos = Reference;
             var parts = new List<string>();
             foreach (var m in members)
                 if (m != null) parts.Add(m.CharacterName + ", " + Geo.Relative(refPos, Geo.Live(m)));
-            Speak("Party: " + string.Join("; ", parts.ToArray()));
+            Speak(Loc.T("scan.party", new { list = string.Join("; ", parts.ToArray()) }));
         }
 
         private static void Speak(string msg) { if (!string.IsNullOrEmpty(msg)) Tts.Speak(msg, interrupt: true); }

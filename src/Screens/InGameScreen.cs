@@ -93,15 +93,15 @@ namespace WrathAccess.Screens
             // Turn-based initiative order: a stable tab-stop right after the action bar. Populated only in
             // turn-based combat (RefreshInitiative); while empty it has no focusable children, so the Tab
             // cycle skips it entirely.
-            _initiative = new ListContainer("Initiative order");
+            _initiative = new ListContainer(Message.Localized("ui", "hud.initiative").Resolve());
             Add(_initiative);
 
-            Add(new ProxyActionButton("Log", () => true, ModLogScreen.Open));
+            Add(new ProxyActionButton(Loc.T("hud.log"), () => true, ModLogScreen.Open));
 
             // Service-window buttons (the game's bottom bar): one Tab-stop list after Log. Activating one
             // calls the game's own open path (HandleOpenWindowOfType, which creates the menu + toggles the
             // window), labeled with the game's own localized name.
-            var windows = new ListContainer("Windows");
+            var windows = new ListContainer(Loc.T("hud.windows"));
             foreach (var type in ServiceButtons)
             {
                 var t = type; // capture for the live closures
@@ -125,7 +125,7 @@ namespace WrathAccess.Screens
             if (vm != null)
                 foreach (var slot in vm.Slots)
                     if (Usable(slot)) { main.Item(new ProxyActionBarSlot(slot)); mainCount++; }
-            if (mainCount == 0) main.Item(new TextElement("No actions."));
+            if (mainCount == 0) main.Item(new TextElement(Loc.T("hud.no_actions")));
             AddGroup(_bar, vm?.GroupAbilities, "hud.abilities");
             AddGroup(_bar, vm?.GroupSpells, "hud.spells");
             AddGroup(_bar, vm?.GroupItems, "hud.items");
@@ -215,7 +215,8 @@ namespace WrathAccess.Screens
             private static string Render(UnitEntityData u)
             {
                 string s = u.CharacterName + ", " + u.CombatState.Initiative;
-                if (Game.Instance?.TurnBasedCombatController?.CurrentTurn?.Rider == u) s += ", active";
+                if (Game.Instance?.TurnBasedCombatController?.CurrentTurn?.Rider == u)
+                    s += ", " + Message.Localized("ui", "combat.active_marker").Resolve();
                 return s;
             }
         }

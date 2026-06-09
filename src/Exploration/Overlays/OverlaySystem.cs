@@ -20,8 +20,9 @@ namespace WrathAccess.Exploration.Overlays
         public abstract string Name { get; }
         public abstract string Key { get; } // settings-path segment, e.g. "grid"
 
-        private CategorySetting _settings;
-        public void Bind(CategorySetting settings) => _settings = settings;
+        /// <summary>The bound per-overlay settings category (for subclasses with nested setting groups).</summary>
+        protected CategorySetting Settings { get; private set; }
+        public void Bind(CategorySetting settings) => Settings = settings;
 
         /// <summary>Add this system's tunables to its settings category (the <c>enabled</c> toggle and the
         /// audio <c>volume</c> are added for you — see the registry / <see cref="AudioSystem"/>).</summary>
@@ -29,9 +30,9 @@ namespace WrathAccess.Exploration.Overlays
 
         public bool Enabled => Bool("enabled", true);
 
-        protected bool Bool(string key, bool fallback) => _settings?.Get<BoolSetting>(key)?.Get() ?? fallback;
-        protected int Int(string key, int fallback) => _settings?.Get<IntSetting>(key)?.Get() ?? fallback;
-        protected string ChoiceId(string key, string fallback) => _settings?.Get<ChoiceSetting>(key)?.Current?.Id ?? fallback;
+        protected bool Bool(string key, bool fallback) => Settings?.Get<BoolSetting>(key)?.Get() ?? fallback;
+        protected int Int(string key, int fallback) => Settings?.Get<IntSetting>(key)?.Get() ?? fallback;
+        protected string ChoiceId(string key, string fallback) => Settings?.Get<ChoiceSetting>(key)?.Current?.Id ?? fallback;
 
         public virtual void OnEnter(Overlay overlay) { }
         public virtual void OnExit(Overlay overlay) { }

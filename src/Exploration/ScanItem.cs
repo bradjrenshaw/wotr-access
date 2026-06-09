@@ -45,7 +45,7 @@ namespace WrathAccess.Exploration
 
         public string Describe(Vector3 reference)
         {
-            var name = string.IsNullOrEmpty(Name) ? "(unnamed)" : Name;
+            var name = string.IsNullOrEmpty(Name) ? Loc.T("scan.unnamed") : Name;
             var extra = Extra;
             var rel = Geo.Relative(reference, Position);
             return string.IsNullOrEmpty(extra) ? name + ", " + rel : name + ", " + extra + ", " + rel;
@@ -55,7 +55,7 @@ namespace WrathAccess.Exploration
         /// (the cursor is on it, so distance/bearing would be noise).</summary>
         public string DescribeInPlace()
         {
-            var name = string.IsNullOrEmpty(Name) ? "(unnamed)" : Name;
+            var name = string.IsNullOrEmpty(Name) ? Loc.T("scan.unnamed") : Name;
             var extra = Extra;
             return string.IsNullOrEmpty(extra) ? name : name + ", " + extra;
         }

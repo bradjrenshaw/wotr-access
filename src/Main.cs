@@ -54,11 +54,12 @@ namespace WrathAccess
                 // known once settings have loaded, then their saved values are re-applied to the new subtrees.
                 WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.BuildOverlays();
                 ScreenManager.Initialize();
-                GameLogReader.Initialize(); // read barks + narrative log lines (no dialogue window)
+                // Game-log reading (barks, rolls, loot, …) lives in the overlays' Log system — see
+                // Overlays.LogSystem (per-overlay, per-message-type toggles) fed by the LogFeed Harmony tap.
                 WarningReader.Initialize(); // speak the game's "can't do that" warnings (refusal reasons)
 
                 Log.Log("WrathAccess initialized. " + BuildStamp());
-                Tts.Speak("Wrath Access loaded.");
+                Tts.Speak(Loc.T("app.loaded"));
             }
             catch (Exception e)
             {
@@ -136,7 +137,7 @@ namespace WrathAccess
             if (!inPlay) { _wasPaused = null; return; }
             bool paused = game.IsPaused;
             if (_wasPaused.HasValue && paused != _wasPaused.Value)
-                Tts.Speak(paused ? "Paused" : "Unpaused");
+                Tts.Speak(Loc.T(paused ? "pause.paused" : "pause.unpaused"));
             _wasPaused = paused;
         }
 
@@ -175,9 +176,9 @@ namespace WrathAccess
             if (!FocusMode.Active) return;
             var game = Game.Instance;
             if (game == null) return;
-            if (!QuickSaveModes.Contains(game.CurrentMode)) { Tts.Speak("Can't quick save now"); return; }
-            try { game.MakeQuickSave(); Tts.Speak("Quick saving"); }
-            catch (Exception e) { Log.Error("[quicksave] " + e); Tts.Speak("Quick save failed"); }
+            if (!QuickSaveModes.Contains(game.CurrentMode)) { Tts.Speak(Loc.T("save.cant")); return; }
+            try { game.MakeQuickSave(); Tts.Speak(Loc.T("save.saving")); }
+            catch (Exception e) { Log.Error("[quicksave] " + e); Tts.Speak(Loc.T("save.failed")); }
         }
 
         // Flip the game's real-time-with-pause <-> turn-based combat mode. We only flip the EnableTurnBasedMode
@@ -192,7 +193,7 @@ namespace WrathAccess
             // The game's own mode-change cue for the target mode, then flip (it confirms + propagates).
             UiSound.Play(nowTurnBased ? Kingmaker.UI.UISoundType.ChangeModeTBM : Kingmaker.UI.UISoundType.ChangeModeRTWP);
             setting.SetValueAndConfirm(nowTurnBased);
-            Tts.Speak(nowTurnBased ? "Turn-based mode" : "Real-time mode");
+            Tts.Speak(Message.Localized("ui", nowTurnBased ? "combat.mode_turn_based" : "combat.mode_real_time").Resolve());
         }
 
         /// <summary>
@@ -229,7 +230,7 @@ namespace WrathAccess
             InputManager.Register("toggle_focus", "Toggle Focus Mode", () =>
             {
                 FocusMode.Toggle();
-                Tts.Speak("Focus mode " + (FocusMode.Active ? "on" : "off"));
+                Tts.Speak(Loc.T(FocusMode.Active ? "focus.on" : "focus.off"));
                 if (FocusMode.Active) WrathAccess.UI.Navigation.AnnounceCurrent();
             }).AddBinding(KeyCode.A, ctrl: true, shift: true);
 

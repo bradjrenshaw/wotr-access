@@ -46,15 +46,15 @@ namespace WrathAccess.Exploration.Overlays
             if (!CombatMode.TryPathInfo(dest, out float len, out float gap, out float moveAction, out float total)
                 || gap > ReachToleranceMeters)
             {
-                Tts.Speak("No path");
+                Tts.Speak(Message.Localized("ui", "path.none").Resolve());
                 return;
             }
             int feet = Mathf.RoundToInt(len / Geo.MetresPerFoot);
-            string line = "Path, " + feet + (feet == 1 ? " foot" : " feet");
+            string line = Message.Localized("ui", "path.distance", new { feet }).Resolve();
             // Mirror the game's break markers: within the move action → plain; past it but reachable →
             // it costs the standard action too; past everything → not reachable this turn.
-            if (len > total + 0.05f) line += ", beyond remaining movement";
-            else if (len > moveAction + 0.05f) line += ", uses standard action";
+            if (len > total + 0.05f) line += ", " + Message.Localized("ui", "path.beyond").Resolve();
+            else if (len > moveAction + 0.05f) line += ", " + Message.Localized("ui", "path.uses_standard").Resolve();
             Tts.Speak(line);
         }
 

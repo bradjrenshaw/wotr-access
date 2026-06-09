@@ -98,7 +98,7 @@ namespace WrathAccess.Screens
         private void SpeakText()
         {
             var vm = Vm();
-            if (vm != null) Tts.Speak("Tutorial. " + PageText(vm), interrupt: true);
+            if (vm != null) Tts.Speak(Loc.T("tutorial.prefix", new { text = PageText(vm) }), interrupt: true);
         }
 
         private static TutorialData.Page CurrentPageOf(TutorialWindowVM vm)

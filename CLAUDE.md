@@ -76,6 +76,16 @@ jumps) and reshapes the whole UI. Instead we build our own nav over the live
 - Current bindings are proof-of-life test hotkeys (Ctrl+Shift+A toggle focus mode,
   Ctrl+Shift+T speak test) — to be replaced by the real nav action set.
 
+## Hard rules
+- **Localize every string the mod speaks or displays** — no hardcoded English in
+  `Speak` calls or labels, ever. Speech/UI text: `Loc.T(key[, args])` (or
+  `Message.Localized`) + an entry in `assets/locale/enGB/ui.json`. Settings labels:
+  pass a `localizationKey` + an entry in `assets/locale/enGB/settings.json`. The
+  enGB files are the complete translation manifest; other languages are just a
+  dropped-in folder. Sole exception: debug-only tooling (Player.log dumps, dev
+  hotkeys). Game content (names, log lines, tooltips) is already localized by the
+  game — pass it through, never re-translate.
+
 ## Roadmap
 1. **(done)** Loader + TTS + UMM doorstop install + full decompile.
 2. **(in progress)** Input substrate: InputManager + FocusMode suppression.

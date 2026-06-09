@@ -26,6 +26,7 @@ namespace WrathAccess.Exploration.Overlays
             () => new FogSystem(),
             () => new ObjectCueSystem(),
             () => new PathInfoSystem(),
+            () => new LogSystem(),
         };
 
         private static readonly Choice[] ModeChoices =
@@ -45,12 +46,12 @@ namespace WrathAccess.Exploration.Overlays
 
         private static readonly Seed[] Seeds =
         {
-            new Seed("tile_view", "Tile view", "tiled", "none", "grid", "sonar", "fog", "object", "path"),
-            new Seed("continuous", "Continuous mode", "continuous", "none", "spatial", "sonar", "walltones", "fog", "object", "path"),
+            new Seed("tile_view", "Tile view", "tiled", "none", "grid", "sonar", "fog", "object", "path", "log"),
+            new Seed("continuous", "Continuous mode", "continuous", "none", "spatial", "sonar", "walltones", "fog", "object", "path", "log"),
         };
 
         // A new (non-seed) overlay's starting config: a tile cursor + the speech/cue systems.
-        private static readonly HashSet<string> GenericEnabled = new HashSet<string> { "grid", "sonar", "fog", "object", "path" };
+        private static readonly HashSet<string> GenericEnabled = new HashSet<string> { "grid", "sonar", "fog", "object", "path", "log" };
 
         private static readonly Dictionary<string, Overlay> _objects = new Dictionary<string, Overlay>();
 

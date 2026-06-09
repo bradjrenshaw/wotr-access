@@ -79,7 +79,7 @@ namespace WrathAccess.Exploration.Overlays
             var m = PrimaryMode;
             var r = m != null ? m.VerticalFollow(dir, this) : VerticalResult.Unsupported;
             if (r == VerticalResult.Moved) Announce(PrimaryContext);
-            else if (r == VerticalResult.NoSurface) Tts.Speak("No surface " + (dir < 0 ? "below" : "above"), interrupt: true);
+            else if (r == VerticalResult.NoSurface) Tts.Speak(Loc.T(dir < 0 ? "overlay.no_surface_below" : "overlay.no_surface_above"), interrupt: true);
         }
 
         public void AnnounceCurrent() => Announce(PrimaryContext);

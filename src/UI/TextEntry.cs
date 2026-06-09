@@ -53,7 +53,7 @@ namespace WrathAccess.UI
             field.MoveTextEnd(false);
 
             string current = string.IsNullOrEmpty(_last) ? "blank" : _last;
-            Tts.Speak("Editing " + _label + ", " + current + ". Type to edit, Enter when done.", interrupt: true);
+            Tts.Speak(Loc.T("edit.begin", new { label = _label, value = current }), interrupt: true);
         }
 
         private static void OnChanged(string text)
@@ -97,7 +97,7 @@ namespace WrathAccess.UI
             if (newText.Length > oldText.Length)
                 Tts.Speak(Speakable(newText.Substring(p, newText.Length - oldText.Length)), interrupt: true);
             else if (newText.Length < oldText.Length)
-                Tts.Speak("deleted " + Speakable(oldText.Substring(p, oldText.Length - newText.Length)), interrupt: true);
+                Tts.Speak(Loc.T("edit.deleted", new { text = Speakable(oldText.Substring(p, oldText.Length - newText.Length)) }), interrupt: true);
         }
 
         // A lone space says nothing through TTS; name it so the user hears the keypress landed.

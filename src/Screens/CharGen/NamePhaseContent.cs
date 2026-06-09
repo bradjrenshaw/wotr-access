@@ -28,7 +28,7 @@ namespace WrathAccess.Screens
                 var field = AcquireNameField();
                 if (field != null) field.text = name;
                 Phase.OnEndEdit(name);
-                Tts.Speak("Name: " + (string.IsNullOrEmpty(name) ? "blank" : name), interrupt: true);
+                Tts.Speak(Loc.T("name.announce", new { name = string.IsNullOrEmpty(name) ? Loc.T("name.blank") : name }), interrupt: true);
             }));
 
             content.Add(new ProxySequentialSelector("Birth month", () => Phase.MonthSelectorVM));

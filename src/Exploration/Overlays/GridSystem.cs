@@ -48,15 +48,15 @@ namespace WrathAccess.Exploration.Overlays
 
             if (Bool("bearing", true))
             {
-                var bearing = Geo.Bearing(ctx.Reference, centre);
-                sb.Append(bearing == "here" ? "here" : bearing + ", " + Geo.FeetStr(Geo.Distance(ctx.Reference, centre)));
+                sb.Append(Geo.IsHere(ctx.Reference, centre) ? Loc.T("geo.here")
+                    : Geo.Bearing(ctx.Reference, centre) + ", " + Geo.FeetStr(Geo.Distance(ctx.Reference, centre)));
                 var vert = Geo.Vertical(ctx.Reference, centre);
                 if (vert != null) sb.Append(", ").Append(vert);
             }
 
             if (Bool("terrain", true)) Append(sb, Terrain(s, fromY, centre));
 
-            if (Bool("fog", true) && FogOfWarController.IsInFogOfWar(centre)) Append(sb, "fog of war");
+            if (Bool("fog", true) && FogOfWarController.IsInFogOfWar(centre)) Append(sb, Loc.T("grid.fog_of_war"));
 
             if (Bool("contents", true))
             {
@@ -84,15 +84,15 @@ namespace WrathAccess.Exploration.Overlays
                 if (NavmeshProbe.FloorBelow(centre.x, centre.z, centre.y, out var below))
                 {
                     float drop = centre.y - below.y;
-                    if (Geo.Feet(drop) >= 2f) return "edge, drop " + Geo.FeetStr(drop);
+                    if (Geo.Feet(drop) >= 2f) return Loc.T("grid.edge_drop", new { drop = Geo.FeetStr(drop) });
                 }
-                return "not walkable";
+                return Loc.T("grid.not_walkable");
             }
 
             float dy = s.Point.y - fromY;
             if (Geo.Feet(Mathf.Abs(dy)) >= 1f)
-                return "walkable, " + (dy > 0f ? "up " : "down ") + Geo.FeetStr(Mathf.Abs(dy));
-            return "walkable";
+                return Loc.T(dy > 0f ? "grid.walkable_up" : "grid.walkable_down", new { height = Geo.FeetStr(Mathf.Abs(dy)) });
+            return Loc.T("grid.walkable");
         }
 
         // Visible things whose footprint overlaps this cell and that are on roughly this level.
@@ -105,7 +105,7 @@ namespace WrathAccess.Exploration.Overlays
                 var p = item.Position;
                 if (Mathf.Abs(p.y - centre.y) > LevelGap) continue;
                 if (!OverlapsTile(p, item.Footprint, centre)) continue;
-                var name = string.IsNullOrEmpty(item.Name) ? "object" : item.Name;
+                var name = string.IsNullOrEmpty(item.Name) ? Loc.T("scan.object_fallback") : item.Name;
                 if (!names.Contains(name)) names.Add(name);
             }
             return names;

@@ -39,7 +39,9 @@ namespace WrathAccess.Exploration
         {
             if (!CombatController.IsInTurnBasedCombat()) return false;
             var cur = CombatController.SelectedUnit;
-            Tts.Speak(cur != null ? cur.CharacterName + "'s turn" : "Turn-based mode", interrupt: true);
+            Tts.Speak(cur != null
+                ? Message.Localized("ui", "combat.turn", new { name = cur.CharacterName }).Resolve()
+                : Message.Localized("ui", "combat.mode_turn_based").Resolve(), interrupt: true);
             return true;
         }
 
@@ -49,7 +51,7 @@ namespace WrathAccess.Exploration
             if (sm == null) return;
             sm.SelectAll();
             int n = Game.Instance.SelectionCharacter.SelectedUnits.Count;
-            Tts.Speak("Whole party selected, " + n + (n == 1 ? " character" : " characters"), interrupt: true);
+            Tts.Speak(n == 1 ? Loc.T("party.selected_all_one") : Loc.T("party.selected_all", new { count = n }), interrupt: true);
         }
 
         private static void DoSelectMember(int index)
@@ -57,7 +59,7 @@ namespace WrathAccess.Exploration
             var ring = BuildRing(index);
             if (ring.Count == 0)
             {
-                Tts.Speak("No party member " + (index + 1), interrupt: true);
+                Tts.Speak(Loc.T("party.no_member", new { index = index + 1 }), interrupt: true);
                 return;
             }
 
@@ -76,7 +78,7 @@ namespace WrathAccess.Exploration
             // never updated. follow:false matches the keybinding (recenter, not continuous follow). The
             // unit's "selected" voice bark still fires through SelectUnit's ask path.
             UIUtilityUnit.SetCharacterSelected(unit, follow: false);
-            Tts.Speak(unit.CharacterName + " selected", interrupt: true);
+            Tts.Speak(Loc.T("party.member_selected", new { name = unit.CharacterName }), interrupt: true);
         }
 
         // A member's selection ring: the member, then each owned, in-game, controllable unit they own

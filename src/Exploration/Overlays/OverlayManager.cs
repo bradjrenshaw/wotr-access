@@ -37,7 +37,7 @@ namespace WrathAccess.Exploration.Overlays
             Current?.OnExit();
             _active++;
             if (_active >= _overlays.Count) _active = -1;
-            if (Current == null) { Tts.Speak("Overlays off", interrupt: true); return; }
+            if (Current == null) { Tts.Speak(Loc.T("overlay.off"), interrupt: true); return; }
             Tts.Speak(Current.Name, interrupt: true);
             Current.OnEnter();
             Current.AnnounceCurrent();

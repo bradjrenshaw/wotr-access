@@ -41,7 +41,7 @@ namespace WrathAccess.UI.Proxies
             {
                 var field = _acquire?.Invoke();
                 if (field != null) TextEntry.Begin(field, _label);
-                else Tts.Speak("Text field unavailable", interrupt: true);
+                else Tts.Speak(Loc.T("text.unavailable"), interrupt: true);
             });
         }
     }

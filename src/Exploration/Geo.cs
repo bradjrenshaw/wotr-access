@@ -35,37 +35,40 @@ namespace WrathAccess.Exploration
         // to whole feet; we round to the nearest foot to stay close to what's on screen.
         public const float MetresPerFoot = 0.3048f;
         public static float Feet(float metres) => metres / MetresPerFoot;
-        public static string FeetStr(float metres) => Mathf.RoundToInt(Feet(metres)) + " ft";
+        public static string FeetStr(float metres) => Loc.T("geo.feet", new { feet = Mathf.RoundToInt(Feet(metres)) });
 
         private static readonly string[] Compass =
             { "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest" };
 
+        /// <summary>True when the two points coincide on the XZ plane (the "here" case).</summary>
+        public static bool IsHere(Vector3 from, Vector3 to)
+            => Mathf.Abs(to.x - from.x) < 0.05f && Mathf.Abs(to.z - from.z) < 0.05f;
+
         public static string Bearing(Vector3 from, Vector3 to)
         {
             float dx = to.x - from.x, dz = to.z - from.z;
-            if (Mathf.Abs(dx) < 0.05f && Mathf.Abs(dz) < 0.05f) return "here";
+            if (IsHere(from, to)) return Loc.T("geo.here");
             float deg = Mathf.Atan2(dx, dz) * Mathf.Rad2Deg; // 0 = +Z (north), 90 = +X (east)
             if (deg < 0f) deg += 360f;
-            return Compass[Mathf.RoundToInt(deg / 45f) % 8];
+            return Loc.T("geo." + Compass[Mathf.RoundToInt(deg / 45f) % 8]);
         }
 
         /// <summary>"above"/"below" only past the game's own 1.5 height threshold; else null.</summary>
         public static string Vertical(Vector3 from, Vector3 to)
         {
             float dy = to.y - from.y;
-            if (dy > 1.5f) return "above";
-            if (dy < -1.5f) return "below";
+            if (dy > 1.5f) return Loc.T("geo.above");
+            if (dy < -1.5f) return Loc.T("geo.below");
             return null;
         }
 
-        public static string Raw(Vector3 v) => "pos " + v.x.ToString("0.0") + " " + v.y.ToString("0.0") + " " + v.z.ToString("0.0");
+        public static string Raw(Vector3 v) => Loc.T("geo.pos", new { x = v.x.ToString("0.0"), y = v.y.ToString("0.0"), z = v.z.ToString("0.0") });
 
         /// <summary>"&lt;bearing&gt;, &lt;dist&gt; ft[, above/below], pos x y z" relative to a reference point.</summary>
         public static string Relative(Vector3 from, Vector3 to)
         {
-            var bearing = Bearing(from, to);
-            if (bearing == "here") return "here, " + Raw(to);
-            var s = bearing + ", " + FeetStr(Distance(from, to));
+            if (IsHere(from, to)) return Loc.T("geo.here") + ", " + Raw(to);
+            var s = Bearing(from, to) + ", " + FeetStr(Distance(from, to));
             var vert = Vertical(from, to);
             if (vert != null) s += ", " + vert;
             return s + ", " + Raw(to);

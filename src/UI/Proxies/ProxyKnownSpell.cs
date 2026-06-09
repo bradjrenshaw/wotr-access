@@ -74,7 +74,7 @@ namespace WrathAccess.UI.Proxies
             Add(NotKingdomOrMap, Message.Localized("ui", "spellbook.add_to_bar").Resolve(), AddToActionBar);
             Add(MetamagicAvailable, Message.Localized("ui", "metamagic.apply").Resolve(), ApplyMetamagic);
 
-            if (labels.Count == 0) { Tts.Speak("No actions", interrupt: true); return; }
+            if (labels.Count == 0) { Tts.Speak(Loc.T("menu.no_actions"), interrupt: true); return; }
             var actions = runs;
             ChoiceSubmenuScreen.Open(_vm.DisplayName, labels, -1, idx => { if (idx >= 0 && idx < actions.Count) actions[idx]?.Invoke(); });
         }

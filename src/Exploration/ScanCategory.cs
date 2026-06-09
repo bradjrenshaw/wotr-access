@@ -33,26 +33,18 @@ namespace WrathAccess.Exploration
         };
 
         public static string Label(ScanCategory c)
-        {
-            switch (c)
-            {
-                case ScanCategory.PointsOfInterest: return "Points of Interest";
-                case ScanCategory.SearchPoints: return "Search Points";
-                case ScanCategory.Other: return "Other Interactables";
-                default: return c.ToString();
-            }
-        }
+            => Loc.T("scan.category." + c.ToString().ToLowerInvariant());
 
         /// <summary>Singular label used to name an otherwise-unnamed map object (e.g. "Door").</summary>
         public static string Singular(ScanCategory c)
         {
             switch (c)
             {
-                case ScanCategory.Doors: return "Door";
-                case ScanCategory.Containers: return "Container";
-                case ScanCategory.Exits: return "Exit";
-                case ScanCategory.SearchPoints: return "Search point";
-                default: return "Object";
+                case ScanCategory.Doors: return Loc.T("scan.singular.door");
+                case ScanCategory.Containers: return Loc.T("scan.singular.container");
+                case ScanCategory.Exits: return Loc.T("scan.singular.exit");
+                case ScanCategory.SearchPoints: return Loc.T("scan.singular.search_point");
+                default: return Loc.T("scan.singular.object");
             }
         }
     }

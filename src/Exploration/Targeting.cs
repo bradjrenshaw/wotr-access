@@ -72,7 +72,7 @@ namespace WrathAccess.Exploration
         private static void Begin(AbilityData ability, string announceName)
         {
             Handler?.SetAbility(ability);
-            if (announceName != null) Tts.Speak("Targeting " + announceName + ", choose a target", interrupt: true);
+            if (announceName != null) Tts.Speak(Loc.T("target.begin", new { name = announceName }), interrupt: true);
         }
 
         private static void CastOnSelf(AbilityData ability)
@@ -88,14 +88,14 @@ namespace WrathAccess.Exploration
         {
             if (!Aiming) return;
             Game.Instance?.ClickEventsController?.ClearPointerMode(); // → DropAbility()
-            Tts.Speak("Targeting cancelled", interrupt: true);
+            Tts.Speak(Loc.T("target.cancelled"), interrupt: true);
         }
 
         /// <summary>Enter: cast at the world cursor — the unit under it if any, else the cursor point.</summary>
         public static void CommitAtCursor()
         {
             if (!Aiming) return;
-            if (!Cursor.Has) { Tts.Speak("No cursor set", interrupt: true); return; }
+            if (!Cursor.Has) { Tts.Speak(Loc.T("scan.no_cursor"), interrupt: true); return; }
             Commit(CursorTarget.Inside()?.TargetUnit, Cursor.Position.Value);
         }
 
@@ -103,7 +103,7 @@ namespace WrathAccess.Exploration
         public static void CommitOn(ScanItem item)
         {
             if (!Aiming) return;
-            if (item == null) { Tts.Speak("No item selected", interrupt: true); return; }
+            if (item == null) { Tts.Speak(Loc.T("scan.no_item"), interrupt: true); return; }
             Commit(item.TargetUnit, item.Position);
         }
 
@@ -117,7 +117,7 @@ namespace WrathAccess.Exploration
             // reason, which WarningReader speaks — so we don't second-guess it. OnClick returns true only if
             // it actually issued the cast.
             if (Handler.OnClick(go, point, 0))
-                Tts.Speak(unit != null ? "Casting on " + unit.CharacterName : "Casting", interrupt: true);
+                Tts.Speak(unit != null ? Loc.T("target.cast_on", new { name = unit.CharacterName }) : Loc.T("target.cast"), interrupt: true);
         }
     }
 }

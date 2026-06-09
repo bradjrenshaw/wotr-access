@@ -77,7 +77,7 @@ namespace WrathAccess.UI
                     if (tpl == null && Current.Parent is Table grid) tpl = grid.RowTooltipForCell(Current);
                     if (tpl == null && Current.Parent is FlowSheet sheet) tpl = sheet.RowTooltipForCell(Current);
                     if (tpl != null) WrathAccess.Screens.TooltipScreen.Open(tpl);
-                    else Speak("No tooltip");
+                    else Speak(Loc.T("nav.no_tooltip"));
                     return true;
                 }
                 default:
@@ -181,7 +181,7 @@ namespace WrathAccess.UI
                     group.Expand();
                     // A lazy drill-in can resolve to nothing (e.g. a skill whose glossary key has no
                     // entry). Don't leave a silent empty-expanded node — recollapse and say so.
-                    if (group.Children.Count == 0) { group.Collapse(); Speak("No details", interrupt: true); }
+                    if (group.Children.Count == 0) { group.Collapse(); Speak(Loc.T("nav.no_details"), interrupt: true); }
                     else Speak(node.GetFocusMessage().Resolve(), interrupt: true);
                     return true;
                 }

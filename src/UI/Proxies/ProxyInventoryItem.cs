@@ -87,7 +87,7 @@ namespace WrathAccess.UI.Proxies
             Add(_slot.HasItem, Menu.Drop, Drop);
             Add(_slot.HasItem, Menu.Information, _slot.ShowInfo);
 
-            if (labels.Count == 0) { Tts.Speak("No actions", interrupt: true); return; }
+            if (labels.Count == 0) { Tts.Speak(Loc.T("menu.no_actions"), interrupt: true); return; }
             var actions = runs;
             ChoiceSubmenuScreen.Open(Name(), labels, -1, idx => { if (idx >= 0 && idx < actions.Count) actions[idx]?.Invoke(); });
         }

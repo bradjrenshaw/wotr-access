@@ -38,7 +38,7 @@ namespace WrathAccess.Screens
         public override void OnFocus()
         {
             string what = string.IsNullOrEmpty(PendingLabel) ? "" : PendingLabel + ". ";
-            Tts.Speak("Rebind " + what + "Press a key, or Escape to cancel.");
+            Tts.Speak(Loc.T("bind.prompt", new { what }));
         }
 
         public override void OnUpdate()
@@ -46,7 +46,7 @@ namespace WrathAccess.Screens
             var dlg = Dialog();
             if (dlg == null) return;
             if (dlg.CurrentBindingIsOccupied && !_lastOccupied)
-                Tts.Speak("That key is already in use. Press another, or Escape to cancel.", interrupt: true);
+                Tts.Speak(Loc.T("bind.in_use"), interrupt: true);
             _lastOccupied = dlg.CurrentBindingIsOccupied;
         }
     }

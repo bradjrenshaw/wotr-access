@@ -46,10 +46,10 @@ namespace WrathAccess.Exploration
             get
             {
                 var state = _unit.State;
-                if (state.IsDead) return "dead";
-                if (!state.IsConscious) return "unconscious";
-                var hp = "HP " + _unit.HPLeft + " of " + _unit.MaxHP;
-                if (_unit.IsInCombat) hp += ", in combat";
+                if (state.IsDead) return Loc.T("unit.dead");
+                if (!state.IsConscious) return Loc.T("unit.unconscious");
+                var hp = Loc.T("unit.hp", new { hp = _unit.HPLeft, max = _unit.MaxHP });
+                if (_unit.IsInCombat) hp += ", " + Loc.T("unit.in_combat");
                 return hp;
             }
         }

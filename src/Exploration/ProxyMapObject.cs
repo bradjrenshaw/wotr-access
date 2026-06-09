@@ -149,7 +149,7 @@ namespace WrathAccess.Exploration
                 var prefab = CleanName(_obj.View?.name);
                 if (!string.IsNullOrEmpty(prefab)) return prefab; // the designer's prefab name ("Bag", "Jug")
                 foreach (var c in Categories) return ScanCategories.Singular(c); // first category's singular
-                return "Object";
+                return Loc.T("scan.singular.object");
             }
         }
 
@@ -182,8 +182,8 @@ namespace WrathAccess.Exploration
             get
             {
                 var bits = new List<string>();
-                if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add("restricted");
-                if (_obj.Get<DisableTrapInteractionPart>() != null) bits.Add("trapped");
+                if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add(Loc.T("object.restricted"));
+                if (_obj.Get<DisableTrapInteractionPart>() != null) bits.Add(Loc.T("object.trapped"));
                 return bits.Count > 0 ? string.Join(", ", bits.ToArray()) : null;
             }
         }

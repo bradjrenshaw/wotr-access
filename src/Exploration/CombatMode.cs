@@ -107,7 +107,7 @@ namespace WrathAccess.Exploration
             if (_trackedTurn != null && (turn != _trackedTurn || _trackedTurn.Status == TurnController.TurnStatus.Ended))
             {
                 if (_trackedUnit != null && _trackedUnit.IsDirectlyControllable)
-                    Tts.Speak(_trackedUnit.CharacterName + "'s turn ended");
+                    Tts.Speak(Message.Localized("ui", "combat.turn_ended", new { name = _trackedUnit.CharacterName }).Resolve());
                 _trackedTurn = null;
                 _trackedUnit = null;
             }
@@ -121,7 +121,8 @@ namespace WrathAccess.Exploration
             if (cur == _lastTurn) return;
             _lastTurn = cur;
             if (cur != null)
-                Tts.Speak(cur.CharacterName + (cur.IsPlayersEnemy ? "'s turn, enemy" : "'s turn"));
+                Tts.Speak(Message.Localized("ui", cur.IsPlayersEnemy ? "combat.turn_enemy" : "combat.turn",
+                    new { name = cur.CharacterName }).Resolve());
         }
 
         /// <summary>
@@ -135,24 +136,28 @@ namespace WrathAccess.Exploration
             if (!FocusMode.Active) return;
             var screen = WrathAccess.Screens.ScreenManager.Current;
             if (screen == null || screen.Key != "ctx.ingame") return;
-            if (!InTurnBased) { Tts.Speak("Not in turn-based combat", interrupt: true); return; }
+            if (!InTurnBased) { Tts.Speak(Message.Localized("ui", "combat.not_turn_based").Resolve(), interrupt: true); return; }
             var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
             var cu = CurrentUnit;
-            if (turn == null || cu == null) { Tts.Speak("No active turn", interrupt: true); return; }
+            if (turn == null || cu == null) { Tts.Speak(Message.Localized("ui", "combat.no_active_turn").Resolve(), interrupt: true); return; }
 
-            var sb = new System.Text.StringBuilder(cu.CharacterName);
-            sb.Append(", standard action ").Append(cu.HasStandardAction() ? "available" : "used");
-            sb.Append(", move action ").Append(cu.HasMoveAction() ? "available" : "used");
-            sb.Append(", swift action ").Append(cu.HasSwiftAction() ? "available" : "used");
+            string State(bool available) => Message.Localized("ui", available ? "combat.available" : "combat.used").Resolve();
+            var sb = new System.Text.StringBuilder(Message.Localized("ui", "combat.status_actions", new
+            {
+                name = cu.CharacterName,
+                standard = State(cu.HasStandardAction()),
+                move = State(cu.HasMoveAction()),
+                swift = State(cu.HasSwiftAction()),
+            }).Resolve());
             // Two numbers, like the game's path break markers: the move action alone, and (when different)
             // the maximum with the standard action converted to a second move.
             int moveFt = Mathf.RoundToInt(
                 cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false) / Geo.MetresPerFoot);
             int totalFt = Mathf.RoundToInt(
                 cu.CombatState.TBM.GetRemainingMovementRange(total: true, singleActionMove: false) / Geo.MetresPerFoot);
-            sb.Append(", ").Append(moveFt).Append(moveFt == 1 ? " foot" : " feet").Append(" movement remaining");
-            if (totalFt > moveFt) sb.Append(", ").Append(totalFt).Append(" with standard action");
-            if (turn.HasFiveFootStep(cu)) sb.Append(", five foot step available");
+            sb.Append(", ").Append(Message.Localized("ui", "combat.movement_remaining", new { feet = moveFt }).Resolve());
+            if (totalFt > moveFt) sb.Append(", ").Append(Message.Localized("ui", "combat.with_standard", new { feet = totalFt }).Resolve());
+            if (turn.HasFiveFootStep(cu)) sb.Append(", ").Append(Message.Localized("ui", "combat.five_foot_step").Resolve());
             Tts.Speak(sb.ToString(), interrupt: true);
         }
     }

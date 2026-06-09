@@ -43,7 +43,7 @@ namespace WrathAccess.Exploration.Overlays
 
         private static void Announce(Vector3 dest)
         {
-            if (!CombatMode.TryPathInfo(dest, out float len, out float gap, out float remaining)
+            if (!CombatMode.TryPathInfo(dest, out float len, out float gap, out float moveAction, out float total)
                 || gap > ReachToleranceMeters)
             {
                 Tts.Speak("No path");
@@ -51,7 +51,10 @@ namespace WrathAccess.Exploration.Overlays
             }
             int feet = Mathf.RoundToInt(len / Geo.MetresPerFoot);
             string line = "Path, " + feet + (feet == 1 ? " foot" : " feet");
-            if (len > remaining + 0.05f) line += ", beyond remaining movement";
+            // Mirror the game's break markers: within the move action → plain; past it but reachable →
+            // it costs the standard action too; past everything → not reachable this turn.
+            if (len > total + 0.05f) line += ", beyond remaining movement";
+            else if (len > moveAction + 0.05f) line += ", uses standard action";
             Tts.Speak(line);
         }
 

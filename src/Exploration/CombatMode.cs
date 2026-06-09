@@ -43,9 +43,10 @@ namespace WrathAccess.Exploration
         /// the path ends (a partial path to the closest reachable node = the spot itself is unreachable),
         /// and the current unit's remaining movement this turn — all in metres. False if no path at all.
         /// </summary>
-        public static bool TryPathInfo(Vector3 point, out float lengthMeters, out float endGapMeters, out float remainingMeters)
+        public static bool TryPathInfo(Vector3 point, out float lengthMeters, out float endGapMeters,
+            out float moveActionMeters, out float totalMeters)
         {
-            lengthMeters = endGapMeters = remainingMeters = 0f;
+            lengthMeters = endGapMeters = moveActionMeters = totalMeters = 0f;
             var cu = CurrentUnit;
             var pts = ComputePath(point, 0.3f);
             if (cu == null || pts == null || pts.Count == 0) return false;
@@ -53,8 +54,10 @@ namespace WrathAccess.Exploration
             var end = pts[pts.Count - 1];
             float dx = end.x - point.x, dz = end.z - point.z;
             endGapMeters = Mathf.Sqrt(dx * dx + dz * dz);
-            // total: both actions spent on movement — "can I get there at all this turn".
-            remainingMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: true, singleActionMove: false);
+            // Two budgets, matching the game's path break markers: the move action alone, and the maximum
+            // with the standard action converted to a second move ("can I get there at all this turn").
+            moveActionMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false);
+            totalMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: true, singleActionMove: false);
             return true;
         }
 
@@ -119,6 +122,38 @@ namespace WrathAccess.Exploration
             _lastTurn = cur;
             if (cur != null)
                 Tts.Speak(cur.CharacterName + (cur.IsPlayersEnemy ? "'s turn, enemy" : "'s turn"));
+        }
+
+        /// <summary>
+        /// R: the acting unit's action economy + remaining movement. Availability comes from the game's own
+        /// checks (the same Has*Action calls its turn logic uses); movement is the remaining range with both
+        /// actions spent on moving — the same budget the path verdict compares against. Gated to focus-mode
+        /// exploration like the scanner keys.
+        /// </summary>
+        public static void AnnounceStatus()
+        {
+            if (!FocusMode.Active) return;
+            var screen = WrathAccess.Screens.ScreenManager.Current;
+            if (screen == null || screen.Key != "ctx.ingame") return;
+            if (!InTurnBased) { Tts.Speak("Not in turn-based combat", interrupt: true); return; }
+            var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
+            var cu = CurrentUnit;
+            if (turn == null || cu == null) { Tts.Speak("No active turn", interrupt: true); return; }
+
+            var sb = new System.Text.StringBuilder(cu.CharacterName);
+            sb.Append(", standard action ").Append(cu.HasStandardAction() ? "available" : "used");
+            sb.Append(", move action ").Append(cu.HasMoveAction() ? "available" : "used");
+            sb.Append(", swift action ").Append(cu.HasSwiftAction() ? "available" : "used");
+            // Two numbers, like the game's path break markers: the move action alone, and (when different)
+            // the maximum with the standard action converted to a second move.
+            int moveFt = Mathf.RoundToInt(
+                cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false) / Geo.MetresPerFoot);
+            int totalFt = Mathf.RoundToInt(
+                cu.CombatState.TBM.GetRemainingMovementRange(total: true, singleActionMove: false) / Geo.MetresPerFoot);
+            sb.Append(", ").Append(moveFt).Append(moveFt == 1 ? " foot" : " feet").Append(" movement remaining");
+            if (totalFt > moveFt) sb.Append(", ").Append(totalFt).Append(" with standard action");
+            if (turn.HasFiveFootStep(cu)) sb.Append(", five foot step available");
+            Tts.Speak(sb.ToString(), interrupt: true);
         }
     }
 }

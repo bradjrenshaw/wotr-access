@@ -306,6 +306,10 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.AnnounceCursor).AddBinding(KeyCode.K);
             InputManager.Register("scan.announceParty", "Announce party",
                 WrathAccess.Exploration.Scanner.AnnounceParty).AddBinding(KeyCode.K, shift: true);
+            // Turn-based status: the acting unit's action economy + remaining movement (self-gates like
+            // the scanner keys).
+            InputManager.Register("combat.status", "Combat status: actions and movement",
+                WrathAccess.Exploration.CombatMode.AnnounceStatus).AddBinding(KeyCode.R);
             InputManager.Register("scan.interact", "Scanner: interact with item",
                 WrathAccess.Exploration.Scanner.InteractSelected).AddBinding(KeyCode.I);
             InputManager.Register("scan.moveToCursor", "Scanner: move to cursor",

@@ -1,11 +1,14 @@
 # Wrath Access installer
 
 An accessible wxPython GUI installer for the mod, compiled with **Nuitka
-`--standalone`** (a plain folder of real native binaries — deliberately NOT
-`--onefile`, whose self-extract-to-temp behaviour is the classic antivirus
-false-positive trigger). Defender behaviour is verified by testers per release;
-if flags ever appear, the escalation path is code signing (SignPath's free OSS
-program / Azure Trusted Signing).
+`--onefile`** with the mod payload embedded — the entire release is ONE
+`WrathAccessInstaller.exe` (~15 MB). Onefile self-extracts to temp at runtime
+(the classic antivirus-heuristic pattern), so Defender behaviour is verified by
+testers per release; the local on-demand Defender scan of the first build was
+clean. If flags ever appear: `python installer/build.py --folder` builds the
+standalone-folder fallback (no self-extraction; zip it), and the durable
+escalation is code signing (SignPath's free OSS program / Azure Trusted
+Signing).
 
 ## What it does
 - Detects the game install (default Steam paths + every Steam library via the
@@ -21,10 +24,10 @@ program / Azure Trusted Signing).
 ## Building a release
 ```
 pip install wxPython nuitka
-python installer/build.py
+python installer/build.py            # single-file exe (payload embedded)
+python installer/build.py --folder   # standalone-folder fallback (zip it)
 ```
-Output: `installer/build/WrathAccessInstaller/` — zip it; testers run
-`WrathAccessInstaller.exe` inside.
+Output: `installer/build/WrathAccessInstaller.exe` — that exe IS the release.
 
 ## Developing / testing the GUI without compiling
 ```

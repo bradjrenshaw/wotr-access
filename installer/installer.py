@@ -35,9 +35,10 @@ TOLK_DLLS = ["Tolk.dll", "nvdaControllerClient64.dll", "SAAPI64.dll"]
 # ---------------------------------------------------------------- paths
 
 def payload_dir() -> str:
-    """The payload shipped next to the installer (payload/WrathAccess + payload/game)."""
-    base = os.path.dirname(os.path.abspath(sys.argv[0]))
-    return os.path.join(base, "payload")
+    """The bundled payload (payload/WrathAccess + payload/game). Under Nuitka, __file__ points
+    where our files actually live: the dist folder (standalone) or the self-extraction dir
+    (onefile, where --include-data-dir embedded the payload). Plain-python runs: the script dir."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "payload")
 
 
 def local_low() -> str:

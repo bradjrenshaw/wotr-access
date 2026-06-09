@@ -51,6 +51,15 @@ namespace WrathAccess.Exploration
             return string.IsNullOrEmpty(extra) ? name + ", " + rel : name + ", " + extra + ", " + rel;
         }
 
+        /// <summary>The spoken line for the thing itself, no position — for at-cursor announcements
+        /// (the cursor is on it, so distance/bearing would be noise).</summary>
+        public string DescribeInPlace()
+        {
+            var name = string.IsNullOrEmpty(Name) ? "(unnamed)" : Name;
+            var extra = Extra;
+            return string.IsNullOrEmpty(extra) ? name : name + ", " + extra;
+        }
+
         /// <summary>
         /// Interact with this item — mirroring the game's click (auto-path + act), driven through the
         /// game's own click handlers/commands (see the interaction-pipeline memory). Returns true if

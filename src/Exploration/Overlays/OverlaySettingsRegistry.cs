@@ -21,6 +21,7 @@ namespace WrathAccess.Exploration.Overlays
             () => new GridSystem(),
             () => new SpatialSystem(),
             () => new SonarSystem(),
+            () => new ElevationSystem(),
             () => new WallToneSystem(),
             () => new FogSystem(),
             () => new ObjectCueSystem(),

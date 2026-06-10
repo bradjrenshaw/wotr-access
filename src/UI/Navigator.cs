@@ -64,6 +64,10 @@ namespace WrathAccess.UI
         public virtual bool OnInputHeld(InputAction action) => false;
         public virtual bool OnInputReleased(InputAction action) => false;
 
+        /// <summary>Per-frame hook for typed-character input (type-ahead search). Called from the main
+        /// frame loop after action dispatch; the base navigator has no search.</summary>
+        public virtual void TickTypeahead() { }
+
         private static readonly List<UIElement> EmptyPath = new List<UIElement>();
 
         /// <summary>

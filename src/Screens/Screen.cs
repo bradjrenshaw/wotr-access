@@ -45,6 +45,10 @@ namespace WrathAccess.Screens
         /// </summary>
         public virtual bool CapturesRawInput => false;
 
+        /// <summary>Whether typing letters runs the type-ahead search over the focused region. Off for
+        /// the in-game screen, where letters are exploration hotkeys (scanner, status, …).</summary>
+        public virtual bool AllowsTypeahead => true;
+
         public virtual void OnPush() { }
 
         public virtual void OnFocus()

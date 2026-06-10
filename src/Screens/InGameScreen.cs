@@ -35,6 +35,7 @@ namespace WrathAccess.Screens
         public override string ScreenName => "Game";
         public override int Layer => 0;
         public override bool StartUnfocused => true; // exploration owns the arrows; Tab brings up the HUD
+        public override bool AllowsTypeahead => false; // letters stay exploration hotkeys (scanner, status…)
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
 
         public override void OnPush() { BuildShell(); _sig = null; _turnSig = null; _lastRestoreLabel = null; }

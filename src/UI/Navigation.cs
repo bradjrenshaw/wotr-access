@@ -20,6 +20,9 @@ namespace WrathAccess.UI
         public static bool DispatchJustPressed(InputAction action) =>
             Active != null && Active.OnInputJustPressed(action);
 
+        /// <summary>Feed typed characters to the active navigator's type-ahead search (per frame).</summary>
+        public static void TickTypeahead() => Active?.TickTypeahead();
+
         public static void AnnounceCurrent() => Active?.AnnounceCurrent();
 
         /// <summary>Re-establish initial focus if the focused screen has focusable content but nothing is

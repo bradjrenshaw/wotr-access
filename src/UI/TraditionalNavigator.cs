@@ -13,8 +13,18 @@ namespace WrathAccess.UI
     /// </summary>
     public sealed class TraditionalNavigator : Navigator
     {
+        private readonly TypeAheadSearch _search = new TypeAheadSearch();
+        private readonly List<UIElement> _searchItems = new List<UIElement>();
+        private UIElement _searchFocus; // where the search last landed (staleness check)
+
+        public TraditionalNavigator()
+        {
+            _search.OnNoMatch = text => Speak(Loc.T("search.no_match", new { text }), interrupt: true);
+        }
+
         protected override void BuildInitialFocus()
         {
+            ClearSearch(announce: false); // a (re)attached screen starts with no live search
             // An unfocused screen (exploration) starts with nothing focused — arrows bubble to the overlay,
             // and Tab enters the HUD. But if it has remembered focus (you were in the HUD and a sub-screen
             // covered it, e.g. the log), restore it instead of dropping back to exploration. Tabbing out of
@@ -33,6 +43,21 @@ namespace WrathAccess.UI
 
         public override bool OnInputJustPressed(InputAction action)
         {
+            // A live type-ahead search captures a few keys first: Up/Down walk the matches, Escape
+            // clears, Space extends the buffer (via the typed-char path — so consume the tooltip action
+            // it would otherwise trigger). ANY other key silently ends the search and acts normally —
+            // Enter activates the found item, Backspace stays the secondary action, Tab leaves, etc.
+            if (_search.IsSearchActive)
+            {
+                if (_searchFocus != null && Current != _searchFocus)
+                    ClearSearch(announce: false); // focus moved under us → results are stale
+                else if (action.Key == "nav.up" && _search.ResultCount > 0) { _search.NavigateResults(-1); return true; }
+                else if (action.Key == "nav.down" && _search.ResultCount > 0) { _search.NavigateResults(1); return true; }
+                else if (action.Key == "nav.back") { ClearSearch(announce: true); return true; }
+                else if (action.Key == "focus.tooltip") return true; // Space → buffer, not tooltip (F1 = alias)
+                else ClearSearch(announce: false);
+            }
+
             switch (action.Key)
             {
                 case "nav.up": return Arrow(NavDirection.Up);
@@ -59,6 +84,7 @@ namespace WrathAccess.UI
                     // Screen-level back/close (e.g. Settings → Close). Consume only if the screen handles it.
                     return Screen != null && Screen.InvokeAction(ActionIds.Back);
                 case "focus.tooltip":
+                case "focus.tooltipAlt":
                 {
                     // In plain exploration (nothing focused) Space is the pause toggle, not a tooltip key —
                     // don't consume it; let it bubble to the global handler (Main.TogglePauseIfExploring).
@@ -438,6 +464,107 @@ namespace WrathAccess.UI
                 return false;
             }
             return false;
+        }
+
+        // ---- Type-ahead search (engine in TypeAheadSearch; this is the glue) ----
+
+        /// <summary>Per-frame: feed typed letters into the search. Letters (and Space, once a buffer
+        /// exists) come from Unity's <c>inputString</c>; Ctrl/Alt chords are hotkeys, never search input.
+        /// Home/End jump within live results (no global actions bind them on UI screens).</summary>
+        public override void TickTypeahead()
+        {
+            if (Screen == null || Screen.CapturesRawInput || !Screen.AllowsTypeahead
+                || !FocusMode.Active || Current == null)
+            {
+                if (_search.IsSearchActive || _search.HasBuffer) ClearSearch(announce: false);
+                return;
+            }
+
+            if (_search.IsSearchActive && _search.ResultCount > 0)
+            {
+                if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Home)) { _search.JumpToFirstResult(); return; }
+                if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.End)) { _search.JumpToLastResult(); return; }
+            }
+
+            var typed = UnityEngine.Input.inputString;
+            if (string.IsNullOrEmpty(typed)) return;
+            if (UnityEngine.Input.GetKey(UnityEngine.KeyCode.LeftControl) || UnityEngine.Input.GetKey(UnityEngine.KeyCode.RightControl)
+                || UnityEngine.Input.GetKey(UnityEngine.KeyCode.LeftAlt) || UnityEngine.Input.GetKey(UnityEngine.KeyCode.RightAlt))
+                return;
+
+            foreach (var c in typed)
+            {
+                if (char.IsLetter(c)) TypeChar(c);
+                else if (c == ' ' && _search.HasBuffer) TypeChar(c); // multi-word; a lone Space stays tooltip
+            }
+        }
+
+        private void TypeChar(char c)
+        {
+            RebuildSearchScope(); // fresh snapshot — the UI is live, items may have changed since last key
+            if (_searchItems.Count == 0) return;
+            _search.AddChar(c);
+            _search.Search(_searchItems.Count, i => _searchItems[i].GetLabelText(), SearchFocusResult);
+        }
+
+        // The searchable scope = the tab-stop-level region the focus lives in: ascend until the parent
+        // is the screen or a Panel (the same carve-up ComputeTabStops uses). A tree searches its VISIBLE
+        // nodes (collapsed branches stay hidden, matching what arrows can reach); anything else (list,
+        // bar, table, flowsheet) searches its focusable leaves.
+        private void RebuildSearchScope()
+        {
+            _searchItems.Clear();
+            var scope = (UIElement)Current;
+            if (scope == null) return;
+            while (scope.Parent != null && scope.Parent != Screen && scope.Parent.Shape != ContainerShape.Panel)
+                scope = scope.Parent;
+            if (scope is Container c)
+            {
+                if (c.Shape == ContainerShape.Tree) CollectVisible(c, _searchItems);
+                else CollectSearchLeaves(c, _searchItems);
+            }
+            else if (scope.CanFocus) _searchItems.Add(scope);
+        }
+
+        private static void CollectSearchLeaves(Container c, List<UIElement> outList)
+        {
+            foreach (var child in c.Children)
+            {
+                if (child is Container cc)
+                {
+                    if (cc.Shape == ContainerShape.Tree)
+                    {
+                        if (cc.CanFocus) outList.Add(cc);
+                        if (cc.Expanded) CollectVisible(cc, outList);
+                    }
+                    else CollectSearchLeaves(cc, outList);
+                }
+                else if (child.CanFocus) outList.Add(child);
+            }
+        }
+
+        // Land on a result: a real focus move (path + remembered focus), announced interrupting — typing
+        // is rapid, each refinement should cut off the last. Land like arrow navigation does
+        // (FocusTreeNode): a matched GROUP node is the result itself — never auto-descend into its
+        // remembered child, which would re-announce a slider the user just visited; only a Bar
+        // descends to its first leaf.
+        private void SearchFocusResult(int index)
+        {
+            if (index < 0 || index >= _searchItems.Count) return;
+            var target = _searchItems[index];
+            var snap = new List<UIElement>(Path);
+            FocusTreeNode(target);
+            _searchFocus = Current;
+            AnnounceDelta(snap, interrupt: true);
+        }
+
+        private void ClearSearch(bool announce)
+        {
+            bool had = _search.IsSearchActive || _search.HasBuffer;
+            _search.Clear();
+            _searchItems.Clear();
+            _searchFocus = null;
+            if (announce && had) Speak(Loc.T("search.cleared"), interrupt: true);
         }
     }
 }

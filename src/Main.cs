@@ -118,6 +118,7 @@ namespace WrathAccess
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
             InputManager.Tick();
             ScreenManager.Tick();
+            WrathAccess.UI.Navigation.TickTypeahead(); // typed letters → type-ahead search (after dispatch)
             TickPause(); // announce the game's pause state whenever it changes (ours OR the game's own)
             TickControl(); // chime when a cutscene/scripted event takes or returns control of the party
             WrathAccess.Exploration.CombatMode.TickTurn(); // announce whose turn it is in turn-based combat
@@ -310,6 +311,10 @@ namespace WrathAccess
             // matching the game's own Space binding. (A move queued while paused only walks once unpaused.)
             InputManager.Register("focus.tooltip", "Read tooltip / toggle pause",
                 TogglePauseIfExploring).AddBinding(KeyCode.Space);
+            // F1 is the always-works tooltip alias: while a type-ahead search is live, Space extends the
+            // search buffer instead of reading the tooltip, but F1 still opens it. A separate action (not a
+            // second binding on focus.tooltip) so F1 never inherits Space's exploration job (pause).
+            InputManager.Register("focus.tooltipAlt", "Read tooltip").AddBinding(KeyCode.F1);
             InputManager.Register("nav.next", "Next (Tab)").AddBinding(KeyCode.Tab).Repeating();
             InputManager.Register("nav.prev", "Previous (Shift+Tab)").AddBinding(KeyCode.Tab, shift: true).Repeating();
             // Ctrl+Up/Down jump between regions of a FlowSheet (handled by the navigator only when focus is

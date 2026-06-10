@@ -14,11 +14,13 @@ namespace WrathAccess.Screens
     public sealed class ModKeyCaptureScreen : Screen
     {
         private static InputAction s_action;
+        private static bool s_append;       // add to the existing bindings instead of replacing them
         private static bool s_armed;        // the key that opened the dialog has released; ready to capture
         private static bool s_awaitRelease; // bound; staying up until the confirming key releases
         private static KeyCode s_releaseKey;
 
-        public static void Open(InputAction action) { s_action = action; s_armed = false; s_awaitRelease = false; }
+        public static void Open(InputAction action, bool append = false)
+        { s_action = action; s_append = append; s_armed = false; s_awaitRelease = false; }
 
         public override string Key => "overlay.modkeycapture";
         public override int Layer => 36; // just above the mod menu (35)
@@ -67,7 +69,14 @@ namespace WrathAccess.Screens
                 bool alt = UnityEngine.Input.GetKey(KeyCode.LeftAlt) || UnityEngine.Input.GetKey(KeyCode.RightAlt);
                 var binding = new KeyboardBinding(key, ctrl, shift, alt);
 
-                // Reject a combo already bound to another action — otherwise one keypress fires two actions.
+                // Reject a combo already bound to another action — otherwise one keypress fires two
+                // actions. In append mode, also reject a combo this action already has.
+                if (s_append && HasBinding(action, binding))
+                {
+                    Tts.Speak(Message.Localized("settings", "rebind.conflict",
+                        new { combo = binding.DisplayName, other = action.Label }).Resolve(), interrupt: true);
+                    return;
+                }
                 var conflict = FindConflict(binding, action);
                 if (conflict != null)
                 {
@@ -76,7 +85,7 @@ namespace WrathAccess.Screens
                     return; // keep capturing
                 }
 
-                action.ClearBindings();
+                if (!s_append) action.ClearBindings(); // append mode ADDS an alternative combo
                 action.AddBinding(binding); // BindingsChanged → BindingSetting auto-saves
                 Tts.Speak(Message.Localized("settings", "rebind.bound",
                     new { action = action.Label, combo = binding.DisplayName }).Resolve());
@@ -84,6 +93,13 @@ namespace WrathAccess.Screens
                 s_awaitRelease = true; // close once the key is released
                 return;
             }
+        }
+
+        private static bool HasBinding(InputAction action, InputBinding binding)
+        {
+            foreach (var b in action.Bindings)
+                if (b.Type == binding.Type && b.Serialize() == binding.Serialize()) return true;
+            return false;
         }
 
         // The action (other than the one being bound) that already uses this exact combo, or null.

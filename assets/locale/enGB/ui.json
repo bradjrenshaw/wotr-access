@@ -236,5 +236,10 @@
 
   "speech.handler_changed": "Speech handler changed to {handler}",
 
-  "overlay.default_name": "Default"
+  "overlay.default_name": "Default",
+  "bind.option_add": "Add binding",
+  "bind.option_clear": "Clear bindings",
+
+  "search.no_match": "{text}, no match",
+  "search.cleared": "Search cleared"
 }

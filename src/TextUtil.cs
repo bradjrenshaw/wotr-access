@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace WrathAccess
@@ -26,6 +28,29 @@ namespace WrathAccess
             s = RichTextTag.Replace(s, "");
             s = Whitespace.Replace(s, " ");
             return s.Trim();
+        }
+
+        /// <summary>Fold accents away for matching ("Séance" matches "seance"); ligatures œ/æ expand.
+        /// Ported from OniAccess (VisionNotIncluded) with permission.</summary>
+        public static string RemoveDiacritics(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            var decomposed = text.Normalize(NormalizationForm.FormD);
+            var sb = new StringBuilder(decomposed.Length);
+            for (int i = 0; i < decomposed.Length; i++)
+            {
+                char c = decomposed[i];
+                switch (c)
+                {
+                    case 'œ': case 'Œ': sb.Append("oe"); break;
+                    case 'æ': case 'Æ': sb.Append("ae"); break;
+                    default:
+                        if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                            sb.Append(c);
+                        break;
+                }
+            }
+            return sb.ToString();
         }
     }
 }

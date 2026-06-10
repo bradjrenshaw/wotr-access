@@ -7,9 +7,10 @@ namespace WrathAccess.UI.Proxies
 {
     /// <summary>
     /// A mod key-binding row (one <see cref="InputAction"/>) in the settings menu: announces the action's
-    /// label + its current combo. Activate (Enter) opens the capture dialog to rebind; the secondary
-    /// action (Backspace) clears it. Clearing re-announces the now-empty value; rebinding is announced by
-    /// the capture screen, so we don't re-announce on activate.
+    /// label + every bound combo. Activate (Enter) opens the capture dialog to rebind (REPLACES the set);
+    /// the secondary action (Backspace) opens a menu: Add binding (append an alternative combo — actions
+    /// support any number) or Clear bindings. Rebinding is announced by the capture screen, so we don't
+    /// re-announce on activate.
     /// </summary>
     public sealed class ProxyModBinding : UIElement
     {
@@ -19,6 +20,24 @@ namespace WrathAccess.UI.Proxies
         private readonly InputAction _action;
 
         public ProxyModBinding(InputAction action) { _action = action; }
+
+        private void OpenMenu()
+        {
+            var options = new List<string>
+            {
+                Message.Localized("ui", "bind.option_add").Resolve(),
+                Message.Localized("ui", "bind.option_clear").Resolve(),
+            };
+            ChoiceSubmenuScreen.Open(_action.Label, options, -1, idx =>
+            {
+                if (idx == 0) ModKeyCaptureScreen.Open(_action, append: true);
+                else if (idx == 1)
+                {
+                    _action.ClearBindings();
+                    Tts.Speak(Message.Localized("ui", "value.not_bound").Resolve());
+                }
+            });
+        }
 
         public override bool ReannounceOnContext => true; // after Clear → read the new "(none)"
 
@@ -35,8 +54,8 @@ namespace WrathAccess.UI.Proxies
         {
             yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.rebind"),
                 _ => ModKeyCaptureScreen.Open(_action));
-            yield return new ElementAction(ActionIds.Context, Message.Localized("ui", "action.clear"),
-                _ => _action.ClearBindings());
+            yield return new ElementAction(ActionIds.Context, Message.Localized("ui", "action.open"),
+                _ => OpenMenu());
         }
     }
 }

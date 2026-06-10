@@ -20,7 +20,7 @@ namespace WrathAccess.Screens
         public MessageModalScreen() { Wrap = true; } // Tab cycles message ↔ buttons
 
         public override string Key => "overlay.modal";
-        public override string ScreenName => "Dialog";
+        public override string ScreenName => Loc.T("screen.dialog");
         public override int Layer => 30;
 
         public override bool IsActive() => Vm() != null;

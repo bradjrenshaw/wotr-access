@@ -95,7 +95,7 @@ namespace WrathAccess.Screens
                 () => _detailed,
                 () => { _detailed = !_detailed; SyncGameViewMode(); FillDetail(); }));
 
-            _detailPanel = new Panel("Details");
+            _detailPanel = new Panel(Loc.T("chargen.details"));
             content.Add(_detailPanel);
 
             _classFrom = Phase.SelectedClassVM.Value;
@@ -145,7 +145,7 @@ namespace WrathAccess.Screens
             var archetypes = Archetypes().ToList();
             if (archetypes.Count == 0) return; // class has no archetypes → no list
 
-            var list = new ListContainer("Archetypes");
+            var list = new ListContainer(Loc.T("chargen.archetypes"));
             foreach (var a in archetypes) list.Add(new ProxyClassItem(a));
             _archetypePanel.Add(list);
         }

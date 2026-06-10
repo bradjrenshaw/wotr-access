@@ -27,7 +27,7 @@ namespace WrathAccess.Screens
     public sealed class BookEventScreen : Screen
     {
         public override string Key => "ctx.bookevent";
-        public override string ScreenName => "Book event";
+        public override string ScreenName => Loc.T("screen.book_event");
         public override int Layer => 15; // over the in-game context + service windows, like dialogue
 
         private BlueprintBookPage _builtPage;  // page the tree was built for
@@ -62,7 +62,7 @@ namespace WrathAccess.Screens
             Clear();
             Add(new TextElement(() => Passage(vm))); // the whole passage — focus here to re-read it
 
-            var answers = new ListContainer("Answers");
+            var answers = new ListContainer(Loc.T("dialog.answers"));
             var list = vm.Answers.Value;
             if (list != null)
                 foreach (var a in list)

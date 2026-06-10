@@ -17,7 +17,7 @@ namespace WrathAccess.Screens
     public sealed class LootScreen : Screen
     {
         public override string Key => "ctx.loot";
-        public override string ScreenName => "Loot";
+        public override string ScreenName => Loc.T("screen.loot");
         public override int Layer => 15; // over the in-game context + service windows, alongside dialogue
 
         private LootVM _builtVm; // the window the current tree was built for
@@ -53,7 +53,7 @@ namespace WrathAccess.Screens
                 foreach (var obj in vm.ContextLoot)
                 {
                     if (obj?.SlotsGroup == null) continue;
-                    var group = new ListContainer(string.IsNullOrEmpty(obj.DisplayName) ? "Loot" : obj.DisplayName);
+                    var group = new ListContainer(string.IsNullOrEmpty(obj.DisplayName) ? Loc.T("loot.container") : obj.DisplayName);
                     foreach (var slot in obj.SlotsGroup.VisibleCollection)
                         if (slot != null && slot.HasItem) group.Add(new ProxyLootSlot(vm, slot));
                     if (group.Children.Count > 0) Add(group);
@@ -61,7 +61,7 @@ namespace WrathAccess.Screens
             }
 
             // Take all — its own Tab-stop after the lists.
-            Add(new ProxyActionButton("Take all", () => vm.HasItemsToLoot, vm.CollectAll));
+            Add(new ProxyActionButton(() => Loc.T("loot.take_all"), () => vm.HasItemsToLoot, vm.CollectAll));
 
             Navigation.Attach(this);
         }

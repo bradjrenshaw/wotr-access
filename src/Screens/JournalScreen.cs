@@ -17,7 +17,7 @@ namespace WrathAccess.Screens
     public sealed class JournalScreen : Screen
     {
         public override string Key => "service.Journal";
-        public override string ScreenName => "Journal";
+        public override string ScreenName => Loc.T("screen.journal");
         public override int Layer => 10;
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Journal;
@@ -95,7 +95,7 @@ namespace WrathAccess.Screens
         private void BuildQuestList(JournalVM jv)
         {
             var groups = jv.Navigation?.NavigationGroups;
-            var sheet = new FlowSheet("Quests");
+            var sheet = new FlowSheet(Loc.T("journal.quests"));
             bool any = false;
             if (groups != null)
                 foreach (var g in groups)
@@ -104,7 +104,7 @@ namespace WrathAccess.Screens
                     var r = sheet.List(g.Title);
                     foreach (var q in g.Quests) if (q != null) { r.Item(new ProxyJournalQuest(q)); any = true; }
                 }
-            if (!any) sheet.List(null).Item(new TextElement("No quests."));
+            if (!any) sheet.List(null).Item(new TextElement(() => Loc.T("journal.no_quests")));
             sheet.Reflow();
             _content.Add(sheet);
         }
@@ -114,9 +114,9 @@ namespace WrathAccess.Screens
         private void BuildDetail(JournalVM jv)
         {
             var q = jv.Quest?.Value;
-            if (q == null) { _content.Add(new TextElement("Select a quest.")); return; }
+            if (q == null) { _content.Add(new TextElement(() => Loc.T("journal.select_quest"))); return; }
 
-            var sheet = new FlowSheet("Quest");
+            var sheet = new FlowSheet(Loc.T("journal.quest"));
             var head = sheet.List(null);
             head.Item(new TextElement(q.Title, "heading"));
             if (!string.IsNullOrWhiteSpace(q.Description)) head.Item(new TextElement(q.Description));
@@ -124,7 +124,7 @@ namespace WrathAccess.Screens
 
             if (q.Objectives != null && q.Objectives.Count > 0)
             {
-                var obj = sheet.List("Objectives");
+                var obj = sheet.List(Loc.T("journal.objectives"));
                 foreach (var o in q.Objectives)
                 {
                     if (o == null) continue;

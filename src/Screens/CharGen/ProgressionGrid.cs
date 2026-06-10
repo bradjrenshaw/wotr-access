@@ -77,7 +77,7 @@ namespace WrathAccess.Screens
                 else bands.AddRange(SelectBands(prog.ClassProgressionVms, selectedClass));
             }
 
-            var sheet = new FlowSheet("Progression");
+            var sheet = new FlowSheet(Loc.T("chargen.progression"));
 
             // Section order mirrors the game's UnitProgressionView prefab (verified from
             // mainmenupcview.res, which lays the scroll content out in a vertical layout):
@@ -204,7 +204,7 @@ namespace WrathAccess.Screens
 
             var cells = new List<UIElement>(levels.Count);
             foreach (var lv in levels) cells.Add(cellAt.TryGetValue(lv.Level, out var c) ? c : null);
-            region.Row(new TextElement("Spells"), cells.ToArray());
+            region.Row(new TextElement(() => Loc.T("chargen.spells")), cells.ToArray());
         }
 
         private static string Ordinal(int n)

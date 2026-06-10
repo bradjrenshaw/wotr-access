@@ -24,19 +24,19 @@ namespace WrathAccess.Screens
 
         public override void Build(Container content)
         {
-            var raceList = new ListContainer("Races");
+            var raceList = new ListContainer(Loc.T("chargen.races"));
             if (Phase.RaceSelector?.EntitiesCollection != null)
                 foreach (var item in Phase.RaceSelector.EntitiesCollection)
                     if (item != null) raceList.Add(new ProxySelectionItem(item, () => item.DisplayName));
             content.Add(raceList);
 
-            var genderList = new ListContainer("Gender");
+            var genderList = new ListContainer(Loc.T("chargen.gender"));
             if (Phase.GenderSelector?.EntitiesCollection != null)
                 foreach (var g in Phase.GenderSelector.EntitiesCollection)
                     if (g != null) genderList.Add(new ProxySelectionItem(g, () => g.DisplayName));
             content.Add(genderList);
 
-            _detailPanel = new Panel("Details");
+            _detailPanel = new Panel(Loc.T("chargen.details"));
             content.Add(_detailPanel);
 
             _raceFrom = Phase.SelectedRaceVM.Value;

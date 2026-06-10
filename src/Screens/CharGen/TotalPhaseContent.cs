@@ -38,7 +38,7 @@ namespace WrathAccess.Screens
             // unlabeled block).
             if (Phase.AbilityScores?.AbilityScores != null)
             {
-                var g = new StatGroup("Ability Scores", "Score", "Modifier");
+                var g = new StatGroup(Loc.T("section.ability_scores"), Loc.T("col.score"), Loc.T("col.modifier"));
                 foreach (var a in Phase.AbilityScores.AbilityScores) g.Row(CharInfoStatRows.Ability(a));
                 _sink.StatGroup(g);
             }

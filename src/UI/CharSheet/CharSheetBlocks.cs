@@ -21,13 +21,13 @@ namespace WrathAccess.UI.CharSheet
         public static void NamePortrait(CharInfoNameAndPortraitVM np, ICharSheetSink sink)
         {
             if (np == null) return;
-            var items = new List<UIElement> { new TextElement(() => "Name: " + np.UnitName) };
+            var items = new List<UIElement> { new TextElement(() => Loc.T("char.name", new { value = np.UnitName })) };
             var mythic = np.MythicName?.Value;
-            if (!string.IsNullOrEmpty(mythic)) items.Add(new TextElement(() => "Mythic: " + np.MythicName.Value));
+            if (!string.IsNullOrEmpty(mythic)) items.Add(new TextElement(() => Loc.T("char.mythic", new { value = np.MythicName.Value })));
             if (np.HitPoints != null)
-                items.Add(new TextElement(() => "Hit points: " + np.HitPoints.HpText.Value,
+                items.Add(new TextElement(() => Loc.T("char.hit_points", new { value = np.HitPoints.HpText.Value }),
                     tooltip: () => np.HitPoints.Tooltip.Value));
-            sink.ListSection("Character", items);
+            sink.ListSection(Loc.T("section.character"), items);
         }
 
         public static void LevelClassScores(CharInfoLevelClassScoresVM lcs, ICharSheetSink sink)
@@ -38,24 +38,24 @@ namespace WrathAccess.UI.CharSheet
             var xp = lcs.Experience;
             if (xp != null)
             {
-                var items = new List<UIElement> { new TextElement(() => "Level: " + xp.Level) };
-                items.Add(new TextElement(() => "Experience: " + xp.CurrentExp + " / " + xp.NextLevelExp));
-                if (xp.NegativeLevels > 0) items.Add(new TextElement(() => "Negative levels: " + xp.NegativeLevels));
-                sink.ListSection("Level", items);
+                var items = new List<UIElement> { new TextElement(() => Loc.T("char.level", new { value = xp.Level })) };
+                items.Add(new TextElement(() => Loc.T("char.experience", new { current = xp.CurrentExp, next = xp.NextLevelExp })));
+                if (xp.NegativeLevels > 0) items.Add(new TextElement(() => Loc.T("char.negative_levels", new { value = xp.NegativeLevels })));
+                sink.ListSection(Loc.T("section.level"), items);
             }
 
             var rga = lcs.RaceGenderAlignment;
             if (rga != null)
-                sink.ListSection("Race", new List<UIElement>
+                sink.ListSection(Loc.T("section.race"), new List<UIElement>
                 {
-                    new TextElement(() => "Race: " + rga.RaceValue, tooltip: () => rga.RaceTooltip),
-                    new TextElement(() => "Gender: " + rga.GenderValue),
-                    new TextElement(() => "Alignment: " + rga.AlignmentDisplayValue, tooltip: () => rga.AlignmentTooltip),
+                    new TextElement(() => Loc.T("char.race", new { value = rga.RaceValue }), tooltip: () => rga.RaceTooltip),
+                    new TextElement(() => Loc.T("char.gender", new { value = rga.GenderValue })),
+                    new TextElement(() => Loc.T("char.alignment", new { value = rga.AlignmentDisplayValue }), tooltip: () => rga.AlignmentTooltip),
                 });
 
             if (lcs.AbilityScores?.AbilityScores != null)
             {
-                var g = new StatGroup("Ability Scores", "Score", "Modifier");
+                var g = new StatGroup(Loc.T("section.ability_scores"), Loc.T("col.score"), Loc.T("col.modifier"));
                 foreach (var a in lcs.AbilityScores.AbilityScores) g.Row(CharInfoStatRows.Ability(a)); // carries the stat tooltip
                 sink.StatGroup(g);
             }
@@ -64,21 +64,21 @@ namespace WrathAccess.UI.CharSheet
             if (classes != null && classes.Count > 0)
             {
                 var items = new List<UIElement>();
-                foreach (var c in classes) { var cc = c; items.Add(new TextElement(() => cc.ClassName + " " + cc.Level, tooltip: () => cc.Tooltip)); }
-                sink.ListSection("Classes", items);
+                foreach (var c in classes) { var cc = c; items.Add(new TextElement(() => Loc.T("char.class_level", new { name = cc.ClassName, level = cc.Level }), tooltip: () => cc.Tooltip)); }
+                sink.ListSection(Loc.T("section.classes"), items);
             }
         }
 
         public static void Attacks(CharInfoAttacksBlockVM atk, ICharSheetSink sink)
         {
             if (atk == null) return;
-            var g = new StatGroup("Attacks", "Attack", "Damage", "Crit"); // prefab columns: weapon, attack, damage, crit
+            var g = new StatGroup(Loc.T("section.attacks"), Loc.T("col.attack"), Loc.T("col.damage"), Loc.T("col.crit")); // prefab columns: weapon, attack, damage, crit
             AddAttackRow(g, atk.MainHandAttack);
             AddAttackRow(g, atk.OffHandAttack);
             if (atk.AdditionalAttackEntities != null)
                 foreach (var a in atk.AdditionalAttackEntities) AddAttackRow(g, a);
             if (g.Rows.Count > 0) sink.StatGroup(g);
-            else sink.ListSection("Attacks", new[] { new TextElement("No attacks.") });
+            else sink.ListSection(Loc.T("section.attacks"), new[] { new TextElement(() => Loc.T("char.no_attacks")) });
         }
 
         private static void AddAttackRow(StatGroup g, CharInfoAttackEntityVM a)
@@ -105,7 +105,7 @@ namespace WrathAccess.UI.CharSheet
         public static void Defence(CharInfoDefenceBlockVM def, ICharSheetSink sink)
         {
             if (def == null) return;
-            var g = new StatGroup("Defense");
+            var g = new StatGroup(Loc.T("section.defense"));
             var ac = def.ArmorClass?.Value;
             if (ac != null)
             {

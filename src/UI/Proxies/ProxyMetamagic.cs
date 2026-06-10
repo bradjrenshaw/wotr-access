@@ -20,7 +20,7 @@ namespace WrathAccess.UI.Proxies
 
         public override bool CanFocus => _vm != null;
 
-        private string Label()
+        private string FeatLabel()
         {
             var name = _vm.Feature?.Name ?? "";
             return name + " (+" + _vm.Cost + ")"; // +N spell levels
@@ -28,7 +28,7 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
-            yield return new LabelAnnouncement(Message.Raw(Label()));
+            yield return new LabelAnnouncement(Message.Raw(FeatLabel()));
             yield return new RoleAnnouncement("toggle");
             yield return new ValueAnnouncement(Message.Localized("ui", _vm.IsSelected ? "value.on" : "value.off"));
         }

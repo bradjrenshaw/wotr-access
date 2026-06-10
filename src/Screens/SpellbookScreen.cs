@@ -25,7 +25,7 @@ namespace WrathAccess.Screens
     public sealed class SpellbookScreen : Screen
     {
         public override string Key => "service.Spellbook";
-        public override string ScreenName => "Spellbook";
+        public override string ScreenName => Loc.T("screen.spellbook");
         public override int Layer => 10;
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Spellbook;
@@ -112,7 +112,7 @@ namespace WrathAccess.Screens
             var party = Game.Instance?.Player?.Party;
             if (party != null && party.Count > 0)
             {
-                var sw = new ListContainer("Characters");
+                var sw = new ListContainer(Loc.T("label.characters"));
                 foreach (var u in party)
                 {
                     var unit = u;
@@ -140,7 +140,7 @@ namespace WrathAccess.Screens
 
             if (!vm.HasSpellbooks.Value)
             {
-                _content.Add(new TextElement("This character has no spells."));
+                _content.Add(new TextElement(() => Loc.T("spell.none")));
                 Settle(cap, modeChanged);
                 return;
             }
@@ -152,7 +152,7 @@ namespace WrathAccess.Screens
             if (books != null && books.HasMoreThanOneSpellbooks.Value && books.SelectionGroup?.EntitiesCollection != null)
             {
                 var sheet = new FlowSheet();
-                var bar = sheet.Bar("Spellbooks");
+                var bar = sheet.Bar(Loc.T("spell.spellbooks"));
                 foreach (var e in books.SelectionGroup.EntitiesCollection) { var ent = e; bar.Cell(new ProxySelectionItem(ent, () => ent.BookName)); }
                 sheet.Reflow();
                 _content.Add(sheet);
@@ -163,7 +163,7 @@ namespace WrathAccess.Screens
             if (ch != null)
             {
                 var sink = new FlowSheetCharSheetSink();
-                var g = new StatGroup("Caster");
+                var g = new StatGroup(Loc.T("spell.caster"));
                 g.Row(CharInfoStatRows.Value(ch.CasterLevel, signed: false));
                 g.Row(CharInfoStatRows.Value(ch.Concentration, signed: true));
                 g.Row(CharInfoStatRows.Value(ch.SpellPenetration, signed: true));
@@ -177,7 +177,7 @@ namespace WrathAccess.Screens
             if (levels != null)
             {
                 var sheet = new FlowSheet();
-                var bar = sheet.Bar("Spell level");
+                var bar = sheet.Bar(Loc.T("metamagic.spell_level"));
                 foreach (var e in levels)
                 {
                     if (e == null || !e.IsAvailable.Value) continue;
@@ -223,7 +223,7 @@ namespace WrathAccess.Screens
         {
             var panel = vm.SpellbookMemorizingPanelVM;
             if (panel == null) return;
-            var sheet = new FlowSheet(WithLevel("Memorize", vm));
+            var sheet = new FlowSheet(WithLevel(Loc.T("spell.memorize"), vm));
 
             // Like the game: show the memorize slots when there are any at this level, else a substitute
             // line (spontaneous spells-per-day, cantrips "cast at will", not-enough-stat/level, …).
@@ -245,7 +245,7 @@ namespace WrathAccess.Screens
             var info = new List<UIElement>();
             if (!hasSlots) info.Add(new TextElement(() => SubstituteText(panel))); // live (spontaneous count changes on cast)
             if (panel.NeedToSleep) info.Add(new TextElement((string)UIStrings.Instance.SpellBookTexts.NeedToSleep));
-            if (info.Count > 0) { var r = sheet.List("Spell slots"); foreach (var e in info) r.Item(e); }
+            if (info.Count > 0) { var r = sheet.List(Loc.T("spell.slots")); foreach (var e in info) r.Item(e); }
 
             sheet.Reflow();
             if (sheet.RowCount > 0) _content.Add(sheet);
@@ -289,30 +289,30 @@ namespace WrathAccess.Screens
             var mixer = vm.SpellbookMetamagicMixerVM;
             var sel = mixer.SpellbookMetamagicSelector;
             var baseSpell = vm.CurrentSelectedSpell?.Value;
-            var sheet = new FlowSheet("Metamagic");
+            var sheet = new FlowSheet(Loc.T("spell.metamagic"));
 
             if (baseSpell != null)
             {
                 var bs = baseSpell;
-                sheet.List("Spell").Item(new TextElement(() => bs.DisplayName, null, () => bs.Tooltip));
+                sheet.List(Loc.T("spell.spell")).Item(new TextElement(() => bs.DisplayName, null, () => bs.Tooltip));
             }
 
             var feats = sel?.MetamagicItems;
             if (feats != null && feats.Count > 0)
             {
-                var r = sheet.List("Metamagic");
+                var r = sheet.List(Loc.T("spell.metamagic"));
                 foreach (var item in feats) if (item != null) r.Item(new ProxyMetamagicToggle(item));
             }
             else
             {
-                sheet.List("Metamagic").Item(new TextElement("No metamagic feats known."));
+                sheet.List(Loc.T("spell.metamagic")).Item(new TextElement(() => Loc.T("spell.no_metamagic")));
             }
 
             var lvl = sel?.SpellbookSpellLevelSelector;
             if (lvl != null && lvl.CanChangeLevel.Value)
-                sheet.List("Heighten").Item(new ProxyMetamagicLevel(lvl));
+                sheet.List(Loc.T("spell.heighten")).Item(new ProxyMetamagicLevel(lvl));
 
-            var result = sheet.List("Result");
+            var result = sheet.List(Loc.T("metamagic.result"));
             int resultLevel = lvl?.ResultSpellLevel.Value ?? 0;
             bool castable = lvl?.CanUseSpell ?? true;
             result.Item(new TextElement(ResultLine(baseSpell, resultLevel, castable)));
@@ -327,9 +327,8 @@ namespace WrathAccess.Screens
 
         private static string ResultLine(AbilityDataVM baseSpell, int level, bool castable)
         {
-            var s = Message.Localized("ui", "metamagic.result").Resolve() + ": "
-                + (baseSpell?.DisplayName ?? "") + ", " + LevelName(level);
-            if (!castable) s += " (" + Message.Localized("ui", "metamagic.too_high").Resolve() + ")";
+            var s = Loc.T("metamagic.result_line", new { name = baseSpell?.DisplayName ?? "", level = LevelName(level) });
+            if (!castable) s += " (" + Loc.T("metamagic.too_high") + ")";
             return s;
         }
 
@@ -348,8 +347,8 @@ namespace WrathAccess.Screens
         {
             var known = vm.SpellbookKnownSpellsVM?.KnownSpells;
             var unit = vm.UnitDescriptor?.Value;
-            var sheet = new FlowSheet(WithLevel("Spells", vm));
-            var t = sheet.Table("Spells", "School");
+            var sheet = new FlowSheet(WithLevel(Loc.T("spell.spells"), vm));
+            var t = sheet.Table(Loc.T("spell.spells"), Loc.T("col.school"));
             bool any = false;
             if (known != null)
                 foreach (var spell in known)
@@ -359,13 +358,14 @@ namespace WrathAccess.Screens
                     var s = spell;
                     t.Row(new ProxyKnownSpell(s, unit), new UIElement[] { new TextElement(() => s.SchoolName) });
                 }
-            if (!any) t.Row(new TextElement("No spells at this level."), new UIElement[0]);
+            if (!any) t.Row(new TextElement(() => Loc.T("spell.none_at_level")), new UIElement[0]);
             t.Associate(0);
             sheet.Reflow();
             _content.Add(sheet);
         }
 
-        private static string LevelName(int level) => level == 0 ? "Cantrips" : "Level " + level;
+        private static string LevelName(int level)
+            => level == 0 ? Loc.T("spell.cantrips") : Loc.T("spell.level", new { level });
 
         // The memorize/known sections are filtered to the current spell level (the level switcher drives both),
         // so put the level in their headers — otherwise it's only known from the switcher region.

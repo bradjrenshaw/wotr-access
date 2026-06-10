@@ -40,7 +40,7 @@ namespace WrathAccess.Screens
             _count = sectors != null ? sectors.Count : 0;
             _listPanel.Clear();
             if (sectors == null || sectors.Count == 0) return;
-            var list = new ListContainer("Alignments");
+            var list = new ListContainer(Loc.T("chargen.alignments"));
             foreach (var sector in sectors)
             {
                 if (sector == null) continue;

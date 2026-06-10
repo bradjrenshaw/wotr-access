@@ -18,7 +18,7 @@ namespace WrathAccess.Screens
     public sealed class NewGameScreen : WizardScreen
     {
         public override string Key => "ctx.newgame";
-        public override string ScreenName => "New Game";
+        public override string ScreenName => Loc.T("screen.new_game");
         public override int Layer => 0; // mutually exclusive with the main-menu sidebar
 
         private static NewGameVM Vm()
@@ -47,7 +47,7 @@ namespace WrathAccess.Screens
                 // one Tab-stop each, arrow within) to match it, rather than a flat wall of Tab-stops.
                 SettingsEntityBuilder.BuildInto(content, difficulty.SettingEntities, tree: true);
             else
-                content.Add(new TextElement("This step is not accessible yet."));
+                content.Add(new TextElement(() => Loc.T("wizard.step_unavailable")));
         }
 
         protected override void OnBack() => Vm()?.OnButtonBack();
@@ -56,7 +56,7 @@ namespace WrathAccess.Screens
         protected override string NextLabel()
         {
             var p = Vm()?.MenuSelectionGroup.SelectedEntity.Value?.NewGamePhaseVM;
-            return p != null && p.NextStepTitle != null ? p.NextStepTitle.Value : "Next";
+            return p != null && p.NextStepTitle != null ? p.NextStepTitle.Value : Loc.T("wizard.next");
         }
 
         protected override bool NextEnabled()

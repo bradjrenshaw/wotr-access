@@ -32,9 +32,9 @@ namespace WrathAccess.Screens
             var sheet = new FlowSheet();
 
             sheet.List(null) // unlabelled status line
-                .Item(new TextElement(() => "Skill points remaining: " + Points() + ", max rank " + MaxRank()));
+                .Item(new TextElement(() => Loc.T("chargen.skill_points", new { points = Points(), rank = MaxRank() })));
 
-            var table = sheet.Table("Skills", "Rank", "Modifier", "Raise", "Lower");
+            var table = sheet.Table(Loc.T("section.skills"), Loc.T("col.rank"), Loc.T("col.modifier"), Loc.T("col.raise"), Loc.T("col.lower"));
             foreach (var s in Phase.SkillAllocators)
             {
                 if (s == null) continue;

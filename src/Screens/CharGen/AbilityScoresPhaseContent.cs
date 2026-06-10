@@ -37,9 +37,9 @@ namespace WrathAccess.Screens
             _sheet = new FlowSheet();
 
             _sheet.List(null) // unlabelled status line (self-describing, single cell)
-                .Item(new TextElement(() => "Points remaining: " + Points()));
+                .Item(new TextElement(() => Loc.T("chargen.points_remaining", new { value = Points() })));
 
-            var table = _sheet.Table("Ability scores", "Score", "Modifier", "Race bonus", "Raise", "Lower");
+            var table = _sheet.Table(Loc.T("section.ability_scores"), Loc.T("col.score"), Loc.T("col.modifier"), Loc.T("col.race_bonus"), Loc.T("col.raise"), Loc.T("col.lower"));
             foreach (var a in Phase.AbilityScoreAllocators)
             {
                 if (a == null) continue;

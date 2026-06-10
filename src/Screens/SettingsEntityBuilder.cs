@@ -55,8 +55,8 @@ namespace WrathAccess.Screens
         private static TreeGroup BuildKeyBindingGroup(SettingEntityKeyBindingVM vm)
         {
             var group = new TreeGroup(vm.Title);
-            group.Add(new ProxyKeyBindingSlot(vm, 0, "binding 1"));
-            group.Add(new ProxyKeyBindingSlot(vm, 1, "binding 2"));
+            group.Add(new ProxyKeyBindingSlot(vm, 0, Loc.T("bind.slot", new { index = 1 })));
+            group.Add(new ProxyKeyBindingSlot(vm, 1, Loc.T("bind.slot", new { index = 2 })));
             return group;
         }
     }

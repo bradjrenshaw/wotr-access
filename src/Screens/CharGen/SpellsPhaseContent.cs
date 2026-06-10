@@ -64,7 +64,7 @@ namespace WrathAccess.Screens
             content.Add(_selectorPanel);
             FillSelector();
 
-            _knownSection = new Panel("Known spells");
+            _knownSection = new Panel(Loc.T("chargen.known_spells"));
             content.Add(_knownSection);
         }
 
@@ -84,7 +84,7 @@ namespace WrathAccess.Screens
             if (NoSelections)
             {
                 _selBuilt = true;
-                _selectorPanel.Add(new TextElement("This class knows all its spells automatically."));
+                _selectorPanel.Add(new TextElement(() => Loc.T("chargen.spells_auto")));
                 return;
             }
 
@@ -100,8 +100,8 @@ namespace WrathAccess.Screens
             // ("Fireball, toggle, on, Level 1, School evocation, …"); Left/Right reads normally; Enter/Space
             // on any cell fall through to the toggle. A toggle in a multi-select group (slot budget):
             // SetSelectedFromView(!IsSelected), the same OnClick the view uses.
-            var sheet = new FlowSheet("Choose spells");
-            var table = sheet.Table("Choose spells", "Level", "School", "Recommendation");
+            var sheet = new FlowSheet(Loc.T("chargen.choose_spells"));
+            var table = sheet.Table(Loc.T("chargen.choose_spells"), Loc.T("col.level"), Loc.T("col.school"), Loc.T("col.recommendation"));
             foreach (var it in items)
             {
                 var item = it; // capture for the live closures
@@ -156,11 +156,11 @@ namespace WrathAccess.Screens
             _knownList = null;
             if (levels.Count == 0)
             {
-                _knownSection.Add(new TextElement("No spells known yet."));
+                _knownSection.Add(new TextElement(() => Loc.T("chargen.no_spells_yet")));
                 return;
             }
 
-            var radio = new ListContainer("Spell level");
+            var radio = new ListContainer(Loc.T("metamagic.spell_level"));
             foreach (var e in levels)
             {
                 var ent = e; // capture
@@ -179,7 +179,7 @@ namespace WrathAccess.Screens
             var known = Phase.SpellbookVM?.SpellbookKnownSpellsVM?.KnownSpells;
             if (known == null || known.Count == 0)
             {
-                _knownList.Add(new TextElement("No spells known at this level."));
+                _knownList.Add(new TextElement(() => Loc.T("chargen.no_spells_at_level")));
                 return;
             }
             var list = new ListContainer();

@@ -25,7 +25,7 @@ namespace WrathAccess.Screens
     public sealed class EncyclopediaScreen : Screen
     {
         public override string Key => "service.Encyclopedia";
-        public override string ScreenName => "Encyclopedia";
+        public override string ScreenName => Loc.T("screen.encyclopedia");
         public override int Layer => 10;
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Encyclopedia;
@@ -131,10 +131,10 @@ namespace WrathAccess.Screens
             _page.Clear();
 
             var page = vm.Page?.Value;
-            var sheet = new FlowSheet("Page");
+            var sheet = new FlowSheet(Loc.T("ency.page"));
             if (page == null)
             {
-                sheet.List(null).Item(new TextElement("Select a topic."));
+                sheet.List(null).Item(new TextElement(() => Loc.T("ency.select_topic")));
                 sheet.Reflow();
                 _page.Add(sheet);
                 return;
@@ -150,10 +150,10 @@ namespace WrathAccess.Screens
                         body.Item(new TextElement(t.Text));
                         break;
                     case EncyclopediaPageBlockClassProgressionVM _:
-                        body.Item(new TextElement("Class progression table (not shown)."));
+                        body.Item(new TextElement(() => Loc.T("ency.progression_not_shown")));
                         break;
                     case EncyclopediaPageBlockUnitVM _:
-                        body.Item(new TextElement("Creature statistics (not shown)."));
+                        body.Item(new TextElement(() => Loc.T("ency.stats_not_shown")));
                         break;
                     // Child pages are listed below; images are skipped.
                 }

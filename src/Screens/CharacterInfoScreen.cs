@@ -39,7 +39,7 @@ namespace WrathAccess.Screens
     public sealed class CharacterInfoScreen : Screen
     {
         public override string Key => "service.Character";
-        public override string ScreenName => "Character";
+        public override string ScreenName => Loc.T("screen.character");
         public override int Layer => 10;
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.CharacterInfo;
@@ -108,7 +108,7 @@ namespace WrathAccess.Screens
             var entities = menu?.SelectionGroup?.EntitiesCollection;
             if (entities != null)
             {
-                var tabs = new ListContainer("Pages");
+                var tabs = new ListContainer(Loc.T("char.pages"));
                 foreach (var e in entities)
                 {
                     var ent = e;
@@ -163,7 +163,7 @@ namespace WrathAccess.Screens
                 case CharInfoMartialVM mt: RenderMartial(mt, sink); break;
                 case CharInfoAlignmentVM al: RenderAlignment(type, al, sink); break;
                 case CharInfoStoriesVM st: RenderStories(st, sink); break;
-                default: sink.ListSection(type.ToString(), new[] { new TextElement("Not shown yet.") }); break;
+                default: sink.ListSection(type.ToString(), new[] { new TextElement(() => Loc.T("char.not_shown")) }); break;
             }
         }
 
@@ -176,8 +176,8 @@ namespace WrathAccess.Screens
             if (type == CharInfoComponentType.AlignmentWheel)
             {
                 var items = new List<UIElement>();
-                items.Add(new TextElement(() => "Alignment: " + AlignmentText(al)));
-                if (!string.IsNullOrEmpty(al.MythicLevel)) items.Add(new TextElement(() => "Mythic: " + al.MythicLevel));
+                items.Add(new TextElement(() => Loc.T("char.alignment", new { value = AlignmentText(al) })));
+                if (!string.IsNullOrEmpty(al.MythicLevel)) items.Add(new TextElement(() => Loc.T("char.mythic", new { value = al.MythicLevel })));
                 sink.ListSection("Alignment", items);
                 return;
             }
@@ -215,7 +215,7 @@ namespace WrathAccess.Screens
         private static void RenderSkills(CharInfoSkillsBlockVM sk, ICharSheetSink sink)
         {
             if (sk.Skills == null) return;
-            var g = new StatGroup("Skills", "Rank", "Modifier");
+            var g = new StatGroup(Loc.T("section.skills"), Loc.T("col.rank"), Loc.T("col.modifier"));
             foreach (var s in sk.Skills) g.Row(CharInfoStatRows.Skill(s));
             sink.StatGroup(g);
         }

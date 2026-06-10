@@ -47,7 +47,7 @@ namespace WrathAccess.Screens
             if (_phaseContent != null)
                 _phaseContent.Build(content);
             else
-                content.Add(new TextElement("This phase is not accessible yet."));
+                content.Add(new TextElement(() => Loc.T("chargen.phase_unavailable")));
         }
 
         // The roadmap strip (top of screen): one entry per phase, name + state + live summary, each a
@@ -70,7 +70,7 @@ namespace WrathAccess.Screens
             _roadmapPhases = phases != null ? phases.ToList() : new List<CharGenPhaseBaseVM>();
             if (_roadmapPhases.Count == 0) return;
 
-            var list = new ListContainer("Steps");
+            var list = new ListContainer(Loc.T("chargen.steps"));
             foreach (var p in _roadmapPhases)
             {
                 if (p == null) continue;

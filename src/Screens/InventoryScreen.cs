@@ -27,7 +27,7 @@ namespace WrathAccess.Screens
     public sealed class InventoryScreen : Screen
     {
         public override string Key => "service.Inventory";
-        public override string ScreenName => "Inventory";
+        public override string ScreenName => Loc.T("screen.inventory");
         public override int Layer => 10;
         public override bool IsActive()
         {
@@ -118,7 +118,7 @@ namespace WrathAccess.Screens
             var party = Game.Instance?.Player?.Party;
             if (party != null && party.Count > 0)
             {
-                var sw = new ListContainer("Characters");
+                var sw = new ListContainer(Loc.T("label.characters"));
                 foreach (var u in party)
                 {
                     var unit = u;
@@ -183,30 +183,31 @@ namespace WrathAccess.Screens
             if (doll.WeaponSets != null && doll.WeaponSets.Count > 0)
             {
                 // Grip toggle for the active set, above the sets (only landable when the weapon can re-grip).
-                sheet.Bar("Grip").Cell(new ProxyGripToggle(() => doll.CurrentSet?.Value));
-                var sets = sheet.Bar("Weapon sets");
+                sheet.Bar(Loc.T("inventory.grip")).Cell(new ProxyGripToggle(() => doll.CurrentSet?.Value));
+                var sets = sheet.Bar(Loc.T("inv.weapon_sets"));
                 foreach (var ws in doll.WeaponSets)
                     if (ws != null) sets.Cell(new ProxyWeaponSet(ws));
             }
 
-            var list = sheet.List("Equipment");
+            var list = sheet.List(Loc.T("inv.equipment"));
             var set = doll.CurrentSet?.Value;
-            AddSlot(list, "Primary hand", set?.Primary);
-            AddSlot(list, "Secondary hand", set?.Secondary);
-            AddSlot(list, "Armor", doll.Armor);
-            AddSlot(list, "Head", doll.Head);
-            AddSlot(list, "Neck", doll.Neck);
-            AddSlot(list, "Shoulders", doll.Shoulders);
-            AddSlot(list, "Wrist", doll.Wrist);
-            AddSlot(list, "Gloves", doll.Gloves);
-            AddSlot(list, "Belt", doll.Belt);
-            AddSlot(list, "Ring 1", doll.Ring1);
-            AddSlot(list, "Ring 2", doll.Ring2);
-            AddSlot(list, "Feet", doll.Feet);
-            AddSlot(list, "Glasses", doll.Glasses);
-            AddSlot(list, "Shirt", doll.Shirt);
+            AddSlot(list, Loc.T("slot.primary_hand"), set?.Primary);
+            AddSlot(list, Loc.T("slot.secondary_hand"), set?.Secondary);
+            AddSlot(list, Loc.T("slot.armor"), doll.Armor);
+            AddSlot(list, Loc.T("slot.head"), doll.Head);
+            AddSlot(list, Loc.T("slot.neck"), doll.Neck);
+            AddSlot(list, Loc.T("slot.shoulders"), doll.Shoulders);
+            AddSlot(list, Loc.T("slot.wrist"), doll.Wrist);
+            AddSlot(list, Loc.T("slot.gloves"), doll.Gloves);
+            AddSlot(list, Loc.T("slot.belt"), doll.Belt);
+            AddSlot(list, Loc.T("slot.ring1"), doll.Ring1);
+            AddSlot(list, Loc.T("slot.ring2"), doll.Ring2);
+            AddSlot(list, Loc.T("slot.feet"), doll.Feet);
+            AddSlot(list, Loc.T("slot.glasses"), doll.Glasses);
+            AddSlot(list, Loc.T("slot.shirt"), doll.Shirt);
             if (doll.QuickSlots != null)
-                for (int i = 0; i < doll.QuickSlots.Length; i++) AddSlot(list, "Quick slot " + (i + 1), doll.QuickSlots[i]);
+                for (int i = 0; i < doll.QuickSlots.Length; i++)
+                    AddSlot(list, Loc.T("slot.quick", new { index = i + 1 }), doll.QuickSlots[i]);
             sheet.Reflow();
             if (sheet.RowCount > 0) _content.Add(sheet);
         }
@@ -222,13 +223,13 @@ namespace WrathAccess.Screens
         {
             if (stash == null) return;
             var sheet = new FlowSheet();
-            var list = sheet.List("Inventory");
+            var list = sheet.List(Loc.T("inv.inventory"));
             var enc = stash.EncumbranceVM;
             if (enc != null)
-                list.Item(new TextElement(() => "Encumbrance: " + enc.LoadWeight.Value
-                        + (string.IsNullOrEmpty(enc.LoadStatus.Value) ? "" : ", " + enc.LoadStatus.Value)),
+                list.Item(new TextElement(() => Loc.T("inv.encumbrance", new { value = enc.LoadWeight.Value
+                        + (string.IsNullOrEmpty(enc.LoadStatus.Value) ? "" : ", " + enc.LoadStatus.Value) })),
                     tooltip: () => stash.EncumbranceTooltip);
-            list.Item(new TextElement(() => "Gold: " + stash.Money.Value));
+            list.Item(new TextElement(() => Loc.T("inv.gold", new { value = stash.Money.Value })));
             sheet.Reflow();
             if (sheet.RowCount > 0) _content.Add(sheet);
         }
@@ -246,14 +247,14 @@ namespace WrathAccess.Screens
             var sheet = new FlowSheet();
 
             if (filter?.ItemsFilterSearchVM != null)
-                sheet.Bar("Search").Cell(new ProxyItemSearch(filter.ItemsFilterSearchVM, () => group?.SearchString?.Value));
+                sheet.Bar(Loc.T("inventory.search")).Cell(new ProxyItemSearch(filter.ItemsFilterSearchVM, () => group?.SearchString?.Value));
 
             if (filter != null)
-                sheet.Bar("Sort").Cell(new ProxyItemSorter(filter)); // the stash-swap button will join this bar later
+                sheet.Bar(Loc.T("inventory.sort")).Cell(new ProxyItemSorter(filter)); // the stash-swap button will join this bar later
 
             if (filter?.SelectionFilterGroup?.EntitiesCollection != null)
             {
-                var bar = sheet.Bar("Filters");
+                var bar = sheet.Bar(Loc.T("inv.filters"));
                 foreach (var type in FilterOrder)
                 {
                     var e = FindFilter(filter, type);
@@ -266,7 +267,7 @@ namespace WrathAccess.Screens
             // the rest are value columns. Up/Down reads the item + columns; a value column leads with its
             // value; Enter/secondary/Space on any cell fall through to the item (so the row tooltip is the
             // item's own — no separate row tooltip needed).
-            var items = sheet.Table("Stash", "Type", "Qty", "Weight", "Value");
+            var items = sheet.Table(Loc.T("inv.stash"), Loc.T("col.type"), Loc.T("col.qty"), Loc.T("col.weight"), Loc.T("col.value"));
             bool any = false;
             if (group?.VisibleCollection != null)
                 foreach (var slot in group.VisibleCollection)
@@ -282,7 +283,7 @@ namespace WrathAccess.Screens
                         new TextElement(() => s.Cost.Value.ToString()),
                     });
                 }
-            if (!any) items.Row(new TextElement("No items."), new UIElement[0]);
+            if (!any) items.Row(new TextElement(() => Loc.T("inv.no_items")), new UIElement[0]);
             items.Associate(0); // column 0 (the item) is the row's element
 
             sheet.Reflow();

@@ -92,26 +92,26 @@ namespace WrathAccess.Screens
             Register(new CharGenScreen()); // chargen / level-up (menu + in-game); layer 15, above contexts
             Register(new InGameScreen()); // exploration: unfocused (overlay owns arrows), Tab enters the HUD
             Register(new ModLogScreen()); // mod log review (channel tabs + history), opened from the HUD, layer 22
-            Register(new PredicateScreen("ctx.globalmap", "World Map", 0, () => RC()?.IsGlobalMap ?? false));
-            Register(new PredicateScreen("ctx.tacticalcombat", "Tactical Combat", 0, () => RC()?.IsTacticalCombat ?? false));
+            Register(new PredicateScreen("ctx.globalmap", Loc.T("screen.world_map"), 0, () => RC()?.IsGlobalMap ?? false));
+            Register(new PredicateScreen("ctx.tacticalcombat", Loc.T("screen.tactical_combat"), 0, () => RC()?.IsTacticalCombat ?? false));
             Register(new DialogueScreen()); // in-game conversation (common DialogVM); layer 15, above contexts + service windows
             Register(new LootScreen()); // loot window (container/corpse); layer 15, above contexts + service windows
             Register(new BookEventScreen()); // book event (storybook passage + choices); layer 15
-            Register(new PredicateScreen("ctx.kingdom", "Kingdom", 0, () => RC()?.IsKingdom ?? false));
-            Register(new PredicateScreen("ctx.citybuilder", "City", 0, () => RC()?.IsCityBuilder ?? false));
+            Register(new PredicateScreen("ctx.kingdom", Loc.T("screen.kingdom"), 0, () => RC()?.IsKingdom ?? false));
+            Register(new PredicateScreen("ctx.citybuilder", Loc.T("screen.city"), 0, () => RC()?.IsCityBuilder ?? false));
 
             // Service windows (layer 10) — one at a time, via CurrentServiceWindow.
             Register(new InventoryScreen()); // inventory window (Inventory/Equipment/SmartItem), navigable; layer 10
             Register(new CharacterInfoScreen()); // character sheet (CharacterInfo window), navigable; layer 10
-            RegisterServiceWindow("Mythic Path", ServiceWindowsType.Mythic);
+            RegisterServiceWindow("Mythic Path", Loc.T("screen.mythic_path"), ServiceWindowsType.Mythic);
             Register(new SpellbookScreen()); // spellbook window (known spells + add to action bar), navigable; layer 10
             Register(new JournalScreen()); // journal window (grouped quests + objectives), navigable; layer 10
             Register(new EncyclopediaScreen()); // encyclopedia window (chapters + page text + child links), navigable; layer 10
-            RegisterServiceWindow("Map", ServiceWindowsType.LocalMap);
+            RegisterServiceWindow("Map", Loc.T("screen.map"), ServiceWindowsType.LocalMap);
 
             // Overlays (can sit on top of a context/window). Settings lives on the
             // shared CommonVM, so this same screen also covers the in-game pause menu.
-            Register(new PredicateScreen("overlay.saveload", "Save and Load", 20, () => RC()?.SaveLoadIsShown ?? false));
+            Register(new PredicateScreen("overlay.saveload", Loc.T("screen.saveload"), 20, () => RC()?.SaveLoadIsShown ?? false));
             Register(new SettingsScreen());
             Register(new ChoiceSubmenuScreen()); // mod-pushed, layer 26 (above settings)
             Register(new KeyBindCaptureScreen()); // key-binding capture, layer 27 (raw-input passthrough)
@@ -125,9 +125,10 @@ namespace WrathAccess.Screens
             Main.Log?.Log("ScreenManager: " + _registered.Count + " screens registered.");
         }
 
-        private static void RegisterServiceWindow(string name, params ServiceWindowsType[] types)
+        // key stays the stable English name; label is the localized spoken screen name
+        private static void RegisterServiceWindow(string name, string label, params ServiceWindowsType[] types)
         {
-            Register(new PredicateScreen("service." + name, name, 10, () =>
+            Register(new PredicateScreen("service." + name, label, 10, () =>
             {
                 var rc = RC();
                 if (rc == null) return false;

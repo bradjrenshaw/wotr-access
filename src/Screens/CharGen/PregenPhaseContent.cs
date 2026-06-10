@@ -34,7 +34,7 @@ namespace WrathAccess.Screens
             list.Add(new ProxyCustomCharacter(Phase)); // last entry, in the list itself
             content.Add(list);
 
-            _detailPanel = new Panel("Details");
+            _detailPanel = new Panel(Loc.T("chargen.details"));
             content.Add(_detailPanel);
             FillDetail();
         }

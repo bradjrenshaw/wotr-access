@@ -47,7 +47,7 @@ namespace WrathAccess.Screens
             var voices = Voices();
             _count = voices.Count; // unfiltered count, for lazy-materialize detection
             _listPanel.Clear();
-            var list = new ListContainer("Voices");
+            var list = new ListContainer(Loc.T("chargen.voices"));
 
             // Mirror CharGenVoiceSelectorPCView.IsVisible: same-gender items are always visible;
             // cross-gender items are hidden EXCEPT the empty ("None") voice, which is always visible

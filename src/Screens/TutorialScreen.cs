@@ -75,17 +75,17 @@ namespace WrathAccess.Screens
             _builtPage = CurrentPageOf(vm);
             if (vm == null) return;
 
-            var list = new ListContainer("Tutorial");
+            var list = new ListContainer(Loc.T("tutorial.title"));
             list.Add(new TextElement(() => PageText(Vm()))); // full current-page text — focus to re-read
             if (Vm() is TutorialModalWindowVM modal && modal.MultiplePages)
             {
-                list.Add(new ProxyActionButton("Previous page", CanPrev, () => StepPage(-1)));
-                list.Add(new ProxyActionButton("Next page", CanNext, () => StepPage(1)));
+                list.Add(new ProxyActionButton(() => Loc.T("tutorial.prev_page"), CanPrev, () => StepPage(-1)));
+                list.Add(new ProxyActionButton(() => Loc.T("tutorial.next_page"), CanNext, () => StepPage(1)));
             }
             if (vm.CanBeBanned)
                 list.Add(new ProxyBoolToggle((string)UIStrings.Instance.Tutorial.DontShowThisTutorial,
                     () => _banOnClose, () => _banOnClose = !_banOnClose));
-            list.Add(new ProxyActionButton("Dismiss", null, Dismiss));
+            list.Add(new ProxyActionButton(() => Loc.T("tutorial.dismiss"), null, Dismiss));
             Add(list);
         }
 

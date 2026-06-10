@@ -89,7 +89,7 @@ namespace WrathAccess.Screens
             Add(content);
 
             // Footer: Back then Next (label + availability track the current phase live).
-            Add(new ProxyActionButton("Back", BackEnabled, OnBack));
+            Add(new ProxyActionButton(() => Loc.T("wizard.back"), BackEnabled, OnBack));
             Add(new ProxyActionButton(NextLabel, NextEnabled, OnNext));
 
             // Land initial focus on the phase content, not the header — so advancing/jumping phases

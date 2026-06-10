@@ -50,7 +50,7 @@ namespace WrathAccess.Screens
 
             // Sidebar entries live in a labeled list, so focusing into it announces
             // "Main Menu" (the container) then the first entry — exercising the path diff.
-            var list = new ListContainer("Main Menu");
+            var list = new ListContainer(Loc.T("screen.main_menu"));
             list.Add(MainMenuButton.For(sidebar.ContinueVm));
             list.Add(MainMenuButton.For(sidebar.NewGameVm));
             list.Add(MainMenuButton.For(sidebar.LoadVm));

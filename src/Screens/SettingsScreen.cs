@@ -22,7 +22,7 @@ namespace WrathAccess.Screens
         public SettingsScreen() { Wrap = true; } // Tab wraps around the whole dialog
 
         public override string Key => "overlay.settings";
-        public override string ScreenName => "Settings";
+        public override string ScreenName => Loc.T("screen.settings");
         public override int Layer => 25;
 
         public override bool IsActive() => Vm() != null;
@@ -75,7 +75,7 @@ namespace WrathAccess.Screens
             _builtFrom = vm;
             if (vm == null) return;
 
-            var tabs = new ListContainer("Tabs");
+            var tabs = new ListContainer(Loc.T("label.tabs"));
             foreach (var tab in vm.SelectionGroup.EntitiesCollection)
                 tabs.Add(new ProxySettingsTab(tab, vm));
             Add(tabs);
@@ -88,8 +88,8 @@ namespace WrathAccess.Screens
 
             // Action buttons are direct children of the root panel, so they're individual
             // Tab-stops you tab through (like a Windows dialog), not an arrow-list.
-            Add(new ProxyActionButton("Apply", SettingsController.HasUnconfirmedSettings, () => vm.ApplyAndClose()));
-            Add(new ProxyActionButton("Close", () => true, () => vm.Close()));
+            Add(new ProxyActionButton(() => Loc.T("settings.apply"), SettingsController.HasUnconfirmedSettings, () => vm.ApplyAndClose()));
+            Add(new ProxyActionButton(() => Loc.T("action.close"), () => true, () => vm.Close()));
         }
 
         // Refills only the content panel (tabs/actions stay put), so focus on the tab

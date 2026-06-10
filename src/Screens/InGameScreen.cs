@@ -32,7 +32,7 @@ namespace WrathAccess.Screens
     public sealed class InGameScreen : Screen
     {
         public override string Key => "ctx.ingame";
-        public override string ScreenName => "Game";
+        public override string ScreenName => Loc.T("screen.game");
         public override int Layer => 0;
         public override bool StartUnfocused => true; // exploration owns the arrows; Tab brings up the HUD
         public override bool AllowsTypeahead => false; // letters stay exploration hotkeys (scanner, status…)
@@ -89,7 +89,7 @@ namespace WrathAccess.Screens
         private void BuildShell()
         {
             Clear();
-            _bar = new FlowSheet("Action bar");
+            _bar = new FlowSheet(Loc.T("hud.action_bar"));
             Add(_bar);
 
             // The turn-based Turn panel: a stable tab-stop right after the action bar — one vertical list

@@ -35,13 +35,13 @@ namespace WrathAccess.Screens
             // selection's full tooltip (which would re-list the options below).
             var info = new ListContainer();
             var source = SourceLabel();
-            if (!string.IsNullOrWhiteSpace(source)) info.Add(new TextElement("Source: " + source));
+            if (!string.IsNullOrWhiteSpace(source)) info.Add(new TextElement(() => Loc.T("chargen.source", new { value = source })));
             var overview = Phase.FeatureSelectorStateVM?.Feature?.Description;
             if (!string.IsNullOrWhiteSpace(overview)) info.Add(new TextElement(overview));
             if (info.Children.Count > 0) content.Add(info);
 
             if (Phase.SelectionIsProhibited != null && Phase.SelectionIsProhibited.Value)
-                content.Add(new TextElement("Nothing to select here."));
+                content.Add(new TextElement(() => Loc.T("chargen.nothing_to_select")));
             _filterPanel = new Panel(); // the tag filter, when the selection actually has tags
             content.Add(_filterPanel);
             _treePanel = new Panel();
@@ -84,7 +84,7 @@ namespace WrathAccess.Screens
             _filterBuilt = true;
             var tags = Phase.CharGenFeatureSearchVM?.LocalizedValues;
             if (_filterPanel == null || tags == null || tags.Count == 0) return;
-            _tagOptions = new List<string> { "All" };
+            _tagOptions = new List<string> { Loc.T("filter.all") };
             _tagOptions.AddRange(tags);
             _filterPanel.Clear();
             _filterPanel.Add(new ProxyChoiceDropdown("Filter by tag", _tagOptions,

@@ -20,7 +20,7 @@ namespace WrathAccess.Screens
         {
             content.Add(new ProxyTextField("Character name", AcquireNameField, () => Phase.InputText));
 
-            content.Add(new ProxyActionButton("Random name", () => true, () =>
+            content.Add(new ProxyActionButton(() => Loc.T("chargen.random_name"), () => true, () =>
             {
                 // Mirror CharGenNamePhaseDetailedPCView.OnGenerateButtonClick: roll a name, push it to
                 // the visual field, and commit it through the VM's onEndEdit.

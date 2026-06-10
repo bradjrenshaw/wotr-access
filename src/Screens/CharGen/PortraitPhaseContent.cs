@@ -21,7 +21,7 @@ namespace WrathAccess.Screens
 
         public override void Build(Container content)
         {
-            var tabs = new ListContainer("Tabs");
+            var tabs = new ListContainer(Loc.T("label.tabs"));
             foreach (var tab in Phase.TabSelector.EntitiesCollection)
             {
                 var t = tab; // capture for the live closure
@@ -29,7 +29,7 @@ namespace WrathAccess.Screens
             }
             content.Add(tabs);
 
-            _portraitPanel = new Panel("Portraits");
+            _portraitPanel = new Panel(Loc.T("chargen.portraits"));
             content.Add(_portraitPanel);
             FillPortraits();
         }
@@ -62,7 +62,7 @@ namespace WrathAccess.Screens
                 }, suppressActivateSound: true));
                 index++;
             }
-            if (list.Children.Count == 0) list.Add(new TextElement("No portraits."));
+            if (list.Children.Count == 0) list.Add(new TextElement(() => Loc.T("chargen.no_portraits")));
             _portraitPanel.Add(list);
         }
 

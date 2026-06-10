@@ -82,7 +82,7 @@ namespace WrathAccess.Screens
             Clear();
             Add(new TextElement(() => CueLine(vm))); // the line — focus here to repeat it
 
-            var answers = new ListContainer("Answers");
+            var answers = new ListContainer(Loc.T("dialog.answers"));
             if (vm.Answers.Value != null && vm.Answers.Value.Count > 0)
             {
                 foreach (var a in vm.Answers.Value)

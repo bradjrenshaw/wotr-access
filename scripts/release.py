@@ -2,7 +2,7 @@
 
 Produces, under dist/:
   WrathAccess.zip           — the mod payload the installer downloads/extracts:
-                              WrathAccess/ (the native-mod folder) + game/ (Tolk natives)
+                              WrathAccess/ (the native-mod folder) + game/ (prism.dll)
   WrathAccessInstaller.exe  — the Rust installer (cargo build --release)
 
 Release = `gh release create vX.Y.Z dist/WrathAccess.zip dist/WrathAccessInstaller.exe`

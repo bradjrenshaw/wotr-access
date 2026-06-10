@@ -1,8 +1,8 @@
 # WrathAccess — Accessibility Mod for Pathfinder: Wrath of the Righteous
 
 Screen-reader accessibility mod for blind players. Speaks UI focus, menus,
-dialogue, and (later) turn-based combat via Tolk. Sibling project to
-SayTheSpire / SayTheSpire2; reuse those patterns where they fit.
+dialogue, and (later) turn-based combat via Prism (Tolk is retired). Sibling
+project to SayTheSpire / SayTheSpire2; reuse those patterns where they fit.
 
 ## Game facts
 - **Engine**: Unity **2020.3.48f1**, **Mono** scripting backend (not IL2CPP) →
@@ -57,8 +57,8 @@ dotnet build
 ```
 Debug build compiles `WrathAccess.dll` and deploys the full native-mod layout to
 `%LocalLow%\...\Modifications\WrathAccess\` (manifest + settings json + dlls
-under `Assemblies\` + `assets\`), and the native Tolk dlls next to `Wrath.exe`
-(**game must be closed** or the Tolk.dll copy fails; `dotnet build -c Release`
+under `Assemblies\` + `assets\`), and the native speech dll (`prism.dll`) next to
+`Wrath.exe` (**game must be closed** or that copy fails; `dotnet build -c Release`
 compiles without deploying). Then restart the game. The mod must be enabled once
 in `OwlcatModificationManagerSettings.json` (already done on this machine).
 
@@ -81,9 +81,10 @@ jumps) and reshapes the whole UI. Instead we build our own nav over the live
 
 ## Architecture (current — input substrate)
 - `src/Main.cs` — native-mod entry (`[OwlcatModificationEnterPoint] Load`). Boots
-  Tolk, Harmony, registers input; the `Ticker` MonoBehaviour drives the per-frame
+  speech, Harmony, registers input; the `Ticker` MonoBehaviour drives the per-frame
   loops; `Enabled` master switch (wired to the game's mod enable/disable).
-- `src/Tts.cs` — Tolk wrapper. Never interrupts by default (SayTheSpire preference).
+- `src/Tts.cs` — speech facade over `src/Speech/` (Prism primary, manual-COM SAPI,
+  clipboard fallback). Never interrupts by default (SayTheSpire preference).
 - `src/Input/` — ported SayTheSpire2 input framework, Unity-backed:
   `InputManager` (registry + per-frame poll), `InputAction`, `InputBinding` +
   `KeyboardBinding` (Unity `KeyCode` polling; needs `UnityEngine.InputLegacyModule`).

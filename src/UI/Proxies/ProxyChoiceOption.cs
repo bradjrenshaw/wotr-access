@@ -11,6 +11,8 @@ namespace WrathAccess.UI.Proxies
         public override System.Type AnnouncementOrderType => typeof(ProxySelectionItem);
 
         private readonly string _label;
+        // Snapshot is safe: a ChoiceSubmenuScreen is ephemeral (rebuilt on every open, closed by the
+        // selection itself), so the selected state can't change while this proxy lives.
         private readonly bool _selected;
         private readonly Action _select;
 

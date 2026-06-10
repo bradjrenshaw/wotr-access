@@ -4,7 +4,8 @@ using System.Linq;
 namespace WrathAccess.UI.CharSheet
 {
     /// <summary>
-    /// Default character-sheet presentation. A group with two or more value columns (ability scores,
+    /// RETAINED ALTERNATE PRESENTATION — only reachable via <see cref="PanelCharSheetSink"/>
+    /// (not instantiated anywhere today; FlowSheetCharSheetSink is the live default). A group with two or more value columns (ability scores,
     /// skills) becomes a <see cref="Table"/> grid — arrow across columns / down rows, Space on a row
     /// drills into that stat's modifier breakdown. A single-value group (saving throws, defenses)
     /// becomes a flat <see cref="ListContainer"/> of "name, value" lines, each carrying the same

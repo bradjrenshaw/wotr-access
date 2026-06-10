@@ -19,7 +19,7 @@ namespace WrathAccess
     /// loads every assembly under <c>Modifications/WrathAccess/Assemblies/</c> and invokes the
     /// <c>[OwlcatModificationEnterPoint]</c> method during boot (GameStarter, before the main menu),
     /// passing our <c>OwlcatModification</c>. Install = copy the mod folder + list "WrathAccess" in
-    /// <c>OwlcatModificationManagerSettings.json</c> (+ Tolk natives next to Wrath.exe) — pure file
+    /// <c>OwlcatModificationManagerSettings.json</c> (+ prism.dll next to Wrath.exe) — pure file
     /// operations, no third-party installer. The native system has no per-frame hook, so we spawn our own
     /// persistent <see cref="Ticker"/> MonoBehaviour to drive the input/screen/overlay loops.
     /// </summary>

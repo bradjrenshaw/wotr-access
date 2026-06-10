@@ -21,7 +21,7 @@ namespace WrathAccess.Screens
     ///     first-level-class template — full description + skills + features — for archetypes and
     ///     short-less classes), so we don't second-guess which field to read.
     ///   • Mechanic — the plain bindings: name + full description + saves/BAB/HP grades + caster
-    ///     stats + class skills. (The progression grid is still TODO.)
+    ///     stats + class skills, plus the per-level progression grid (see ProgressionGrid).
     /// Classes/archetypes come from the canonical (selectable) instances so SetSelectedFromView
     /// works. The archetype list refreshes on class change; the detail on class or archetype change.
     /// </summary>
@@ -178,7 +178,7 @@ namespace WrathAccess.Screens
 
         // Mechanic mode reconstructs the game's Detailed PANEL (which is plain VM bindings, NOT a
         // tooltip) as a treeview tab-stop: name, full description, then Martial / Caster / Class-skill
-        // groups (each value a child). After the tree come the progression grid (TODO) and — only
+        // groups (each value a child). After the tree come the progression grid and — only
         // when actually present — the auto-levelup button, as their own tab-stops.
         private void FillMechanic()
         {

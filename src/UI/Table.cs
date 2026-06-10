@@ -9,6 +9,10 @@ namespace WrathAccess.UI
     public enum CellRole { None, Column, Row, Group }
 
     /// <summary>
+    /// RETAINED ALTERNATE GRID — no live screen builds a Table today (FlowSheet's TableRegion is the
+    /// grid primitive in use); it remains the substrate of the PanelCharSheetSink/GridCharSheetLayout
+    /// presentation, kept deliberately, and the navigator still handles it (GridArrow).
+    ///
     /// A 2-D data grid (Excel-with-a-screen-reader). Arrows move a cell cursor — Left/Right change
     /// column, Up/Down change row — and the navigator announces the header for whichever axis changed
     /// plus the cell. The whole table is one Tab-stop.

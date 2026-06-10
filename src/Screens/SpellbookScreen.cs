@@ -313,9 +313,10 @@ namespace WrathAccess.Screens
                 sheet.List(Loc.T("spell.heighten")).Item(new ProxyMetamagicLevel(lvl));
 
             var result = sheet.List(Loc.T("metamagic.result"));
-            int resultLevel = lvl?.ResultSpellLevel.Value ?? 0;
-            bool castable = lvl?.CanUseSpell ?? true;
-            result.Item(new TextElement(ResultLine(baseSpell, resultLevel, castable)));
+            // Live closure: the result level/castability change as metamagics toggle, and re-resolving
+            // per read keeps the line current across a language swap (no frozen build-time string).
+            result.Item(new TextElement(() => ResultLine(baseSpell,
+                lvl?.ResultSpellLevel.Value ?? 0, lvl?.CanUseSpell ?? true)));
             // Always show Write (greyed when you can't write yet — no metamagic applied, or the result level
             // exceeds your castable slots), mirroring the game's Interactable = CanWriteSpell button.
             result.Item(new ProxyActionButton(() => Message.Localized("ui", "metamagic.write").Resolve(),

@@ -6,7 +6,9 @@ namespace WrathAccess.UI.CharSheet
     /// The original presentation: each section is its own Tab-stop in a panel — stat groups via
     /// <see cref="GridCharSheetLayout"/> (table or flat list), free-form sections as a
     /// <see cref="ListContainer"/>. Kept as the fallback / selectable alternative to
-    /// <see cref="FlowSheetCharSheetSink"/>.
+    /// <see cref="FlowSheetCharSheetSink"/>. NOT currently instantiated anywhere — reachable only
+    /// by swapping the sink in TotalPhaseContent / CharacterInfoScreen (or a future presentation
+    /// setting); this chain (with GridCharSheetLayout + Table) is retained deliberately.
     /// </summary>
     public sealed class PanelCharSheetSink : ICharSheetSink
     {

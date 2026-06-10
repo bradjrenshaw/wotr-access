@@ -1,6 +1,9 @@
 using Kingmaker; // Game
+using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized TB texts)
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
+using Kingmaker.PubSubSystem; // EventBus, IMessageModalUIHandler
 using Kingmaker.TurnBasedMode; // PathVisualizer, ActionsState
+using Kingmaker.UI; // MessageModalBase
 using TurnBased.Controllers; // CombatController, TurnController
 using UnityEngine; // Vector3
 
@@ -137,9 +140,19 @@ namespace WrathAccess.Exploration
             var screen = WrathAccess.Screens.ScreenManager.Current;
             if (screen == null || screen.Key != "ctx.ingame") return;
             if (!InTurnBased) { Tts.Speak(Message.Localized("ui", "combat.not_turn_based").Resolve(), interrupt: true); return; }
+            var line = StatusLine();
+            if (line == null) { Tts.Speak(Message.Localized("ui", "combat.no_active_turn").Resolve(), interrupt: true); return; }
+            Tts.Speak(line, interrupt: true);
+        }
+
+        /// <summary>The acting unit's action economy + movement budgets as one spoken line (null when no
+        /// active turn). Shared by the R status key and the HUD Turn panel's status element.</summary>
+        public static string StatusLine()
+        {
+            if (!InTurnBased) return null;
             var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
             var cu = CurrentUnit;
-            if (turn == null || cu == null) { Tts.Speak(Message.Localized("ui", "combat.no_active_turn").Resolve(), interrupt: true); return; }
+            if (turn == null || cu == null) return null;
 
             string State(bool available) => Message.Localized("ui", available ? "combat.available" : "combat.used").Resolve();
             var sb = new System.Text.StringBuilder(Message.Localized("ui", "combat.status_actions", new
@@ -158,7 +171,117 @@ namespace WrathAccess.Exploration
             sb.Append(", ").Append(Message.Localized("ui", "combat.movement_remaining", new { feet = moveFt }).Resolve());
             if (totalFt > moveFt) sb.Append(", ").Append(Message.Localized("ui", "combat.with_standard", new { feet = totalFt }).Resolve());
             if (turn.HasFiveFootStep(cu)) sb.Append(", ").Append(Message.Localized("ui", "combat.five_foot_step").Resolve());
-            Tts.Speak(sb.ToString(), interrupt: true);
+            return sb.ToString();
+        }
+
+        // ---- HUD Turn panel controls ----
+
+        private static TurnController Turn() => Game.Instance?.TurnBasedCombatController?.CurrentTurn;
+
+        /// <summary>End turn — the game's own End Turn button is literally PauseBind() (which in turn-based
+        /// means end-turn / speed-up / dismiss the start window, with all the game's guards).</summary>
+        public static void EndTurn()
+        {
+            if (!InTurnBased) return;
+            Game.Instance?.PauseBind();
+        }
+
+        /// <summary>The five-foot-step movement mode is currently engaged for the acting unit.</summary>
+        public static bool FiveFootEngaged
+        {
+            get { var t = Turn(); var cu = CurrentUnit; return t != null && cu != null && t.GetEnabledFiveFootStep(cu); }
+        }
+
+        /// <summary>A five-foot step is still available to the acting unit this turn.</summary>
+        public static bool FiveFootAvailable
+        {
+            get { var t = Turn(); var cu = CurrentUnit; return t != null && cu != null && t.HasFiveFootStep(cu); }
+        }
+
+        /// <summary>Toggle five-foot-step mode — exactly the game's panel button
+        /// (PredictionPanelBaseView.EnableFiveFoot: flip ModifyMovementLimit).</summary>
+        public static void ToggleFiveFoot()
+        {
+            var t = Turn();
+            if (t == null) return;
+            t.ModifyMovementLimit(!t.ModifyMovementLimitValue);
+            Tts.Speak(Message.Localized("ui", FiveFootEngaged ? "turn.five_foot_on" : "turn.five_foot_off").Resolve(),
+                interrupt: true);
+        }
+
+        /// <summary>
+        /// Delay the acting unit's turn until after <paramref name="target"/> — mirroring the game's
+        /// initiative-tracker flow (InitiativeTrackerBaseView.DelayInitiative): gated by CanDelay; a
+        /// first-use confirmation and a "this skips into the next round" confirmation are raised through
+        /// the game's OWN message modal (game-localized texts; our MessageModalScreen reads it).
+        /// </summary>
+        public static void DelayAfter(UnitEntityData target)
+        {
+            var turn = Turn();
+            if (turn == null || !turn.CanDelay())
+            {
+                Tts.Speak(Message.Localized("ui", "turn.cant_delay").Resolve(), interrupt: true);
+                return;
+            }
+            if (target == null || target == turn.Rider || target == CurrentUnit)
+            {
+                Tts.Speak(Message.Localized("ui", "turn.delay_self").Resolve(), interrupt: true);
+                return;
+            }
+
+            var ui = Game.Instance.Player.UISettings;
+            if (!ui.DelayNotificatioinSeen) // (the game's own property name, typo included)
+            {
+                Confirm(UIStrings.Instance.TurnBasedTexts.ConfirmDelay, () =>
+                {
+                    ui.DelayNotificatioinSeen = true;
+                    DoDelay(turn, target);
+                });
+            }
+            else if (IsSkipRound(target))
+            {
+                Confirm(UIStrings.Instance.TurnBasedTexts.ConfirmRoundDelay, () => DoDelay(turn, target));
+            }
+            else
+            {
+                DoDelay(turn, target);
+            }
+        }
+
+        private static void DoDelay(TurnController turn, UnitEntityData target)
+        {
+            turn.DelayInitiaive(target); // the game's method (typo included)
+            UiSound.Play(UISoundType.DelayTurn);
+            Tts.Speak(Message.Localized("ui", "turn.delayed", new { name = target.CharacterName }).Resolve());
+        }
+
+        // The game's IsSkipRound: the target sits EARLIER in the sorted order than us, so acting after
+        // them means waiting into the next round.
+        private static bool IsSkipRound(UnitEntityData target)
+        {
+            var turn = Turn();
+            var tb = Game.Instance?.TurnBasedCombatController;
+            if (turn == null || tb == null) return false;
+            int me = -1, tgt = -1, i = 0;
+            foreach (var u in tb.SortedUnits)
+            {
+                if (u == turn.Rider) me = i;
+                if (u == target) tgt = i;
+                i++;
+            }
+            return me > tgt;
+        }
+
+        private static void Confirm(string text, System.Action onYes)
+        {
+            EventBus.RaiseEvent(delegate(IMessageModalUIHandler w)
+            {
+                w.HandleOpen(text, MessageModalBase.ModalType.Dialog,
+                    delegate(MessageModalBase.ButtonType button)
+                    {
+                        if (button == MessageModalBase.ButtonType.Yes) onYes();
+                    });
+            });
         }
     }
 }

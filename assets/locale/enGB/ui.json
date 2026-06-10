@@ -224,5 +224,13 @@
   "nav.no_details": "No details",
   "hud.log": "Log",
   "hud.windows": "Windows",
-  "hud.no_actions": "No actions."
+  "hud.no_actions": "No actions.",
+
+  "hud.turn": "Turn",
+  "turn.end": "End turn",
+  "turn.five_foot_on": "Five foot step on",
+  "turn.five_foot_off": "Five foot step off",
+  "turn.cant_delay": "Can't delay the turn right now",
+  "turn.delay_self": "That's the acting unit",
+  "turn.delayed": "Turn delayed until after {name}"
 }

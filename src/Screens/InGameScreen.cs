@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Text;
 using Kingmaker;
+using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized TB control names)
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UI.Common; // UIUtility.GetServiceWindowsLabel
 using Kingmaker.UI.MVVM._VM.ActionBar;
@@ -36,13 +37,13 @@ namespace WrathAccess.Screens
         public override bool StartUnfocused => true; // exploration owns the arrows; Tab brings up the HUD
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
 
-        public override void OnPush() { BuildShell(); _sig = null; _initSig = null; _lastRestoreLabel = null; }
-        public override void OnPop() { Clear(); _bar = null; _initiative = null; }
+        public override void OnPush() { BuildShell(); _sig = null; _turnSig = null; _lastRestoreLabel = null; }
+        public override void OnPop() { Clear(); _bar = null; _turn = null; }
 
         private FlowSheet _bar;        // the action-bar FlowSheet (a stable child; only its regions rebuild)
-        private ListContainer _initiative; // turn-based initiative order (a stable child; empty out of combat)
+        private ListContainer _turn;   // turn-based Turn panel (a stable child; empty out of combat)
         private string _sig;          // last action-bar content signature
-        private string _initSig;      // last initiative-order membership signature
+        private string _turnSig;      // last Turn-panel membership signature
         private string _lastRestoreLabel; // dedupe the restore announce across a multi-frame settle
         private UIElement _watchedSlot;
         private string _watchedToggle;
@@ -55,7 +56,7 @@ namespace WrathAccess.Screens
             var sig = Sig();
             if (sig != _sig) { _sig = sig; RefreshBar(); }
             else _lastRestoreLabel = null; // settled: the next change announces its landing
-            RefreshInitiative();
+            RefreshTurn();
         }
 
         // While an action-bar slot is focused, announce when its live state changes under you — the toggle
@@ -90,11 +91,13 @@ namespace WrathAccess.Screens
             _bar = new FlowSheet("Action bar");
             Add(_bar);
 
-            // Turn-based initiative order: a stable tab-stop right after the action bar. Populated only in
-            // turn-based combat (RefreshInitiative); while empty it has no focusable children, so the Tab
-            // cycle skips it entirely.
-            _initiative = new ListContainer(Message.Localized("ui", "hud.initiative").Resolve());
-            Add(_initiative);
+            // The turn-based Turn panel: a stable tab-stop right after the action bar — one vertical list
+            // with the status line and controls (End turn, Five foot step) at the top and the initiative
+            // order beneath (Enter on a unit = delay your turn until after them). Populated only in
+            // turn-based combat (RefreshTurn); while empty it has no focusable children, so the Tab cycle
+            // skips it entirely.
+            _turn = new ListContainer(Message.Localized("ui", "hud.turn").Resolve());
+            Add(_turn);
 
             Add(new ProxyActionButton(Loc.T("hud.log"), () => true, ModLogScreen.Open));
 
@@ -156,29 +159,52 @@ namespace WrathAccess.Screens
             Navigation.Focus(cell, announce);
         }
 
-        // Rebuild the initiative list only when its membership/order changes (units join, die, or delay).
-        // Entry labels are LIVE (name, initiative, active marker), so the marker moving each turn needs no
-        // rebuild — and no focus juggling. If a rebuild does land while focus is inside the list, restore to
-        // the same unit's entry (or the first, if it's gone).
-        private void RefreshInitiative()
+        // Rebuild the Turn panel only when its membership changes (turn-based toggling, units joining,
+        // dying, or delaying). The status line, button states, and entry labels are all LIVE, so the
+        // active marker moving or actions being spent needs no rebuild — and no focus juggling. If a
+        // rebuild does land while focus is inside, restore to the same unit's entry (or the same child
+        // index for the fixed controls at the top).
+        private void RefreshTurn()
         {
-            if (_initiative == null) return;
+            if (_turn == null) return;
             var units = InitiativeUnits();
-            var sb = new StringBuilder();
+            var sb = new StringBuilder(CombatMode.InTurnBased ? "tb|" : "off|");
             foreach (var u in units) sb.Append(u.UniqueId).Append('|');
             var sig = sb.ToString();
-            if (sig == _initSig) return;
-            _initSig = sig;
+            if (sig == _turnSig) return;
+            _turnSig = sig;
 
-            var focusedUnit = (Navigation.Active?.Current as InitiativeEntry)?.Unit;
-            _initiative.Clear();
-            foreach (var u in units) _initiative.Add(new InitiativeEntry(u));
-            if (focusedUnit == null) return; // focus wasn't in the list — nothing to restore
+            // Capture focus (a unit identity for entries; a child index for the fixed controls).
+            var current = Navigation.Active?.Current;
+            var focusedUnit = (current as InitiativeEntry)?.Unit;
+            int focusedIndex = (current != null && current.Parent == _turn) ? _turn.IndexOf(current) : -1;
+
+            _turn.Clear();
+            if (CombatMode.InTurnBased)
+            {
+                // Controls/status at the top, initiative order beneath.
+                _turn.Add(new TextElement(() => CombatMode.StatusLine()));
+                _turn.Add(new ProxyActionButton(Message.Localized("ui", "turn.end").Resolve(),
+                    () => true, CombatMode.EndTurn));
+                // The game's own localized control name + a live on/off state.
+                _turn.Add(new ProxyActionButton(
+                    () => (string)UIStrings.Instance.TurnBasedTexts.FiveFeetActionName + ", "
+                        + Message.Localized("ui", CombatMode.FiveFootEngaged ? "value.on" : "value.off").Resolve(),
+                    () => CombatMode.FiveFootAvailable || CombatMode.FiveFootEngaged,
+                    CombatMode.ToggleFiveFoot,
+                    suppressActivateSound: true, actionVerb: "toggle"));
+                foreach (var u in units) _turn.Add(new InitiativeEntry(u));
+            }
+
+            if (focusedUnit == null && focusedIndex < 0) return; // focus wasn't in the panel
             UIElement target = null;
-            foreach (var child in _initiative.Children)
-                if (child is InitiativeEntry e && e.Unit == focusedUnit) { target = e; break; }
-            target = target ?? _initiative.FirstFocusable();
-            // Same unit → silent restore (its live label already reads current); unit gone → announce the landing.
+            if (focusedUnit != null)
+                foreach (var child in _turn.Children)
+                    if (child is InitiativeEntry e && e.Unit == focusedUnit) { target = e; break; }
+            if (target == null && focusedIndex >= 0 && _turn.Children.Count > 0)
+                target = _turn.Children[System.Math.Min(focusedIndex, _turn.Children.Count - 1)];
+            target = target ?? _turn.FirstFocusable();
+            // Same unit → silent restore (its live label already reads current); otherwise announce the landing.
             if (target != null) Navigation.Focus(target, announce: (target as InitiativeEntry)?.Unit != focusedUnit);
         }
 
@@ -207,10 +233,19 @@ namespace WrathAccess.Screens
         }
 
         // One initiative row — live text, so the active marker follows the turn without a rebuild.
+        // Enter = delay the acting unit's turn until after this unit (the game's tracker interaction;
+        // CombatMode gates it on CanDelay and raises the game's own confirmation modals).
         private sealed class InitiativeEntry : TextElement
         {
             public readonly UnitEntityData Unit;
             public InitiativeEntry(UnitEntityData unit) : base(() => Render(unit)) { Unit = unit; }
+
+            public override IEnumerable<ElementAction> GetActions()
+            {
+                yield return new ElementAction(ActionIds.Activate,
+                    Message.Raw((string)UIStrings.Instance.TurnBasedTexts.DelayTurn),
+                    _ => CombatMode.DelayAfter(Unit));
+            }
 
             private static string Render(UnitEntityData u)
             {

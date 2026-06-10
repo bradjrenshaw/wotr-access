@@ -121,11 +121,20 @@ namespace WrathAccess.UI
 
         public void SetFocusedChild(UIElement element) => FocusedChild = element;
 
-        /// <summary>First child the navigator may land on (skips non-focusable).</summary>
+        /// <summary>First child the navigator may land on (skips non-focusable). Also skips a Panel
+        /// with nothing focusable inside (recursively): panels are structural, so descending into an
+        /// empty one strands focus on a silent node — and on a lazily-built screen (e.g. a chargen
+        /// phase whose list materializes frames later) the stranded empty SIBLING would keep winning
+        /// the descent forever, so EnsureFocus could never re-home onto the content once it appeared.</summary>
         public virtual UIElement FirstFocusable()
         {
             for (int i = 0; i < _children.Count; i++)
-                if (_children[i].CanFocus) return _children[i];
+            {
+                if (!_children[i].CanFocus) continue;
+                if (_children[i] is Container c && c.Shape == ContainerShape.Panel && c.FirstFocusable() == null)
+                    continue;
+                return _children[i];
+            }
             return null;
         }
 

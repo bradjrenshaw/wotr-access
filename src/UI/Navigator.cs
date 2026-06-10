@@ -134,9 +134,15 @@ namespace WrathAccess.UI
         /// first-focusable fallback (used to decide whether descending deeper is justified).</summary>
         private static UIElement RememberedOrSelected(Container c)
         {
-            if (c.FocusedChild != null && c.FocusedChild.CanFocus) return c.FocusedChild;
+            if (c.FocusedChild != null && c.FocusedChild.CanFocus && !IsEmptyPanel(c.FocusedChild))
+                return c.FocusedChild;
             return SelectedChild(c);
         }
+
+        // A Panel with nothing focusable inside — structural only; never a valid focus target or
+        // remembered-focus memory (a stranded landing on one must not be resurrected by descent).
+        private static bool IsEmptyPanel(UIElement e)
+            => e is Container c && c.Shape == ContainerShape.Panel && c.FirstFocusable() == null;
 
         /// <summary>The child to land on when first focusing a container: the remembered focus, else — for a
         /// single-select <b>list or tree</b> (radio buttons, tabs, the deity tree) — the currently-selected
@@ -147,7 +153,8 @@ namespace WrathAccess.UI
         protected static UIElement RepresentativeChild(Container c)
         {
             if (c == null) return null;
-            if (c.FocusedChild != null && c.FocusedChild.CanFocus) return c.FocusedChild;
+            if (c.FocusedChild != null && c.FocusedChild.CanFocus && !IsEmptyPanel(c.FocusedChild))
+                return c.FocusedChild;
             if (c.Shape == ContainerShape.VerticalList || c.Shape == ContainerShape.HorizontalList
                 || c.Shape == ContainerShape.Tree)
             {

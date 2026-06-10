@@ -84,6 +84,20 @@ namespace WrathAccess.Settings
             foreach (var k in applied) _unknownKeys.Remove(k);
         }
 
+        // ---- unknown-key access (schema migrations read old paths out of the preserved set) ----
+
+        public static List<string> UnknownPaths() => new List<string>(_unknownKeys.Keys);
+
+        public static bool TryGetUnknown(string path, out JToken token) => _unknownKeys.TryGetValue(path, out token);
+
+        public static void RemoveUnknownWhere(Func<string, bool> predicate)
+        {
+            var doomed = new List<string>();
+            foreach (var k in _unknownKeys.Keys)
+                if (predicate(k)) doomed.Add(k);
+            foreach (var k in doomed) _unknownKeys.Remove(k);
+        }
+
         public static void Save()
         {
             _dirty = false;

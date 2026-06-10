@@ -1,5 +1,3 @@
-using WrathAccess.UI; // NavDirection
-
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
@@ -8,10 +6,10 @@ namespace WrathAccess.Exploration.Overlays
     /// and tile-stepping on the secondary. A mode may read sibling <see cref="OverlaySystem"/>s through the
     /// overlay (e.g. tile-step reads cell size from <c>GridSystem</c>).
     ///
-    /// Two input styles: <b>discrete</b> modes act on a key press via <see cref="OnDirection"/> and set
-    /// <see cref="AnnouncesOnMove"/> true (the overlay speaks the new spot); <b>continuous</b> modes ignore
-    /// presses and glide in <see cref="Tick"/> by polling held keys, leaving <see cref="AnnouncesOnMove"/>
-    /// false (feedback is audio, not per-frame speech).
+    /// All modes poll their slot's held arrows in <see cref="Tick"/> as one combined vector (see
+    /// <see cref="CursorKeys"/>), so held diagonals work: <b>discrete</b> modes step on a typematic
+    /// cadence and announce each landing (<see cref="AnnouncesOnMove"/> true); <b>continuous</b> modes
+    /// glide per frame (false — feedback is audio, not per-frame speech).
     /// </summary>
     internal abstract class MovementMode
     {
@@ -27,9 +25,6 @@ namespace WrathAccess.Exploration.Overlays
 
         public virtual void OnEnter(Overlay overlay) { }
         public virtual void OnExit(Overlay overlay) { }
-
-        /// <summary>Discrete movement: a directional key on this mode's slot was pressed.</summary>
-        public virtual void OnDirection(NavDirection dir, Overlay overlay) { }
 
         /// <summary>Continuous movement: glide per frame by polling this slot's held keys.</summary>
         public virtual void Tick(float dt, Overlay overlay) { }

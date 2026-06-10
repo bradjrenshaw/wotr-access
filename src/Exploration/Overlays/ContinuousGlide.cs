@@ -42,13 +42,9 @@ namespace WrathAccess.Exploration.Overlays
         {
             if (!OverlayManager.Active) return;            // menu up / focus off → don't move
             if (WrathAccess.UI.Navigation.HasFocus) return; // the HUD has focus → arrows belong to it, not the cursor
-            if (_slot != MovementSlot.Primary) return;     // only the primary slot's keys (nav.*) are wired yet
 
-            float dx = 0f, dz = 0f;
-            if (InputManager.Held("nav.up")) dz += 1f;     // +Z = north
-            if (InputManager.Held("nav.down")) dz -= 1f;
-            if (InputManager.Held("nav.right")) dx += 1f;  // +X = east
-            if (InputManager.Held("nav.left")) dx -= 1f;
+            CursorKeys.HeldVector(_slot, out int ix, out int iz);
+            float dx = ix, dz = iz;
             if (dx == 0f && dz == 0f) return;
 
             var cur = overlay.Cursor.Position;

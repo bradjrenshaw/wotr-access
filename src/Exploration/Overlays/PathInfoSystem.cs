@@ -60,6 +60,8 @@ namespace WrathAccess.Exploration.Overlays
 
         private static bool MoveKeyHeld()
             => InputManager.Held("nav.up") || InputManager.Held("nav.down")
-            || InputManager.Held("nav.left") || InputManager.Held("nav.right");
+            || InputManager.Held("nav.left") || InputManager.Held("nav.right")
+            || InputManager.Held("nav.secondaryUp") || InputManager.Held("nav.secondaryDown")
+            || InputManager.Held("nav.secondaryLeft") || InputManager.Held("nav.secondaryRight");
     }
 }

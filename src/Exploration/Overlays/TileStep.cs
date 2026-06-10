@@ -1,5 +1,5 @@
 using UnityEngine;
-using WrathAccess.UI; // NavDirection
+using WrathAccess.Input; // OsKeyboard (typematic cadence)
 
 namespace WrathAccess.Exploration.Overlays
 {
@@ -28,21 +28,45 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void OnEnter(Overlay overlay) => Resync(overlay); // snap to the nearest cell centre
 
-        public override void OnDirection(NavDirection dir, Overlay overlay)
+        // Stepping POLLS the slot's held arrows as one vector (so Up+Right = a single diagonal step),
+        // with its own typematic cadence (the user's OS delay/rate): one step on press, a pause, then
+        // repeats while held. Per-action auto-repeat can't do this — two held keys would repeat
+        // independently and zigzag at double speed.
+        private bool _holding;
+        private float _nextStep;
+
+        public override void Tick(float dt, Overlay overlay)
+        {
+            if (!OverlayManager.Active || WrathAccess.UI.Navigation.HasFocus) { _holding = false; return; }
+            CursorKeys.HeldVector(_slot, out int dx, out int dz);
+            if (dx == 0 && dz == 0) { _holding = false; return; }
+
+            // A diagonal tile is sqrt(2) longer than a cardinal one; stretch the repeat interval to
+            // match so held-diagonal GROUND speed equals cardinal (the step itself stays on-grid).
+            float stretch = (dx != 0 && dz != 0) ? 1.41421356f : 1f;
+            float now = Time.unscaledTime;
+            if (!_holding)
+            {
+                _holding = true;
+                _nextStep = now + OsKeyboard.InitialDelay;
+                Step(dx, dz, overlay);
+            }
+            else if (now >= _nextStep)
+            {
+                _nextStep = now + OsKeyboard.RepeatInterval * stretch;
+                Step(dx, dz, overlay);
+            }
+        }
+
+        private void Step(int dx, int dz, Overlay overlay)
         {
             float cell = Cell(overlay);
             var p = overlay.Cursor.Position;
-            float x = Snap(p.x, cell), z = Snap(p.z, cell), y = p.y;
-            switch (dir)
-            {
-                case NavDirection.Up: z += cell; break;    // +Z = north
-                case NavDirection.Down: z -= cell; break;
-                case NavDirection.Right: x += cell; break; // +X = east
-                case NavDirection.Left: x -= cell; break;
-            }
+            float x = Snap(p.x, cell) + dx * cell, z = Snap(p.z, cell) + dz * cell, y = p.y;
             var s = NavmeshProbe.Sample(x, z, y);
             if (s.OnNavmesh) y = s.Point.y; // follow the surface; otherwise keep height (never fall)
             overlay.Cursor.Position = new Vector3(x, y, z);
+            overlay.Announce(Context); // the landing readout (GridSystem composes it)
         }
 
         public override void Recenter(Overlay overlay)

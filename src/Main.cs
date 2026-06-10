@@ -236,14 +236,14 @@ namespace WrathAccess
             // by reflection. Creates "announcements" + "ui" categories under the settings Root.
             WrathAccess.UI.Announcements.AnnouncementRegistry.RegisterDefaults();
 
-            // Overlays = the data-driven area-overlay configs (one settings subtree per overlay); also
-            // builds the live Overlay objects and installs them in OverlayManager.
-            WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Register();
-
             // Audio = settings-wide master volume (every overlay sound system scales by it).
             var audio = new WrathAccess.Settings.CategorySetting("audio", "Audio", localizationKey: "category.audio");
             audio.Add(new WrathAccess.Settings.IntSetting("master_volume", "Master volume", 100, 0, 100, 5, "audio.master_volume"));
             WrathAccess.Settings.ModSettings.Root.Add(audio);
+
+            // Overlays = the data-driven area-overlay configs (composition per overlay + shared defaults); also
+            // builds the live Overlay objects and installs them in OverlayManager.
+            WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Register();
 
             // Speech tab: the handler dropdown (Prism / SAPI / Clipboard, auto by default) + each
             // handler's own settings subtree, all rendered by the settings treeview.
@@ -283,12 +283,18 @@ namespace WrathAccess
 
             // Navigation actions (consumed by the active navigator while focus mode is on).
             // Movement actions auto-repeat while held (Repeating); activation keys do not.
-            // The arrows' Performed handler fires only when the navigator DIDN'T consume them — i.e.
-            // in-game with no UI focus tree — where it drives the active area overlay's cursor instead.
-            InputManager.Register("nav.up", "Navigate Up", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Up)).AddBinding(KeyCode.UpArrow).Repeating();
-            InputManager.Register("nav.down", "Navigate Down", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Down)).AddBinding(KeyCode.DownArrow).Repeating();
-            InputManager.Register("nav.left", "Navigate Left", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Left)).AddBinding(KeyCode.LeftArrow).Repeating();
-            InputManager.Register("nav.right", "Navigate Right", () => OverlayManager.Move(MovementSlot.Primary, NavDirection.Right)).AddBinding(KeyCode.RightArrow).Repeating();
+            // The arrows have NO press handlers for the world cursor: movement modes POLL the held keys
+            // each frame as one combined vector (CursorKeys), so held diagonals (Up+Right) move
+            // diagonally instead of zigzagging per-key. Plain arrows = the primary cursor slot;
+            // Shift+arrows = the secondary slot ("None" by default = inert).
+            InputManager.Register("nav.up", "Navigate Up").AddBinding(KeyCode.UpArrow).Repeating();
+            InputManager.Register("nav.down", "Navigate Down").AddBinding(KeyCode.DownArrow).Repeating();
+            InputManager.Register("nav.left", "Navigate Left").AddBinding(KeyCode.LeftArrow).Repeating();
+            InputManager.Register("nav.right", "Navigate Right").AddBinding(KeyCode.RightArrow).Repeating();
+            InputManager.Register("nav.secondaryUp", "Secondary cursor up").AddBinding(KeyCode.UpArrow, shift: true);
+            InputManager.Register("nav.secondaryDown", "Secondary cursor down").AddBinding(KeyCode.DownArrow, shift: true);
+            InputManager.Register("nav.secondaryLeft", "Secondary cursor left").AddBinding(KeyCode.LeftArrow, shift: true);
+            InputManager.Register("nav.secondaryRight", "Secondary cursor right").AddBinding(KeyCode.RightArrow, shift: true);
             // Enter activates the focused UI control; in plain exploration (no focus tree) the navigator
             // declines and this fires instead — our "left click": interact with the thing under the cursor.
             InputManager.Register("nav.primary", "Primary action / interact",

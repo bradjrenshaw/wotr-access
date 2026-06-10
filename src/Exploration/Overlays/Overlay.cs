@@ -59,14 +59,6 @@ namespace WrathAccess.Exploration.Overlays
 
         /// <summary>A directional key on the given slot — routed to that slot's movement mode. A discrete
         /// stepper announces the new spot in its context; a continuous glider stays silent (moves in Tick).</summary>
-        public void Move(MovementSlot slot, NavDirection dir)
-        {
-            var mode = Cursor.ModeFor(slot);
-            if (mode == null) return;
-            mode.OnDirection(dir, this);
-            if (mode.AnnouncesOnMove) Announce(mode.Context);
-        }
-
         public void Recenter()
         {
             var m = PrimaryMode;

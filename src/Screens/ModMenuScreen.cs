@@ -42,8 +42,11 @@ namespace WrathAccess.Screens
         private static readonly (string key, string label, string loc)[] Tabs =
         {
             ("audio", "Audio", "category.audio"),
+            ("exploration", "Exploration", "category.exploration"),
             ("input", "Input", "category.input"),
+            ("log", "Log", "category.log"),
             ("overlays", "Overlays", "category.overlays"),
+            ("sonar", "Sonar", "category.sonar"),
             ("speech", "Speech", "category.speech"),
             ("ui", "UI", "category.ui"),
         };
@@ -159,6 +162,88 @@ namespace WrathAccess.Screens
                 if (speech != null)
                     foreach (var s in speech.Children) BuildSettingNode(tree, s);
             }
+            else if (key == "sonar")
+            {
+                // The shared sonar defaults, flat (every overlay follows these unless customized).
+                var d = SystemDefaults("sonar");
+                if (d != null)
+                    foreach (var s in d.Children) BuildSettingNode(tree, s);
+            }
+            else if (key == "log")
+            {
+                // The shared log message-type tree, configured once for all overlays.
+                var d = SystemDefaults("log");
+                if (d != null)
+                    foreach (var s in d.Children) BuildSettingNode(tree, s);
+            }
+            else if (key == "exploration")
+            {
+                // The Default overlay's cursor (mode + speed per slot) first, then the remaining shared
+                // system defaults, one collapsible node per system (empty ones — systems with no
+                // tunables — are skipped by BuildSettingNode).
+                var cursor = ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>("cursor");
+                if (cursor != null) BuildSettingNode(tree, cursor);
+                foreach (var sysKey in new[] { "grid", "spatial", "slope", "walltones", "object", "fog", "path" })
+                {
+                    var d = SystemDefaults(sysKey);
+                    if (d != null) BuildSettingNode(tree, d);
+                }
+            }
+        }
+
+        private static CategorySetting SystemDefaults(string key)
+            => ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>(key);
+
+        // One system inside an overlay: enabled toggle + whole-subtree inheritance. "Following
+        // defaults" shows just a Customize button (the tunables live on the Sonar/Log/Exploration
+        // tabs); Customize materializes the overlay's own full copy of the system tree (seeded from
+        // the current defaults) in place, and Reset drops it again. The node label carries the live
+        // state so the deviation is audible at a glance.
+        private Container BuildSystemNode(string id, CategorySetting sysCat)
+        {
+            var key = sysCat.Key;
+            var node = new TreeGroup("")
+            {
+                LabelProvider = () => Loc("system." + key,
+                        WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SystemName(key))
+                    + ", " + (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key)
+                        ? Loc("overlay.state_customized", "customized")
+                        : Loc("overlay.state_default", "following defaults"))
+            };
+            FillSystemNode(node, id, key, sysCat);
+            return node;
+        }
+
+        private void FillSystemNode(Container node, string id, string key, CategorySetting sysCat)
+        {
+            node.Clear();
+            var enabled = sysCat.Get<BoolSetting>("enabled");
+            if (enabled != null)
+                node.Add(new ProxyBoolToggle(enabled.Label, enabled.Get, () => enabled.Set(!enabled.Get())));
+
+            if (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key))
+            {
+                var custom = sysCat.Get<CategorySetting>("custom");
+                if (custom != null)
+                    foreach (var c in custom.Children) BuildSettingNode(node, c);
+                node.Add(new ProxyActionButton(Loc("overlay.reset_defaults", "Reset to defaults"), null, () =>
+                {
+                    WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.ResetSystem(id, key);
+                    FillSystemNode(node, id, key, sysCat);
+                    Tts.Speak(Loc("overlay.state_default", "following defaults"));
+                    Navigation.Focus(node, announce: false);
+                }));
+            }
+            else
+            {
+                node.Add(new ProxyActionButton(Loc("overlay.customize", "Customize for this overlay"), null, () =>
+                {
+                    WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Customize(id, key);
+                    FillSystemNode(node, id, key, sysCat);
+                    Tts.Speak(Loc("overlay.state_customized", "customized"));
+                    Navigation.Focus(node, announce: false);
+                }));
+            }
         }
 
         // One overlay = a collapsible node (Cursor + systems) with a LIVE "(standard)" tag, plus always-on
@@ -168,12 +253,16 @@ namespace WrathAccess.Screens
             var group = new TreeGroup("")
             {
                 LabelProvider = () => WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayName(id)
-                    + (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsStandard(id)
-                        ? " " + Loc("overlay.standard_tag", "(standard)") : "")
             };
-            foreach (var c in oCat.Children) BuildSettingNode(group, c); // hidden "name" is skipped
+            foreach (var c in oCat.Children) // hidden "name" is skipped
+            {
+                if (c is CategorySetting sysCat
+                    && WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SystemName(sysCat.Key) != null)
+                    group.Add(BuildSystemNode(id, sysCat));
+                else
+                    BuildSettingNode(group, c);
+            }
             group.Add(new ProxyActionButton(Loc("overlay.rename", "Rename overlay"), null, () => RenameOverlay(id)));
-            group.Add(new ProxyActionButton(Loc("overlay.make_standard", "Make standard"), null, () => MakeStandard(id)));
             group.Add(new ProxyActionButton(Loc("overlay.remove", "Remove overlay"), null, () => RemoveOverlay(id)));
             _overlayNodes[id] = group;
             return group;
@@ -218,21 +307,6 @@ namespace WrathAccess.Screens
             });
         }
 
-        private void MakeStandard(string id)
-        {
-            if (!WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.MakeDefault(id))
-            {
-                Tts.Speak(Loc("overlay.already_standard", "Already standard"));
-                return;
-            }
-            Tts.Speak(Loc("overlay.made_standard", "Set as standard"));
-            if (_overlaysTree != null && _overlayNodes.TryGetValue(id, out var node))
-            {
-                _overlaysTree.Remove(node);      // move to front; the live "(standard)" tags auto-update
-                _overlaysTree.Insert(0, node);
-                Navigation.Focus(node);
-            }
-        }
 
         // Map a setting to a navigable control; categories recurse into collapsible tree groups.
         private static void BuildSettingNode(Container parent, Setting s)

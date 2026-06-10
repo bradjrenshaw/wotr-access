@@ -20,15 +20,30 @@ namespace WrathAccess.Exploration.Overlays
         public abstract string Name { get; }
         public abstract string Key { get; } // settings-path segment, e.g. "grid"
 
-        /// <summary>The bound per-overlay settings category (for subclasses with nested setting groups).</summary>
-        protected CategorySetting Settings { get; private set; }
-        public void Bind(CategorySetting settings) => Settings = settings;
+        /// <summary>The overlay's own category for this system: holds `enabled` (+ the hidden
+        /// `customized` flag, + the `custom` override subtree when materialized).</summary>
+        public CategorySetting OverlayCat { get; private set; }
+
+        /// <summary>The shared defaults for this system type (defaults.&lt;key&gt;).</summary>
+        public CategorySetting DefaultsCat { get; private set; }
+
+        public void Bind(CategorySetting overlayCat, CategorySetting defaultsCat)
+        {
+            OverlayCat = overlayCat;
+            DefaultsCat = defaultsCat;
+        }
+
+        /// <summary>The resolution root for tunables — WHOLE-SUBTREE inheritance: an overlay that has
+        /// customized this system reads ONLY its own `custom` copy; otherwise ONLY the shared defaults.
+        /// Resolved live on every read, so Customize/Reset take effect immediately.</summary>
+        protected CategorySetting Settings => OverlayCat?.Get<CategorySetting>("custom") ?? DefaultsCat;
 
         /// <summary>Add this system's tunables to its settings category (the <c>enabled</c> toggle and the
         /// audio <c>volume</c> are added for you — see the registry / <see cref="AudioSystem"/>).</summary>
         public virtual void RegisterSettings(CategorySetting cat) { }
 
-        public bool Enabled => Bool("enabled", true);
+        /// <summary>Per-overlay always (composition is the overlay's identity — never inherited).</summary>
+        public bool Enabled => OverlayCat?.Get<BoolSetting>("enabled")?.Get() ?? true;
 
         protected bool Bool(string key, bool fallback) => Settings?.Get<BoolSetting>(key)?.Get() ?? fallback;
         protected int Int(string key, int fallback) => Settings?.Get<IntSetting>(key)?.Get() ?? fallback;

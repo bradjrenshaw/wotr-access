@@ -139,5 +139,32 @@
   "speech.backend_auto": "Auto (best available)",
   "speech.sapi.rate": "Rate",
   "speech.sapi.volume": "Volume",
-  "speech.sapi.voice": "Voice"
+  "speech.sapi.voice": "Voice",
+
+  "category.exploration": "Exploration",
+  "category.sonar": "Sonar",
+  "category.log": "Log",
+  "audio.volumes": "System volumes",
+  "audio.volumes.sonar": "Sonar volume",
+  "audio.volumes.slope": "Slope volume",
+  "audio.volumes.walltones": "Wall tones volume",
+  "audio.volumes.fog": "Fog cue volume",
+  "audio.volumes.object": "Object cue volume",
+  "system.grid": "Grid",
+  "system.spatial": "Spatial",
+  "system.sonar": "Sonar",
+  "system.slope": "Slope",
+  "system.walltones": "Wall tones",
+  "system.fog": "Fog cue",
+  "system.object": "Object cue",
+  "system.path": "Path info",
+  "system.log": "Log",
+  "overlay.custom": "Custom settings",
+  "overlay.customize": "Customize for this overlay",
+  "overlay.reset_defaults": "Reset to defaults",
+  "overlay.state_customized": "customized",
+  "overlay.state_default": "following defaults",
+
+  "overlay.cursor.primary": "Primary cursor",
+  "overlay.cursor.secondary": "Secondary cursor"
 }

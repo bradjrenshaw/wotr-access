@@ -47,7 +47,6 @@ namespace WrathAccess.Exploration.Overlays
         // self-gate on Active so they mute/idle when a menu's up or focus is off.
         public static void Tick(float dt) => Current?.Tick(dt);
 
-        public static void Move(MovementSlot slot, NavDirection dir) { if (Active) Current.Move(slot, dir); }
         public static void Recenter() { if (Active) Current.Recenter(); }
         public static void AnnounceCurrent() { if (Active) Current.AnnounceCurrent(); }
         public static void VerticalFollow(int dir) { if (Active) Current.VerticalFollow(dir); }

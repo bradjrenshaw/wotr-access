@@ -117,22 +117,42 @@ namespace WrathAccess.Screens
             }
             else if (key == "ui")
             {
-                // Global per-announcement-type settings in one collapsible node at the top (only the
-                // [ShowInGlobalSettings] types are non-hidden).
-                var ann = ModSettings.Root.Get<CategorySetting>("announcements");
-                if (ann != null)
+                var annRoot = ModSettings.Root.Get<CategorySetting>("announcements");
+
+                // Announcements: a verbosity preset + a plain on/off per announcement type — the 90%
+                // case, first. The full per-type detail (suffix etc.) lives under Per-element overrides.
+                if (annRoot != null)
                 {
-                    var global = new TreeGroup(Loc("global.group", "Global"));
-                    foreach (var s in ann.Children) BuildSettingNode(global, s);
-                    if (global.Children.Count > 0) tree.Add(global);
+                    var announcements = new TreeGroup(Loc("ui.announcements", "Announcements"));
+                    announcements.Add(BuildVerbosityDropdown(annRoot));
+                    foreach (var child in annRoot.Children)
+                    {
+                        if (!(child is CategorySetting annCat) || annCat.Hidden) continue;
+                        var enabled = annCat.Get<BoolSetting>("enabled");
+                        if (enabled != null)
+                            announcements.Add(new ProxyBoolToggle(annCat.Label, enabled.Get,
+                                () => enabled.Set(!enabled.Get())));
+                    }
+                    tree.Add(announcements);
                 }
 
-                // Each element type as its own root-level node, after Global — sorted alphabetically by
-                // label (Global already sits on top, added above) so the list is easy to scan.
+                // (future root-level UI settings slot in here)
+
+                // Per-element overrides, tucked at the bottom: the Global node carries each announcement
+                // type's FULL settings (suffix punctuation etc.); then every element type's tri-state
+                // inherit/on/off overrides, alphabetical.
+                var overrides = new TreeGroup(Loc("ui.element_overrides", "Per-element overrides"));
+                if (annRoot != null)
+                {
+                    var global = new TreeGroup(Loc("global.group", "Global"));
+                    foreach (var s in annRoot.Children) BuildSettingNode(global, s);
+                    if (global.Children.Count > 0) overrides.Add(global);
+                }
                 var ui = ModSettings.Root.Get<CategorySetting>("ui");
                 if (ui != null)
                     foreach (var s in ui.Children.OrderBy(c => c.Label, System.StringComparer.CurrentCultureIgnoreCase))
-                        BuildSettingNode(tree, s);
+                        BuildSettingNode(overrides, s);
+                if (overrides.Children.Count > 0) tree.Add(overrides);
             }
             else if (key == "overlays")
             {
@@ -151,9 +171,17 @@ namespace WrathAccess.Screens
             }
             else if (key == "audio")
             {
+                // Flat: master volume, then every system volume at the root (they're all just volumes —
+                // no "System volumes" grouping; the storage paths under audio.volumes.* are unchanged).
                 var audio = ModSettings.Root.Get<CategorySetting>("audio");
                 if (audio != null)
-                    foreach (var s in audio.Children) BuildSettingNode(tree, s);
+                    foreach (var s in audio.Children)
+                    {
+                        if (s is CategorySetting volumes && volumes.Key == "volumes")
+                            foreach (var v in volumes.Children) BuildSettingNode(tree, v);
+                        else
+                            BuildSettingNode(tree, s);
+                    }
             }
             else if (key == "speech")
             {
@@ -189,6 +217,50 @@ namespace WrathAccess.Screens
                     if (d != null) BuildSettingNode(tree, d);
                 }
             }
+        }
+
+        // Verbosity presets: each names the announcement types it turns OFF (everything else on).
+        // The dropdown derives its state from the live toggles — hand-edits read as "Custom".
+        private static readonly (string label, string loc, string[] off)[] VerbosityPresets =
+        {
+            ("Verbose", "preset.verbose", new string[0]),
+            ("Standard", "preset.standard", new[] { "position" }),
+            ("Concise", "preset.concise", new[] { "role", "tooltip", "position" }),
+        };
+
+        private UIElement BuildVerbosityDropdown(CategorySetting annRoot)
+        {
+            var visible = annRoot.Children.OfType<CategorySetting>().Where(c => !c.Hidden)
+                .Select(c => (Key: c.Key, Enabled: c.Get<BoolSetting>("enabled")))
+                .Where(t => t.Enabled != null).ToList();
+
+            var labels = VerbosityPresets.Select(p => Loc(p.loc, p.label)).ToList();
+            labels.Add(Loc("preset.custom", "Custom"));
+
+            int Current()
+            {
+                for (int i = 0; i < VerbosityPresets.Length; i++)
+                {
+                    var off = VerbosityPresets[i].off;
+                    bool match = true;
+                    foreach (var t in visible)
+                        if (t.Enabled.Get() == System.Array.IndexOf(off, t.Key) >= 0) { match = false; break; }
+                    if (match) return i;
+                }
+                return VerbosityPresets.Length; // Custom
+            }
+
+            void Apply(int idx)
+            {
+                if (idx < 0 || idx >= VerbosityPresets.Length) return; // choosing Custom = keep as-is
+                var off = VerbosityPresets[idx].off;
+                foreach (var t in visible)
+                    t.Enabled.Set(System.Array.IndexOf(off, t.Key) < 0);
+            }
+
+            // "Custom" is a derived display state, not a choice — mark it virtual.
+            return new ProxyChoiceDropdown(Loc("ui.verbosity", "Verbosity"), labels, Current, Apply,
+                selectableCount: VerbosityPresets.Length);
         }
 
         private static CategorySetting SystemDefaults(string key)

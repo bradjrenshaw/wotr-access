@@ -166,5 +166,13 @@
   "overlay.state_default": "following defaults",
 
   "overlay.cursor.primary": "Primary cursor",
-  "overlay.cursor.secondary": "Secondary cursor"
+  "overlay.cursor.secondary": "Secondary cursor",
+
+  "ui.announcements": "Announcements",
+  "ui.element_overrides": "Per-element overrides",
+  "ui.verbosity": "Verbosity",
+  "preset.verbose": "Verbose",
+  "preset.standard": "Standard",
+  "preset.concise": "Concise",
+  "preset.custom": "Custom"
 }

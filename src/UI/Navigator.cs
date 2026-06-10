@@ -83,32 +83,63 @@ namespace WrathAccess.UI
             if (announce) AnnounceDelta(snapshot);
         }
 
-        /// <summary>Append an element to the path; if it's a container, descend to its representative leaf.
-        /// Descent STOPS at a tree node (focus lands on the top-level node; its children are reached by
-        /// expanding/arrowing, not by descending into them).</summary>
+        /// <summary>Append an element to the path; if it's a container, descend to the INNERMOST
+        /// remembered/selected element. A tree NODE is only descended into when it's expanded AND
+        /// actually remembers (or has selected) a deeper target — otherwise focus lands on the node
+        /// itself (we never auto-dive into expanded nodes via the first-focusable fallback).</summary>
         protected void AppendWithDescend(UIElement element)
         {
-            while (element != null)
+            if (element == null) return;
+            Path.Add(element);
+            DescendFrom(element);
+        }
+
+        /// <summary>Continue descending from an element ALREADY on the path to the innermost
+        /// remembered/selected element (same rules as <see cref="AppendWithDescend"/>). Used after a
+        /// Tab lands on a stop, so re-entering a tree restores the deep position, not the top node.</summary>
+        protected void DescendFrom(UIElement element)
+        {
+            while (true)
             {
-                Path.Add(element);
                 var container = element as Container;
                 if (container == null) return;
-                var next = RepresentativeChild(container);
-                container.SetFocusedChild(next);
-                if (container.Shape == ContainerShape.Tree)
+
+                UIElement next;
+                // A tree NODE (a tree-shaped container nested inside the tree; the tree ROOT always
+                // exposes its children).
+                bool isTreeNode = container.Shape == ContainerShape.Tree
+                    && container.Parent is Container parent && parent.Shape == ContainerShape.Tree;
+                if (isTreeNode)
                 {
-                    if (next != null) Path.Add(next); // land ON the top-level node; don't descend into it
-                    return;
+                    if (!container.Expanded) return; // collapsed → its children aren't navigable
+                    next = RememberedOrSelected(container);
+                    if (next == null) return;        // nothing remembered/selected → stay on the node
                 }
+                else
+                {
+                    next = RepresentativeChild(container);
+                    if (next == null) return;
+                }
+                container.SetFocusedChild(next);
+                Path.Add(next);
                 element = next;
             }
         }
 
+        /// <summary>A container's remembered focus, else its selected child — WITHOUT the
+        /// first-focusable fallback (used to decide whether descending deeper is justified).</summary>
+        private static UIElement RememberedOrSelected(Container c)
+        {
+            if (c.FocusedChild != null && c.FocusedChild.CanFocus) return c.FocusedChild;
+            return SelectedChild(c);
+        }
+
         /// <summary>The child to land on when first focusing a container: the remembered focus, else — for a
         /// single-select <b>list or tree</b> (radio buttons, tabs, the deity tree) — the currently-selected
-        /// DIRECT child, else the first focusable. Only the top level is considered: descent stops at a tree
-        /// node, and tree stepping/expanding never prefers selected, so expanding a node won't yank focus to
-        /// a selected descendant. Panels/grids don't prefer selected.</summary>
+        /// DIRECT child, else the first focusable. Single-level by design; AppendWithDescend chains it to
+        /// reach the innermost remembered/selected element (tree nodes only when expanded + justified).
+        /// Tree stepping/expanding never prefers selected, so expanding a node won't yank focus to a
+        /// selected descendant. Panels/grids don't prefer selected.</summary>
         protected static UIElement RepresentativeChild(Container c)
         {
             if (c == null) return null;

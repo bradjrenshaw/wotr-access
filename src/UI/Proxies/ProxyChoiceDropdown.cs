@@ -19,13 +19,19 @@ namespace WrathAccess.UI.Proxies
         private readonly List<string> _options;
         private readonly Func<int> _current;
         private readonly Action<int> _onSelect;
+        private readonly int _selectable;
 
-        public ProxyChoiceDropdown(string label, List<string> options, Func<int> current, Action<int> onSelect)
+        /// <param name="selectableCount">Options beyond this index are VIRTUAL: the dropdown can display
+        /// them as its current value (e.g. a derived "Custom" state) but they're not offered in the
+        /// chooser. -1 (default) = everything selectable.</param>
+        public ProxyChoiceDropdown(string label, List<string> options, Func<int> current, Action<int> onSelect,
+            int selectableCount = -1)
         {
             _label = label;
             _options = options;
             _current = current;
             _onSelect = onSelect;
+            _selectable = (selectableCount < 0 || options == null) ? (options?.Count ?? 0) : selectableCount;
         }
 
         private int Current => _current != null ? _current() : -1;
@@ -42,7 +48,13 @@ namespace WrathAccess.UI.Proxies
         public override IEnumerable<ElementAction> GetActions()
         {
             yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.open"),
-                _ => ChoiceSubmenuScreen.Open(_label, _options, Current, _onSelect));
+                _ =>
+                {
+                    int cur = Current;
+                    ChoiceSubmenuScreen.Open(_label, _options.GetRange(0, _selectable),
+                        cur < _selectable ? cur : -1, // a virtual current value preselects nothing
+                        _onSelect);
+                });
         }
     }
 }

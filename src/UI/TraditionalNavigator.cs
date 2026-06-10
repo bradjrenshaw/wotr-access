@@ -22,18 +22,13 @@ namespace WrathAccess.UI
             if (Screen != null && Screen.StartUnfocused && Screen.FocusedChild == null) return;
 
             // Restore remembered focus (each container's FocusedChild), falling back to the
-            // first focusable. So returning to a screen (e.g. after closing a submenu) lands
-            // back where you were, not at the top.
-            Container node = Screen;
-            while (node != null)
-            {
-                var child = RepresentativeChild(node);
-                if (child == null) break;
-                node.SetFocusedChild(child);
-                Path.Add(child);
-                if (node.Shape == ContainerShape.Tree) break; // landed on a top-level tree node; don't descend in
-                node = child as Container;
-            }
+            // first focusable — descending to the INNERMOST remembered/selected element, trees
+            // included (AppendWithDescend owns the rules). So returning to a screen lands back
+            // exactly where you were, not on the outermost node.
+            var first = RepresentativeChild(Screen);
+            if (first == null) return;
+            Screen.SetFocusedChild(first);
+            AppendWithDescend(first);
         }
 
         public override bool OnInputJustPressed(InputAction action)
@@ -386,7 +381,9 @@ namespace WrathAccess.UI
             if (idx < 0)
             {
                 var snap = new List<UIElement>(Path);
-                BuildPathTo(stops[step >= 0 ? 0 : stops.Count - 1]);
+                var entry = stops[step >= 0 ? 0 : stops.Count - 1];
+                BuildPathTo(entry);
+                DescendFrom(entry); // land on the innermost remembered/selected element, not the stop
                 AnnounceDelta(snap, interrupt: true);
                 return true;
             }
@@ -410,6 +407,7 @@ namespace WrathAccess.UI
             }
             var snapshot = new List<UIElement>(Path);
             BuildPathTo(stops[ni]);
+            DescendFrom(stops[ni]); // land on the innermost remembered/selected element, not the stop
             AnnounceDelta(snapshot, interrupt: true);
             return true;
         }

@@ -196,6 +196,8 @@ namespace WrathAccess.Screens
                 var d = SystemDefaults("sonar");
                 if (d != null)
                     foreach (var s in d.Children) BuildSettingNode(tree, s);
+                // The per-category sound picks (global, not per-overlay — like the volumes).
+                BuildSettingNode(tree, ModSettings.Root.Get<CategorySetting>("sounds"));
             }
             else if (key == "log")
             {

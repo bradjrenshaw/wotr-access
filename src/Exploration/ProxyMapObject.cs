@@ -79,7 +79,7 @@ namespace WrathAccess.Exploration
                         case InteractionDoorPart _: cats.Add(ScanCategory.Doors); break;
                         case InteractionLootPart _: cats.Add(ScanCategory.Containers); break;
                         case InteractionSkillCheckPart _: cats.Add(ScanCategory.SearchPoints); break;
-                        case DisableTrapInteractionPart _: break;     // trap = state (see Extra), not a category
+                        case DisableTrapInteractionPart _: cats.Add(ScanCategory.Traps); break; // a discovered trap
                         default: cats.Add(ScanCategory.Other); break; // dialog, combine, button, device, bark
                     }
                 }
@@ -92,16 +92,17 @@ namespace WrathAccess.Exploration
             }
         }
 
-        // The sonar cue for this object, by interactable role: loot sub-type / door / trap / area transition /
-        // generic mechanism (lever, switch, usable). "unknown" is reserved for a not-yet-found HiddenPart
-        // (there's something here, but you haven't searched it out); plain scenery returns null. Skips
-        // disabled parts.
-        public override string SonarSound
+        // The primary taxonomy node, by interactable role and STATE. Priority: exits > loot > doors >
+        // traps > search points > mechanisms — with one state flip: an exit DOOR still closed is
+        // primarily a door (interacting opens it); once open it's primarily the exit. An unfound
+        // HiddenPart reads as a search point (there's something here, but you haven't searched it out);
+        // plain scenery is the silent-by-default scenery node. Skips disabled parts.
+        public override string Primary
         {
             get
             {
                 InteractionLootPart loot = null;
-                bool door = false, trap = false, hidden = false, mechanism = false;
+                bool door = false, doorOpen = false, trap = false, hidden = false, skill = false, mechanism = false;
                 var interactions = _obj.Interactions;
                 for (int i = 0; i < interactions.Count; i++)
                 {
@@ -110,32 +111,34 @@ namespace WrathAccess.Exploration
                     switch (part)
                     {
                         case InteractionLootPart l: loot = l; break;
-                        case InteractionDoorPart _: door = true; break;
+                        case InteractionDoorPart d: door = true; doorOpen = d.IsOpen; break;
                         case DisableTrapInteractionPart _: trap = true; break;
                         case HiddenPart h: if (!h.Opened) hidden = true; break;
+                        case InteractionSkillCheckPart _: skill = true; break;
                         default: mechanism = true; break;
                     }
                 }
-                bool transition = _obj.Get<AreaTransitionPart>() != null;
 
-                if (loot != null) return LootSound(loot);
-                if (door) return "door";
-                if (trap) return "trap";
-                if (transition) return "transition";
-                if (mechanism) return "mechanism";
-                return hidden ? "unknown" : null;
+                bool exit = _obj.Get<AreaTransitionPart>() != null;
+                if (exit && !(door && !doorOpen)) return SonarTaxonomy.Exits;
+                if (loot != null) return LootNode(loot);
+                if (door) return SonarTaxonomy.Doors;
+                if (trap) return SonarTaxonomy.Traps;
+                if (hidden || skill) return SonarTaxonomy.SearchPoints;
+                if (mechanism) return SonarTaxonomy.Mechanisms;
+                return SonarTaxonomy.Scenery;
             }
         }
 
-        private static string LootSound(InteractionLootPart loot)
+        private static string LootNode(InteractionLootPart loot)
         {
             switch (loot.Settings.LootContainerType) // Settings is public on InteractionPart<T>
             {
-                case LootContainerType.Chest: return "loot-chest";
-                case LootContainerType.Unit: return "loot-corpse";
-                case LootContainerType.Environment: return "loot-environment";
-                case LootContainerType.PlayerChest: return "loot-stash";
-                case LootContainerType.OneSlot: return "loot-single";
+                case LootContainerType.Chest: return SonarTaxonomy.ContainersChest;
+                case LootContainerType.Unit: return SonarTaxonomy.ContainersCorpse;
+                case LootContainerType.Environment: return SonarTaxonomy.ContainersEnvironment;
+                case LootContainerType.PlayerChest: return SonarTaxonomy.ContainersStash;
+                case LootContainerType.OneSlot: return SonarTaxonomy.ContainersSingle;
                 default: return "loot-generic"; // DefaultLoot + anything new
             }
         }

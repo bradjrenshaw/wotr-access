@@ -30,6 +30,8 @@ namespace WrathAccess.Exploration
 
         public override IEnumerable<ScanCategory> Categories { get { yield return ScanCategory.PointsOfInterest; } }
 
+        public override string Primary => SonarTaxonomy.Poi; // silent by default; assignable in Sounds
+
         // The marker's own kind (exit/loot/poi/unit…) — handy while comparing against the entity data.
         protected override string Extra => _marker.GetMarkerType().ToString().ToLowerInvariant();
     }

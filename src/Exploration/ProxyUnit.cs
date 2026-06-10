@@ -21,10 +21,20 @@ namespace WrathAccess.Exploration
 
         public override UnitEntityData TargetUnit => _unit; // ability targeting picks this unit
 
-        // Sonar cue by faction — the same split the scanner uses (Party / Enemies / Neutrals): your party are
-        // allies, hostiles are enemies, everyone else neutral.
-        public override string SonarSound =>
-            _unit.IsPlayerFaction ? "units-ally" : _unit.IsPlayersEnemy ? "units-enemy" : "units-neutral";
+        // Primary node: faction while alive (the scanner's Party/Enemies/Neutrals split); a dead unit
+        // with loot is primarily a corpse-container (its relevance is the loot — the sonar follows the
+        // user's corpse sound, while Categories keeps it listed under its faction too); a dead empty
+        // unit drops out of the taxonomy (silent, no longer relevant).
+        public override string Primary
+        {
+            get
+            {
+                if (_unit.State.IsDead)
+                    return _unit.IsDeadAndHasLoot ? SonarTaxonomy.ContainersCorpse : null;
+                return _unit.IsPlayerFaction ? SonarTaxonomy.Party
+                    : _unit.IsPlayersEnemy ? SonarTaxonomy.Enemies : SonarTaxonomy.Neutrals;
+            }
+        }
 
         // The unit's body radius (size-scaled) — what combat reach uses for edge-to-edge distance, so a
         // Large/Huge creature correctly reports a footprint spanning several tiles.

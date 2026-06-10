@@ -390,5 +390,8 @@
   "text.prompt": "Edit text",
   "text.help": "Type to edit, Backspace to delete, Enter to confirm, Escape to cancel.",
   "text.cancelled": "Cancelled",
-  "text.space": "space"
+  "text.space": "space",
+
+  "scan.category.traps": "Traps",
+  "scan.singular.trap": "Trap"
 }

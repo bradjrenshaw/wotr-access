@@ -71,7 +71,7 @@ namespace WrathAccess.Exploration.Overlays
             _sweep.Clear();
             foreach (var it in WorldModel.Items)
             {
-                if (!it.IsVisible || it.SonarSound == null) continue;
+                if (!it.IsVisible || SonarTaxonomy.Resolve(it.Primary) == null) continue;
                 float dx = it.Position.x - c.x, dz = it.Position.z - c.z;
                 float edge = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - it.Footprint);
                 if (edge > maxDist) continue;
@@ -83,7 +83,7 @@ namespace WrathAccess.Exploration.Overlays
         private void FirePing(ScanItem item, Overlay overlay)
         {
             if (!item.IsVisible) return; // went away since the snapshot
-            var snd = item.SonarSound;
+            var snd = SonarTaxonomy.Resolve(item.Primary); // live: the user's per-node pick
             if (snd == null) return;
 
             var c = overlay.Cursor.Position;

@@ -241,6 +241,9 @@ namespace WrathAccess
             var audio = new WrathAccess.Settings.CategorySetting("audio", "Audio", localizationKey: "category.audio");
             audio.Add(new WrathAccess.Settings.IntSetting("master_volume", "Master volume", 100, 0, 100, 5, "audio.master_volume"));
             WrathAccess.Settings.ModSettings.Root.Add(audio);
+            // The shared sonar-sound taxonomy (global, like the volumes): per-node sound picks the
+            // sonar/object cues resolve live. Shown on the Sonar tab.
+            WrathAccess.Exploration.SonarTaxonomy.RegisterSettings();
 
             // Overlays = the data-driven area-overlay configs (composition per overlay + shared defaults); also
             // builds the live Overlay objects and installs them in OverlayManager.

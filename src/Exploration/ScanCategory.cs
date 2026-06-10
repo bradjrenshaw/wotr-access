@@ -17,6 +17,7 @@ namespace WrathAccess.Exploration
         Containers,
         Exits,
         SearchPoints,
+        Traps,
         Other,
         Scenery,
     }
@@ -29,7 +30,7 @@ namespace WrathAccess.Exploration
             ScanCategory.All,
             ScanCategory.PointsOfInterest, ScanCategory.Party, ScanCategory.Enemies, ScanCategory.Neutrals,
             ScanCategory.Doors, ScanCategory.Containers, ScanCategory.Exits, ScanCategory.SearchPoints,
-            ScanCategory.Other, ScanCategory.Scenery,
+            ScanCategory.Traps, ScanCategory.Other, ScanCategory.Scenery,
         };
 
         public static string Label(ScanCategory c)
@@ -44,6 +45,7 @@ namespace WrathAccess.Exploration
                 case ScanCategory.Containers: return Loc.T("scan.singular.container");
                 case ScanCategory.Exits: return Loc.T("scan.singular.exit");
                 case ScanCategory.SearchPoints: return Loc.T("scan.singular.search_point");
+                case ScanCategory.Traps: return Loc.T("scan.singular.trap");
                 default: return Loc.T("scan.singular.object");
             }
         }

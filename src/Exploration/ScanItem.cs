@@ -30,11 +30,13 @@ namespace WrathAccess.Exploration
         public virtual float Footprint => 0f;
 
         /// <summary>
-        /// The sonar's sound name for this thing (a file under assets/audio/interactables/, without the
-        /// extension), or null = don't sonify. Default null — only interactable map objects classify a
-        /// sound (see <see cref="ProxyMapObject"/>); units/markers/scenery stay silent for now.
+        /// The PRIMARY taxonomy node (<see cref="SonarTaxonomy"/> key) — the single, state-aware role
+        /// this thing sounds as right now (a dead lootable enemy is primary containers.corpse; an exit
+        /// door flips doors→exits when opened). Null = not part of the taxonomy at all (sound is then
+        /// the user's per-node pick via <see cref="SonarTaxonomy.Resolve"/>; membership for the scanner
+        /// stays the full <see cref="Categories"/> set).
         /// </summary>
-        public virtual string SonarSound => null;
+        public virtual string Primary => null;
 
         /// <summary>True for a creature/unit (vs a map object or marker). Lets the sonar treat units like
         /// interactables for the object enter/exit cue while leaving plain scenery out.</summary>

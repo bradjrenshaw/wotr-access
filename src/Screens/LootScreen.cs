@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Kingmaker;
+using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized Leave/remove-loot labels)
 using Kingmaker.UI.MVVM._VM.Loot;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
@@ -62,6 +63,18 @@ namespace WrathAccess.Screens
 
             // Take all — its own Tab-stop after the lists.
             Add(new ProxyActionButton(() => Loc.T("loot.take_all"), () => vm.HasItemsToLoot, vm.CollectAll));
+
+            // Zone-exit variant (leaving the area with uncollected loot): mirror the game's extra
+            // controls — a Leave button (proceed WITHOUT collecting; in this mode Take all also leaves,
+            // both run the deferred transition) and the remove-uncollected-loot toggle. Escape stays the
+            // cancel (vm.Close keeps you in the area), exactly like the game's X / EscManager.
+            if (vm.Mode == LootContextVM.LootWindowMode.ZoneExit)
+            {
+                Add(new ProxyActionButton(() => TextUtil.StripRichText(UIStrings.Instance.LootWindow.LeaveZone),
+                    () => true, vm.LeaveZone));
+                Add(new ProxyBoolToggle(TextUtil.StripRichText(UIStrings.Instance.LootWindow.RemoveUncollectedLootHint),
+                    () => vm.RemoveUncollectedLoot.Value, vm.SwitchRemoveUncollectedLoot));
+            }
 
             Navigation.Attach(this);
         }

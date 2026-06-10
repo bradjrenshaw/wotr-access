@@ -6,8 +6,14 @@ pub const GAME_DIR_NAME: &str = "Pathfinder Second Adventure";
 pub const GAME_EXE: &str = "Wrath.exe";
 pub const MOD_NAME: &str = "WrathAccess";
 
-/// Native screen-reader DLLs the mod P/Invokes — they must sit next to Wrath.exe.
-pub const GAME_ROOT_DLLS: &[&str] = &["Tolk.dll", "nvdaControllerClient64.dll", "SAAPI64.dll"];
+/// Native speech DLL the mod P/Invokes — it must sit next to Wrath.exe. Prism talks to screen
+/// readers directly, so it's the only native we ship.
+pub const GAME_ROOT_DLLS: &[&str] = &["prism.dll"];
+
+/// Files older versions shipped but we no longer install (the Tolk era). Install and uninstall
+/// both remove them so upgrades don't leave stale binaries in the game folder.
+pub const LEGACY_GAME_ROOT_DLLS: &[&str] =
+    &["Tolk.dll", "nvdaControllerClient64.dll", "SAAPI64.dll"];
 
 /// The game's LocalLow data root, where the native mod system lives.
 pub fn locallow_game_dir() -> PathBuf {

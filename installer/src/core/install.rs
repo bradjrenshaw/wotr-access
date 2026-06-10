@@ -12,7 +12,7 @@ use std::io::{Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 
 use super::manager;
-use super::paths::{installed_mod_dir, modifications_dir, GAME_EXE, MOD_NAME};
+use super::paths::{installed_mod_dir, modifications_dir, GAME_EXE, LEGACY_GAME_ROOT_DLLS, MOD_NAME};
 
 pub fn download_and_install(
     url: &str,
@@ -125,6 +125,11 @@ pub fn install_zip(data: &[u8], game_path: &Path) -> Result<(), String> {
     }
     if !mod_dir.join("OwlcatModificationManifest.json").exists() {
         return Err("The zip didn't contain the mod (no WrathAccess/OwlcatModificationManifest.json).".into());
+    }
+
+    // Retire files older versions placed in the game folder (best-effort).
+    for dll in LEGACY_GAME_ROOT_DLLS {
+        let _ = fs::remove_file(game_path.join(dll));
     }
 
     fs::create_dir_all(modifications_dir())

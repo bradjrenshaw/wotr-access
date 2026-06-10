@@ -38,12 +38,14 @@ namespace WrathAccess.Screens
 
         // Explicit tabs (the settings Root holds bindings/announcements/ui, which don't map 1:1 to tabs:
         // the UI tab composes the global announcement settings + the per-element-type overrides).
+        // Alphabetical by label, so the tab list is easy to scan.
         private static readonly (string key, string label, string loc)[] Tabs =
         {
-            ("input", "Input", "category.input"),
-            ("ui", "UI", "category.ui"),
-            ("overlays", "Overlays", "category.overlays"),
             ("audio", "Audio", "category.audio"),
+            ("input", "Input", "category.input"),
+            ("overlays", "Overlays", "category.overlays"),
+            ("speech", "Speech", "category.speech"),
+            ("ui", "UI", "category.ui"),
         };
 
         public override void OnPush() { _priorFocus = FocusMode.Active; FocusMode.Set(true); _active = 0; _built = false; }
@@ -149,6 +151,13 @@ namespace WrathAccess.Screens
                 var audio = ModSettings.Root.Get<CategorySetting>("audio");
                 if (audio != null)
                     foreach (var s in audio.Children) BuildSettingNode(tree, s);
+            }
+            else if (key == "speech")
+            {
+                // The handler dropdown, then each handler's own settings subtree as a collapsible node.
+                var speech = ModSettings.Root.Get<CategorySetting>("speech");
+                if (speech != null)
+                    foreach (var s in speech.Children) BuildSettingNode(tree, s);
             }
         }
 

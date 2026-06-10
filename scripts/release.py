@@ -37,15 +37,13 @@ def stage_payload():
     shutil.copy2(os.path.join(REPO, "OwlcatModificationManifest.json"), mod)
     shutil.copy2(os.path.join(REPO, "OwlcatModificationSettings.json"), mod)
     shutil.copy2(os.path.join(REPO, "bin", "Release", "WrathAccess.dll"), asm)
-    shutil.copy2(os.path.join(REPO, "tolk", "TolkDotNet.dll"), asm)
     naudio = glob.glob(os.path.join(os.path.expanduser("~"), ".nuget", "packages",
                                     "naudio", "*", "lib", "net35", "NAudio.dll"))
     if not naudio:
         raise SystemExit("NAudio.dll not found in the NuGet cache — run a build first.")
     shutil.copy2(sorted(naudio)[-1], asm)
     shutil.copytree(os.path.join(REPO, "assets"), os.path.join(mod, "assets"))
-    for dll in ("Tolk.dll", "nvdaControllerClient64.dll", "SAAPI64.dll"):
-        shutil.copy2(os.path.join(REPO, "tolk", "x64", dll), game)
+    shutil.copy2(os.path.join(REPO, "vendor", "prism.dll"), game)
 
 
 def make_zip():

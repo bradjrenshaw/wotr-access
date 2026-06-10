@@ -232,5 +232,7 @@
   "turn.five_foot_off": "Five foot step off",
   "turn.cant_delay": "Can't delay the turn right now",
   "turn.delay_self": "That's the acting unit",
-  "turn.delayed": "Turn delayed until after {name}"
+  "turn.delayed": "Turn delayed until after {name}",
+
+  "speech.handler_changed": "Speech handler changed to {handler}"
 }

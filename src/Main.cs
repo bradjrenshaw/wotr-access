@@ -51,7 +51,6 @@ namespace WrathAccess
 
             try
             {
-                Tts.Initialize();
                 WrathAccess.Localization.LocalizationManager.Initialize(); // wire Message's resolver early
                 _harmony = new Harmony("WrathAccess");
                 _harmony.PatchAll(Assembly.GetExecutingAssembly());
@@ -66,6 +65,8 @@ namespace WrathAccess
                 BuildSettings();
                 WrathAccess.Settings.ModSettings.Initialize(
                     System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "WrathAccess"));
+                // Speech comes up AFTER settings load so the persisted handler/backend choices apply.
+                WrathAccess.Speech.SpeechManager.Initialize();
                 // Overlays are built AFTER load: the saved overlay-id list (incl. user-added ones) is only
                 // known once settings have loaded, then their saved values are re-applied to the new subtrees.
                 WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.BuildOverlays();
@@ -243,6 +244,12 @@ namespace WrathAccess
             var audio = new WrathAccess.Settings.CategorySetting("audio", "Audio", localizationKey: "category.audio");
             audio.Add(new WrathAccess.Settings.IntSetting("master_volume", "Master volume", 100, 0, 100, 5, "audio.master_volume"));
             WrathAccess.Settings.ModSettings.Root.Add(audio);
+
+            // Speech tab: the handler dropdown (Prism / SAPI / Clipboard, auto by default) + each
+            // handler's own settings subtree, all rendered by the settings treeview.
+            var speech = new WrathAccess.Settings.CategorySetting("speech", "Speech", localizationKey: "category.speech");
+            WrathAccess.Speech.SpeechManager.RegisterSettings(speech);
+            WrathAccess.Settings.ModSettings.Root.Add(speech);
         }
 
         private static void RegisterInput()

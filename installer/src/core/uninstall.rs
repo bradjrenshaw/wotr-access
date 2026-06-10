@@ -2,7 +2,7 @@ use std::fs;
 use std::path::Path;
 
 use super::manager;
-use super::paths::{installed_mod_dir, GAME_ROOT_DLLS};
+use super::paths::{installed_mod_dir, GAME_ROOT_DLLS, LEGACY_GAME_ROOT_DLLS};
 
 /// Remove the mod folder, its EnabledModifications entry, and the Tolk natives
 /// from the game folder. The user's Wrath Access settings (LocalLow/WrathAccess)
@@ -19,7 +19,7 @@ pub fn uninstall_mod(game_path: &Path) -> Result<Vec<String>, String> {
 
     manager::disable_mod()?;
 
-    for dll in GAME_ROOT_DLLS {
+    for dll in GAME_ROOT_DLLS.iter().chain(LEGACY_GAME_ROOT_DLLS.iter()) {
         let p = game_path.join(dll);
         if p.exists() {
             fs::remove_file(&p).map_err(|e| {

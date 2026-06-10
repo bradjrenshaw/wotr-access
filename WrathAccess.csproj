@@ -24,7 +24,7 @@
          <LocalLowDir>/OwlcatModificationManagerSettings.json (one-time; the installer does this). -->
     <LocalLowDir>$(UserProfile)\AppData\LocalLow\Owlcat Games\Pathfinder Wrath Of The Righteous</LocalLowDir>
     <ModDeployDir>$(LocalLowDir)\Modifications\$(ModName)</ModDeployDir>
-    <TolkDir>$(MSBuildProjectDirectory)\tolk</TolkDir>
+    <VendorDir>$(MSBuildProjectDirectory)\vendor</VendorDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,12 +43,12 @@
     <Reference Include="UnityEngine"><HintPath>$(ManagedDir)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
+    <!-- GUIUtility.systemCopyBuffer (the Clipboard speech fallback). -->
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.UI"><HintPath>$(ManagedDir)\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Unity.TextMeshPro"><HintPath>$(ManagedDir)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
 
-    <!-- Tolk screen-reader bridge: TolkDotNet is the only managed dll we ship. -->
-    <Reference Include="TolkDotNet"><HintPath>$(TolkDir)\TolkDotNet.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -69,7 +69,8 @@
     <Copy SourceFiles="$(MSBuildProjectDirectory)\OwlcatModificationSettings.json" DestinationFolder="$(ModDeployDir)" />
     <!-- Managed dlls ONLY under Assemblies/: the loader Assembly.LoadFrom's every file in there. -->
     <Copy SourceFiles="$(OutputPath)$(ModName).dll" DestinationFolder="$(ModDeployDir)\Assemblies" />
-    <Copy SourceFiles="$(TolkDir)\TolkDotNet.dll" DestinationFolder="$(ModDeployDir)\Assemblies" />
+    <!-- SAPI is driven over COM directly (System.Speech doesn't work under Mono) — retire old copies. -->
+    <Delete Files="$(ModDeployDir)\Assemblies\TolkDotNet.dll;$(ModDeployDir)\Assemblies\System.Speech.dll" ContinueOnError="true" />
     <!-- NAudio (managed; no native dll). -->
     <Copy SourceFiles="$(PkgNAudio)\lib\net35\NAudio.dll" DestinationFolder="$(ModDeployDir)\Assemblies" />
     <!-- Bundled assets (audio, locale), at the MOD ROOT (resolved via Main.ModDir). -->
@@ -77,10 +78,10 @@
       <ModAsset Include="$(MSBuildProjectDirectory)\assets\**\*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(ModAsset)" DestinationFiles="@(ModAsset->'$(ModDeployDir)\assets\%(RecursiveDir)%(Filename)%(Extension)')" />
-    <!-- Native libs must sit next to Wrath.exe so P/Invoke can resolve them. -->
-    <Copy SourceFiles="$(TolkDir)\x64\Tolk.dll" DestinationFolder="$(GameDir)" />
-    <Copy SourceFiles="$(TolkDir)\x64\nvdaControllerClient64.dll" DestinationFolder="$(GameDir)" />
-    <Copy SourceFiles="$(TolkDir)\x64\SAAPI64.dll" DestinationFolder="$(GameDir)" />
+    <!-- Native speech lib must sit next to Wrath.exe so P/Invoke can resolve it. Prism talks to
+         screen readers directly (no client dlls). The old Tolk natives are retired. -->
+    <Copy SourceFiles="$(VendorDir)\prism.dll" DestinationFolder="$(GameDir)" />
+    <Delete Files="$(GameDir)\Tolk.dll;$(GameDir)\nvdaControllerClient64.dll;$(GameDir)\SAAPI64.dll" ContinueOnError="true" />
     <!-- Retire any old UMM-era copy so the mod can't load twice. -->
     <RemoveDir Directories="$(GameDir)\Mods\$(ModName)" />
     <Message Text="Deployed $(ModName) to $(ModDeployDir)" Importance="high" />

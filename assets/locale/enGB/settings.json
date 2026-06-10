@@ -127,5 +127,17 @@
   "overlay.log.crusade.postponed_turns": "Postponed turns",
   "overlay.log.crusade.battle_morale": "Battle morale",
   "overlay.log.crusade.resurrect": "Resurrections",
-  "overlay.log.crusade.deaths": "Unit deaths"
+  "overlay.log.crusade.deaths": "Unit deaths",
+
+  "category.speech": "Speech",
+  "speech.handler": "Speech handler",
+  "speech.auto": "Auto",
+  "speech.prism": "Prism",
+  "speech.sapi": "SAPI",
+  "speech.clipboard": "Clipboard",
+  "speech.prism.backend": "Backend",
+  "speech.backend_auto": "Auto (best available)",
+  "speech.sapi.rate": "Rate",
+  "speech.sapi.volume": "Volume",
+  "speech.sapi.voice": "Voice"
 }

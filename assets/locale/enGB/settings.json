@@ -293,5 +293,8 @@
   "reset.tab": "Reset {name} to defaults",
   "reset.all": "Reset all settings to defaults",
   "reset.tab_done": "{name} reset to defaults",
-  "reset.all_done": "All settings reset to defaults"
+  "reset.all_done": "All settings reset to defaults",
+
+  "bind.explore.whereAmI": "Where am I",
+  "bind.scan.debugAreaParts": "Read area parts (debug)"
 }

@@ -395,5 +395,10 @@
   "scan.category.traps": "Traps",
   "scan.singular.trap": "Trap",
 
-  "review.others": "Objects"
+  "review.others": "Objects",
+
+  "where.indoors": "indoors",
+  "where.region": "{region} of the map",
+  "where.center": "center",
+  "where.unknown": "Unknown location"
 }

@@ -62,6 +62,7 @@ namespace WrathAccess.Exploration
         public static void PrevCategory() { if (Active) StepCategory(-1); }
         public static void CursorToSelected() { if (Active) CommitCursor(); }
         public static void AnnounceCursor() { if (Active) SpeakCursor(); }
+        public static void AnnounceWhereAmI() { if (Active) SpeakWhereAmI(); }
         public static void AnnounceParty() { if (Active) SpeakParty(); }
         // While aiming an ability, the act-on-target inputs commit the cast instead of their normal job:
         // I → cast on the selected scanner item, Enter → cast at the cursor, Backspace → cancel aim.
@@ -94,6 +95,45 @@ namespace WrathAccess.Exploration
             if (!Active) return;
             _debugAll = !_debugAll;
             Speak("Scanner debug: " + (_debugAll ? "showing all, including hidden" : "showing visible only"));
+        }
+
+        // Debug (F9): speak + log every AREA PART of the current area — name, indoor flag, which one
+        // is current, and (log only) the bounds extents. Dev tooling, English by design.
+        public static void DebugDumpAreaParts()
+        {
+            if (!Active) return;
+            var area = Game.Instance?.CurrentlyLoadedArea;
+            if (area == null) { Speak("No area"); return; }
+            var current = Kingmaker.Blueprints.Area.AreaService.Instance?.CurrentAreaPart;
+
+            var all = new List<Kingmaker.Blueprints.Area.BlueprintAreaPart> { area }; // the area IS part 0
+            if (area.Parts != null)
+                foreach (var pr in area.Parts)
+                {
+                    var part = pr?.Get();
+                    if (part != null) all.Add(part);
+                }
+
+            var spoken = new List<string>();
+            Main.Log?.Log("[areaparts] === " + all.Count + " parts in " + area.name + " ===");
+            foreach (var part in all)
+            {
+                // AreaLocalName is the SUB-part field; the area itself (part 0) is named by AreaName —
+                // the same fallback AreaDisplayName uses.
+                string name = part.AreaLocalName != null && !part.AreaLocalName.IsEmpty()
+                    ? TextUtil.StripRichText(part.AreaLocalName)
+                    : part is Kingmaker.Blueprints.Area.BlueprintArea asArea && asArea.AreaName != null
+                        ? TextUtil.StripRichText(asArea.AreaName) : "(unnamed)";
+                var line = name
+                    + (part == current ? " (current)" : "")
+                    + (part.IsIndoor ? ", indoors" : "");
+                spoken.Add(line);
+                var b = part.Bounds != null ? part.Bounds.LocalMapBounds : default(Bounds);
+                Main.Log?.Log("[areaparts] bp='" + part.name + "' name='" + name + "'"
+                    + (part == current ? " CURRENT" : "") + " indoor=" + part.IsIndoor
+                    + " mapBounds=" + b.min + ".." + b.max);
+            }
+            Speak(all.Count + " area parts: " + string.Join("; ", spoken));
         }
 
         // Debug (F10): dump every map object's identity to Player.log — GameObject/prefab name, blueprint
@@ -388,6 +428,50 @@ namespace WrathAccess.Exploration
         {
             if (!Cursor.Has) { Speak(Loc.T("scan.no_cursor")); return; }
             Speak(Loc.T("scan.cursor_at", new { rel = Geo.Relative(Reference, Cursor.Position.Value) }));
+        }
+
+        // "Where am I": the game's own display name for the current location (AreaDisplayName prefers
+        // the current AREA PART's local name — the section, e.g. an upper floor — then settlement/
+        // renamed/area name), indoors when the part says so, and the MOVEMENT CURSOR's position within
+        // the section's map bounds as a 3x3 compass region (ScanFrom: the cursor when one is placed,
+        // the leader otherwise — same reference the scanner reads from). World-aligned compass,
+        // matching every other bearing we speak (the visual map may be rotated via LocalMapRotation;
+        // we stay consistent with our own directions instead).
+        private static void SpeakWhereAmI()
+        {
+            var pos = ScanFrom;
+
+            var parts = new List<string>();
+            var area = Game.Instance?.CurrentlyLoadedArea;
+            string name = area != null ? TextUtil.StripRichText(area.AreaDisplayName) : null;
+            if (!string.IsNullOrWhiteSpace(name)) parts.Add(name);
+
+            var part = Kingmaker.Blueprints.Area.AreaService.Instance?.CurrentAreaPart;
+            if (part != null && part.IsIndoor) parts.Add(Loc.T("where.indoors"));
+            var bounds = part?.Bounds;
+            if (bounds != null)
+            {
+                var b = bounds.LocalMapBounds;
+                if (b.size.x > 1f && b.size.z > 1f)
+                {
+                    float fx = Mathf.Clamp01((pos.x - b.min.x) / b.size.x);
+                    float fz = Mathf.Clamp01((pos.z - b.min.z) / b.size.z);
+                    parts.Add(Loc.T("where.region", new { region = RegionWord(fx, fz) }));
+                }
+            }
+            Speak(parts.Count > 0 ? string.Join(", ", parts) : Loc.T("where.unknown"));
+        }
+
+        // 3x3 grid over the map bounds -> center or a compass word (+Z = north, like Geo's compass).
+        private static string RegionWord(float fx, float fz)
+        {
+            int col = fx < 1f / 3f ? -1 : fx > 2f / 3f ? 1 : 0;
+            int row = fz < 1f / 3f ? -1 : fz > 2f / 3f ? 1 : 0;
+            if (col == 0 && row == 0) return Loc.T("where.center");
+            string key = row > 0 ? (col < 0 ? "geo.northwest" : col > 0 ? "geo.northeast" : "geo.north")
+                : row < 0 ? (col < 0 ? "geo.southwest" : col > 0 ? "geo.southeast" : "geo.south")
+                : col < 0 ? "geo.west" : "geo.east";
+            return Loc.T(key);
         }
 
         private static void SpeakParty()

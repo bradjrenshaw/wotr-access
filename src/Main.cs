@@ -377,6 +377,10 @@ namespace WrathAccess
             // walks once unpaused.)
             InputManager.Register("explore.pause", "Toggle pause", InputCategory.Exploration,
                 TogglePauseIfExploring).AddBinding(KeyCode.Space);
+            // Y: "where am I" — the location's name (current section when it has one), indoors, and the
+            // leader's compass region within the section's map bounds.
+            InputManager.Register("explore.whereAmI", "Where am I", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.Y);
             InputManager.Register("explore.cancelTargeting", "Cancel targeting", InputCategory.Exploration,
                 () => { if (WrathAccess.Exploration.Targeting.Aiming) WrathAccess.Exploration.Targeting.Cancel(); })
                 .AddBinding(KeyCode.Escape);
@@ -426,6 +430,8 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.ToggleDebugShowAll).AddBinding(KeyCode.F11).Grouped("scanner");
             InputManager.Register("scan.debugDumpNames", "Scanner: dump object names to log (debug)", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.DumpObjectNames).AddBinding(KeyCode.F10).Grouped("scanner");
+            InputManager.Register("scan.debugAreaParts", "Read area parts (debug)", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.DebugDumpAreaParts).AddBinding(KeyCode.F9).Grouped("scanner");
 
             // Area overlays: swappable spatial views. Arrows drive the active overlay's cursor (see the
             // explore.cursor* actions above).

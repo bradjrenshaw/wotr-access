@@ -354,21 +354,21 @@ namespace WrathAccess
             // The cursor arrows have NO press handlers: movement modes POLL the held keys each frame as
             // one combined vector (CursorKeys), so held diagonals move diagonally instead of zigzagging.
             InputManager.Register("explore.cursorUp", "Move cursor up", InputCategory.Exploration)
-                .AddBinding(KeyCode.UpArrow).Repeating().Grouped("cursor");
+                .AddBinding(KeyCode.UpArrow).AddBinding(KeyCode.W).Repeating().Grouped("cursor");
             InputManager.Register("explore.cursorDown", "Move cursor down", InputCategory.Exploration)
-                .AddBinding(KeyCode.DownArrow).Repeating().Grouped("cursor");
+                .AddBinding(KeyCode.DownArrow).AddBinding(KeyCode.S).Repeating().Grouped("cursor");
             InputManager.Register("explore.cursorLeft", "Move cursor left", InputCategory.Exploration)
-                .AddBinding(KeyCode.LeftArrow).Repeating().Grouped("cursor");
+                .AddBinding(KeyCode.LeftArrow).AddBinding(KeyCode.A).Repeating().Grouped("cursor");
             InputManager.Register("explore.cursorRight", "Move cursor right", InputCategory.Exploration)
-                .AddBinding(KeyCode.RightArrow).Repeating().Grouped("cursor");
+                .AddBinding(KeyCode.RightArrow).AddBinding(KeyCode.D).Repeating().Grouped("cursor");
             InputManager.Register("explore.secondaryUp", "Secondary cursor up", InputCategory.Exploration)
-                .AddBinding(KeyCode.UpArrow, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.UpArrow, shift: true).AddBinding(KeyCode.W, shift: true).Grouped("cursor");
             InputManager.Register("explore.secondaryDown", "Secondary cursor down", InputCategory.Exploration)
-                .AddBinding(KeyCode.DownArrow, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.DownArrow, shift: true).AddBinding(KeyCode.S, shift: true).Grouped("cursor");
             InputManager.Register("explore.secondaryLeft", "Secondary cursor left", InputCategory.Exploration)
-                .AddBinding(KeyCode.LeftArrow, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.LeftArrow, shift: true).AddBinding(KeyCode.A, shift: true).Grouped("cursor");
             InputManager.Register("explore.secondaryRight", "Secondary cursor right", InputCategory.Exploration)
-                .AddBinding(KeyCode.RightArrow, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.RightArrow, shift: true).AddBinding(KeyCode.D, shift: true).Grouped("cursor");
             // Our "left click": interact with the thing under the cursor.
             InputManager.Register("explore.interact", "Interact at cursor", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.InteractAtCursor)
@@ -410,8 +410,10 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.NextCategory).AddBinding(KeyCode.PageDown, ctrl: true).Repeating().Grouped("scanner");
             InputManager.Register("scan.categoryPrev", "Scanner: previous category", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("scanner");
-            InputManager.Register("scan.cursorToItem", "Scanner: move cursor to item", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.CursorToSelected).AddBinding(KeyCode.Home).Grouped("scanner");
+            // Home and Slash: plant the movement cursor ON the review target (the explicit opt-in jump).
+            InputManager.Register("scan.cursorToItem", "Move cursor to review target", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.CursorToSelected)
+                .AddBinding(KeyCode.Home).AddBinding(KeyCode.Slash).Grouped("scanner");
             InputManager.Register("scan.announceCursor", "Announce cursor position", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.AnnounceCursor).AddBinding(KeyCode.K).Grouped("scanner");
             InputManager.Register("scan.announceParty", "Announce party", InputCategory.Exploration,
@@ -434,9 +436,43 @@ namespace WrathAccess
             InputManager.Register("overlay.announce", "Overlay: announce cursor", InputCategory.Exploration,
                 OverlayManager.AnnounceCurrent).AddBinding(KeyCode.Keypad5).Grouped("overlays");
             InputManager.Register("overlay.descend", "Overlay: follow surface down", InputCategory.Exploration,
-                () => OverlayManager.VerticalFollow(-1)).AddBinding(KeyCode.Period).Grouped("overlays");
+                () => OverlayManager.VerticalFollow(-1)).AddBinding(KeyCode.Period, ctrl: true).Grouped("overlays");
             InputManager.Register("overlay.ascend", "Overlay: follow surface up", InputCategory.Exploration,
-                () => OverlayManager.VerticalFollow(1)).AddBinding(KeyCode.Comma).Grouped("overlays");
+                () => OverlayManager.VerticalFollow(1)).AddBinding(KeyCode.Comma, ctrl: true).Grouped("overlays");
+
+            // The review cursor: cycle nearby things by group — closest first from the movement cursor,
+            // which NEVER moves (look around while holding position). Shift = cycle backward. The landing
+            // becomes the scanner selection, so I interacts with it and Home plants the cursor on it.
+            InputManager.Register("review.nextParty", "Review next party member", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Party, 1))
+                .AddBinding(KeyCode.Comma).Repeating().Grouped("review");
+            InputManager.Register("review.prevParty", "Review previous party member", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Party, -1))
+                .AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("review");
+            InputManager.Register("review.nextEnemy", "Review next enemy", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Enemies, 1))
+                .AddBinding(KeyCode.Period).Repeating().Grouped("review");
+            InputManager.Register("review.prevEnemy", "Review previous enemy", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Enemies, -1))
+                .AddBinding(KeyCode.Period, shift: true).Repeating().Grouped("review");
+            InputManager.Register("review.nextNeutral", "Review next neutral", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Neutrals, 1))
+                .AddBinding(KeyCode.N).Repeating().Grouped("review");
+            InputManager.Register("review.prevNeutral", "Review previous neutral", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Neutrals, -1))
+                .AddBinding(KeyCode.N, shift: true).Repeating().Grouped("review");
+            InputManager.Register("review.nextOther", "Review next object", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, 1))
+                .AddBinding(KeyCode.M).Repeating().Grouped("review");
+            InputManager.Register("review.prevOther", "Review previous object", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, -1))
+                .AddBinding(KeyCode.M, shift: true).Repeating().Grouped("review");
+            InputManager.Register("review.nextPoi", "Review next point of interest", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Poi, 1))
+                .AddBinding(KeyCode.B).Repeating().Grouped("review");
+            InputManager.Register("review.prevPoi", "Review previous point of interest", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Poi, -1))
+                .AddBinding(KeyCode.B, shift: true).Repeating().Grouped("review");
         }
     }
 }

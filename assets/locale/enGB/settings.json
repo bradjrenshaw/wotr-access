@@ -258,7 +258,7 @@
   "bind.scan.itemPrev": "Scanner: previous item",
   "bind.scan.categoryNext": "Scanner: next category",
   "bind.scan.categoryPrev": "Scanner: previous category",
-  "bind.scan.cursorToItem": "Scanner: move cursor to item",
+  "bind.scan.cursorToItem": "Move cursor to review target",
   "bind.scan.announceCursor": "Announce cursor position",
   "bind.scan.announceParty": "Announce party",
   "bind.scan.interact": "Scanner: interact with item",
@@ -275,5 +275,23 @@
   "input.group.party": "Party selection",
   "input.group.combat": "Combat",
   "input.group.scanner": "Scanner",
-  "input.group.overlays": "Overlays"
+  "input.group.overlays": "Overlays",
+
+  "input.group.review": "Review cursor",
+  "bind.review.nextParty": "Review next party member",
+  "bind.review.prevParty": "Review previous party member",
+  "bind.review.nextEnemy": "Review next enemy",
+  "bind.review.prevEnemy": "Review previous enemy",
+  "bind.review.nextNeutral": "Review next neutral",
+  "bind.review.prevNeutral": "Review previous neutral",
+  "bind.review.nextOther": "Review next object",
+  "bind.review.prevOther": "Review previous object",
+
+  "bind.review.nextPoi": "Review next point of interest",
+  "bind.review.prevPoi": "Review previous point of interest",
+
+  "reset.tab": "Reset {name} to defaults",
+  "reset.all": "Reset all settings to defaults",
+  "reset.tab_done": "{name} reset to defaults",
+  "reset.all_done": "All settings reset to defaults"
 }

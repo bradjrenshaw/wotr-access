@@ -26,6 +26,8 @@ namespace WrathAccess.Settings
 
         public int Get() => Value;
 
+        public override void ResetToDefault() => Set(Default);
+
         public void Set(int value)
         {
             value = Mathf.Clamp(value, Min, Max);

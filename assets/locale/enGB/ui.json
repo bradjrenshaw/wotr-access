@@ -393,5 +393,7 @@
   "text.space": "space",
 
   "scan.category.traps": "Traps",
-  "scan.singular.trap": "Trap"
+  "scan.singular.trap": "Trap",
+
+  "review.others": "Objects"
 }

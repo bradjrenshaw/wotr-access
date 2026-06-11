@@ -40,6 +40,19 @@ namespace WrathAccess.Settings
         public static T GetSetting<T>(string path) where T : Setting
             => (_byPath.TryGetValue(path, out var s) ? s : null) as T;
 
+        /// <summary>Resolve a CATEGORY by dotted path, walking segment-wise from Root — the flat index
+        /// holds leaves only, and category paths never contain dotted keys (unlike action-key leaves).</summary>
+        public static CategorySetting GetCategory(string path)
+        {
+            CategorySetting cat = Root;
+            foreach (var seg in path.Split('.'))
+            {
+                cat = cat != null ? cat.Get<CategorySetting>(seg) : null;
+                if (cat == null) return null;
+            }
+            return cat;
+        }
+
         /// <summary>Rebuild the flat FullPath → Setting index. Call after the tree is built or changes.</summary>
         public static void Reindex()
         {
@@ -98,8 +111,21 @@ namespace WrathAccess.Settings
             foreach (var k in doomed) _unknownKeys.Remove(k);
         }
 
+        private static int _batchDepth;
+
+        /// <summary>Suppress the per-change file writes while mutating MANY settings (the Reset
+        /// buttons touch hundreds — a save each was a visible stall); one save when the batch ends.
+        /// Direct Save() calls inside the batch defer too.</summary>
+        public static void Batch(Action action)
+        {
+            _batchDepth++;
+            try { action(); }
+            finally { _batchDepth--; if (_batchDepth == 0) SaveIfDirty(); }
+        }
+
         public static void Save()
         {
+            if (_batchDepth > 0) { _dirty = true; return; } // deferred to the batch end
             _dirty = false;
             if (_path == null) return;
             try

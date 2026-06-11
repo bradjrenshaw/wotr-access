@@ -87,6 +87,15 @@ namespace WrathAccess.Screens
             Add(_content);
             RebuildContent();
 
+            // Two standing Tab-stops after the tree (NOT inside _content, so they survive tab switches
+            // and focus stays put after a reset): reset THIS tab, and reset everything.
+            Add(new ProxyActionButton(
+                () => Message.Localized("settings", "reset.tab", new { name = ActiveTabLabel() }).Resolve(),
+                () => true, ResetActiveTab));
+            Add(new ProxyActionButton(
+                () => Message.Localized("settings", "reset.all").Resolve(),
+                () => true, ResetAllSettings));
+
             Navigation.Attach(this);
             Tts.Speak(Loc("menu.title", "Mod menu")); // once, on open (Build runs only on open now)
             Navigation.AnnounceCurrent();
@@ -354,6 +363,63 @@ namespace WrathAccess.Screens
             _overlaysTree.Insert(at, node);
             Tts.Speak(Loc("overlay.added", "Overlay added"));
             Navigation.Focus(node);
+        }
+
+        private string ActiveTabLabel()
+            => _active >= 0 && _active < Tabs.Length ? Loc(Tabs[_active].loc, Tabs[_active].label) : "";
+
+        // The settings subtrees each tab renders — what its Reset button restores. Overlays are special:
+        // reset = remove every overlay (back to the empty default list); the shared system defaults they
+        // followed live on the other tabs.
+        private static string[] ResetRootsFor(string key)
+        {
+            switch (key)
+            {
+                case "audio": return new[] { "audio" };
+                case "exploration": return new[]
+                {
+                    "defaults.cursor", "defaults.grid", "defaults.spatial", "defaults.slope",
+                    "defaults.walltones", "defaults.object", "defaults.fog", "defaults.path",
+                };
+                case "input": return new[] { "bindings" };
+                case "log": return new[] { "defaults.log" };
+                case "sonar": return new[] { "defaults.sonar", "sounds" };
+                case "speech": return new[] { "speech" };
+                case "ui": return new[] { "announcements", "ui" };
+                default: return new string[0];
+            }
+        }
+
+        private void ResetActiveTab()
+        {
+            var key = _active >= 0 && _active < Tabs.Length ? Tabs[_active].key : null;
+            if (key == null) return;
+            ModSettings.Batch(() =>
+            {
+                if (key == "overlays") RemoveAllOverlays();
+                else
+                    foreach (var path in ResetRootsFor(key))
+                        ModSettings.GetCategory(path)?.ResetToDefault();
+            });
+            RebuildContent(); // values are read live, but structural tabs (overlays/sounds) need the refresh
+            Tts.Speak(Message.Localized("settings", "reset.tab_done", new { name = ActiveTabLabel() }).Resolve());
+        }
+
+        private void ResetAllSettings()
+        {
+            ModSettings.Batch(() =>
+            {
+                RemoveAllOverlays();
+                foreach (var s in ModSettings.Root.Children) s.ResetToDefault();
+            });
+            RebuildContent();
+            Tts.Speak(Message.Localized("settings", "reset.all_done").Resolve());
+        }
+
+        private static void RemoveAllOverlays()
+        {
+            var ids = new List<string>(WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayIds());
+            foreach (var id in ids) WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Remove(id);
         }
 
         private void RemoveOverlay(string id)

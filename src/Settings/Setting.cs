@@ -18,6 +18,11 @@ namespace WrathAccess.Settings
         private readonly string _labelFallback;
         public string LocalizationKey { get; }
 
+        /// <summary>Restore this setting to its registration-time default (the Reset buttons in the
+        /// mod menu). Value types Set() their stored Default (firing Changed so live consumers apply);
+        /// categories recurse; bindings restore the default combos.</summary>
+        public virtual void ResetToDefault() { }
+
         /// <summary>Live label override (e.g. a binding showing its current key); wins over the loc key.</summary>
         public Func<string> LabelProvider { get; set; }
 

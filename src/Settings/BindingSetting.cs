@@ -19,10 +19,31 @@ namespace WrathAccess.Settings
 
         public InputAction Action => _action;
 
+        // The default combos, captured at construction — BuildSettings runs after registration but
+        // BEFORE the saved config loads, so this snapshot is the registration-time default set.
+        private readonly List<(string type, string data)> _defaults;
+
         public BindingSetting(InputAction action) : base(action.Key, action.Label, "bind." + action.Key)
         {
             _action = action;
+            _defaults = action.Bindings.Select(b => (b.Type, b.Serialize())).ToList();
             _action.BindingsChanged += () => { if (!_loading) ModSettings.MarkDirty(); };
+        }
+
+        public override void ResetToDefault()
+        {
+            _loading = true; // one save at the end, not per AddBinding
+            try
+            {
+                _action.ClearBindings();
+                foreach (var (type, data) in _defaults)
+                {
+                    var parsed = InputBinding.Deserialize(type, data);
+                    if (parsed != null) _action.AddBinding(parsed);
+                }
+            }
+            finally { _loading = false; }
+            ModSettings.MarkDirty();
         }
 
         public override object BoxedValue =>

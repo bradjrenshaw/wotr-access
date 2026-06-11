@@ -25,6 +25,12 @@ namespace WrathAccess.Settings
         }
 
         /// <summary>Remove a child (e.g. deleting a user-created overlay's subtree). Reindex + save after.</summary>
+        /// <summary>Reset every child (recursively) to its default.</summary>
+        public override void ResetToDefault()
+        {
+            for (int i = 0; i < _children.Count; i++) _children[i].ResetToDefault();
+        }
+
         public void Remove(Setting child)
         {
             if (child != null && _children.Remove(child)) child.Parent = null;

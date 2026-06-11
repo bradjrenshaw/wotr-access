@@ -20,6 +20,8 @@ namespace WrathAccess.Settings
 
         public string Get() => Value;
 
+        public override void ResetToDefault() => Set(Default);
+
         public void Set(string value)
         {
             value = value ?? "";

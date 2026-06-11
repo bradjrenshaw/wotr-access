@@ -8,11 +8,21 @@ using WrathAccess.Screens;
 
 namespace WrathAccess.Exploration
 {
+    /// <summary>The review cursor's cycle groups (Comma/Period/N/M/B): living party / living enemies /
+    /// living neutrals / everything else in the taxonomy (loot incl. corpses, doors, exits, search
+    /// points, traps, mechanisms — scenery excluded) / points of interest (their own cycle, and
+    /// excluded from Others since markers often duplicate entities — same logic as the All bucket).</summary>
+    internal enum ReviewGroup { Party, Enemies, Neutrals, Others, Poi }
+
     /// <summary>
     /// The scanner: a categorized, distance-sorted list of things in the current area, browsed with
-    /// PageUp/Down (items) and Ctrl+PageUp/Down (categories). Home plants a virtual cursor on the
-    /// selected item; K reads the cursor; Shift+K reads the whole party. Read-only for now — it browses
-    /// and announces; movement/interaction come later.
+    /// PageUp/Down (items) and Ctrl+PageUp/Down (categories). Its selection IS the <b>review cursor</b>
+    /// — the look-without-moving counterpart of the movement cursor (NVDA object-navigator style):
+    /// Comma/Period/N/M cycle it through nearby party / enemies / neutrals / everything else, sorted
+    /// closest-to-farthest FROM the movement cursor (Shift+key cycles backward), announcing name +
+    /// state + bearing/distance — a tactical overview that never moves your position. I interacts with
+    /// the review target; Home plants the movement cursor ON it (the explicit opt-in); K reads the
+    /// movement cursor; Shift+K reads the whole party.
     ///
     /// Active only while Focus Mode owns the keyboard AND the plain in-game context is on top (no
     /// dialogue/menu/window), so our keys never collide with the game's. Distances/bearings are relative
@@ -75,6 +85,10 @@ namespace WrathAccess.Exploration
             if (Targeting.Aiming) { Targeting.Cancel(); return; }
             DoMoveToCursor();
         }
+        /// <summary>Cycle the review cursor through a group, nearest-first from the movement cursor.
+        /// The landing becomes the scanner selection too, so PageUp/Down, I, and Home all follow it.</summary>
+        public static void CycleReview(ReviewGroup group, int dir) { if (Active) DoCycleReview(group, dir); }
+
         public static void ToggleDebugShowAll()
         {
             if (!Active) return;
@@ -169,6 +183,80 @@ namespace WrathAccess.Exploration
             if (_entered) _itemIndex = ((_itemIndex + dir) % list.Count + list.Count) % list.Count;
             _entered = true;
             AnnounceItem(list);
+        }
+
+        // Group membership rides the taxonomy's PRIMARY node, so it's state-aware for free: a living
+        // enemy cycles under Period, its lootable corpse under M (containers.corpse), an emptied corpse
+        // under nothing; scenery never cycles.
+        private static bool InGroup(ScanItem it, ReviewGroup g)
+        {
+            var p = it.Primary;
+            if (p == null) return false;
+            switch (g)
+            {
+                case ReviewGroup.Party: return p == SonarTaxonomy.Party;
+                case ReviewGroup.Enemies: return p == SonarTaxonomy.Enemies;
+                case ReviewGroup.Neutrals: return p == SonarTaxonomy.Neutrals;
+                case ReviewGroup.Poi: return p == SonarTaxonomy.Poi;
+                default: return p != SonarTaxonomy.Party && p != SonarTaxonomy.Enemies
+                    && p != SonarTaxonomy.Neutrals && p != SonarTaxonomy.Scenery
+                    && p != SonarTaxonomy.Poi;
+            }
+        }
+
+        private static string ReviewGroupLabel(ReviewGroup g)
+        {
+            switch (g)
+            {
+                case ReviewGroup.Party: return ScanCategories.Label(ScanCategory.Party);
+                case ReviewGroup.Enemies: return ScanCategories.Label(ScanCategory.Enemies);
+                case ReviewGroup.Neutrals: return ScanCategories.Label(ScanCategory.Neutrals);
+                case ReviewGroup.Poi: return ScanCategories.Label(ScanCategory.PointsOfInterest);
+                default: return Loc.T("review.others");
+            }
+        }
+
+        private static void DoCycleReview(ReviewGroup group, int dir)
+        {
+            var prev = Selected; // the cached selection — ScanItem identities are stable in WorldModel
+            Rebuild();
+            var refPos = ScanFrom;
+            var candidates = new List<ScanItem>();
+            foreach (var it in WorldModel.Items)
+                if ((_debugAll || it.IsVisible) && InGroup(it, group)) candidates.Add(it);
+            if (candidates.Count == 0)
+            {
+                Speak(Loc.T("scan.category_empty", new { label = ReviewGroupLabel(group) }));
+                return;
+            }
+            candidates.Sort((a, b) => Geo.Distance(refPos, a.Position).CompareTo(Geo.Distance(refPos, b.Position)));
+
+            // Continue from the current target when it's in this group; otherwise enter at the nearest
+            // (or, cycling backward into a fresh group, the farthest). Distances are live, so the order
+            // self-heals as things move.
+            int idx = prev != null ? candidates.IndexOf(prev) : -1;
+            idx = idx < 0
+                ? (dir >= 0 ? 0 : candidates.Count - 1)
+                : ((idx + dir) % candidates.Count + candidates.Count) % candidates.Count;
+            var target = candidates[idx];
+
+            SyncSelectionTo(target);
+            Speak(target.Describe(refPos) + ", "
+                + Loc.T("nav.position", new { index = idx + 1, count = candidates.Count }));
+        }
+
+        // Point the scanner's browse position at this item (its first concrete category in cycle order,
+        // skipping the All aggregate) so PageUp/Down continues from the review target in context.
+        private static void SyncSelectionTo(ScanItem item)
+        {
+            for (int c = 0; c < ScanCategories.Order.Length; c++)
+            {
+                var cat = ScanCategories.Order[c];
+                if (cat == ScanCategory.All) continue;
+                if (!_items.TryGetValue(cat, out var list)) continue;
+                int i = list.IndexOf(item);
+                if (i >= 0) { _catIndex = c; _itemIndex = i; _entered = true; return; }
+            }
         }
 
         private static void AnnounceCategory()

@@ -19,6 +19,8 @@ namespace WrathAccess.Settings
 
         public bool Get() => Value;
 
+        public override void ResetToDefault() => Set(Default);
+
         public void Set(bool value)
         {
             if (Value == value) return;

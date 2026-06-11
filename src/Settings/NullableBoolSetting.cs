@@ -37,6 +37,8 @@ namespace WrathAccess.Settings
         /// <summary>Toggle the resolved value (writing an explicit override).</summary>
         public void ToggleExplicit() => SetExplicit(!Resolved);
 
+        public override void ResetToDefault() => Reset(); // default = no override (follow the global)
+
         /// <summary>Clear the override so it follows the global fallback again.</summary>
         public void Reset()
         {

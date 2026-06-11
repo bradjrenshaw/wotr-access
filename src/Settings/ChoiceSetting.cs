@@ -43,6 +43,8 @@ namespace WrathAccess.Settings
 
         public Choice Current => Choices.FirstOrDefault(c => c.Id == ValueId);
 
+        public override void ResetToDefault() => Set(Default);
+
         public void Set(string id)
         {
             if (ValueId == id || Choices.All(c => c.Id != id)) return;

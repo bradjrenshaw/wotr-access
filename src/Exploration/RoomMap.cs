@@ -1,0 +1,425 @@
+using System;
+using System.Collections.Generic;
+using Kingmaker;
+using Pathfinding;
+using UnityEngine;
+using WrathAccess.Screens;
+
+namespace WrathAccess.Exploration
+{
+    /// <summary>
+    /// Splits the current area's walkable space into ROOMS for orientation ("Room 12, large hall"):
+    /// rasterize the live A* recast navmesh to a grid, compute per-cell clearance (distance to the
+    /// nearest wall), then persistence watershed — basins grow from clearance maxima and split where
+    /// they meet across a pronounced dip (a doorway, or a doorless cave pinch; PERSIST is how deep the
+    /// dip must be). Small regions merge into their biggest neighbour; survivors are numbered stably
+    /// (sorted by centroid) and classified by area/elongation/clearance (passage / corridor / small
+    /// room / room / large hall). Tuned on the Shield Maze offline (rooms_proto.py renders the floor
+    /// plan; thresholds chosen by eye — the user prefers MORE rooms over fewer, for clearer space
+    /// indicators). Rebuilt when the area part changes; ~100ms once per load.
+    ///
+    /// Consumers: Y's "where am I" appends the room; an optional announce-on-room-change watches the
+    /// scan reference (cursor, else leader) with a dwell so boundary dithering doesn't flap.
+    /// </summary>
+    internal static class RoomMap
+    {
+        private const float Cell = 0.25f;        // metres per grid cell
+        private const float Persist = 0.7f;      // clearance dip (m) required to split two basins
+        private const float MinRoomArea = 12f;   // m^2 — smaller regions merge into a neighbour
+        private const float CutFloor = 0.45f;    // cells narrower than this never union (assigned after)
+        private const float MaxCells = 1.7e6f;   // grid budget; coarsen the cell size beyond it
+        private const float LevelGap = 3f;       // |y| beyond which a cell is "another floor"
+        private const float AnnounceDwell = 0.5f; // seconds inside a new room before announcing
+
+        public sealed class Room
+        {
+            public int Id;            // stable 1..N (sorted by centroid)
+            public string ClassKey;   // room.class.* locale suffix
+            public float Area;        // m^2
+            public Vector3 Centroid;
+        }
+
+        private static string _builtFor;      // areaName|partName the grid was built for
+        private static int[] _label;          // per-cell room index (-1 = not walkable), row-major [z*W+x]
+        private static float[] _cellY;        // per-cell surface height (last rasterized)
+        private static int _w, _h;
+        private static float _cell, _x0, _z0;
+        private static readonly List<Room> _rooms = new List<Room>();
+
+        public static IReadOnlyList<Room> Rooms => _rooms;
+        public static bool Ready => _label != null && _rooms.Count > 0;
+
+        /// <summary>The room at a world position, or null (off-mesh, other floor, or no map yet).</summary>
+        public static Room RoomAt(Vector3 pos)
+        {
+            if (_label == null) return null;
+            int gx = (int)((pos.x - _x0) / _cell) + 1;
+            int gz = (int)((pos.z - _z0) / _cell) + 1;
+            if (gx < 0 || gz < 0 || gx >= _w || gz >= _h) return null;
+            // Direct hit, else the nearest labeled cell within 2 cells (residual unlabeled slivers in
+            // tight offshoots, and positions hugging a wall, still resolve to the obvious room).
+            for (int ring = 0; ring <= 2; ring++)
+                for (int dz = -ring; dz <= ring; dz++)
+                    for (int dx = -ring; dx <= ring; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dz), Math.Abs(dx)) != ring) continue;
+                        int nz = gz + dz, nx = gx + dx;
+                        if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
+                        int idx = nz * _w + nx;
+                        int l = _label[idx];
+                        if (l < 0 || l >= _rooms.Count) continue;
+                        if (Mathf.Abs(_cellY[idx] - pos.y) > LevelGap) continue;
+                        return _rooms[l];
+                    }
+            return null;
+        }
+
+        // ---- lifecycle ----
+
+        public static void Tick()
+        {
+            var game = Game.Instance;
+            var area = game?.CurrentlyLoadedArea;
+            if (area == null) { _builtFor = null; _label = null; _rooms.Clear(); return; }
+            var part = Kingmaker.Blueprints.Area.AreaService.Instance?.CurrentAreaPart;
+            string key = area.name + "|" + (part != null ? part.name : "");
+            if (key != _builtFor && AstarPath.active != null)
+            {
+                _builtFor = key; // even on failure: don't retry every frame
+                try
+                {
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+                    Build();
+                    Main.Log?.Log("[rooms] " + key + ": " + _rooms.Count + " rooms in " + sw.ElapsedMilliseconds + "ms");
+                }
+                catch (Exception e)
+                {
+                    _label = null; _rooms.Clear();
+                    Main.Log?.Warning("[rooms] build failed: " + e.Message);
+                }
+            }
+            TickAnnounce();
+        }
+
+        // ---- announce on room change (dwell-gated against boundary dithering) ----
+
+        private static Room _announced, _pending;
+        private static float _pendingSince;
+
+        private static bool AnnounceEnabled =>
+            WrathAccess.Settings.ModSettings.GetCategory("defaults.cursor")
+                ?.Get<WrathAccess.Settings.BoolSetting>("announce_rooms")?.Get() ?? true;
+
+        private static void TickAnnounce()
+        {
+            if (!Ready || !FocusMode.Active
+                || ScreenManager.Current == null || ScreenManager.Current.Key != "ctx.ingame"
+                || !AnnounceEnabled)
+            { _pending = null; return; }
+
+            var pos = Cursor.Has ? Cursor.Position.Value : Overlays.Cursor.PlayerPosition;
+            var room = RoomAt(pos);
+            if (room == null || room == _announced) { _pending = null; return; }
+            if (room != _pending) { _pending = room; _pendingSince = Time.unscaledTime; return; }
+            if (Time.unscaledTime - _pendingSince < AnnounceDwell) return;
+            _announced = room;
+            _pending = null;
+            Tts.Speak(Describe(room), interrupt: false);
+        }
+
+        public static string Describe(Room room)
+            => Loc.T("where.room", new { id = room.Id }) + ", " + Loc.T("room.class." + room.ClassKey);
+
+        /// <summary>Debug: speak the room count + the current room's stats; full table to Player.log.</summary>
+        public static void DebugSpeak()
+        {
+            if (!Ready) { Tts.Speak("No room map", interrupt: true); return; }
+            foreach (var r in _rooms)
+                Main.Log?.Log(string.Format("[rooms] {0}: {1} area={2:0}m2 centroid=({3:0.0},{4:0.0},{5:0.0})",
+                    r.Id, r.ClassKey, r.Area, r.Centroid.x, r.Centroid.y, r.Centroid.z));
+            var pos = Cursor.Has ? Cursor.Position.Value : Overlays.Cursor.PlayerPosition;
+            var cur = RoomAt(pos);
+            Tts.Speak(_rooms.Count + " rooms" + (cur != null ? "; " + Describe(cur) : ""), interrupt: true);
+        }
+
+        // ---- the pipeline (port of rooms_proto.py) ----
+
+        private static void Build()
+        {
+            _rooms.Clear();
+            _label = null;
+
+            // 1) Collect the recast navmesh triangles (world metres).
+            var tris = new List<Vector3>(); // groups of 3
+            var graphs = AstarPath.active.data?.graphs;
+            if (graphs == null) return;
+            foreach (var g in graphs)
+            {
+                if (!(g is NavmeshBase)) continue;
+                g.GetNodes(node =>
+                {
+                    var t = node as TriangleMeshNode;
+                    if (t == null) return;
+                    tris.Add((Vector3)t.GetVertex(0));
+                    tris.Add((Vector3)t.GetVertex(1));
+                    tris.Add((Vector3)t.GetVertex(2));
+                });
+            }
+            if (tris.Count < 3) return;
+
+            // 2) Grid bounds; coarsen the cell if the area is huge.
+            float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue;
+            for (int i = 0; i < tris.Count; i++)
+            {
+                var v = tris[i];
+                if (v.x < minX) minX = v.x;
+                if (v.x > maxX) maxX = v.x;
+                if (v.z < minZ) minZ = v.z;
+                if (v.z > maxZ) maxZ = v.z;
+            }
+            _cell = Cell;
+            while (((maxX - minX) / _cell + 3) * ((maxZ - minZ) / _cell + 3) > MaxCells) _cell *= 1.5f;
+            _x0 = minX; _z0 = minZ;
+            _w = (int)((maxX - minX) / _cell) + 3;
+            _h = (int)((maxZ - minZ) / _cell) + 3;
+            int n = _w * _h;
+            var walk = new bool[n];
+            _cellY = new float[n];
+
+            // 3) Rasterize triangles (barycentric point-in-triangle at cell centres).
+            for (int i = 0; i < tris.Count; i += 3)
+            {
+                Vector3 a = tris[i], b2 = tris[i + 1], c = tris[i + 2];
+                float ax = (a.x - _x0) / _cell + 1, az = (a.z - _z0) / _cell + 1;
+                float bx = (b2.x - _x0) / _cell + 1, bz = (b2.z - _z0) / _cell + 1;
+                float cx = (c.x - _x0) / _cell + 1, cz = (c.z - _z0) / _cell + 1;
+                float y = (a.y + b2.y + c.y) / 3f;
+                int lox = Mathf.Max(0, (int)Mathf.Min(ax, Mathf.Min(bx, cx)));
+                int hix = Mathf.Min(_w - 1, (int)Mathf.Max(ax, Mathf.Max(bx, cx)) + 1);
+                int loz = Mathf.Max(0, (int)Mathf.Min(az, Mathf.Min(bz, cz)));
+                int hiz = Mathf.Min(_h - 1, (int)Mathf.Max(az, Mathf.Max(bz, cz)) + 1);
+                float d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+                if (Mathf.Abs(d) < 1e-9f) continue;
+                for (int gz = loz; gz <= hiz; gz++)
+                    for (int gx = lox; gx <= hix; gx++)
+                    {
+                        float px = gx + 0.5f, pz = gz + 0.5f;
+                        float l1 = ((bz - cz) * (px - cx) + (cx - bx) * (pz - cz)) / d;
+                        float l2 = ((cz - az) * (px - cx) + (ax - cx) * (pz - cz)) / d;
+                        float l3 = 1 - l1 - l2;
+                        if (l1 >= -0.001f && l2 >= -0.001f && l3 >= -0.001f)
+                        { walk[gz * _w + gx] = true; _cellY[gz * _w + gx] = y; }
+                    }
+            }
+
+            // 4) Chamfer 3-4 distance transform → clearance in metres.
+            var dist = new int[n];
+            const int INF = int.MaxValue / 4;
+            for (int i = 0; i < n; i++) dist[i] = walk[i] ? INF : 0;
+            for (int gz = 0; gz < _h; gz++)
+                for (int gx = 0; gx < _w; gx++)
+                {
+                    int i = gz * _w + gx;
+                    if (dist[i] == 0) continue;
+                    int best = dist[i];
+                    if (gx > 0) best = Math.Min(best, dist[i - 1] + 3);
+                    if (gz > 0)
+                    {
+                        best = Math.Min(best, dist[i - _w] + 3);
+                        if (gx > 0) best = Math.Min(best, dist[i - _w - 1] + 4);
+                        if (gx < _w - 1) best = Math.Min(best, dist[i - _w + 1] + 4);
+                    }
+                    dist[i] = best;
+                }
+            for (int gz = _h - 1; gz >= 0; gz--)
+                for (int gx = _w - 1; gx >= 0; gx--)
+                {
+                    int i = gz * _w + gx;
+                    if (dist[i] == 0) continue;
+                    int best = dist[i];
+                    if (gx < _w - 1) best = Math.Min(best, dist[i + 1] + 3);
+                    if (gz < _h - 1)
+                    {
+                        best = Math.Min(best, dist[i + _w] + 3);
+                        if (gx < _w - 1) best = Math.Min(best, dist[i + _w + 1] + 4);
+                        if (gx > 0) best = Math.Min(best, dist[i + _w - 1] + 4);
+                    }
+                    dist[i] = best;
+                }
+            var clear = new float[n];
+            for (int i = 0; i < n; i++) clear[i] = dist[i] * (_cell / 3f);
+
+            // 5) Persistence watershed: visit cells by descending clearance; basins meeting across a
+            //    saddle merge unless BOTH rise at least Persist above it.
+            var order = new int[n];
+            for (int i = 0; i < n; i++) order[i] = i;
+            var keys = new float[n];
+            for (int i = 0; i < n; i++) keys[i] = -clear[i];
+            Array.Sort(keys, order);
+
+            var parent = new int[n];
+            var peak = new float[n];
+            var seen = new bool[n];
+            for (int i = 0; i < n; i++) parent[i] = i;
+            Func<int, int> find = null;
+            find = a => { while (parent[a] != a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+
+            int[] dz8 = { -1, 1, 0, 0, -1, -1, 1, 1 };
+            int[] dx8 = { 0, 0, -1, 1, -1, 1, -1, 1 };
+            for (int oi = 0; oi < n; oi++)
+            {
+                int i = order[oi];
+                float c = clear[i];
+                if (c < CutFloor) break;
+                if (!walk[i]) continue;
+                seen[i] = true;
+                peak[i] = c;
+                int gz = i / _w, gx = i % _w;
+                int me = find(i);
+                for (int k = 0; k < 8; k++)
+                {
+                    int nz = gz + dz8[k], nx = gx + dx8[k];
+                    if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
+                    int j = nz * _w + nx;
+                    if (!seen[j]) continue;
+                    int r = find(j);
+                    if (r == me) continue;
+                    if (Math.Min(peak[r], peak[me]) - c < Persist)
+                    {
+                        float pk = Math.Max(peak[r], peak[me]);
+                        parent[me] = r;
+                        me = r;
+                        peak[r] = pk;
+                    }
+                }
+            }
+
+            // 6) Label basins; BFS-assign the sub-CutFloor walkable slivers to the nearest region.
+            _label = new int[n];
+            var regionOf = new Dictionary<int, int>();
+            for (int i = 0; i < n; i++) _label[i] = -1;
+            for (int i = 0; i < n; i++)
+            {
+                if (!seen[i]) continue;
+                int r = find(i);
+                int id;
+                if (!regionOf.TryGetValue(r, out id)) { id = regionOf.Count; regionOf[r] = id; }
+                _label[i] = id;
+            }
+            var q = new Queue<int>();
+            for (int i = 0; i < n; i++) if (_label[i] >= 0) q.Enqueue(i);
+            int[] dz4 = { -1, 1, 0, 0 };
+            int[] dx4 = { 0, 0, -1, 1 };
+            // 8-connected: tight rasterized offshoots (a T off an alcove) can touch the rest only
+            // diagonally; 4-way flooding left them unlabeled, so they reported "no room".
+            while (q.Count > 0)
+            {
+                int i = q.Dequeue();
+                int gz = i / _w, gx = i % _w;
+                for (int k = 0; k < 8; k++)
+                {
+                    int nz = gz + dz8[k], nx = gx + dx8[k];
+                    if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
+                    int j = nz * _w + nx;
+                    if (walk[j] && _label[j] < 0) { _label[j] = _label[i]; q.Enqueue(j); }
+                }
+            }
+
+            // 7) Merge small regions into their most-bordered neighbour; isolated tinies drop (-1).
+            int regions = regionOf.Count;
+            var size = new int[regions];
+            for (int i = 0; i < n; i++) if (_label[i] >= 0) size[_label[i]]++;
+            bool changed = true;
+            while (changed)
+            {
+                changed = false;
+                for (int rid = 0; rid < regions; rid++)
+                {
+                    if (size[rid] == 0 || size[rid] * _cell * _cell >= MinRoomArea) continue;
+                    var border = new Dictionary<int, int>();
+                    for (int i = 0; i < n; i++)
+                    {
+                        if (_label[i] != rid) continue;
+                        int gz = i / _w, gx = i % _w;
+                        for (int k = 0; k < 8; k++)
+                        {
+                            int nz = gz + dz8[k], nx = gx + dx8[k];
+                            if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
+                            int l = _label[nz * _w + nx];
+                            if (l >= 0 && l != rid) { int cnt; border.TryGetValue(l, out cnt); border[l] = cnt + 1; }
+                        }
+                    }
+                    int tgt = -1, btot = 0;
+                    foreach (var kv in border) if (kv.Value > btot) { btot = kv.Value; tgt = kv.Key; }
+                    for (int i = 0; i < n; i++) if (_label[i] == rid) _label[i] = tgt; // -1 drops isolated tinies
+                    if (tgt >= 0) size[tgt] += size[rid];
+                    size[rid] = 0;
+                    changed = true;
+                }
+            }
+
+            // 8) Stable numbering (centroid sort) + classification.
+            var stats = new Dictionary<int, List<int>>();
+            for (int i = 0; i < n; i++)
+            {
+                if (_label[i] < 0) continue;
+                List<int> cells;
+                if (!stats.TryGetValue(_label[i], out cells)) { cells = new List<int>(); stats[_label[i]] = cells; }
+                cells.Add(i);
+            }
+            var infos = new List<KeyValuePair<int, Room>>();
+            foreach (var kv in stats)
+            {
+                var cells = kv.Value;
+                double sx = 0, sy = 0, sz = 0, sc = 0;
+                foreach (var i in cells)
+                {
+                    sx += i % _w; sz += i / _w; sy += _cellY[i]; sc += clear[i];
+                }
+                int cnt = cells.Count;
+                float mx = (float)(sx / cnt), mz = (float)(sz / cnt);
+                // covariance for elongation
+                double cxx = 0, czz = 0, cxz = 0;
+                foreach (var i in cells)
+                {
+                    double ddx = i % _w - mx, ddz = i / _w - mz;
+                    cxx += ddx * ddx; czz += ddz * ddz; cxz += ddx * ddz;
+                }
+                cxx /= cnt; czz /= cnt; cxz /= cnt;
+                double tr = cxx + czz, det = cxx * czz - cxz * cxz;
+                double disc = Math.Sqrt(Math.Max(0, tr * tr / 4 - det));
+                double e1 = tr / 2 + disc, e2 = Math.Max(tr / 2 - disc, 1e-6);
+                float elong = (float)Math.Sqrt(e1 / e2);
+                float area = cnt * _cell * _cell;
+                float meanClear = (float)(sc / cnt);
+                string cls;
+                if (elong > 2.6f && meanClear < 2.2f) cls = "passage";
+                else if (elong > 3.2f) cls = "corridor";
+                else if (area < 35f) cls = "small";
+                else if (area > 220f) cls = "hall";
+                else cls = "room";
+                var room = new Room
+                {
+                    ClassKey = cls,
+                    Area = area,
+                    Centroid = new Vector3(_x0 + (mx - 1) * _cell, (float)(sy / cnt), _z0 + (mz - 1) * _cell),
+                };
+                infos.Add(new KeyValuePair<int, Room>(kv.Key, room));
+            }
+            infos.Sort((p1, p2) =>
+            {
+                int c1 = p1.Value.Centroid.z.CompareTo(p2.Value.Centroid.z);
+                return c1 != 0 ? c1 : p1.Value.Centroid.x.CompareTo(p2.Value.Centroid.x);
+            });
+            var remap = new Dictionary<int, int>();
+            for (int k = 0; k < infos.Count; k++)
+            {
+                infos[k].Value.Id = k + 1;
+                remap[infos[k].Key] = k;
+                _rooms.Add(infos[k].Value);
+            }
+            for (int i = 0; i < n; i++)
+                _label[i] = _label[i] >= 0 && remap.ContainsKey(_label[i]) ? remap[_label[i]] : -1;
+        }
+    }
+}

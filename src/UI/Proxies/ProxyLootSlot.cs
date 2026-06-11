@@ -14,7 +14,7 @@ namespace WrathAccess.UI.Proxies
     /// empties, so we drop out of navigation (<see cref="CanFocus"/>) — the next arrow lands on the next item.
     /// The slot VM populates its own reactives (name/count/tooltip) independent of the PC view we bypass.
     /// </summary>
-    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(PositionAnnouncement))]
+    [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyLootSlot : UIElement
     {
         private readonly LootVM _loot;
@@ -36,10 +36,15 @@ namespace WrathAccess.UI.Proxies
             return count > 1 ? name + ", " + count : name;
         }
 
+        // A trophy item (NeedSkinningForCollect) can't be taken until the window's Skin action
+        // succeeds on it — announce that state so the refusal is explicable (the game shows an icon).
+        private bool NeedsSkinning => _slot.NeedSkinningToCollect && !_slot.SkinningResult;
+
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
             yield return new LabelAnnouncement(Message.Raw(ItemLabel()));
             yield return new RoleAnnouncement("item");
+            if (NeedsSkinning) yield return new ValueAnnouncement(Message.Localized("ui", "loot.needs_skinning"));
         }
 
         // Live each time Space is pressed (per the tooltips-live-not-cached rule); first of the slot's list.
@@ -51,8 +56,12 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.take"),
-                _ => _loot.HandleTryCollectLootSlot(_slot));
+            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.take"), _ =>
+            {
+                // An unskinned trophy refuses silently in the VM (TryCollect fails) — say why instead.
+                if (NeedsSkinning) { Tts.Speak(Loc.T("loot.needs_skinning"), interrupt: true); return; }
+                _loot.HandleTryCollectLootSlot(_slot);
+            });
         }
     }
 }

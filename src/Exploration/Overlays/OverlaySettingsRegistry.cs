@@ -111,6 +111,10 @@ namespace WrathAccess.Exploration.Overlays
                 }
             }
             // The Default overlay's cursor (mode + speed per slot) — surfaced on the Exploration tab.
+            var cursorCat = ModSettingsRegistry.EnsureCategory("defaults.cursor", "Defaults/Cursor", "overlay.cursor");
+            if (cursorCat.GetByKey("announce_rooms") == null)
+                cursorCat.Add(new BoolSetting("announce_rooms", "Announce room changes", true,
+                    "overlay.cursor.announce_rooms"));
             BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "tiled", 15);
             BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "none", 15);
 

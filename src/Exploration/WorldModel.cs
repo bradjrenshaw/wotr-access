@@ -33,6 +33,10 @@ namespace WrathAccess.Exploration
             var state = Game.Instance != null ? Game.Instance.State : null;
             if (state == null) { ClearAll(); return; } // no area loaded (menu/global map) → empty
 
+            // Curated environmental details (scene-art things with no runtime data layer) reload on
+            // area change and flow through the same registry, keyed by their entry objects.
+            AreaDetails.Refresh(Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null);
+
             _present.Clear();
             foreach (var u in state.Units) { Ensure(u, () => new ProxyUnit(u)); _present.Add(u); }
             foreach (var o in state.MapObjects) { Ensure(o, () => new ProxyMapObject(o)); _present.Add(o); }
@@ -42,6 +46,12 @@ namespace WrathAccess.Exploration
                 try { if (!LocalMapModel.IsInCurrentArea(m.GetPosition())) continue; } catch { continue; }
                 Ensure(m, () => new ProxyMarker(m));
                 _present.Add(m);
+            }
+            foreach (var d in AreaDetails.Current)
+            {
+                var entry = d; // capture per-iteration for the factory closure
+                Ensure(entry, () => new ProxyDetail(entry));
+                _present.Add(entry);
             }
 
             // Drop anything no longer in the pools (despawned, or left when the area changed).

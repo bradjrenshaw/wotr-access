@@ -133,6 +133,7 @@ namespace WrathAccess
             TickControl(); // chime when a cutscene/scripted event takes or returns control of the party
             WrathAccess.Exploration.CombatMode.TickTurn(); // announce whose turn it is in turn-based combat
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
+            WrathAccess.Exploration.RoomMap.Tick(); // (re)build the room segmentation on area-part change
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
@@ -432,6 +433,8 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.DumpObjectNames).AddBinding(KeyCode.F10).Grouped("scanner");
             InputManager.Register("scan.debugAreaParts", "Read area parts (debug)", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.DebugDumpAreaParts).AddBinding(KeyCode.F9).Grouped("scanner");
+            InputManager.Register("scan.debugRooms", "Read room map stats (debug)", InputCategory.Exploration,
+                WrathAccess.Exploration.RoomMap.DebugSpeak).AddBinding(KeyCode.F8).Grouped("scanner");
 
             // Area overlays: swappable spatial views. Arrows drive the active overlay's cursor (see the
             // explore.cursor* actions above).

@@ -401,5 +401,31 @@
   "where.region": "{region} of the map",
   "where.center": "center",
   "where.unknown": "Unknown location",
-  "ency.untitled": "Untitled entry"
+  "ency.untitled": "Untitled entry",
+  "loot.needs_skinning": "needs skinning",
+
+  "detail.painting_01": "A painting of a woman lying in repose",
+  "detail.painting_02": "A painting: portrait of a young woman with long golden hair",
+  "detail.painting_03": "A painting dominated by blue: a woman in deep blue robes, head bowed",
+  "detail.painting_04": "A painting dominated by red: two figures in dark red robes",
+  "detail.painting_05": "A painting of a dim chamber with two seated figures",
+  "detail.painting_06": "A painting dominated by green: a lush garden",
+  "detail.painting_07": "A painting of a walled city on the water",
+  "detail.painting_08": "A painting dominated by gold: a couple dancing in golden finery",
+  "detail.painting_09": "A painting of a town bathed in red light",
+  "detail.painting_10": "A painting of a wide blue sky with clouds",
+  "detail.painting_11": "A painting of a sunlit street of brick houses",
+  "detail.painting_12": "A painting of a green woodland glade",
+  "detail.painting_set": "A wall hung with several paintings",
+  "detail.button_blue": "Blue button",
+  "detail.button_green": "Green button",
+  "detail.button_red": "Red button",
+  "detail.button_yellow": "Yellow button",
+
+  "where.room": "Room {id}",
+  "room.class.room": "room",
+  "room.class.passage": "narrow passage",
+  "room.class.corridor": "corridor",
+  "room.class.small": "small room",
+  "room.class.hall": "large hall"
 }

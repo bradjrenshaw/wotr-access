@@ -61,8 +61,32 @@ namespace WrathAccess.Screens
                 }
             }
 
-            // Take all — its own Tab-stop after the lists.
-            Add(new ProxyActionButton(() => Loc.T("loot.take_all"), () => vm.HasItemsToLoot, vm.CollectAll));
+            // Take all — its own Tab-stop after the lists. Gated like the game's Collect All button
+            // (CanCollectItems): trophy items needing a skin roll don't count, so a corpse holding
+            // only those reads the button as unavailable instead of silently doing nothing.
+            Add(new ProxyActionButton(() => Loc.T("loot.take_all"),
+                () => vm.LootCollector != null ? vm.LootCollector.CanCollectItems : vm.HasItemsToLoot,
+                vm.CollectAll));
+
+            // Skin — present when the window holds trophy items (NeedSkinningForCollect), mirroring
+            // the game's skin button: one roll over every trophy in the window (the VM plays the
+            // LootSkinning sound), then announce the game's own success/half/failure line (the real
+            // view raises it as a warning notification). Successfully skinned items become takeable.
+            if (vm.LootCollector != null && vm.LootCollector.HasItemsToSkinning)
+            {
+                var collector = vm.LootCollector;
+                Add(new ProxyActionButton(
+                    () => TextUtil.StripRichText(UIStrings.Instance.LootWindow.Skinning),
+                    () => collector.HasItemsToSkinning,
+                    () =>
+                    {
+                        collector.UseSkinning(out int max, out int current);
+                        var line = current == max ? UIStrings.Instance.CommonTexts.SkinningSuccess
+                            : current != 0 ? UIStrings.Instance.CommonTexts.SkinningHalfSuccess
+                            : UIStrings.Instance.CommonTexts.SkinningFailed;
+                        Tts.Speak(TextUtil.StripRichText(line), interrupt: true);
+                    }));
+            }
 
             // Zone-exit variant (leaving the area with uncollected loot): mirror the game's extra
             // controls — a Leave button (proceed WITHOUT collecting; in this mode Take all also leaves,

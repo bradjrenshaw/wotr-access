@@ -460,6 +460,8 @@ namespace WrathAccess.Exploration
 
             var part = Kingmaker.Blueprints.Area.AreaService.Instance?.CurrentAreaPart;
             if (part != null && part.IsIndoor) parts.Add(Loc.T("where.indoors"));
+            var room = RoomMap.RoomAt(pos);
+            if (room != null) parts.Add(RoomMap.Describe(room));
             var bounds = part?.Bounds;
             if (bounds != null)
             {

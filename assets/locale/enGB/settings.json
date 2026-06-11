@@ -308,5 +308,8 @@
   "sound.object_enter": "Object enter",
   "sound.object_exit": "Object exit",
   "sound.control_gained": "Control gained",
-  "sound.control_lost": "Control lost"
+  "sound.control_lost": "Control lost",
+
+  "overlay.cursor.announce_rooms": "Announce room changes",
+  "bind.scan.debugRooms": "Read room map stats (debug)"
 }

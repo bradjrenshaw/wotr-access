@@ -30,11 +30,65 @@ namespace WrathAccess.Exploration.Overlays
 
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
+            cat.Add(new WrathAccess.Settings.ChoiceSetting("review_sound", "Review cursor sound",
+                ReviewSoundChoices(), ReviewSoundDefault(), "overlay.sonar.review_sound"));
             cat.Add(new WrathAccess.Settings.IntSetting("ref_distance", "Reference distance (feet)", 10, 1, 60, 1, "overlay.sonar.ref_distance"));
             cat.Add(new WrathAccess.Settings.IntSetting("max_distance", "Maximum distance (feet)", 40, 10, 120, 5, "overlay.sonar.max_distance"));
             cat.Add(new WrathAccess.Settings.IntSetting("gap_min", "Minimum ping gap (ms)", 100, 30, 400, 10, "overlay.sonar.gap_min"));
             cat.Add(new WrathAccess.Settings.IntSetting("gap_max", "Maximum ping gap (ms)", 200, 50, 600, 10, "overlay.sonar.gap_max"));
             cat.Add(new WrathAccess.Settings.IntSetting("rest", "Rest between sweeps (ms)", 400, 0, 1500, 50, "overlay.sonar.rest"));
+        }
+
+        // The review-sound dropdown: the wavs at the audio root (assets/audio/*.wav — where
+        // review.wav lives) plus Silent. User-dropped files appear under their raw stem.
+        private static System.Collections.Generic.List<WrathAccess.Settings.Choice> ReviewSoundChoices()
+        {
+            var choices = new System.Collections.Generic.List<WrathAccess.Settings.Choice>
+            {
+                new WrathAccess.Settings.Choice("silent", "Silent", "choice.silent"),
+            };
+            try
+            {
+                var stems = new System.Collections.Generic.List<string>();
+                foreach (var f in Directory.GetFiles(OverlayAudio.Dir, "*.wav"))
+                    stems.Add(Path.GetFileNameWithoutExtension(f));
+                stems.Sort(System.StringComparer.OrdinalIgnoreCase);
+                foreach (var s in stems) choices.Add(new WrathAccess.Settings.Choice(s, s, "sound." + s));
+            }
+            catch (System.Exception e)
+            {
+                Main.Log?.Warning("[sonar] couldn't list review sounds: " + e.Message);
+            }
+            return choices;
+        }
+
+        private static string ReviewSoundDefault()
+        {
+            try { if (File.Exists(Path.Combine(OverlayAudio.Dir, "review.wav"))) return "review"; }
+            catch { }
+            return "silent";
+        }
+
+        /// <summary>The review-cursor ping (the scanner's selection landing): the chosen root-level
+        /// sound positioned at the reviewed thing — same distance/pan model as the sweep, relative to
+        /// the given reference (the movement cursor). NOT gated on Enabled: it's selection feedback,
+        /// not part of the sweep; pick Silent to turn it off.</summary>
+        public void PlayReview(ScanItem item, Vector3 from)
+        {
+            if (item == null) return;
+            var stem = Settings?.Get<WrathAccess.Settings.ChoiceSetting>("review_sound")?.ValueId;
+            if (string.IsNullOrEmpty(stem) || stem == "silent") return;
+
+            var p = item.Position;
+            float dx = p.x - from.x, dz = p.z - from.z;
+            float dist = Mathf.Sqrt(dx * dx + dz * dz);
+            float fp = item.Footprint;
+            float refDist = Int("ref_distance", 10) * Geo.MetresPerFoot;
+            float panWidth = PanWidthFeet * Geo.MetresPerFoot;
+            float edge = Mathf.Max(0f, dist - fp);
+            float vol = Mathf.Clamp(refDist / (refDist + edge), MinVol, 1f) * EffectiveVolume;
+            float pan = dist > fp ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
+            _sfx.Play(Path.Combine(OverlayAudio.Dir, stem + ".wav"), vol, pan);
         }
 
         public override void OnExit(Overlay overlay) => ResetSweep();

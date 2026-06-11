@@ -31,6 +31,11 @@ namespace WrathAccess.Exploration.Overlays
 
         private static Overlay Current => _active >= 0 ? _overlays[_active] : null;
 
+        /// <summary>The overlay currently driving audio/cursor, or null when overlays are off — for
+        /// callers (the scanner's review ping) that want the ACTIVE overlay's settings when there is
+        /// one and a fallback of their own when not.</summary>
+        internal static Overlay ActiveOverlay => Active ? Current : null;
+
         public static void Cycle()
         {
             if (!InExploration) return;

@@ -296,5 +296,17 @@
   "reset.all_done": "All settings reset to defaults",
 
   "bind.explore.whereAmI": "Where am I",
-  "bind.scan.debugAreaParts": "Read area parts (debug)"
+  "bind.scan.debugAreaParts": "Read area parts (debug)",
+
+  "overlay.sonar.review_sound": "Review cursor sound",
+  "sound.review": "Review",
+  "sound.up": "Up",
+  "sound.down": "Down",
+  "sound.tracking": "Tracking",
+  "sound.fog_enter": "Fog enter",
+  "sound.fog_exit": "Fog exit",
+  "sound.object_enter": "Object enter",
+  "sound.object_exit": "Object exit",
+  "sound.control_gained": "Control gained",
+  "sound.control_lost": "Control lost"
 }

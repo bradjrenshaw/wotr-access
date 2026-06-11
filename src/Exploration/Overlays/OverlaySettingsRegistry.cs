@@ -367,6 +367,8 @@ namespace WrathAccess.Exploration.Overlays
         // The invisible Default overlay: always first in the Ctrl+O cycle, never in the Overlays tab.
         // Its tunables AND composition are the shared defaults themselves — systems bind the defaults
         // category as their per-overlay category too, so `enabled` resolves to defaults.<sys>.enabled.
+        internal static Overlay DefaultOverlay => _defaultOverlay;
+
         private static Overlay _defaultOverlay;
 
         private static Overlay BuildDefaultOverlay()

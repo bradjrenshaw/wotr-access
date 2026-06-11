@@ -222,6 +222,7 @@ namespace WrathAccess.Exploration
             _itemIndex = Mathf.Clamp(_itemIndex, 0, list.Count - 1);
             if (_entered) _itemIndex = ((_itemIndex + dir) % list.Count + list.Count) % list.Count;
             _entered = true;
+            PlayReviewPing(Selected);
             AnnounceItem(list);
         }
 
@@ -281,8 +282,19 @@ namespace WrathAccess.Exploration
             var target = candidates[idx];
 
             SyncSelectionTo(target);
+            PlayReviewPing(target);
             Speak(target.Describe(refPos) + ", "
                 + Loc.T("nav.position", new { index = idx + 1, count = candidates.Count }));
+        }
+
+        // The review-cursor landing ping: the active overlay's sonar settings when one is on (so a
+        // customized overlay's choice/volume applies), else the Default overlay's — positioned at the
+        // reviewed thing relative to the movement cursor.
+        private static void PlayReviewPing(ScanItem item)
+        {
+            if (item == null) return;
+            var overlay = Overlays.OverlayManager.ActiveOverlay ?? Overlays.OverlaySettingsRegistry.DefaultOverlay;
+            overlay?.Get<Overlays.SonarSystem>()?.PlayReview(item, ScanFrom);
         }
 
         // Point the scanner's browse position at this item (its first concrete category in cycle order,
@@ -307,7 +319,7 @@ namespace WrathAccess.Exploration
             var msg = count == 1
                 ? Loc.T("scan.category_one", new { label = ScanCategories.Label(cat) })
                 : Loc.T("scan.category_many", new { label = ScanCategories.Label(cat), count });
-            if (count > 0) { _itemIndex = Mathf.Clamp(_itemIndex, 0, count - 1); msg += ". " + ItemLine(list); }
+            if (count > 0) { _itemIndex = Mathf.Clamp(_itemIndex, 0, count - 1); msg += ". " + ItemLine(list); PlayReviewPing(Selected); }
             Speak(msg);
         }
 

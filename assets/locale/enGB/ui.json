@@ -400,5 +400,6 @@
   "where.indoors": "indoors",
   "where.region": "{region} of the map",
   "where.center": "center",
-  "where.unknown": "Unknown location"
+  "where.unknown": "Unknown location",
+  "ency.untitled": "Untitled entry"
 }

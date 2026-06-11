@@ -74,7 +74,32 @@ namespace WrathAccess.Screens
         private static ServiceWindowsVM ServiceWindows()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
-        private static string Sig(EncyclopediaVM vm) => vm.Page?.Value?.Page?.GetNavigationTitle() ?? "";
+        // An entry whose title resolves EMPTY at runtime renders as a blank, affordance-free row in
+        // the game's own view — effectively invisible to sighted players (the shipped case: the
+        // VoiceoverChapter chapter, Platforms=Common so it passes the game's PC filter, title never
+        // localized). Mirroring the effective experience: we skip such entries entirely.
+        internal static bool HasVisibleTitle(IPage page)
+            => !string.IsNullOrWhiteSpace(page?.GetNavigationTitle());
+
+        // Label fallback for anything that still slips through with no title (defensive — visible
+        // entries all have real titles once the HasVisibleTitle filter is applied): the blueprint's
+        // dev name, prettified ("Combat_Maneuvers" → "Combat Maneuvers").
+        internal static string PageLabel(IPage page)
+        {
+            var t = page?.GetNavigationTitle();
+            if (!string.IsNullOrWhiteSpace(t)) return TextUtil.StripRichText(t);
+            if (page is Kingmaker.Blueprints.BlueprintScriptableObject bp && !string.IsNullOrEmpty(bp.name))
+                return bp.name.Replace('_', ' ');
+            return Loc.T("ency.untitled");
+        }
+
+        // Identity by label (PageLabel is unique even for titleless pages, where GetNavigationTitle
+        // is "" and two such pages would otherwise read as the same signature).
+        private static string Sig(EncyclopediaVM vm)
+        {
+            var page = vm.Page?.Value?.Page;
+            return page != null ? PageLabel(page) : "";
+        }
 
         // Jumping via the tree resets history — it's a "go anywhere" navigator, not a drill-down, so there's
         // nothing to go "back" to afterward. Drilling via an in-page link pushes history so Escape can return.
@@ -114,7 +139,7 @@ namespace WrathAccess.Screens
             var chapters = vm.NavigationVM?.GetChapters();
             if (chapters != null)
                 foreach (var ch in chapters)
-                    if (ch != null) _nav.Add(new EncyclopediaNavNode(ch, NavigateJump));
+                    if (ch != null && HasVisibleTitle(ch.Page)) _nav.Add(new EncyclopediaNavNode(ch, NavigateJump));
             Add(_nav);
 
             _page = new Panel();
@@ -141,7 +166,8 @@ namespace WrathAccess.Screens
             }
 
             var body = sheet.List(null);
-            body.Item(new TextElement(page.Title, "heading"));
+            var heading = !string.IsNullOrWhiteSpace(page.Title) ? page.Title : PageLabel(page.Page);
+            body.Item(new TextElement(heading, "heading"));
             foreach (var block in page.BlockVMs)
             {
                 switch (block)
@@ -165,14 +191,29 @@ namespace WrathAccess.Screens
                 var topics = sheet.List(Message.Localized("ui", "encyclopedia.topics").Resolve());
                 foreach (var child in childs)
                 {
-                    if (child == null) continue;
+                    if (child == null || !HasVisibleTitle(child)) continue;
                     var c = child;
-                    topics.Item(new ProxyActionButton(() => c.GetNavigationTitle(), () => true, () => NavigateDrill(c), actionVerb: "open"));
+                    topics.Item(new ProxyActionButton(() => PageLabel(c), () => true, () => NavigateDrill(c), actionVerb: "open"));
                 }
             }
 
             sheet.Reflow();
             _page.Add(sheet);
+
+            // Creature pages (the Creatures group: inspected monsters) carry no blocks — the game's
+            // view renders them through the tooltip-brick system instead (EncyclopediaPagePCView binds
+            // a TooltipTemplateUnitInspect when IsBricks). Mirror that: the same template through our
+            // brick renderer, as its own Tab-stop after the heading. What it reveals follows the
+            // game's inspect rules (more details as your knowledge checks succeed).
+            if (page.Page is UnitInfoPage uip && uip.UnitInfo != null)
+            {
+                var bricks = new TreeGroup();
+                foreach (var node in WrathAccess.UI.Tooltips.TooltipTreeBuilder.Build(
+                    new Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateUnitInspect(uip.UnitInfo.Blueprint)))
+                    bricks.Add(node);
+                WrathAccess.UI.Tooltips.TooltipTreeBuilder.ExpandStructural(bricks);
+                if (bricks.Children.Count > 0) _page.Add(bricks);
+            }
 
             if (_navigated) { _navigated = false; FocusPage(sheet); }
         }
@@ -202,7 +243,7 @@ namespace WrathAccess.Screens
         private bool _built;
 
         public EncyclopediaNavNode(EncyclopediaNavigationElementVM vm, Action<IPage> navigate)
-            : base(ContainerShape.Tree, vm.Title)
+            : base(ContainerShape.Tree, EncyclopediaScreen.PageLabel(vm.Page))
         {
             _vm = vm;
             _navigate = navigate;
@@ -216,14 +257,17 @@ namespace WrathAccess.Screens
             {
                 _built = true;
                 foreach (var child in _vm.GetOrCreateChildsVM())
-                    if (child != null) Add(new EncyclopediaNavNode(child, _navigate));
+                    if (child != null && EncyclopediaScreen.HasVisibleTitle(child.Page))
+                        Add(new EncyclopediaNavNode(child, _navigate));
             }
             base.Expand();
         }
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
-            yield return new LabelAnnouncement(Message.Raw(_vm.Title));
+            // Label (set from PageLabel in the ctor), NOT _vm.Title: the raw title is empty for the
+            // titleless VoiceoverChapter, which read as a blank root node.
+            yield return new LabelAnnouncement(Message.Raw(Label));
             if (Expandable) yield return new RoleAnnouncement(Expanded ? "expanded" : "collapsed");
         }
 

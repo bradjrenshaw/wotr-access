@@ -22,6 +22,11 @@ namespace WrathAccess.UI.Tooltips
     public sealed class ColorizedTextBrickRenderer : TooltipBrickRenderer<TooltipBrickColorizedTextVM>
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickColorizedTextVM vm) => One(vm?.Text);
+
+        // Same as TextBrickRenderer: a multi-line colorized brick (the inspect view packs lists —
+        // e.g. a creature's skills — into one brick separated by newlines) reads as one leaf per
+        // line, not a single run you must sit through.
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm) => Lines((vm as TooltipBrickColorizedTextVM)?.Text);
     }
 
     public sealed class TitleBrickRenderer : TooltipBrickRenderer<TooltipBrickTitleVM>
@@ -33,6 +38,25 @@ namespace WrathAccess.UI.Tooltips
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickDoubleTextVM vm)
             => One(vm == null ? null : Join(vm.LeftLine, vm.RightLine));
+
+        // Tree: a single-line pair stays one joined node (the common "label | value" tooltip row),
+        // but when either side is MULTI-line — the inspect view packs each skills COLUMN into one
+        // side — emit one node per line (left column, then right) so the list reads item by item.
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+        {
+            var v = vm as TooltipBrickDoubleTextVM;
+            if (v == null) yield break;
+            bool multi = (v.LeftLine != null && v.LeftLine.IndexOf('\n') >= 0)
+                || (v.RightLine != null && v.RightLine.IndexOf('\n') >= 0);
+            if (!multi)
+            {
+                var joined = Join(v.LeftLine, v.RightLine);
+                if (!string.IsNullOrWhiteSpace(joined)) yield return TooltipNode.Leaf(joined);
+                yield break;
+            }
+            foreach (var n in Lines(v.LeftLine)) yield return n;
+            foreach (var n in Lines(v.RightLine)) yield return n;
+        }
     }
 
     public sealed class TripleTextBrickRenderer : TooltipBrickRenderer<TooltipBrickTripleTextVM>
@@ -312,4 +336,73 @@ namespace WrathAccess.UI.Tooltips
     {
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSpaceVM vm) => None;
     }
+    // ---- The unit-inspect stat blocks (creature pages / Inspect): each wraps the same CharInfo
+    // VMs the character sheet renders — one "Name: Value" line per stat. ----
+
+    public sealed class AbilityScoresBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityScoresVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityScoresVM vm)
+        {
+            var stats = vm?.AbilityScoresBlock?.AbilityScores;
+            if (stats == null) yield break;
+            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+        }
+
+        public override IEnumerable<UIElement> GetFlatElements(TooltipBrickAbilityScoresVM vm)
+            => One(vm?.AbilityScoresBlock?.AbilityScores == null ? null
+                : Join(vm.AbilityScoresBlock.AbilityScores.Select(StatLine).ToArray()));
+    }
+
+    public sealed class ArmorClassBrickRenderer : TooltipBrickRenderer<TooltipBrickArmorClassVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArmorClassVM vm)
+        {
+            var ac = vm?.ArmorClass;
+            if (ac == null) yield break;
+            foreach (var s in new[] { ac.AC, ac.FlatFooted, ac.Touch })
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+        }
+    }
+
+    public sealed class SavingThrowBrickRenderer : TooltipBrickRenderer<TooltipBrickSavingThrowVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSavingThrowVM vm)
+        {
+            var st = vm?.SavingThrowVM;
+            if (st == null) yield break;
+            foreach (var s in new[] { st.Fortitude, st.Reflex, st.Will })
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+        }
+    }
+
+    public sealed class SizeSpeedInitiativeBrickRenderer : TooltipBrickRenderer<TooltipBrickSizeSpeedInitiativeVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSizeSpeedInitiativeVM vm)
+        {
+            if (vm == null) yield break;
+            foreach (var s in new[] { vm.Size, vm.Speed, vm.Initiative })
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+        }
+    }
+
+    // A list of value-stat-formula bricks (e.g. the inspect view's attack lines) — delegate each
+    // child to its own registered renderer.
+    public sealed class MultipleValueStatFormulaBrickRenderer : TooltipBrickRenderer<TooltipBrickMultipleValueStatFormulaVM>
+    {
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickMultipleValueStatFormulaVM vm)
+        {
+            if (vm?.TooltipBrickValueStatFormulas == null) yield break;
+            foreach (var f in vm.TooltipBrickValueStatFormulas)
+                foreach (var el in TooltipBrickRegistry.Elements(f, expanded: true)) yield return el;
+        }
+
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+        {
+            var v = vm as TooltipBrickMultipleValueStatFormulaVM;
+            if (v?.TooltipBrickValueStatFormulas == null) yield break;
+            foreach (var f in v.TooltipBrickValueStatFormulas)
+                foreach (var n in TooltipBrickRegistry.Nodes(f)) yield return n;
+        }
+    }
+
 }

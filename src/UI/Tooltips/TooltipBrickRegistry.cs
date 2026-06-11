@@ -115,6 +115,11 @@ namespace WrathAccess.UI.Tooltips
             Register(new ShortClassDescriptionBrickRenderer());
             Register(new AbilityScoresBlockBrickRenderer());
             Register(new SkillsBrickRenderer());
+            Register(new AbilityScoresBrickRenderer());
+            Register(new ArmorClassBrickRenderer());
+            Register(new SavingThrowBrickRenderer());
+            Register(new SizeSpeedInitiativeBrickRenderer());
+            Register(new MultipleValueStatFormulaBrickRenderer());
             Register(new SeparatorBrickRenderer());
             Register(new SpaceBrickRenderer());
         }

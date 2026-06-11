@@ -36,6 +36,18 @@ namespace WrathAccess.Screens
         public override int Layer => 0;
         public override bool StartUnfocused => true; // exploration owns the arrows; Tab brings up the HUD
         public override bool AllowsTypeahead => false; // letters stay exploration hotkeys (scanner, status…)
+
+        // Both categories are always live in-game; HUD focus decides which one wins SHARED chords
+        // (arrows, Enter, Space, Escape, Backspace). Focused: UI first — arrows navigate the HUD —
+        // while unshared exploration keys (Shift+arrows, scanner, party) keep working underneath.
+        // Unfocused: Exploration first — arrows move the cursor — while unshared UI keys (Tab) still
+        // reach the navigator, which is how Tab ENTERS the HUD.
+        private static readonly WrathAccess.Input.InputCategory[] FocusedCats =
+            { WrathAccess.Input.InputCategory.UI, WrathAccess.Input.InputCategory.Exploration };
+        private static readonly WrathAccess.Input.InputCategory[] UnfocusedCats =
+            { WrathAccess.Input.InputCategory.Exploration, WrathAccess.Input.InputCategory.UI };
+        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories
+            => WrathAccess.UI.Navigation.HasFocus ? FocusedCats : UnfocusedCats;
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
 
         public override void OnPush() { BuildShell(); _sig = null; _turnSig = null; _lastRestoreLabel = null; }

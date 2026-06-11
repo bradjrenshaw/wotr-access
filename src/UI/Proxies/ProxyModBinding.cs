@@ -28,7 +28,7 @@ namespace WrathAccess.UI.Proxies
                 Message.Localized("ui", "bind.option_add").Resolve(),
                 Message.Localized("ui", "bind.option_clear").Resolve(),
             };
-            ChoiceSubmenuScreen.Open(_action.Label, options, -1, idx =>
+            ChoiceSubmenuScreen.Open(_action.DisplayLabel, options, -1, idx =>
             {
                 if (idx == 0) ModKeyCaptureScreen.Open(_action, append: true);
                 else if (idx == 1)
@@ -43,7 +43,7 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
-            yield return new LabelAnnouncement(Message.Raw(_action.Label));
+            yield return new LabelAnnouncement(Message.Raw(_action.DisplayLabel));
             yield return new RoleAnnouncement("key binding");
             // Unbound reads the localized "not bound" (shared with ProxyKeyBindingSlot); otherwise the combo.
             yield return new ValueAnnouncement(_action.Bindings.Count == 0

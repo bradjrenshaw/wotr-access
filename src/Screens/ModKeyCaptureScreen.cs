@@ -29,7 +29,7 @@ namespace WrathAccess.Screens
 
         public override void OnFocus()
             => Tts.Speak(Message.Localized("settings", "rebind.prompt",
-                new { action = s_action != null ? s_action.Label : "" }).Resolve());
+                new { action = s_action != null ? s_action.DisplayLabel : "" }).Resolve());
 
         public override void OnUpdate()
         {
@@ -74,21 +74,24 @@ namespace WrathAccess.Screens
                 if (s_append && HasBinding(action, binding))
                 {
                     Tts.Speak(Message.Localized("settings", "rebind.conflict",
-                        new { combo = binding.DisplayName, other = action.Label }).Resolve(), interrupt: true);
+                        new { combo = binding.DisplayName, other = action.DisplayLabel }).Resolve(), interrupt: true);
                     return;
                 }
+                // A within-category conflict STEALS the combo (announced) - refusing would dead-end a
+                // mid-reshuffle user. Across categories the same combo is legal by design: stack-order
+                // shadowing decides which one a press means (see InputCategory).
                 var conflict = FindConflict(binding, action);
                 if (conflict != null)
                 {
-                    Tts.Speak(Message.Localized("settings", "rebind.conflict",
-                        new { combo = binding.DisplayName, other = conflict.Label }).Resolve(), interrupt: true);
-                    return; // keep capturing
+                    RemoveEqualBinding(conflict, binding);
+                    Tts.Speak(Message.Localized("settings", "rebind.stolen",
+                        new { combo = binding.DisplayName, other = conflict.DisplayLabel }).Resolve(), interrupt: true);
                 }
 
                 if (!s_append) action.ClearBindings(); // append mode ADDS an alternative combo
                 action.AddBinding(binding); // BindingsChanged → BindingSetting auto-saves
                 Tts.Speak(Message.Localized("settings", "rebind.bound",
-                    new { action = action.Label, combo = binding.DisplayName }).Resolve());
+                    new { action = action.DisplayLabel, combo = binding.DisplayName }).Resolve());
                 s_releaseKey = key;
                 s_awaitRelease = true; // close once the key is released
                 return;
@@ -102,16 +105,27 @@ namespace WrathAccess.Screens
             return false;
         }
 
-        // The action (other than the one being bound) that already uses this exact combo, or null.
+        // The SAME-CATEGORY action (other than the one being bound) that already uses this exact
+        // combo, or null. Other categories never conflict - shadowing resolves them.
         private static InputAction FindConflict(InputBinding binding, InputAction self)
         {
             foreach (var a in InputManager.Actions)
             {
-                if (a == self) continue;
+                if (a == self || a.Category != self.Category) continue;
                 foreach (var b in a.Bindings)
                     if (b.Type == binding.Type && b.Serialize() == binding.Serialize()) return a;
             }
             return null;
+        }
+
+        private static void RemoveEqualBinding(InputAction owner, InputBinding binding)
+        {
+            foreach (var b in owner.Bindings)
+                if (b.Type == binding.Type && b.Serialize() == binding.Serialize())
+                {
+                    owner.RemoveBinding(b); // BindingsChanged -> its BindingSetting saves
+                    return;
+                }
         }
 
         // Keyboard keys we can bind to: every KeyCode except None, the modifier keys, Escape, and the

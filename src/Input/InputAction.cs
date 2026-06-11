@@ -16,6 +16,15 @@ namespace WrathAccess.Input
         public string Key { get; }
         public string Label { get; }
 
+        /// <summary>The display label resolved through the settings locale table ("bind.&lt;key&gt;"),
+        /// falling back to the registration label. Use for anything spoken/displayed.</summary>
+        public string DisplayLabel
+            => WrathAccess.Localization.LocalizationManager.GetOrDefault("settings", "bind." + Key, Label);
+
+        /// <summary>The input layer this action lives in (decides when it's polled and how identical
+        /// chords across categories resolve — see <see cref="InputCategory"/>).</summary>
+        public InputCategory Category { get; internal set; } = InputCategory.Global;
+
         private readonly List<InputBinding> _bindings = new List<InputBinding>();
         public IReadOnlyList<InputBinding> Bindings => _bindings;
 
@@ -51,6 +60,12 @@ namespace WrathAccess.Input
             BindingsChanged?.Invoke();
         }
 
+        /// <summary>Remove one binding (the rebind capture stealing a within-category conflict).</summary>
+        public void RemoveBinding(InputBinding binding)
+        {
+            if (_bindings.Remove(binding)) BindingsChanged?.Invoke();
+        }
+
         public bool JustPressed { get { for (int i = 0; i < _bindings.Count; i++) if (_bindings[i].JustPressed()) return true; return false; } }
         public bool Held { get { for (int i = 0; i < _bindings.Count; i++) if (_bindings[i].Held()) return true; return false; } }
         public bool Released { get { for (int i = 0; i < _bindings.Count; i++) if (_bindings[i].Released()) return true; return false; } }
@@ -60,6 +75,12 @@ namespace WrathAccess.Input
         internal float NextRepeatTime;
 
         public InputAction Repeating() { Repeats = true; return this; }
+
+        /// <summary>Display-only subgroup within the category's settings tree (e.g. "scanner",
+        /// "party") — purely how the Input tab nests the rebind rows; dispatch ignores it.</summary>
+        public string Group { get; private set; }
+
+        public InputAction Grouped(string group) { Group = group; return this; }
 
         internal void InvokePerformed() => Performed?.Invoke();
     }

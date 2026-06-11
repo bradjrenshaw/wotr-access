@@ -138,6 +138,20 @@ namespace WrathAccess.UI
             return null;
         }
 
+        /// <summary>Last child the navigator may land on (the Home/End jump's End target); skips
+        /// non-focusable children and empty Panels, mirroring <see cref="FirstFocusable"/>.</summary>
+        public virtual UIElement LastFocusable()
+        {
+            for (int i = _children.Count - 1; i >= 0; i--)
+            {
+                if (!_children[i].CanFocus) continue;
+                if (_children[i] is Container c && c.Shape == ContainerShape.Panel && c.FirstFocusable() == null)
+                    continue;
+                return _children[i];
+            }
+            return null;
+        }
+
         /// <summary>Next focusable child from <paramref name="from"/> in a direction (list shapes only).</summary>
         public virtual UIElement GetNeighbor(UIElement from, NavDirection dir)
         {

@@ -11,10 +11,10 @@ namespace WrathAccess.Exploration.Overlays
         {
             bool primary = slot == MovementSlot.Primary;
             dx = 0; dz = 0;
-            if (InputManager.Held(primary ? "nav.up" : "nav.secondaryUp")) dz += 1;       // +Z = north
-            if (InputManager.Held(primary ? "nav.down" : "nav.secondaryDown")) dz -= 1;
-            if (InputManager.Held(primary ? "nav.right" : "nav.secondaryRight")) dx += 1; // +X = east
-            if (InputManager.Held(primary ? "nav.left" : "nav.secondaryLeft")) dx -= 1;
+            if (InputManager.Held(primary ? "explore.cursorUp" : "explore.secondaryUp")) dz += 1;       // +Z = north
+            if (InputManager.Held(primary ? "explore.cursorDown" : "explore.secondaryDown")) dz -= 1;
+            if (InputManager.Held(primary ? "explore.cursorRight" : "explore.secondaryRight")) dx += 1; // +X = east
+            if (InputManager.Held(primary ? "explore.cursorLeft" : "explore.secondaryLeft")) dx -= 1;
         }
     }
 }

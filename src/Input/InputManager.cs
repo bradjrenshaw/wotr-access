@@ -5,32 +5,94 @@ using Kingmaker;
 namespace WrathAccess.Input
 {
     /// <summary>
-    /// Registry + per-frame poll, ticked from Main.OnUpdate. Each JustPressed
-    /// action is dispatched into the active navigator first (only while focus mode
-    /// owns the keyboard); if unconsumed, its global handler fires. Nav keys
-    /// (arrows/confirm) have no global handler, so off-focus-mode they're inert and
-    /// the game keeps its keys; global hotkeys (toggle/etc.) fire in either mode.
+    /// Registry + per-frame poll, ticked from Main.OnUpdate. Actions live in CATEGORIES
+    /// (<see cref="InputCategory"/>): each frame the live categories are the top screen's declared
+    /// list (in its priority order) plus Global, and an identical chord bound in two live categories
+    /// resolves to the higher-priority one (its lower twin is SHADOWED — not an error; that's how the
+    /// same arrows mean HUD nav focused and cursor movement unfocused). UI-category presses dispatch
+    /// into the active navigator; every other category fires its handler directly. With focus mode
+    /// off only Global is live, so the game keeps its own keys.
     /// </summary>
     public static class InputManager
     {
         private static readonly List<InputAction> _actions = new List<InputAction>();
         public static IReadOnlyList<InputAction> Actions => _actions;
 
-        public static InputAction Register(string key, string label, Action onPerformed = null)
+        public static InputAction Register(string key, string label, InputCategory category, Action onPerformed = null)
         {
-            var action = new InputAction(key, label);
+            var action = new InputAction(key, label) { Category = category };
             if (onPerformed != null) action.Performed += onPerformed;
             _actions.Add(action);
             return action;
         }
 
-        /// <summary>Whether the action with this key is currently held — for per-frame polling (e.g. the
-        /// continuous overlay reading held arrows), rather than the press/repeat Performed path.</summary>
+        // The frame's live state, rebuilt at the top of Tick (cheap: ~50 actions x ~1 binding).
+        private static readonly List<InputCategory> _activeCats = new List<InputCategory>();
+        private static readonly HashSet<InputBinding> _live = new HashSet<InputBinding>();
+        private static readonly Dictionary<string, int> _chordRank = new Dictionary<string, int>();
+
+        /// <summary>Whether the action with this key is currently held via a LIVE (unshadowed, active-
+        /// category) binding — for per-frame polling (e.g. the cursor's held-arrow vector). A held
+        /// arrow stops counting the instant a higher claim takes the chord (a menu opening).</summary>
         public static bool Held(string key)
         {
             for (int i = 0; i < _actions.Count; i++)
-                if (_actions[i].Key == key) return _actions[i].Held;
+                if (_actions[i].Key == key) return HeldLive(_actions[i]);
             return false;
+        }
+
+        private static bool JustPressedLive(InputAction a)
+        {
+            for (int i = 0; i < a.Bindings.Count; i++)
+                if (_live.Contains(a.Bindings[i]) && a.Bindings[i].JustPressed()) return true;
+            return false;
+        }
+
+        private static bool HeldLive(InputAction a)
+        {
+            for (int i = 0; i < a.Bindings.Count; i++)
+                if (_live.Contains(a.Bindings[i]) && a.Bindings[i].Held()) return true;
+            return false;
+        }
+
+        // Live categories = the TOP screen's declaration (priority order) + Global; focus mode off =
+        // Global only. Then walk categories in priority order marking bindings live, shadowing any
+        // identical chord already claimed by an earlier (higher-priority) category. Same-category
+        // duplicates are both live (the rebind capture prevents them; first registered wins the press).
+        private static void RebuildLive()
+        {
+            _activeCats.Clear();
+            if (FocusMode.Active)
+            {
+                var top = WrathAccess.Screens.ScreenManager.Current;
+                if (top != null)
+                    foreach (var c in top.InputCategories)
+                        if (!_activeCats.Contains(c)) _activeCats.Add(c);
+            }
+            if (!_activeCats.Contains(InputCategory.Global)) _activeCats.Add(InputCategory.Global);
+
+            _live.Clear();
+            _chordRank.Clear();
+            for (int rank = 0; rank < _activeCats.Count; rank++)
+            {
+                var cat = _activeCats[rank];
+                for (int i = 0; i < _actions.Count; i++)
+                {
+                    var a = _actions[i];
+                    if (a.Category != cat) continue;
+                    for (int j = 0; j < a.Bindings.Count; j++)
+                    {
+                        var b = a.Bindings[j];
+                        var chord = b.Type + "\n" + b.Serialize();
+                        if (_chordRank.TryGetValue(chord, out int owner))
+                        {
+                            if (owner < rank) continue; // shadowed by a higher category
+                        }
+                        else _chordRank[chord] = rank;
+                        _live.Add(b);
+                    }
+                }
+            }
         }
 
         public static void Tick()
@@ -44,6 +106,8 @@ namespace WrathAccess.Input
             var current = WrathAccess.Screens.ScreenManager.Current;
             if (current != null && current.CapturesRawInput) return;
 
+            RebuildLive(); // this frame's category claims + chord shadowing
+
             // Typematic repeat: fire once, pause, then repeat while held — at the user's
             // own OS keyboard delay/rate (falls back to defaults off Windows).
             float now = UnityEngine.Time.unscaledTime;
@@ -52,10 +116,10 @@ namespace WrathAccess.Input
             for (int i = 0; i < _actions.Count; i++)
             {
                 var action = _actions[i];
-                bool held = action.Held;
+                bool held = HeldLive(action);
 
                 bool fire = false;
-                if (action.JustPressed)
+                if (JustPressedLive(action))
                 {
                     fire = true;
                     action.NextRepeatTime = now + initialDelay;
@@ -72,7 +136,11 @@ namespace WrathAccess.Input
                 if (!held) action.NextRepeatTime = 0f; // reset on release (disarms repeat until next press)
 
                 if (!fire) continue;
-                bool consumed = FocusMode.Active && WrathAccess.UI.Navigation.DispatchJustPressed(action);
+                // UI presses go to the navigator (UI is only ever live in focus mode); everything else
+                // fires its handler directly — the category already decided who owns the key, so the
+                // old navigator-first-then-bubble fallback chain is gone.
+                bool consumed = action.Category == InputCategory.UI
+                    && WrathAccess.UI.Navigation.DispatchJustPressed(action);
                 if (!consumed) action.InvokePerformed();
             }
         }

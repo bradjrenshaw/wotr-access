@@ -49,6 +49,13 @@ namespace WrathAccess.Screens
         /// the in-game screen, where letters are exploration hotkeys (scanner, status, …).</summary>
         public virtual bool AllowsTypeahead => true;
 
+        private static readonly WrathAccess.Input.InputCategory[] UiOnly = { WrathAccess.Input.InputCategory.UI };
+
+        /// <summary>The input categories this screen uses while it's the TOP screen, in priority order
+        /// (an identical chord in two categories resolves to the earlier one). Default: plain UI
+        /// navigation. The in-game screen adds Exploration and flips the order with HUD focus.</summary>
+        public virtual System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories => UiOnly;
+
         public virtual void OnPush() { }
 
         public virtual void OnFocus()

@@ -76,9 +76,9 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         private static bool MoveKeyHeld()
-            => InputManager.Held("nav.up") || InputManager.Held("nav.down")
-            || InputManager.Held("nav.left") || InputManager.Held("nav.right")
-            || InputManager.Held("nav.secondaryUp") || InputManager.Held("nav.secondaryDown")
-            || InputManager.Held("nav.secondaryLeft") || InputManager.Held("nav.secondaryRight");
+            => InputManager.Held("explore.cursorUp") || InputManager.Held("explore.cursorDown")
+            || InputManager.Held("explore.cursorLeft") || InputManager.Held("explore.cursorRight")
+            || InputManager.Held("explore.secondaryUp") || InputManager.Held("explore.secondaryDown")
+            || InputManager.Held("explore.secondaryLeft") || InputManager.Held("explore.secondaryRight");
     }
 }

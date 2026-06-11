@@ -41,7 +41,6 @@ namespace WrathAccess.Exploration.Overlays
         public override void Tick(float dt, Overlay overlay)
         {
             if (!OverlayManager.Active) return;            // menu up / focus off → don't move
-            if (WrathAccess.UI.Navigation.HasFocus) return; // the HUD has focus → arrows belong to it, not the cursor
 
             CursorKeys.HeldVector(_slot, out int ix, out int iz);
             float dx = ix, dz = iz;

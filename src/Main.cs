@@ -112,9 +112,19 @@ namespace WrathAccess
             private void Update() { try { OnFrame(); } catch (Exception e) { Log?.Error("[tick] " + e); } }
         }
 
+        // Focus mode starts ON (no hotkey ritual every launch) — but the game's Keyboard doesn't exist
+        // yet at our entry point (GameStarter), so engage on the first frame it does. One-shot: a later
+        // manual toggle-off stays off.
+        private static bool _bootFocusPending = true;
+
         private static void OnFrame()
         {
             if (!Enabled) return;
+            if (_bootFocusPending && Game.Instance?.Keyboard != null)
+            {
+                _bootFocusPending = false;
+                FocusMode.Set(true); // silent: the first screen announcement signals we're live
+            }
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
             InputManager.Tick();
             ScreenManager.Tick();
@@ -229,8 +239,44 @@ namespace WrathAccess
         private static void BuildSettings()
         {
             var bindings = new WrathAccess.Settings.CategorySetting("bindings", "Input", localizationKey: "category.input");
-            foreach (var a in InputManager.Actions)
-                bindings.Add(new WrathAccess.Settings.BindingSetting(a));
+            // One collapsible group per input category - the same chord may legitimately appear in two
+            // groups (stack-order shadowing resolves it); duplicates are only prevented WITHIN a group.
+            var inputCats = new[]
+            {
+                (InputCategory.Global, "global", "Global"),
+                (InputCategory.UI, "ui", "Menus and UI"),
+                (InputCategory.Exploration, "explore", "Exploration"),
+            };
+            foreach (var (cat, key, label) in inputCats)
+            {
+                var catGroup = new WrathAccess.Settings.CategorySetting(key, label, localizationKey: "input." + key);
+                // Ungrouped actions sit at the category root; grouped ones nest in named sub-trees
+                // (cursor / party / combat / scanner / overlays). Display order: the sub-trees first
+                // (alphabetical by localized label), then the root rebind rows (alphabetical too).
+                var leaves = new System.Collections.Generic.List<WrathAccess.Settings.BindingSetting>();
+                var subGroups = new System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<WrathAccess.Settings.BindingSetting>>();
+                foreach (var a in InputManager.Actions)
+                {
+                    if (a.Category != cat) continue;
+                    var row = new WrathAccess.Settings.BindingSetting(a);
+                    if (a.Group == null) { leaves.Add(row); continue; }
+                    if (!subGroups.TryGetValue(a.Group, out var rows))
+                        subGroups[a.Group] = rows = new System.Collections.Generic.List<WrathAccess.Settings.BindingSetting>();
+                    rows.Add(row);
+                }
+                foreach (var g in System.Linq.Enumerable.OrderBy(subGroups.Keys,
+                    k => WrathAccess.Localization.LocalizationManager.GetOrDefault("settings", "input.group." + k, k),
+                    StringComparer.CurrentCultureIgnoreCase))
+                {
+                    var sub = new WrathAccess.Settings.CategorySetting(g, g, localizationKey: "input.group." + g);
+                    foreach (var b in System.Linq.Enumerable.OrderBy(subGroups[g], r => r.Label, StringComparer.CurrentCultureIgnoreCase))
+                        sub.Add(b);
+                    catGroup.Add(sub);
+                }
+                foreach (var b in System.Linq.Enumerable.OrderBy(leaves, r => r.Label, StringComparer.CurrentCultureIgnoreCase))
+                    catGroup.Add(b);
+                bindings.Add(catGroup);
+            }
             WrathAccess.Settings.ModSettings.Root.Add(bindings);
 
             // UI = per-announcement settings (global toggles) + per-element-type overrides, discovered
@@ -258,122 +304,139 @@ namespace WrathAccess
 
         private static void RegisterInput()
         {
-            // Global hotkeys (fire when the navigator doesn't consume them).
-            InputManager.Register("toggle_focus", "Toggle Focus Mode", () =>
+            // ---- Global: always live, even when focus mode is off (handlers self-gate as needed) ----
+            InputManager.Register("toggle_focus", "Toggle focus mode", InputCategory.Global, () =>
             {
                 FocusMode.Toggle();
                 Tts.Speak(Loc.T(FocusMode.Active ? "focus.on" : "focus.off"));
                 if (FocusMode.Active) WrathAccess.UI.Navigation.AnnounceCurrent();
             }).AddBinding(KeyCode.A, ctrl: true, shift: true);
 
-            InputManager.Register("speak_test", "Speak Test", () =>
+            InputManager.Register("speak_test", "Speak test", InputCategory.Global, () =>
                 Tts.Speak("Wrath Access input and speech are working."))
                 .AddBinding(KeyCode.T, ctrl: true, shift: true);
 
             // Quick save (the game's own MakeQuickSave). Self-gates to focus mode + a save-allowed mode.
-            InputManager.Register("game.quickSave", "Quick save", QuickSave).AddBinding(KeyCode.F5);
+            InputManager.Register("game.quickSave", "Quick save", InputCategory.Global, QuickSave)
+                .AddBinding(KeyCode.F5);
 
-            // Party selection — drives the game's real selection, which decides move-to-cursor's
+            // Mod menu - Ctrl+M, available everywhere (fires in either focus mode).
+            InputManager.Register("mod.menu", "Open mod menu", InputCategory.Global,
+                () => WrathAccess.Screens.ModMenuScreen.Toggle()).AddBinding(KeyCode.M, ctrl: true);
+
+            // ---- UI: screen/menu navigation (dispatched into the active navigator) ----
+            InputManager.Register("ui.up", "Navigate up", InputCategory.UI).AddBinding(KeyCode.UpArrow).Repeating();
+            InputManager.Register("ui.down", "Navigate down", InputCategory.UI).AddBinding(KeyCode.DownArrow).Repeating();
+            InputManager.Register("ui.left", "Navigate left", InputCategory.UI).AddBinding(KeyCode.LeftArrow).Repeating();
+            InputManager.Register("ui.right", "Navigate right", InputCategory.UI).AddBinding(KeyCode.RightArrow).Repeating();
+            InputManager.Register("ui.next", "Next region (Tab)", InputCategory.UI).AddBinding(KeyCode.Tab).Repeating();
+            InputManager.Register("ui.prev", "Previous region (Shift+Tab)", InputCategory.UI).AddBinding(KeyCode.Tab, shift: true).Repeating();
+            InputManager.Register("ui.activate", "Activate control", InputCategory.UI)
+                .AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
+            InputManager.Register("ui.secondary", "Secondary action", InputCategory.UI).AddBinding(KeyCode.Backspace);
+            InputManager.Register("ui.back", "Back / close", InputCategory.UI).AddBinding(KeyCode.Escape);
+            // Space + F1 (one action, two bindings): while a type-ahead search is live, Space extends
+            // the search buffer (the SPACE key is reserved, not the action), so F1 still reads tooltips.
+            InputManager.Register("ui.tooltip", "Read tooltip", InputCategory.UI)
+                .AddBinding(KeyCode.Space).AddBinding(KeyCode.F1);
+            // Home/End jump to the first/last item: a list's ends, a tree's current depth's ends, a
+            // FlowSheet's very first/last cell regardless of region (and a live search's first/last hit).
+            InputManager.Register("ui.home", "Jump to first item", InputCategory.UI).AddBinding(KeyCode.Home);
+            InputManager.Register("ui.end", "Jump to last item", InputCategory.UI).AddBinding(KeyCode.End);
+            // Ctrl+Up/Down jump between regions of a FlowSheet (handled only when focus is inside one).
+            InputManager.Register("ui.regionPrev", "Previous sheet region", InputCategory.UI)
+                .AddBinding(KeyCode.UpArrow, ctrl: true).Repeating();
+            InputManager.Register("ui.regionNext", "Next sheet region", InputCategory.UI)
+                .AddBinding(KeyCode.DownArrow, ctrl: true).Repeating();
+
+            // ---- Exploration: the in-game world (live in ctx.ingame; shared chords - arrows, Enter,
+            // Space, Escape, Backspace - are won by the HUD while it's focused, by these while not) ----
+            // The cursor arrows have NO press handlers: movement modes POLL the held keys each frame as
+            // one combined vector (CursorKeys), so held diagonals move diagonally instead of zigzagging.
+            InputManager.Register("explore.cursorUp", "Move cursor up", InputCategory.Exploration)
+                .AddBinding(KeyCode.UpArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.cursorDown", "Move cursor down", InputCategory.Exploration)
+                .AddBinding(KeyCode.DownArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.cursorLeft", "Move cursor left", InputCategory.Exploration)
+                .AddBinding(KeyCode.LeftArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.cursorRight", "Move cursor right", InputCategory.Exploration)
+                .AddBinding(KeyCode.RightArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.secondaryUp", "Secondary cursor up", InputCategory.Exploration)
+                .AddBinding(KeyCode.UpArrow, shift: true).Grouped("cursor");
+            InputManager.Register("explore.secondaryDown", "Secondary cursor down", InputCategory.Exploration)
+                .AddBinding(KeyCode.DownArrow, shift: true).Grouped("cursor");
+            InputManager.Register("explore.secondaryLeft", "Secondary cursor left", InputCategory.Exploration)
+                .AddBinding(KeyCode.LeftArrow, shift: true).Grouped("cursor");
+            InputManager.Register("explore.secondaryRight", "Secondary cursor right", InputCategory.Exploration)
+                .AddBinding(KeyCode.RightArrow, shift: true).Grouped("cursor");
+            // Our "left click": interact with the thing under the cursor.
+            InputManager.Register("explore.interact", "Interact at cursor", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.InteractAtCursor)
+                .AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
+            // The game's pause toggle, matching its own Space binding. (A move queued while paused only
+            // walks once unpaused.)
+            InputManager.Register("explore.pause", "Toggle pause", InputCategory.Exploration,
+                TogglePauseIfExploring).AddBinding(KeyCode.Space);
+            InputManager.Register("explore.cancelTargeting", "Cancel targeting", InputCategory.Exploration,
+                () => { if (WrathAccess.Exploration.Targeting.Aiming) WrathAccess.Exploration.Targeting.Cancel(); })
+                .AddBinding(KeyCode.Escape);
+
+            // Party selection - drives the game's real selection, which decides move-to-cursor's
             // single-vs-formation behaviour. Ctrl+A = whole party; Ctrl+1..6 = a single member.
-            InputManager.Register("party.selectAll", "Select whole party",
-                WrathAccess.Exploration.PartySelection.SelectWholeParty).AddBinding(KeyCode.A, ctrl: true);
+            InputManager.Register("party.selectAll", "Select whole party", InputCategory.Exploration,
+                WrathAccess.Exploration.PartySelection.SelectWholeParty).AddBinding(KeyCode.A, ctrl: true).Grouped("party");
             for (int i = 0; i < 6; i++)
             {
                 int idx = i; // capture per-iteration for the closure
                 InputManager.Register("party.select" + (i + 1), "Select party member " + (i + 1),
-                    () => WrathAccess.Exploration.PartySelection.SelectMember(idx))
-                    .AddBinding(KeyCode.Alpha1 + i, ctrl: true);
+                    InputCategory.Exploration, () => WrathAccess.Exploration.PartySelection.SelectMember(idx))
+                    .AddBinding(KeyCode.Alpha1 + i, ctrl: true).Grouped("party");
             }
 
-            // Navigation actions (consumed by the active navigator while focus mode is on).
-            // Movement actions auto-repeat while held (Repeating); activation keys do not.
-            // The arrows have NO press handlers for the world cursor: movement modes POLL the held keys
-            // each frame as one combined vector (CursorKeys), so held diagonals (Up+Right) move
-            // diagonally instead of zigzagging per-key. Plain arrows = the primary cursor slot;
-            // Shift+arrows = the secondary slot ("None" by default = inert).
-            InputManager.Register("nav.up", "Navigate Up").AddBinding(KeyCode.UpArrow).Repeating();
-            InputManager.Register("nav.down", "Navigate Down").AddBinding(KeyCode.DownArrow).Repeating();
-            InputManager.Register("nav.left", "Navigate Left").AddBinding(KeyCode.LeftArrow).Repeating();
-            InputManager.Register("nav.right", "Navigate Right").AddBinding(KeyCode.RightArrow).Repeating();
-            InputManager.Register("nav.secondaryUp", "Secondary cursor up").AddBinding(KeyCode.UpArrow, shift: true);
-            InputManager.Register("nav.secondaryDown", "Secondary cursor down").AddBinding(KeyCode.DownArrow, shift: true);
-            InputManager.Register("nav.secondaryLeft", "Secondary cursor left").AddBinding(KeyCode.LeftArrow, shift: true);
-            InputManager.Register("nav.secondaryRight", "Secondary cursor right").AddBinding(KeyCode.RightArrow, shift: true);
-            // Enter activates the focused UI control; in plain exploration (no focus tree) the navigator
-            // declines and this fires instead — our "left click": interact with the thing under the cursor.
-            InputManager.Register("nav.primary", "Primary action / interact",
-                WrathAccess.Exploration.Scanner.InteractAtCursor).AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
-            InputManager.Register("nav.secondary", "Secondary action").AddBinding(KeyCode.Backspace);
-            // Escape: the navigator consumes it as Back inside a UI screen; in plain exploration it bubbles
-            // here, where it cancels ability targeting if we're aiming (otherwise a no-op).
-            InputManager.Register("nav.back", "Back",
-                () => { if (WrathAccess.Exploration.Targeting.Aiming) WrathAccess.Exploration.Targeting.Cancel(); })
-                .AddBinding(KeyCode.Escape);
-            // Space: in a UI state it reads the focused control's tooltip (handled by the navigator); in
-            // plain exploration the navigator stands down and this fires instead — the game's pause toggle,
-            // matching the game's own Space binding. (A move queued while paused only walks once unpaused.)
-            InputManager.Register("focus.tooltip", "Read tooltip / toggle pause",
-                TogglePauseIfExploring).AddBinding(KeyCode.Space);
-            // F1 is the always-works tooltip alias: while a type-ahead search is live, Space extends the
-            // search buffer instead of reading the tooltip, but F1 still opens it. A separate action (not a
-            // second binding on focus.tooltip) so F1 never inherits Space's exploration job (pause).
-            InputManager.Register("focus.tooltipAlt", "Read tooltip").AddBinding(KeyCode.F1);
-            InputManager.Register("nav.next", "Next (Tab)").AddBinding(KeyCode.Tab).Repeating();
-            InputManager.Register("nav.prev", "Previous (Shift+Tab)").AddBinding(KeyCode.Tab, shift: true).Repeating();
-            // Ctrl+Up/Down jump between regions of a FlowSheet (handled by the navigator only when focus is
-            // inside one; unbound elsewhere in UI screens, so no collision).
-            InputManager.Register("nav.regionPrev", "Previous region").AddBinding(KeyCode.UpArrow, ctrl: true).Repeating();
-            InputManager.Register("nav.regionNext", "Next region").AddBinding(KeyCode.DownArrow, ctrl: true).Repeating();
-            // Mod menu — Ctrl+M, available everywhere (a global hotkey, fires in either focus mode).
-            InputManager.Register("mod.menu", "Open mod menu",
-                () => WrathAccess.Screens.ModMenuScreen.Toggle()).AddBinding(KeyCode.M, ctrl: true);
-
-            // Ctrl+T: toggle the game's combat mode (real-time-with-pause <-> turn-based). Ctrl+T is free in
-            // normal play (the game's Ctrl+T "LocalTeleport" is a cheat-only binding).
-            InputManager.Register("combat.toggleMode", "Toggle turn-based / real-time",
-                ToggleCombatMode).AddBinding(KeyCode.T, ctrl: true);
+            // Ctrl+T: toggle the game's combat mode (real-time-with-pause <-> turn-based). Ctrl+T is free
+            // in normal play (the game's Ctrl+T "LocalTeleport" is a cheat-only binding).
+            InputManager.Register("combat.toggleMode", "Toggle turn-based / real-time", InputCategory.Exploration,
+                ToggleCombatMode).AddBinding(KeyCode.T, ctrl: true).Grouped("combat");
+            // Turn-based status: the acting unit's action economy + remaining movement.
+            InputManager.Register("combat.status", "Combat status: actions and movement", InputCategory.Exploration,
+                WrathAccess.Exploration.CombatMode.AnnounceStatus).AddBinding(KeyCode.R).Grouped("combat");
 
             // Exploration scanner: a categorized, distance-sorted list of things in the current area.
-            // Active only in the in-game context while focus mode owns the keyboard (Scanner gates itself).
-            InputManager.Register("scan.itemNext", "Scanner: next item",
-                WrathAccess.Exploration.Scanner.NextItem).AddBinding(KeyCode.PageDown).Repeating();
-            InputManager.Register("scan.itemPrev", "Scanner: previous item",
-                WrathAccess.Exploration.Scanner.PrevItem).AddBinding(KeyCode.PageUp).Repeating();
-            InputManager.Register("scan.categoryNext", "Scanner: next category",
-                WrathAccess.Exploration.Scanner.NextCategory).AddBinding(KeyCode.PageDown, ctrl: true).Repeating();
-            InputManager.Register("scan.categoryPrev", "Scanner: previous category",
-                WrathAccess.Exploration.Scanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating();
-            InputManager.Register("scan.cursorToItem", "Scanner: move cursor to item",
-                WrathAccess.Exploration.Scanner.CursorToSelected).AddBinding(KeyCode.Home);
-            InputManager.Register("scan.announceCursor", "Announce cursor position",
-                WrathAccess.Exploration.Scanner.AnnounceCursor).AddBinding(KeyCode.K);
-            InputManager.Register("scan.announceParty", "Announce party",
-                WrathAccess.Exploration.Scanner.AnnounceParty).AddBinding(KeyCode.K, shift: true);
-            // Turn-based status: the acting unit's action economy + remaining movement (self-gates like
-            // the scanner keys).
-            InputManager.Register("combat.status", "Combat status: actions and movement",
-                WrathAccess.Exploration.CombatMode.AnnounceStatus).AddBinding(KeyCode.R);
-            InputManager.Register("scan.interact", "Scanner: interact with item",
-                WrathAccess.Exploration.Scanner.InteractSelected).AddBinding(KeyCode.I);
-            InputManager.Register("scan.moveToCursor", "Scanner: move to cursor",
-                WrathAccess.Exploration.Scanner.MoveToCursor).AddBinding(KeyCode.Backspace);
-            InputManager.Register("scan.debugShowAll", "Scanner: toggle show all (debug)",
-                WrathAccess.Exploration.Scanner.ToggleDebugShowAll).AddBinding(KeyCode.F11);
-            InputManager.Register("scan.debugDumpNames", "Scanner: dump object names to log (debug)",
-                WrathAccess.Exploration.Scanner.DumpObjectNames).AddBinding(KeyCode.F10);
+            InputManager.Register("scan.itemNext", "Scanner: next item", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.NextItem).AddBinding(KeyCode.PageDown).Repeating().Grouped("scanner");
+            InputManager.Register("scan.itemPrev", "Scanner: previous item", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.PrevItem).AddBinding(KeyCode.PageUp).Repeating().Grouped("scanner");
+            InputManager.Register("scan.categoryNext", "Scanner: next category", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.NextCategory).AddBinding(KeyCode.PageDown, ctrl: true).Repeating().Grouped("scanner");
+            InputManager.Register("scan.categoryPrev", "Scanner: previous category", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("scanner");
+            InputManager.Register("scan.cursorToItem", "Scanner: move cursor to item", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.CursorToSelected).AddBinding(KeyCode.Home).Grouped("scanner");
+            InputManager.Register("scan.announceCursor", "Announce cursor position", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.AnnounceCursor).AddBinding(KeyCode.K).Grouped("scanner");
+            InputManager.Register("scan.announceParty", "Announce party", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.AnnounceParty).AddBinding(KeyCode.K, shift: true).Grouped("scanner");
+            InputManager.Register("scan.interact", "Scanner: interact with item", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.InteractSelected).AddBinding(KeyCode.I).Grouped("scanner");
+            InputManager.Register("scan.moveToCursor", "Scanner: move to cursor", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.MoveToCursor).AddBinding(KeyCode.Backspace).Grouped("scanner");
+            InputManager.Register("scan.debugShowAll", "Scanner: toggle show all (debug)", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.ToggleDebugShowAll).AddBinding(KeyCode.F11).Grouped("scanner");
+            InputManager.Register("scan.debugDumpNames", "Scanner: dump object names to log (debug)", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.DumpObjectNames).AddBinding(KeyCode.F10).Grouped("scanner");
 
-            // Area overlays: swappable spatial views (first: virtual tile view). Arrows drive the active
-            // overlay's cursor (see nav.* above). These verbs gate themselves to focus-mode exploration.
-            InputManager.Register("overlay.cycle", "Cycle area overlay",
-                OverlayManager.Cycle).AddBinding(KeyCode.O, ctrl: true);
-            InputManager.Register("overlay.recenter", "Overlay: recenter on player",
-                OverlayManager.Recenter).AddBinding(KeyCode.C);
-            InputManager.Register("overlay.announce", "Overlay: announce cursor",
-                OverlayManager.AnnounceCurrent).AddBinding(KeyCode.Keypad5);
-            InputManager.Register("overlay.descend", "Overlay: follow surface down",
-                () => OverlayManager.VerticalFollow(-1)).AddBinding(KeyCode.Period);
-            InputManager.Register("overlay.ascend", "Overlay: follow surface up",
-                () => OverlayManager.VerticalFollow(1)).AddBinding(KeyCode.Comma);
+            // Area overlays: swappable spatial views. Arrows drive the active overlay's cursor (see the
+            // explore.cursor* actions above).
+            InputManager.Register("overlay.cycle", "Cycle area overlay", InputCategory.Exploration,
+                OverlayManager.Cycle).AddBinding(KeyCode.O, ctrl: true).Grouped("overlays");
+            InputManager.Register("overlay.recenter", "Overlay: recenter on player", InputCategory.Exploration,
+                OverlayManager.Recenter).AddBinding(KeyCode.C).Grouped("overlays");
+            InputManager.Register("overlay.announce", "Overlay: announce cursor", InputCategory.Exploration,
+                OverlayManager.AnnounceCurrent).AddBinding(KeyCode.Keypad5).Grouped("overlays");
+            InputManager.Register("overlay.descend", "Overlay: follow surface down", InputCategory.Exploration,
+                () => OverlayManager.VerticalFollow(-1)).AddBinding(KeyCode.Period).Grouped("overlays");
+            InputManager.Register("overlay.ascend", "Overlay: follow surface up", InputCategory.Exploration,
+                () => OverlayManager.VerticalFollow(1)).AddBinding(KeyCode.Comma).Grouped("overlays");
         }
     }
 }

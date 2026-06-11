@@ -55,42 +55,43 @@ namespace WrathAccess.UI
             {
                 if (_searchFocus != null && Current != _searchFocus)
                     ClearSearch(announce: false); // focus moved under us → results are stale
+                else if (action.Key == "ui.home" && _search.ResultCount > 0) { _search.JumpToFirstResult(); return true; }
+                else if (action.Key == "ui.end" && _search.ResultCount > 0) { _search.JumpToLastResult(); return true; }
                 else if (FiredFromSearchKey(action)) return true; // reserved key — TickTypeahead owns it
                 else ClearSearch(announce: false);
             }
 
             switch (action.Key)
             {
-                case "nav.up": return Arrow(NavDirection.Up);
-                case "nav.down": return Arrow(NavDirection.Down);
-                case "nav.left": return Arrow(NavDirection.Left);
-                case "nav.right": return Arrow(NavDirection.Right);
-                case "nav.next": return Tab(1);
-                case "nav.prev": return Tab(-1);
+                case "ui.up": return Arrow(NavDirection.Up);
+                case "ui.down": return Arrow(NavDirection.Down);
+                case "ui.left": return Arrow(NavDirection.Left);
+                case "ui.right": return Arrow(NavDirection.Right);
+                case "ui.next": return Tab(1);
+                case "ui.prev": return Tab(-1);
                 // Ctrl+Up/Down jump between FlowSheet regions; ignored (bubble) when not in a sheet.
-                case "nav.regionPrev": return Current?.Parent is FlowSheet sp && RegionJump(sp, -1);
-                case "nav.regionNext": return Current?.Parent is FlowSheet sn && RegionJump(sn, 1);
-                case "nav.primary":
-                    // Nothing focused (e.g. plain exploration) → don't consume; let Enter bubble to the
-                    // global handler (Main → Scanner.InteractAtCursor = left-click the thing under the cursor).
+                case "ui.home": return JumpEdge(first: true);
+                case "ui.end": return JumpEdge(first: false);
+                case "ui.regionPrev": return Current?.Parent is FlowSheet sp && RegionJump(sp, -1);
+                case "ui.regionNext": return Current?.Parent is FlowSheet sn && RegionJump(sn, 1);
+                case "ui.activate":
+                    // Nothing focused → don't consume (chord shadowing normally routes Enter to
+                    // explore.interact before this can happen; the guard is belt-and-braces).
                     // A cell with no action of its own falls through to its row's associated element (a table
                     // value cell → the row's radio/control); a cell that owns an action keeps priority.
                     if (Current == null) return false;
                     if (!TryActivate(Current)) TryActivate(Associated(Current));
                     return true;
-                case "nav.secondary":
+                case "ui.secondary":
                     if (Current != null && !TryContext(Current)) TryContext(Associated(Current));
                     return true;
-                case "nav.back":
+                case "ui.back":
                     // Screen-level back/close (e.g. Settings → Close). Consume only if the screen handles it.
                     return Screen != null && Screen.InvokeAction(ActionIds.Back);
-                case "focus.tooltip":
-                case "focus.tooltipAlt":
+                case "ui.tooltip":
                 {
-                    // In plain exploration (nothing focused) Space is the pause toggle, not a tooltip key —
-                    // don't consume it; let it bubble to the global handler (Main.TogglePauseIfExploring).
-                    // Once focused in the HUD (Current != null, still the ctx.ingame screen) Space reads the
-                    // tooltip instead, so it must NOT bubble to pause.
+                    // Nothing focused → don't consume (in exploration the Space chord resolves to
+                    // explore.pause before this dispatches; the guard is belt-and-braces).
                     if (Current == null) return false;
                     var tpl = Current.GetTooltipTemplate();
                     // A cell with no tooltip of its own falls back to its row's associated element (the
@@ -332,6 +333,71 @@ namespace WrathAccess.UI
             return true;
         }
 
+        // Home/End: jump to the first/last item of the structure the focus is in — a FlowSheet's very
+        // first/last visitable cell (regardless of region), a tree's first/last node AT THE CURRENT
+        // DEPTH (the focused node's siblings), or a list's first/last item. Outside any of those the
+        // key is consumed and does nothing.
+        private bool JumpEdge(bool first)
+        {
+            if (Current == null) return false;
+
+            if (Current.Parent is FlowSheet sheet)
+            {
+                if (!sheet.TryCoords(Current, out int r, out int c)) return true;
+                int nr = -1, nc = -1;
+                if (first)
+                {
+                    for (int row = 0; row < sheet.RowCount && nr < 0; row++)
+                    {
+                        int col = sheet.LeftmostVisitable(row);
+                        if (col >= 0) { nr = row; nc = col; }
+                    }
+                }
+                else
+                {
+                    for (int row = sheet.RowCount - 1; row >= 0 && nr < 0; row--)
+                        for (int col = sheet.ColCount - 1; col >= 0; col--)
+                            if (sheet.Visitable(row, col)) { nr = row; nc = col; break; }
+                }
+                if (nr < 0 || (nr == r && nc == c)) return true;
+                var cell = sheet.CellAt(nr, nc);
+                if (cell == null) return true;
+                BuildPathTo(cell);
+                AnnounceFlowCell(sheet, r, c, nr, nc, cell, regionEntry: false);
+                return true;
+            }
+
+            var root = TreeRootOf(Current);
+            if (root != null)
+            {
+                var node = TreeNodeOf(Current, root);
+                var parent = node.Parent ?? root;
+                var target = first ? parent.FirstFocusable() : parent.LastFocusable();
+                if (target == null || target == node) return true;
+                var snap = new List<UIElement>(Path);
+                FocusTreeNode(target);
+                AnnounceDelta(snap, interrupt: true);
+                return true;
+            }
+
+            var container = Current.Parent;
+            if (container != null
+                && (container.Shape == ContainerShape.VerticalList || container.Shape == ContainerShape.HorizontalList))
+            {
+                var target = first ? container.FirstFocusable() : container.LastFocusable();
+                if (target == null || target == Current) return true;
+                var snapshot = new List<UIElement>(Path);
+                int idx = Path.IndexOf(Current);
+                if (idx >= 0) Path.RemoveRange(idx, Path.Count - idx);
+                AppendWithDescend(target);
+                container.SetFocusedChild(target);
+                AnnounceDelta(snapshot, interrupt: true);
+                return true;
+            }
+
+            return true; // focused but in no jumpable structure — consume, do nothing
+        }
+
         // Run an element's primary action with its sound + in-place reannounce; returns whether it handled it.
         private bool TryActivate(UIElement e)
         {
@@ -495,8 +561,8 @@ namespace WrathAccess.UI
                 if (_search.ResultCount > 0)
                 {
                     if (TickResultArrows()) return; // Up/Down with OS-typematic auto-repeat
-                    if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Home)) { _search.JumpToFirstResult(); return; }
-                    if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.End)) { _search.JumpToLastResult(); return; }
+                    // (Home/End ride the ui.home/ui.end ACTIONS — intercepted in OnInputJustPressed —
+                    // so they follow the user's bindings.)
                 }
             }
             else
@@ -555,7 +621,6 @@ namespace WrathAccess.UI
                 if (kb.Key >= UnityEngine.KeyCode.A && kb.Key <= UnityEngine.KeyCode.Z) return true;
                 if (!kb.Shift && (kb.Key == UnityEngine.KeyCode.Space
                     || kb.Key == UnityEngine.KeyCode.UpArrow || kb.Key == UnityEngine.KeyCode.DownArrow
-                    || kb.Key == UnityEngine.KeyCode.Home || kb.Key == UnityEngine.KeyCode.End
                     || kb.Key == UnityEngine.KeyCode.Escape)) return true;
             }
             return false;

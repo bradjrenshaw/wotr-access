@@ -37,7 +37,9 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || WrathAccess.UI.Navigation.HasFocus) { _holding = false; return; }
+            // No HUD-focus gate needed: with the HUD focused the primary arrows are SHADOWED by the UI
+            // category (InputManager.Held reads live bindings only), while the secondary slot keeps moving.
+            if (!OverlayManager.Active) { _holding = false; return; }
             CursorKeys.HeldVector(_slot, out int dx, out int dz);
             if (dx == 0 && dz == 0) { _holding = false; return; }
 

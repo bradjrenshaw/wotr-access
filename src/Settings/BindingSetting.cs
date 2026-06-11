@@ -19,7 +19,7 @@ namespace WrathAccess.Settings
 
         public InputAction Action => _action;
 
-        public BindingSetting(InputAction action) : base(action.Key, action.Label)
+        public BindingSetting(InputAction action) : base(action.Key, action.Label, "bind." + action.Key)
         {
             _action = action;
             _action.BindingsChanged += () => { if (!_loading) ModSettings.MarkDirty(); };

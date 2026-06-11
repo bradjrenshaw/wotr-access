@@ -43,18 +43,19 @@ namespace WrathAccess.UI
 
         public override bool OnInputJustPressed(InputAction action)
         {
-            // A live type-ahead search captures a few keys first: Up/Down walk the matches, Escape
-            // clears, Space extends the buffer (via the typed-char path — so consume the tooltip action
-            // it would otherwise trigger). ANY other key silently ends the search and acts normally —
-            // Enter activates the found item, Backspace stays the secondary action, Tab leaves, etc.
+            // A live type-ahead search reserves specific PHYSICAL KEYS — letters (the buffer), Space
+            // (multi-word), Up/Down (walk matches), Home/End (jump), Escape (clear) — handled by
+            // TickTypeahead's raw polling. Suppression is therefore KEY-based, not action-based: an
+            // action FIRED FROM a reserved key is consumed here (so rebinding navigation to WASD never
+            // steals those letters from typing, and a Space-bound tooltip stays typeable), while the
+            // same action fired from any other binding (F1) passes through. Any non-reserved input
+            // silently ends the search and acts normally — Enter activates the found item, Backspace
+            // stays the secondary action, Tab leaves, etc.
             if (_search.IsSearchActive)
             {
                 if (_searchFocus != null && Current != _searchFocus)
                     ClearSearch(announce: false); // focus moved under us → results are stale
-                else if (action.Key == "nav.up" && _search.ResultCount > 0) { _search.NavigateResults(-1); return true; }
-                else if (action.Key == "nav.down" && _search.ResultCount > 0) { _search.NavigateResults(1); return true; }
-                else if (action.Key == "nav.back") { ClearSearch(announce: true); return true; }
-                else if (action.Key == "focus.tooltip") return true; // Space → buffer, not tooltip (F1 = alias)
+                else if (FiredFromSearchKey(action)) return true; // reserved key — TickTypeahead owns it
                 else ClearSearch(announce: false);
             }
 
@@ -468,9 +469,12 @@ namespace WrathAccess.UI
 
         // ---- Type-ahead search (engine in TypeAheadSearch; this is the glue) ----
 
-        /// <summary>Per-frame: feed typed letters into the search. Letters (and Space, once a buffer
-        /// exists) come from Unity's <c>inputString</c>; Ctrl/Alt chords are hotkeys, never search input.
-        /// Home/End jump within live results (no global actions bind them on UI screens).</summary>
+        /// <summary>Per-frame: the search's whole keyboard surface, RAW (binding-independent). Letters
+        /// (and Space, once a buffer exists) come from Unity's <c>inputString</c>; while a search is
+        /// live, Up/Down walk the matches, Home/End jump, Escape clears — by physical key, so they work
+        /// the same no matter what actions those keys are bound to (the navigator suppresses any action
+        /// a reserved key fires; see <see cref="FiredFromSearchKey"/>). Ctrl/Alt chords are hotkeys,
+        /// never search input.</summary>
         public override void TickTypeahead()
         {
             if (Screen == null || Screen.CapturesRawInput || !Screen.AllowsTypeahead
@@ -480,23 +484,81 @@ namespace WrathAccess.UI
                 return;
             }
 
-            if (_search.IsSearchActive && _search.ResultCount > 0)
+            if (UnityEngine.Input.GetKey(UnityEngine.KeyCode.LeftControl) || UnityEngine.Input.GetKey(UnityEngine.KeyCode.RightControl)
+                || UnityEngine.Input.GetKey(UnityEngine.KeyCode.LeftAlt) || UnityEngine.Input.GetKey(UnityEngine.KeyCode.RightAlt))
+                return;
+
+            bool shift = UnityEngine.Input.GetKey(UnityEngine.KeyCode.LeftShift) || UnityEngine.Input.GetKey(UnityEngine.KeyCode.RightShift);
+            if (_search.IsSearchActive && !shift)
             {
-                if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Home)) { _search.JumpToFirstResult(); return; }
-                if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.End)) { _search.JumpToLastResult(); return; }
+                if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Escape)) { ClearSearch(announce: true); return; }
+                if (_search.ResultCount > 0)
+                {
+                    if (TickResultArrows()) return; // Up/Down with OS-typematic auto-repeat
+                    if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.Home)) { _search.JumpToFirstResult(); return; }
+                    if (UnityEngine.Input.GetKeyDown(UnityEngine.KeyCode.End)) { _search.JumpToLastResult(); return; }
+                }
+            }
+            else
+            {
+                _searchHeldDir = 0; // search ended / modifier down → forget the held arrow
             }
 
             var typed = UnityEngine.Input.inputString;
             if (string.IsNullOrEmpty(typed)) return;
-            if (UnityEngine.Input.GetKey(UnityEngine.KeyCode.LeftControl) || UnityEngine.Input.GetKey(UnityEngine.KeyCode.RightControl)
-                || UnityEngine.Input.GetKey(UnityEngine.KeyCode.LeftAlt) || UnityEngine.Input.GetKey(UnityEngine.KeyCode.RightAlt))
-                return;
 
             foreach (var c in typed)
             {
                 if (char.IsLetter(c)) TypeChar(c);
                 else if (c == ' ' && _search.HasBuffer) TypeChar(c); // multi-word; a lone Space stays tooltip
             }
+        }
+
+        private int _searchHeldDir;    // -1 = Up held, +1 = Down held, 0 = none (result auto-repeat)
+        private float _searchRepeatIn; // seconds until the held arrow repeats
+
+        // Up/Down over the results with OS-style typematic repeat (raw GetKeyDown never repeats, and
+        // the game's lists run long): step on the press, then after the OS initial delay repeat at the
+        // OS repeat interval while held — same feel as TileStep's cursor stepping.
+        private bool TickResultArrows()
+        {
+            int dir = UnityEngine.Input.GetKey(UnityEngine.KeyCode.UpArrow) ? -1
+                : UnityEngine.Input.GetKey(UnityEngine.KeyCode.DownArrow) ? 1 : 0;
+            if (dir == 0) { _searchHeldDir = 0; return false; }
+
+            if (dir != _searchHeldDir)
+            {
+                _searchHeldDir = dir;
+                _searchRepeatIn = WrathAccess.Input.OsKeyboard.InitialDelay;
+                _search.NavigateResults(dir);
+                return true;
+            }
+
+            _searchRepeatIn -= UnityEngine.Time.unscaledDeltaTime;
+            if (_searchRepeatIn <= 0f)
+            {
+                _searchRepeatIn = WrathAccess.Input.OsKeyboard.RepeatInterval;
+                _search.NavigateResults(dir);
+            }
+            return true;
+        }
+
+        // Did this action fire from a key the live search reserves? Letters always type (Shift just
+        // capitalises); Space/arrows/Home/End/Escape count only unmodified. Ctrl/Alt chords are never
+        // search input. Checks Held (not JustPressed) so a Repeating action's auto-repeat dispatches
+        // are suppressed too while the key stays down.
+        private static bool FiredFromSearchKey(InputAction action)
+        {
+            foreach (var b in action.Bindings)
+            {
+                if (!(b is KeyboardBinding kb) || kb.Ctrl || kb.Alt || !kb.Held()) continue;
+                if (kb.Key >= UnityEngine.KeyCode.A && kb.Key <= UnityEngine.KeyCode.Z) return true;
+                if (!kb.Shift && (kb.Key == UnityEngine.KeyCode.Space
+                    || kb.Key == UnityEngine.KeyCode.UpArrow || kb.Key == UnityEngine.KeyCode.DownArrow
+                    || kb.Key == UnityEngine.KeyCode.Home || kb.Key == UnityEngine.KeyCode.End
+                    || kb.Key == UnityEngine.KeyCode.Escape)) return true;
+            }
+            return false;
         }
 
         private void TypeChar(char c)
@@ -564,6 +626,7 @@ namespace WrathAccess.UI
             _search.Clear();
             _searchItems.Clear();
             _searchFocus = null;
+            _searchHeldDir = 0;
             if (announce && had) Speak(Loc.T("search.cleared"), interrupt: true);
         }
     }

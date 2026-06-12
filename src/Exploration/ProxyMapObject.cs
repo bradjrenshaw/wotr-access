@@ -86,7 +86,9 @@ namespace WrathAccess.Exploration
                         case HiddenPart h: if (!h.Opened) cats.Add(ScanCategory.SearchPoints); break;
                         case InteractionLootPart _: cats.Add(ScanCategory.Containers); break;
                         case InteractionSkillCheckPart _: cats.Add(ScanCategory.SearchPoints); break;
-                        case DisableTrapInteractionPart _: cats.Add(ScanCategory.Traps); break; // a discovered trap
+                        // A discovered trap — only while ARMED (TrapActive flips off on disarm/trigger;
+                        // the game's highlight and interaction gate on it the same way).
+                        case DisableTrapInteractionPart t: if (t.Owner != null && t.Owner.TrapActive) cats.Add(ScanCategory.Traps); break;
                         default: cats.Add(ScanCategory.Other); break; // dialog, combine, button, device, bark
                     }
                 }
@@ -125,7 +127,7 @@ namespace WrathAccess.Exploration
                     switch (part)
                     {
                         case InteractionLootPart l: loot = l; break;
-                        case DisableTrapInteractionPart _: trap = true; break;
+                        case DisableTrapInteractionPart t: trap = t.Owner != null && t.Owner.TrapActive; break;
                         case HiddenPart h: if (!h.Opened) hidden = true; break;
                         case InteractionSkillCheckPart _: skill = true; break;
                         default: mechanism = true; break;
@@ -201,7 +203,8 @@ namespace WrathAccess.Exploration
                 var doorPart = _obj.Get<InteractionDoorPart>();
                 if (doorPart != null && doorPart.IsOpen) bits.Add(Loc.T("object.open"));
                 if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add(Loc.T("object.restricted"));
-                if (_obj.Get<DisableTrapInteractionPart>() != null) bits.Add(Loc.T("object.trapped"));
+                var trapPart = _obj.Get<DisableTrapInteractionPart>();
+                if (trapPart?.Owner != null && trapPart.Owner.TrapActive) bits.Add(Loc.T("object.trapped"));
                 return bits.Count > 0 ? string.Join(", ", bits.ToArray()) : null;
             }
         }

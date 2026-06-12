@@ -360,9 +360,12 @@ namespace WrathAccess.Exploration
             _selectionOverride = null;
             Rebuild();
             var refPos = ScanFrom;
+            // The review cycles are tactical — "what can we see RIGHT NOW" — so things currently
+            // back under fog of war are skipped (user spec: a chest remembered 300m away on another
+            // level shouldn't be in the Comma/Period rounds). The SCANNER keeps area-wide knowledge.
             var candidates = new List<ScanItem>();
             foreach (var it in WorldModel.Items)
-                if ((_debugAll || it.IsVisible) && InGroup(it, group)) candidates.Add(it);
+                if ((_debugAll || (it.IsVisible && it.CurrentlySeen)) && InGroup(it, group)) candidates.Add(it);
             if (candidates.Count == 0)
             {
                 Speak(Loc.T("scan.category_empty", new { label = ReviewGroupLabel(group) }));

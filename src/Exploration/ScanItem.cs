@@ -19,6 +19,20 @@ namespace WrathAccess.Exploration
         /// <summary>Only listed when the player could actually know about it (fog/vision). Default: yes.</summary>
         public virtual bool IsVisible => true;
 
+        /// <summary>Can the player see this RIGHT NOW — vs <see cref="IsVisible"/>, which for static
+        /// things is reveal-LATCHED like the local map ("we know about it"). Generic fallback: a
+        /// fog-texture sample at the position. Entity-backed items override with the game's
+        /// per-entity fog state (XZ distance + line of sight, refreshed per frame). Used by the
+        /// review cycles ("what's around me now"); the scanner stays area-wide knowledge.</summary>
+        public virtual bool CurrentlySeen
+        {
+            get
+            {
+                try { return !Kingmaker.Controllers.FogOfWarController.IsInFogOfWar(Position); }
+                catch { return true; } // areas without a fog system → no extra filter
+            }
+        }
+
         /// <summary>The unit this item represents, for ability targeting (null = target its point instead).</summary>
         public virtual UnitEntityData TargetUnit => null;
 

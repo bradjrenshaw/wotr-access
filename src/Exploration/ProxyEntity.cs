@@ -20,5 +20,12 @@ namespace WrathAccess.Exploration
         public override Vector3 Position => Geo.Live(Entity); // live view transform, not the lagging data position
 
         public override bool IsVisible => Entity.IsInGame && Entity.IsVisibleForPlayer;
+
+        // The game's own per-entity fog state (XZ-distance + line-of-sight from party revealers,
+        // refreshed per frame by FogOfWarController) — truer than a fog-texture sample: a wall keeps
+        // a nearby chest out of the review cycles. No camera-angle term for anything that matters
+        // (only ambient "extra" units freeze their state while off-camera, and they aren't rendered
+        // for sighted players then either).
+        public override bool CurrentlySeen => !Entity.IsInFogOfWar;
     }
 }

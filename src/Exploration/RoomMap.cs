@@ -34,6 +34,8 @@ namespace WrathAccess.Exploration
         private const float SlopeT = 0.35f;      // rise/run above which a cell is sloped (stairs ~0.6-0.8)
         private const float DyGate = 0.6f;       // max height step (m) across which cells may join a room
         private const float MinStairArea = 2.5f; // m^2 — stair regions below this merge away (vs 12 for flat)
+        private const float StairMinRise = 1.5f; // m a sloped region must CLIMB to count as stairs (bumps ~0.6m)
+        private const float FurnitureMax = 12f;  // m^2 — interior obstacle islands up to this cast no clearance shadow
         private const float MaxCells = 1.7e6f;   // grid budget; coarsen the cell size beyond it
         private const float LevelGap = 3f;       // |y| beyond which a cell is "another floor"
         private const float AnnounceDwell = 0.5f; // seconds inside a new room before announcing
@@ -93,6 +95,8 @@ namespace WrathAccess.Exploration
 
         // ---- lifecycle ----
 
+        private static int _retryCooldown; // frames until the next attempt while the graph is empty
+
         public static void Tick()
         {
             var game = Game.Instance;
@@ -100,18 +104,30 @@ namespace WrathAccess.Exploration
             if (area == null) { _builtFor = null; _label = null; _rooms.Clear(); return; }
             var part = Kingmaker.Blueprints.Area.AreaService.Instance?.CurrentAreaPart;
             string key = area.name + "|" + (part != null ? part.name : "");
-            if (key != _builtFor && AstarPath.active != null)
+            if (key != _builtFor)
             {
-                _builtFor = key; // even on failure: don't retry every frame
+                _builtFor = key;
+                _label = null;
+                _rooms.Clear();
+                _retryCooldown = 0;
+            }
+            // The nav graph STREAMS IN after the part key changes — building immediately can see an
+            // empty graph (Gray Garrison: "0 rooms in 4ms", then never retried, so the whole area
+            // had no rooms). Success latches via Ready; until then, retry on a cooldown.
+            if (!Ready && AstarPath.active != null && --_retryCooldown <= 0)
+            {
+                _retryCooldown = 30; // ~half a second between attempts; an empty-graph pass is ~4ms
                 try
                 {
                     var sw = System.Diagnostics.Stopwatch.StartNew();
                     Build();
-                    Main.Log?.Log("[rooms] " + key + ": " + _rooms.Count + " rooms in " + sw.ElapsedMilliseconds + "ms");
+                    if (_rooms.Count > 0)
+                        Main.Log?.Log("[rooms] " + key + ": " + _rooms.Count + " rooms in " + sw.ElapsedMilliseconds + "ms");
                 }
                 catch (Exception e)
                 {
                     _label = null; _rooms.Clear();
+                    _retryCooldown = 300; // a real failure: back off, the next part change resets
                     Main.Log?.Warning("[rooms] build failed: " + e.Message);
                 }
             }
@@ -232,10 +248,49 @@ namespace WrathAccess.Exploration
                     }
             }
 
+            // 3.5) Furniture mask: small interior unwalkable ISLANDS — crates, pillars, things you
+            //      can walk all the way around — cast no clearance shadow, so the watershed never
+            //      reads the pinch beside them as a doorway (user report: mid-room obstacles were
+            //      splitting rooms; the four-pillar hall carved into quadrants). Only blobs fully
+            //      surrounded by walkable space count; anything connected to the walls/outside
+            //      (via the grid border) is real structure.
+            var noShadow = new bool[n];
+            {
+                int[] dz8f = { -1, 1, 0, 0, -1, -1, 1, 1 };
+                int[] dx8f = { 0, 0, -1, 1, -1, 1, -1, 1 };
+                var visited = new bool[n];
+                var stack = new Stack<int>();
+                var cells = new List<int>();
+                for (int i = 0; i < n; i++)
+                {
+                    if (walk[i] || visited[i]) continue;
+                    cells.Clear();
+                    bool touchesBorder = false;
+                    visited[i] = true;
+                    stack.Push(i);
+                    while (stack.Count > 0)
+                    {
+                        int j = stack.Pop();
+                        cells.Add(j);
+                        int gz = j / _w, gx = j % _w;
+                        if (gz == 0 || gx == 0 || gz == _h - 1 || gx == _w - 1) touchesBorder = true;
+                        for (int k = 0; k < 8; k++)
+                        {
+                            int nz = gz + dz8f[k], nx = gx + dx8f[k];
+                            if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
+                            int m = nz * _w + nx;
+                            if (!walk[m] && !visited[m]) { visited[m] = true; stack.Push(m); }
+                        }
+                    }
+                    if (!touchesBorder && cells.Count * _cell * _cell <= FurnitureMax)
+                        foreach (var j in cells) noShadow[j] = true;
+                }
+            }
+
             // 4) Chamfer 3-4 distance transform → clearance in metres.
             var dist = new int[n];
             const int INF = int.MaxValue / 4;
-            for (int i = 0; i < n; i++) dist[i] = walk[i] ? INF : 0;
+            for (int i = 0; i < n; i++) dist[i] = (walk[i] || noShadow[i]) ? INF : 0;
             for (int gz = 0; gz < _h; gz++)
                 for (int gx = 0; gx < _w; gx++)
                 {
@@ -375,9 +430,21 @@ namespace WrathAccess.Exploration
             int regions = regionOf.Count;
             var size = new int[regions];
             var slopedCells = new int[regions];
+            var minY = new float[regions];
+            var maxY = new float[regions];
+            for (int r2 = 0; r2 < regions; r2++) { minY[r2] = float.MaxValue; maxY[r2] = float.MinValue; }
             for (int i = 0; i < n; i++)
-                if (_label[i] >= 0) { size[_label[i]]++; if (sloped[i]) slopedCells[_label[i]]++; }
-            Func<int, bool> isStair = r2 => slopedCells[r2] * 2 > size[r2];
+                if (_label[i] >= 0)
+                {
+                    int l = _label[i];
+                    size[l]++;
+                    if (sloped[i]) slopedCells[l]++;
+                    if (_cellY[i] < minY[l]) minY[l] = _cellY[i];
+                    if (_cellY[i] > maxY[l]) maxY[l] = _cellY[i];
+                }
+            // Stairs = majority-sloped AND actually CLIMBING somewhere. Steep little lips and rubble
+            // ramps (~0.6m rise, dead ends) read as part of their room, not phantom staircases.
+            Func<int, bool> isStair = r2 => slopedCells[r2] * 2 > size[r2] && maxY[r2] - minY[r2] >= StairMinRise;
             bool changed = true;
             while (changed)
             {
@@ -408,7 +475,13 @@ namespace WrathAccess.Exploration
                     if (tgt < 0)
                         foreach (var kv in border) if (kv.Value > btot) { btot = kv.Value; tgt = kv.Key; }
                     for (int i = 0; i < n; i++) if (_label[i] == rid) _label[i] = tgt; // -1 drops isolated tinies
-                    if (tgt >= 0) { size[tgt] += size[rid]; slopedCells[tgt] += slopedCells[rid]; }
+                    if (tgt >= 0)
+                    {
+                        size[tgt] += size[rid];
+                        slopedCells[tgt] += slopedCells[rid];
+                        if (minY[rid] < minY[tgt]) minY[tgt] = minY[rid];
+                        if (maxY[rid] > maxY[tgt]) maxY[tgt] = maxY[rid];
+                    }
                     size[rid] = 0;
                     changed = true;
                 }
@@ -449,7 +522,7 @@ namespace WrathAccess.Exploration
                 float area = cnt * _cell * _cell;
                 float meanClear = (float)(sc / cnt);
                 string cls;
-                if (slopedCells[kv.Key] * 2 > size[kv.Key]) cls = "stairs";
+                if (isStair(kv.Key)) cls = "stairs";
                 else if (elong > 2.6f && meanClear < 2.2f) cls = "passage";
                 else if (elong > 3.2f) cls = "corridor";
                 else if (area < 35f) cls = "small";

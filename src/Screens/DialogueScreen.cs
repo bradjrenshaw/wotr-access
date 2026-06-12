@@ -1,18 +1,27 @@
+using System;
+using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
 using Kingmaker;
+using Kingmaker.Blueprints.Root.Strings; // UINotificationTexts (game-localized notification formats)
 using Kingmaker.GameModes;
-using Kingmaker.UI.Common; // UIUtility.SkillCheckText
+using Kingmaker.Settings;                // SettingsRoot (the game's per-category notification toggles)
+using Kingmaker.UI.Common;               // UIUtility.SkillCheckText / alignment texts
 using Kingmaker.UI.MVVM._VM.Dialog.Dialog;
+using UniRx;
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// An in-game conversation (the common <see cref="DialogVM"/>): the NPC cue line, then the numbered
-    /// player answers (or a single Continue). The cue is the first focusable element, so focusing it
-    /// repeats the line; Tab/arrow to the answers to choose.
+    /// An in-game conversation (the common <see cref="DialogVM"/>) as ONE FlowSheet that reads like a
+    /// transcript: the scrollback (the game's own pre-formatted <c>DialogVM.History</c> lines — past
+    /// cues and chosen answers — plus NOTIFICATION rows we inject: alignment shifts, items gained or
+    /// lost, XP, revealed locations, mirroring DialogNotificationsView's formats and settings gates),
+    /// then the CURRENT cue row, then the answers region. A new cue rebuilds the sheet and lands focus
+    /// on the cue row silently — you hear the line via the delivery announcement, press Down for the
+    /// answers/continue, or Up to re-read earlier lines. No Tab hop (user spec: dialogue should flow).
     ///
     /// We speak a line only once it's actually delivered on screen, driven by model state — so it fires
     /// whether the cue was advanced by our nav, a mouse click, or an auto-continue. The catch: the game
@@ -21,9 +30,11 @@ namespace WrathAccess.Screens
     /// when control returns to Dialog mode). It marks those with <c>DialogVM.m_CutsceneScheduled</c> (the
     /// same flag it uses to defer the voiceover) and clears it in <c>OnGameModeStart(Dialog)</c> at
     /// delivery. So: announce when the cue is new, we're in Dialog mode, AND the cue isn't cutscene-
-    /// scheduled — immediate for ordinary in-place lines, deferred to delivery for cutscene lines, with
-    /// no artificial delay on the common case. Book events, interchapters, and global-map conversations
-    /// are separate and not handled here yet.
+    /// scheduled. Notification lines arrive with the cue-show event (the VM clears its lists right after
+    /// the command, so the subscriber snapshots synchronously) and are QUEUED ahead of the cue line as
+    /// separate utterances — nothing in dialogue ever interrupts speech (user spec). Book events,
+    /// interchapters, global-map conversations, and kingdom/crusade notification categories are not
+    /// handled here yet.
     /// </summary>
     public sealed class DialogueScreen : Screen
     {
@@ -32,8 +43,16 @@ namespace WrathAccess.Screens
 
         private static readonly FieldInfo CutsceneScheduledField = AccessTools.Field(typeof(DialogVM), "m_CutsceneScheduled");
 
-        private CueVM _builtCue;  // cue the navigable tree was built for
-        private CueVM _spokenCue; // cue we've spoken
+        private DialogVM _subscribedVm;   // the conversation our notification subscription belongs to
+        private IDisposable _notifSub;
+        private CueVM _builtCue;          // cue the sheet was built for
+        private CueVM _spokenCue;         // cue we've spoken
+
+        private readonly List<string> _rows = new List<string>();         // the transcript: history + notifications
+        private readonly List<string> _pendingNotifRows = new List<string>(); // notif lines awaiting ordered insertion
+        private readonly List<string> _pendingSpeak = new List<string>();     // notif lines to speak before the next cue
+        private int _historyConsumed;
+        private TextElement _cueRow;
 
         private static DialogVM Vm()
         {
@@ -56,45 +75,186 @@ namespace WrathAccess.Screens
 
         public override void OnPush() { Clear(); Reset(); }
         public override void OnPop() { Clear(); Reset(); }
-        private void Reset() { _builtCue = null; _spokenCue = null; }
+
+        private void Reset()
+        {
+            _builtCue = null;
+            _spokenCue = null;
+            _rows.Clear();
+            _pendingNotifRows.Clear();
+            _pendingSpeak.Clear();
+            _historyConsumed = 0;
+            _cueRow = null;
+            _notifSub?.Dispose();
+            _notifSub = null;
+            _subscribedVm = null;
+        }
 
         public override void OnUpdate()
         {
             var vm = Vm();
             if (vm == null) return;
+
+            // A new conversation = a fresh VM: reset the transcript and re-subscribe to its notifications.
+            if (vm != _subscribedVm)
+            {
+                Reset();
+                _subscribedVm = vm;
+                // The VM CLEARS its notification lists right after firing the command, so this snapshot
+                // must happen synchronously inside the subscription.
+                _notifSub = vm.DialogNotifications.OnUpdateCommand.Subscribe(show =>
+                {
+                    if (!show) return;
+                    var lines = ComposeNotifications(vm.DialogNotifications);
+                    _pendingNotifRows.AddRange(lines);
+                    _pendingSpeak.AddRange(lines);
+                });
+            }
+
+            // Transcript order: history first (the previous cue + chosen answer are appended by the game
+            // at answer-selection, BEFORE the cue-show event raised the notifications), then the
+            // notification lines those events produced.
+            var history = vm.History;
+            for (; _historyConsumed < history.Count; _historyConsumed++)
+                _rows.Add(TextUtil.StripRichText(history[_historyConsumed]));
+            if (_pendingNotifRows.Count > 0)
+            {
+                _rows.AddRange(_pendingNotifRows);
+                _pendingNotifRows.Clear();
+            }
+
             var cue = vm.Cue.Value;
             if (cue == null) return;
 
-            // Keep the navigable tree in sync with the model (silent) so the answer/continue buttons are current.
             if (cue != _builtCue) { _builtCue = cue; Rebuild(vm); }
 
-            // Speak once delivered: in Dialog mode and not waiting on a cutscene. Once per cue, interrupt
-            // so the current line is always heard.
+            // Speak once delivered: in Dialog mode and not waiting on a cutscene. Once per cue, QUEUED —
+            // never interrupting (user spec) — the notification lines first (the results of the previous
+            // answer), then the new line, each its own utterance.
             if (cue != _spokenCue && DialogMode() && !CutsceneScheduled(vm))
             {
                 _spokenCue = cue;
-                Tts.Speak(CueLine(vm), interrupt: true);
+                foreach (var line in _pendingSpeak) Tts.Speak(line, interrupt: false);
+                _pendingSpeak.Clear();
+                Tts.Speak(CueLine(vm), interrupt: false);
             }
         }
 
         private void Rebuild(DialogVM vm)
         {
             Clear();
-            Add(new TextElement(() => CueLine(vm))); // the line — focus here to repeat it
+            var sheet = new FlowSheet();
 
-            var answers = new ListContainer(Loc.T("dialog.answers"));
+            var log = sheet.List(null); // the transcript; unlabeled so region entry stays quiet
+            foreach (var row in _rows)
+            {
+                var text = row;
+                log.Item(new TextElement(() => text));
+            }
+            bool hasRealAnswers = vm.Answers.Value != null && vm.Answers.Value.Count > 0;
+            // The live line — focus here to repeat it; Enter on it presses Continue when that's the
+            // only way forward (never when real choices exist).
+            _cueRow = new CueRow(() => CueLine(vm), () => hasRealAnswers ? null : vm.SystemAnswer.Value);
+            log.Item(_cueRow);
+
+            var answers = sheet.List(null); // unlabeled: "Answers" before the choices is auditory noise
+            int count = 0;
             if (vm.Answers.Value != null && vm.Answers.Value.Count > 0)
             {
                 foreach (var a in vm.Answers.Value)
-                    if (a != null) answers.Add(DialogAnswerButton.For(a));
+                    if (a != null) { answers.Item(DialogAnswerButton.For(a)); count++; }
             }
             else if (vm.SystemAnswer.Value != null)
             {
-                answers.Add(DialogAnswerButton.For(vm.SystemAnswer.Value));
+                answers.Item(DialogAnswerButton.For(vm.SystemAnswer.Value));
+                count++;
             }
-            if (answers.Children.Count > 0) Add(answers);
+            if (count == 0) sheet.RemoveRegion(answers);
 
-            Navigation.Attach(this); // re-bind to the rebuilt tree (silent; focus → the line)
+            sheet.Reflow();
+            Add(sheet);
+            Navigation.Attach(this);
+            // Land on the current line silently (the delivery announcement speaks it): Down reaches the
+            // answers, Up scrolls back through the conversation so far.
+            Navigation.Focus(_cueRow, announce: false);
+        }
+
+        // The current-line row: focusing repeats the line; when the only way forward is the system
+        // Continue, Enter HERE advances the dialogue too (user spec — Enter straight through exposition
+        // without scrolling down). Real answer sets never ride this shortcut. Activation is the same
+        // VM call as the Continue button (the game plays its own NextDialogLine sound; ours stays off).
+        private sealed class CueRow : TextElement
+        {
+            private readonly Func<AnswerVM> _continueAnswer;
+
+            public CueRow(Func<string> text, Func<AnswerVM> continueAnswer) : base(text)
+            {
+                _continueAnswer = continueAnswer;
+            }
+
+            public override Kingmaker.UI.UISoundType? ActivateSound => null;
+
+            public override IEnumerable<ElementAction> GetActions()
+            {
+                var a = _continueAnswer();
+                if (a != null && a.Enable.Value)
+                    yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.choose"),
+                        _ => a.OnChooseAnswer());
+            }
+        }
+
+        // Mirrors DialogNotificationsView: the same per-category game settings gates and the same
+        // game-localized UINotificationTexts formats; colors stripped for speech. Kingdom/crusade
+        // categories (stats, events, free buildings, morale) are deferred with the kingdom screens.
+        private static List<string> ComposeNotifications(DialogNotificationsVM n)
+        {
+            var lines = new List<string>();
+            var t = UINotificationTexts.Instance;
+
+            if (SettingsRoot.Game.Dialogs.ShowAlignmentShiftsNotifications)
+            {
+                foreach (var shift in n.AlignmentShifts)
+                    lines.Add(TextUtil.StripRichText(string.Format(t.AlignmentShiftedFormat, "#FFFFFF",
+                        UIUtility.GetAlignmentShiftDirectionText(shift.Direction), shift.Value)));
+                var cueData = n.CueData;
+                if (cueData != null && cueData.NewAlignment.HasValue)
+                    lines.Add(TextUtil.StripRichText(string.Format(t.NewAlignmentAfterShiftedFormat, "#FFFFFF",
+                        UIUtility.GetAlignmentName(cueData.NewAlignment.Value))));
+            }
+
+            if (SettingsRoot.Game.Dialogs.ShowLocationRevealedNotification && n.RevealedLocationNames.Count > 0)
+                lines.Add(TextUtil.StripRichText(string.Format(
+                    n.RevealedLocationNames.Count < 2 ? t.RevealedLocationFormat : t.RevealedLocationsFormat,
+                    string.Join(", ", n.RevealedLocationNames.ToArray()))));
+
+            if (SettingsRoot.Game.Dialogs.ShowItemsReceivedNotification)
+            {
+                var got = new List<string>();
+                var lost = new List<string>();
+                foreach (var kv in n.ItemsChanged)
+                {
+                    if (kv.Key == null || kv.Value == 0) continue;
+                    int abs = Math.Abs(kv.Value);
+                    var label = abs > 1 ? kv.Key.Name + " ×" + abs : kv.Key.Name;
+                    (kv.Value > 0 ? got : lost).Add(label);
+                }
+                if (got.Count > 0)
+                    lines.Add(TextUtil.StripRichText(string.Format(t.ItemsRecievedFormat, string.Join(", ", got.ToArray()))));
+                if (lost.Count > 0)
+                    lines.Add(TextUtil.StripRichText(string.Format(t.ItemsLostFormat, string.Join(", ", lost.ToArray()))));
+            }
+
+            if (SettingsRoot.Game.Dialogs.ShowXPGainedNotification && n.XpGains.Count > 0)
+            {
+                int sum = 0;
+                foreach (var x in n.XpGains) sum += x;
+                lines.Add(TextUtil.StripRichText(string.Format(t.XPGainedFormat, sum)));
+            }
+
+            foreach (var c in n.CustomNotifications)
+                if (!string.IsNullOrEmpty(c)) lines.Add(TextUtil.StripRichText(c));
+
+            return lines;
         }
 
         private static string CueLine(DialogVM vm)

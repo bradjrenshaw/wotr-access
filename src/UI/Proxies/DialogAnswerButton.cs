@@ -24,15 +24,12 @@ namespace WrathAccess.UI.Proxies
         {
             if (vm == null) return "";
             var bp = vm.Answer?.Value;
-            if (bp != null)
-            {
-                try { return UIConsts.GetAnswerString(bp, "DialogChoice" + vm.Index, vm.Index); }
-                catch { /* fall through to the plain form */ }
-            }
             var text = bp != null ? bp.DisplayText : null;
-            // system/continue answers carry no text
-            if (string.IsNullOrEmpty(text)) text = Message.Localized("ui", "label.continue").Resolve();
-            return vm.Index + ". " + text;
+            // System/continue answers carry no text — the game's button reads a plain "Continue",
+            // UNNUMBERED (only real choices get the index prefix).
+            if (string.IsNullOrEmpty(text)) return Message.Localized("ui", "label.continue").Resolve();
+            try { return UIConsts.GetAnswerString(bp, "DialogChoice" + vm.Index, vm.Index); }
+            catch { return vm.Index + ". " + text; }
         }
     }
 }

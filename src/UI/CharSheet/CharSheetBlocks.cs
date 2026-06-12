@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized Level Up label)
 using Kingmaker.UI.Common; // UIUtility.AddSign, UIUtilityItem.AttackData
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.LevelClassScores;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.Attack;
@@ -30,7 +31,10 @@ namespace WrathAccess.UI.CharSheet
             sink.ListSection(Loc.T("section.character"), items);
         }
 
-        public static void LevelClassScores(CharInfoLevelClassScoresVM lcs, ICharSheetSink sink)
+        // withLevelUp adds the game's Level Up button next to the XP readout — only the character
+        // sheet's prefab wires that button (CharInfoExperiencePCView null-checks it), so the
+        // inventory's shared summary leaves it off, mirroring the game.
+        public static void LevelClassScores(CharInfoLevelClassScoresVM lcs, ICharSheetSink sink, bool withLevelUp = false)
         {
             if (lcs == null) return;
             // Visual order: header info (level, race/gender/alignment) reads first, then the block's
@@ -41,6 +45,14 @@ namespace WrathAccess.UI.CharSheet
                 var items = new List<UIElement> { new TextElement(() => Loc.T("char.level", new { value = xp.Level })) };
                 items.Add(new TextElement(() => Loc.T("char.experience", new { current = xp.CurrentExp, next = xp.NextLevelExp })));
                 if (xp.NegativeLevels > 0) items.Add(new TextElement(() => Loc.T("char.negative_levels", new { value = xp.NegativeLevels })));
+                if (withLevelUp)
+                    // Same gate (CanLevelup, refreshed per character) and same VM call as the game's
+                    // button; canFocus mirrors the game hiding the button entirely when not pending.
+                    items.Add(new Proxies.ProxyActionButton(
+                        () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.LevelUpText),
+                        enabled: null,
+                        activate: () => xp.LevelUp(),
+                        canFocus: () => xp.CanLevelup));
                 sink.ListSection(Loc.T("section.level"), items);
             }
 

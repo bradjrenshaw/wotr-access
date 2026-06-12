@@ -90,6 +90,13 @@ namespace WrathAccess.Exploration
         /// The landing becomes the scanner selection too, so PageUp/Down, I, and Home all follow it.</summary>
         public static void CycleReview(ReviewGroup group, int dir) { if (Active) DoCycleReview(group, dir); }
 
+        /// <summary>Cycle the review cursor through the CURRENT ROOM's exits (V / Shift+V): the room
+        /// map's geometric openings to neighbouring rooms, plus door and area-transition items in this
+        /// room (a closed door cuts the navmesh, so the door IS the exit there; transitions sit where
+        /// the mesh just ends). An item within a couple of metres of an opening replaces it (richer:
+        /// name, state, interactable).</summary>
+        public static void CycleRoomExits(int dir) { if (Active) DoCycleRoomExits(dir); }
+
         public static void ToggleDebugShowAll()
         {
             if (!Active) return;
@@ -196,11 +203,17 @@ namespace WrathAccess.Exploration
 
         private static ScanItem Selected
         {
-            get { var l = Current; return (l != null && _itemIndex >= 0 && _itemIndex < l.Count) ? l[_itemIndex] : null; }
+            get
+            {
+                if (_selectionOverride != null) return _selectionOverride;
+                var l = Current;
+                return (l != null && _itemIndex >= 0 && _itemIndex < l.Count) ? l[_itemIndex] : null;
+            }
         }
 
         private static void StepCategory(int dir)
         {
+            _selectionOverride = null;
             Rebuild();
             int n = ScanCategories.Order.Length;
             if (_entered) _catIndex = ((_catIndex + dir) % n + n) % n;
@@ -211,6 +224,7 @@ namespace WrathAccess.Exploration
 
         private static void StepItem(int dir)
         {
+            _selectionOverride = null;
             Rebuild();
             var list = Current;
             if (list == null || list.Count == 0)
@@ -257,9 +271,93 @@ namespace WrathAccess.Exploration
             }
         }
 
+        // A geometric room exit as a reviewable item: look at it, ping it, plant the cursor on it
+        // (Home / Slash); not interactable (there's nothing there — it's an opening).
+        private sealed class RoomExitItem : ScanItem
+        {
+            private readonly RoomMap.Exit _exit;
+            public RoomExitItem(RoomMap.Exit exit) { _exit = exit; }
+            public override string Name => Loc.T("exit.to_room", new { room = RoomMap.Describe(_exit.To) });
+            public override Vector3 Position => _exit.Position;
+            public override IEnumerable<ScanCategory> Categories { get { yield return ScanCategory.Exits; } }
+        }
+
+        // The V-cycle's landing when it's a geometric opening: openings aren't WorldModel items, so
+        // they can't become the list selection — Selected resolves to this instead until any other
+        // selection-moving action clears it (I "can't interact", Home/Slash plant the cursor on it).
+        private static ScanItem _selectionOverride;
+
+        private static void DoCycleRoomExits(int dir)
+        {
+            var prev = Selected;
+            Rebuild();
+            var refPos = ScanFrom;
+            var room = RoomMap.RoomAt(refPos);
+            var emptyMsg = Loc.T("scan.category_empty", new { label = ScanCategories.Label(ScanCategory.Exits) });
+            if (room == null) { Speak(emptyMsg); return; }
+
+            // Door/transition items in (or adjacent to) this room — probe around the thing, since a
+            // closed door's own cells are cut out of the navmesh and resolve to either side or nothing.
+            var things = new List<ScanItem>();
+            foreach (var it in WorldModel.Items)
+            {
+                if (!_debugAll && !it.IsVisible) continue;
+                bool isExit = false;
+                foreach (var cat in it.Categories)
+                    if (cat == ScanCategory.Doors || cat == ScanCategory.Exits) { isExit = true; break; }
+                if (!isExit) continue;
+                var p = it.Position;
+                bool inRoom = false;
+                for (int k = 0; k < 5 && !inRoom; k++)
+                {
+                    var probe = p;
+                    if (k == 1) probe.x += 1.5f; else if (k == 2) probe.x -= 1.5f;
+                    else if (k == 3) probe.z += 1.5f; else if (k == 4) probe.z -= 1.5f;
+                    inRoom = RoomMap.RoomAt(probe) == room;
+                }
+                if (inRoom) things.Add(it);
+            }
+
+            var candidates = new List<ScanItem>(things);
+            foreach (var exit in room.Exits)
+            {
+                bool covered = false;
+                foreach (var t in things)
+                {
+                    float dx = t.Position.x - exit.Position.x, dz = t.Position.z - exit.Position.z;
+                    if (dx * dx + dz * dz < 2.5f * 2.5f) { covered = true; break; }
+                }
+                if (!covered) candidates.Add(new RoomExitItem(exit));
+            }
+            if (candidates.Count == 0) { Speak(emptyMsg); return; }
+            candidates.Sort((a, b) => Geo.Distance(refPos, a.Position).CompareTo(Geo.Distance(refPos, b.Position)));
+
+            // Continue from the current target when it's one of these exits; openings match by
+            // position, since RoomExitItems are recreated on every press.
+            int idx = -1;
+            if (prev != null)
+                for (int i = 0; i < candidates.Count; i++)
+                {
+                    if (candidates[i] == prev
+                        || (prev is RoomExitItem && candidates[i] is RoomExitItem
+                            && (candidates[i].Position - prev.Position).sqrMagnitude < 0.05f)) { idx = i; break; }
+                }
+            idx = idx < 0
+                ? (dir >= 0 ? 0 : candidates.Count - 1)
+                : ((idx + dir) % candidates.Count + candidates.Count) % candidates.Count;
+            var target = candidates[idx];
+
+            if (target is RoomExitItem) _selectionOverride = target;
+            else { _selectionOverride = null; SyncSelectionTo(target); }
+            PlayReviewPing(target);
+            Speak(target.Describe(refPos) + ", "
+                + Loc.T("nav.position", new { index = idx + 1, count = candidates.Count }));
+        }
+
         private static void DoCycleReview(ReviewGroup group, int dir)
         {
             var prev = Selected; // the cached selection — ScanItem identities are stable in WorldModel
+            _selectionOverride = null;
             Rebuild();
             var refPos = ScanFrom;
             var candidates = new List<ScanItem>();

@@ -14,9 +14,13 @@ namespace WrathAccess.Exploration
     /// they meet across a pronounced dip (a doorway, or a doorless cave pinch; PERSIST is how deep the
     /// dip must be). Small regions merge into their biggest neighbour; survivors are numbered stably
     /// (sorted by centroid) and classified by area/elongation/clearance (passage / corridor / small
-    /// room / room / large hall). Tuned on the Shield Maze offline (rooms_proto.py renders the floor
-    /// plan; thresholds chosen by eye — the user prefers MORE rooms over fewer, for clearer space
-    /// indicators). Rebuilt when the area part changes; ~100ms once per load.
+    /// room / room / large hall / stairs). Height-aware: cells never union across a height step
+    /// (DyGate), and sloped cells (recast turns staircases into ramps) never union with flat ones —
+    /// so stacked levels split into separate rooms and the staircase between them is its own "stairs"
+    /// room, making it the obvious exit between levels. Tuned on the Shield Maze offline
+    /// (rooms_proto2.py renders the floor plan; thresholds chosen by eye — the user prefers MORE
+    /// rooms over fewer, for clearer space indicators). Rebuilt when the area part changes; ~100ms
+    /// once per load.
     ///
     /// Consumers: Y's "where am I" appends the room; an optional announce-on-room-change watches the
     /// scan reference (cursor, else leader) with a dwell so boundary dithering doesn't flap.
@@ -27,6 +31,9 @@ namespace WrathAccess.Exploration
         private const float Persist = 0.7f;      // clearance dip (m) required to split two basins
         private const float MinRoomArea = 12f;   // m^2 — smaller regions merge into a neighbour
         private const float CutFloor = 0.45f;    // cells narrower than this never union (assigned after)
+        private const float SlopeT = 0.35f;      // rise/run above which a cell is sloped (stairs ~0.6-0.8)
+        private const float DyGate = 0.6f;       // max height step (m) across which cells may join a room
+        private const float MinStairArea = 2.5f; // m^2 — stair regions below this merge away (vs 12 for flat)
         private const float MaxCells = 1.7e6f;   // grid budget; coarsen the cell size beyond it
         private const float LevelGap = 3f;       // |y| beyond which a cell is "another floor"
         private const float AnnounceDwell = 0.5f; // seconds inside a new room before announcing
@@ -37,6 +44,16 @@ namespace WrathAccess.Exploration
             public string ClassKey;   // room.class.* locale suffix
             public float Area;        // m^2
             public Vector3 Centroid;
+            public readonly List<Exit> Exits = new List<Exit>();
+        }
+
+        /// <summary>One walkable opening between two rooms — a cluster of navmesh portal edges.
+        /// A room pair joined by two separate doorways yields two exits. Doors that CUT the navmesh
+        /// (closed) have no connections there — the scanner adds door items to the V-cycle separately.</summary>
+        public sealed class Exit
+        {
+            public Vector3 Position;
+            public Room To;
         }
 
         private static string _builtFor;      // areaName|partName the grid was built for
@@ -193,7 +210,6 @@ namespace WrathAccess.Exploration
                 float ax = (a.x - _x0) / _cell + 1, az = (a.z - _z0) / _cell + 1;
                 float bx = (b2.x - _x0) / _cell + 1, bz = (b2.z - _z0) / _cell + 1;
                 float cx = (c.x - _x0) / _cell + 1, cz = (c.z - _z0) / _cell + 1;
-                float y = (a.y + b2.y + c.y) / 3f;
                 int lox = Mathf.Max(0, (int)Mathf.Min(ax, Mathf.Min(bx, cx)));
                 int hix = Mathf.Min(_w - 1, (int)Mathf.Max(ax, Mathf.Max(bx, cx)) + 1);
                 int loz = Mathf.Max(0, (int)Mathf.Min(az, Mathf.Min(bz, cz)));
@@ -208,7 +224,11 @@ namespace WrathAccess.Exploration
                         float l2 = ((cz - az) * (px - cx) + (ax - cx) * (pz - cz)) / d;
                         float l3 = 1 - l1 - l2;
                         if (l1 >= -0.001f && l2 >= -0.001f && l3 >= -0.001f)
-                        { walk[gz * _w + gx] = true; _cellY[gz * _w + gx] = y; }
+                        {
+                            int ci = gz * _w + gx;
+                            walk[ci] = true;
+                            _cellY[ci] = l1 * a.y + l2 * b2.y + l3 * c.y;
+                        }
                     }
             }
 
@@ -249,6 +269,25 @@ namespace WrathAccess.Exploration
             var clear = new float[n];
             for (int i = 0; i < n; i++) clear[i] = dist[i] * (_cell / 3f);
 
+            // 4.5) Slope mask: cells on a sustained gradient (recast renders stairs as ramps).
+            //      Close r2 absorbs small landings/speckle; open r1 drops isolated specks.
+            var sloped = new bool[n];
+            for (int i = 0; i < n; i++)
+            {
+                if (!walk[i]) continue;
+                int gz = i / _w, gx = i % _w;
+                float dy = 0f;
+                if (gx > 0 && walk[i - 1]) dy = Math.Max(dy, Math.Abs(_cellY[i] - _cellY[i - 1]));
+                if (gx < _w - 1 && walk[i + 1]) dy = Math.Max(dy, Math.Abs(_cellY[i] - _cellY[i + 1]));
+                if (gz > 0 && walk[i - _w]) dy = Math.Max(dy, Math.Abs(_cellY[i] - _cellY[i - _w]));
+                if (gz < _h - 1 && walk[i + _w]) dy = Math.Max(dy, Math.Abs(_cellY[i] - _cellY[i + _w]));
+                sloped[i] = dy / _cell > SlopeT;
+            }
+            Morph(sloped, 2, dilate: true); Morph(sloped, 2, dilate: false);
+            for (int i = 0; i < n; i++) sloped[i] &= walk[i];
+            Morph(sloped, 1, dilate: false); Morph(sloped, 1, dilate: true);
+            for (int i = 0; i < n; i++) sloped[i] &= walk[i];
+
             // 5) Persistence watershed: visit cells by descending clearance; basins meeting across a
             //    saddle merge unless BOTH rise at least Persist above it.
             var order = new int[n];
@@ -282,9 +321,13 @@ namespace WrathAccess.Exploration
                     if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
                     int j = nz * _w + nx;
                     if (!seen[j]) continue;
+                    // never union across a height step or a flat/sloped class change — stacked
+                    // levels stay apart, and staircases form their own basins
+                    if (sloped[j] != sloped[i] || Math.Abs(_cellY[j] - _cellY[i]) > DyGate) continue;
                     int r = find(j);
                     if (r == me) continue;
-                    if (Math.Min(peak[r], peak[me]) - c < Persist)
+                    // sloped basins always merge: one staircase = one region, however long
+                    if (sloped[i] || Math.Min(peak[r], peak[me]) - c < Persist)
                     {
                         float pk = Math.Max(peak[r], peak[me]);
                         parent[me] = r;
@@ -321,21 +364,29 @@ namespace WrathAccess.Exploration
                     int nz = gz + dz8[k], nx = gx + dx8[k];
                     if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
                     int j = nz * _w + nx;
-                    if (walk[j] && _label[j] < 0) { _label[j] = _label[i]; q.Enqueue(j); }
+                    if (walk[j] && _label[j] < 0 && Math.Abs(_cellY[j] - _cellY[i]) <= DyGate)
+                    { _label[j] = _label[i]; q.Enqueue(j); }
                 }
             }
 
-            // 7) Merge small regions into their most-bordered neighbour; isolated tinies drop (-1).
+            // 7) Merge small regions into a neighbour. Stair regions get a smaller floor (a short
+            //    flight is a real room); borders only count where the height is continuous; and a
+            //    region prefers a same-class (stairs vs flat) neighbour. Isolated tinies drop (-1).
             int regions = regionOf.Count;
             var size = new int[regions];
-            for (int i = 0; i < n; i++) if (_label[i] >= 0) size[_label[i]]++;
+            var slopedCells = new int[regions];
+            for (int i = 0; i < n; i++)
+                if (_label[i] >= 0) { size[_label[i]]++; if (sloped[i]) slopedCells[_label[i]]++; }
+            Func<int, bool> isStair = r2 => slopedCells[r2] * 2 > size[r2];
             bool changed = true;
             while (changed)
             {
                 changed = false;
                 for (int rid = 0; rid < regions; rid++)
                 {
-                    if (size[rid] == 0 || size[rid] * _cell * _cell >= MinRoomArea) continue;
+                    if (size[rid] == 0) continue;
+                    float minArea = isStair(rid) ? MinStairArea : MinRoomArea;
+                    if (size[rid] * _cell * _cell >= minArea) continue;
                     var border = new Dictionary<int, int>();
                     for (int i = 0; i < n; i++)
                     {
@@ -345,14 +396,19 @@ namespace WrathAccess.Exploration
                         {
                             int nz = gz + dz8[k], nx = gx + dx8[k];
                             if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
-                            int l = _label[nz * _w + nx];
-                            if (l >= 0 && l != rid) { int cnt; border.TryGetValue(l, out cnt); border[l] = cnt + 1; }
+                            int j = nz * _w + nx;
+                            int l = _label[j];
+                            if (l >= 0 && l != rid && Math.Abs(_cellY[j] - _cellY[i]) <= DyGate)
+                            { int cnt; border.TryGetValue(l, out cnt); border[l] = cnt + 1; }
                         }
                     }
                     int tgt = -1, btot = 0;
-                    foreach (var kv in border) if (kv.Value > btot) { btot = kv.Value; tgt = kv.Key; }
+                    foreach (var kv in border)
+                        if (isStair(kv.Key) == isStair(rid) && kv.Value > btot) { btot = kv.Value; tgt = kv.Key; }
+                    if (tgt < 0)
+                        foreach (var kv in border) if (kv.Value > btot) { btot = kv.Value; tgt = kv.Key; }
                     for (int i = 0; i < n; i++) if (_label[i] == rid) _label[i] = tgt; // -1 drops isolated tinies
-                    if (tgt >= 0) size[tgt] += size[rid];
+                    if (tgt >= 0) { size[tgt] += size[rid]; slopedCells[tgt] += slopedCells[rid]; }
                     size[rid] = 0;
                     changed = true;
                 }
@@ -393,7 +449,8 @@ namespace WrathAccess.Exploration
                 float area = cnt * _cell * _cell;
                 float meanClear = (float)(sc / cnt);
                 string cls;
-                if (elong > 2.6f && meanClear < 2.2f) cls = "passage";
+                if (slopedCells[kv.Key] * 2 > size[kv.Key]) cls = "stairs";
+                else if (elong > 2.6f && meanClear < 2.2f) cls = "passage";
                 else if (elong > 3.2f) cls = "corridor";
                 else if (area < 35f) cls = "small";
                 else if (area > 220f) cls = "hall";
@@ -420,6 +477,127 @@ namespace WrathAccess.Exploration
             }
             for (int i = 0; i < n; i++)
                 _label[i] = _label[i] >= 0 && remap.ContainsKey(_label[i]) ? remap[_label[i]] : -1;
+
+            BuildExits();
+        }
+
+        // 4-neighbourhood binary dilation/erosion passes (the slope mask's close-then-open).
+        private static void Morph(bool[] m, int iters, bool dilate)
+        {
+            int n = _w * _h;
+            var src = new bool[n];
+            for (int it = 0; it < iters; it++)
+            {
+                Array.Copy(m, src, n);
+                for (int i = 0; i < n; i++)
+                {
+                    int gz = i / _w, gx = i % _w;
+                    if (dilate)
+                        m[i] = src[i] || (gx > 0 && src[i - 1]) || (gx < _w - 1 && src[i + 1])
+                            || (gz > 0 && src[i - _w]) || (gz < _h - 1 && src[i + _w]);
+                    else
+                        m[i] = src[i] && (gx == 0 || src[i - 1]) && (gx == _w - 1 || src[i + 1])
+                            && (gz == 0 || src[i - _w]) && (gz == _h - 1 || src[i + _w]);
+                }
+            }
+        }
+
+        // Exits come from the REAL navmesh connectivity, not grid adjacency: every graph
+        // connection between triangles that resolve to different rooms is a walkable portal. The
+        // flattened grid can lie where levels stack (last-wins rasterization once cut a ramp off
+        // its floor and ate the exit), and a cliff edge has no connection at all — so this is
+        // exact in both directions. Portal points cluster per room pair (single-link, 2m);
+        // each cluster = one Exit on both rooms.
+        private static void BuildExits()
+        {
+            var graphs = AstarPath.active?.data?.graphs;
+            if (graphs == null) return;
+            var roomOf = new Dictionary<GraphNode, Room>();
+            Func<TriangleMeshNode, Room> roomFor = t =>
+            {
+                Room r;
+                if (roomOf.TryGetValue(t, out r)) return r;
+                var c = ((Vector3)t.GetVertex(0) + (Vector3)t.GetVertex(1) + (Vector3)t.GetVertex(2)) / 3f;
+                r = RoomAt(c);
+                roomOf[t] = r;
+                return r;
+            };
+            var portals = new Dictionary<long, List<Vector3>>();
+            foreach (var g in graphs)
+            {
+                if (!(g is NavmeshBase)) continue;
+                g.GetNodes(node =>
+                {
+                    var t = node as TriangleMeshNode;
+                    if (t == null || t.connections == null) return;
+                    var ra = roomFor(t);
+                    if (ra == null) return;
+                    foreach (var conn in t.connections)
+                    {
+                        var o = conn.node as TriangleMeshNode;
+                        if (o == null) continue;
+                        var rb = roomFor(o);
+                        if (rb == null || rb == ra) continue;
+                        Vector3 portal;
+                        if (conn.shapeEdge != byte.MaxValue)
+                        {
+                            // the midpoint of the triangle edge this connection crosses
+                            portal = ((Vector3)t.GetVertex(conn.shapeEdge)
+                                      + (Vector3)t.GetVertex((conn.shapeEdge + 1) % 3)) * 0.5f;
+                        }
+                        else
+                        {
+                            var cb = ((Vector3)o.GetVertex(0) + (Vector3)o.GetVertex(1) + (Vector3)o.GetVertex(2)) / 3f;
+                            var ca = ((Vector3)t.GetVertex(0) + (Vector3)t.GetVertex(1) + (Vector3)t.GetVertex(2)) / 3f;
+                            portal = (ca + cb) * 0.5f; // custom/off-mesh link: no shared edge
+                        }
+                        long key = ((long)Math.Min(ra.Id, rb.Id) << 32) | (uint)Math.Max(ra.Id, rb.Id);
+                        List<Vector3> pts;
+                        if (!portals.TryGetValue(key, out pts)) { pts = new List<Vector3>(); portals[key] = pts; }
+                        pts.Add(portal);
+                    }
+                });
+            }
+            foreach (var kv in portals)
+            {
+                var a = _rooms[(int)(kv.Key >> 32) - 1];
+                var b = _rooms[(int)(kv.Key & 0xFFFFFFFF) - 1];
+                var pts = kv.Value;
+                // single-link clustering: one wide doorway = one exit; separate doorways stay separate
+                var root = new int[pts.Count];
+                for (int i = 0; i < root.Length; i++) root[i] = i;
+                Func<int, int> find = null;
+                find = x => { while (root[x] != x) { root[x] = root[root[x]]; x = root[x]; } return x; };
+                for (int i = 0; i < pts.Count; i++)
+                    for (int j = i + 1; j < pts.Count; j++)
+                        if ((pts[i] - pts[j]).sqrMagnitude <= 2f * 2f)
+                        {
+                            int ri = find(i), rj = find(j);
+                            if (ri != rj) root[ri] = rj;
+                        }
+                var sums = new Dictionary<int, Vector3>();
+                var counts = new Dictionary<int, int>();
+                for (int i = 0; i < pts.Count; i++)
+                {
+                    int r = find(i);
+                    Vector3 sum;
+                    sums.TryGetValue(r, out sum);
+                    sums[r] = sum + pts[i];
+                    int c;
+                    counts.TryGetValue(r, out c);
+                    counts[r] = c + 1;
+                }
+                foreach (var cl in sums)
+                {
+                    var pos = cl.Value / counts[cl.Key];
+                    // The centroid of a curved portal chain can drift off the mesh; snap it back to
+                    // the walkable surface — the cursor is planted RAW on this point (Home/Slash).
+                    var snap = NavmeshProbe.Sample(pos.x, pos.z, pos.y);
+                    if (snap.Point != Vector3.zero) pos = snap.Point;
+                    a.Exits.Add(new Exit { Position = pos, To = b });
+                    b.Exits.Add(new Exit { Position = pos, To = a });
+                }
+            }
         }
     }
 }

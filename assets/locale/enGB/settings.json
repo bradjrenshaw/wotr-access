@@ -182,6 +182,8 @@
   "taxonomy.enemies": "Enemies",
   "taxonomy.neutrals": "Neutrals",
   "taxonomy.doors": "Doors",
+  "taxonomy.doors.all": "All doors",
+  "taxonomy.doors.open": "Open doors",
   "taxonomy.containers": "Containers",
   "taxonomy.containers.all": "All containers",
   "taxonomy.containers.chest": "Chests",
@@ -198,6 +200,7 @@
   "choice.silent": "Silent",
   "choice.inherit": "Inherit",
   "sound.door": "Door",
+  "sound.door_open": "Door open",
   "sound.loot-chest": "Chest",
   "sound.loot-corpse": "Corpse loot",
   "sound.loot-environment": "Environment loot",
@@ -289,6 +292,8 @@
 
   "bind.review.nextPoi": "Review next point of interest",
   "bind.review.prevPoi": "Review previous point of interest",
+  "bind.review.nextExit": "Review next room exit",
+  "bind.review.prevExit": "Review previous room exit",
 
   "reset.tab": "Reset {name} to defaults",
   "reset.all": "Reset all settings to defaults",

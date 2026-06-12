@@ -300,14 +300,15 @@ namespace WrathAccess.UI
                     break;
                 case NavDirection.Down:
                 case NavDirection.Up:
-                    nr = dir == NavDirection.Down ? r + 1 : r - 1;
-                    if (nr < 0 || nr >= sheet.RowCount) return true; // edge → consume
-                    if (sheet.Visitable(nr, c)) { nc = c; next = sheet.CellAt(nr, c); }
-                    else
+                    // Scan past rows with nothing currently landable (e.g. a list row whose only
+                    // element is an unfocusable hidden button) — stopping on one would wall off the
+                    // rest of the sheet. Prefer the current column in the landing row, else leftmost.
+                    int step = dir == NavDirection.Down ? 1 : -1;
+                    for (nr = r + step; nr >= 0 && nr < sheet.RowCount; nr += step)
                     {
+                        if (sheet.Visitable(nr, c)) { nc = c; next = sheet.CellAt(nr, c); break; }
                         int lc = sheet.LeftmostVisitable(nr);
-                        if (lc < 0) return true;
-                        nc = lc; next = sheet.CellAt(nr, lc);
+                        if (lc >= 0) { nc = lc; next = sheet.CellAt(nr, lc); break; }
                     }
                     break;
             }

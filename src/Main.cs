@@ -134,6 +134,7 @@ namespace WrathAccess
             WrathAccess.Exploration.CombatMode.TickTurn(); // announce whose turn it is in turn-based combat
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             WrathAccess.Exploration.RoomMap.Tick(); // (re)build the room segmentation on area-part change
+            WrathAccess.Exploration.RestAction.Tick(); // finish a pending rest: interact with the freshly spawned camp
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
@@ -482,6 +483,12 @@ namespace WrathAccess
             InputManager.Register("review.prevPoi", "Review previous point of interest", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Poi, -1))
                 .AddBinding(KeyCode.B, shift: true).Repeating().Grouped("review");
+            InputManager.Register("review.nextExit", "Review next room exit", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleRoomExits(1))
+                .AddBinding(KeyCode.V).Repeating().Grouped("review");
+            InputManager.Register("review.prevExit", "Review previous room exit", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleRoomExits(-1))
+                .AddBinding(KeyCode.V, shift: true).Repeating().Grouped("review");
         }
     }
 }

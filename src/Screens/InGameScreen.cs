@@ -20,7 +20,8 @@ namespace WrathAccess.Screens
     /// The in-game (exploration) context as a navigable screen. It's UNFOCUSED by default — the overlay
     /// owns the arrows for spatial navigation — and <b>Tab enters the HUD</b>, then Tab cycles its regions
     /// (Tab off the end returns to exploration). Regions, in order: the <b>Action bar</b> (the selected
-    /// unit's ability/spell/item slots) and the <b>Log</b> button (opens <see cref="ModLogScreen"/>).
+    /// unit's ability/spell/item slots), the <b>Menu</b> list (Log → <see cref="ModLogScreen"/>, Rest,
+    /// and eventually the rest of the game's compass-corner cluster), and the <b>Windows</b> list.
     /// Party/combat-turn-order regions come later; combat will vary the set.
     ///
     /// Nothing about the action bar is cached: the Log/Windows tab-stops are built once, and the action bar
@@ -112,7 +113,18 @@ namespace WrathAccess.Screens
             _turn = new ListContainer(Message.Localized("ui", "hud.turn").Resolve());
             Add(_turn);
 
-            Add(new ProxyActionButton(Loc.T("hud.log"), () => true, ModLogScreen.Open));
+            // The game's IngameMenu cluster (the compass-corner buttons) as ONE Tab-stop list. Log is
+            // ours (the mod's log review); Rest is the game's bonfire button collapsed into one action
+            // (see RestAction: gates + camp placement at the cursor + the walk-to-camp interaction;
+            // refusals are the game's own warnings, spoken by WarningReader). More cluster functions
+            // (skip time, formation…) join here later.
+            var menu = new ListContainer(Loc.T("hud.menu"));
+            menu.Add(new ProxyActionButton(Loc.T("hud.log"), () => true, ModLogScreen.Open));
+            menu.Add(new ProxyActionButton(
+                () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText),
+                () => true,
+                RestAction.TryRest));
+            Add(menu);
 
             // Service-window buttons (the game's bottom bar): one Tab-stop list after Log. Activating one
             // calls the game's own open path (HandleOpenWindowOfType, which creates the menu + toggles the

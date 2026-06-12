@@ -154,7 +154,7 @@ namespace WrathAccess.Screens
             switch (block)
             {
                 case CharInfoNameAndPortraitVM np: CharSheetBlocks.NamePortrait(np, sink); break;
-                case CharInfoLevelClassScoresVM lcs: CharSheetBlocks.LevelClassScores(lcs, sink); break;
+                case CharInfoLevelClassScoresVM lcs: CharSheetBlocks.LevelClassScores(lcs, sink, withLevelUp: true); break;
                 case CharInfoAttacksBlockVM atk: CharSheetBlocks.Attacks(atk, sink); break;
                 case CharInfoDefenceBlockVM def: CharSheetBlocks.Defence(def, sink); break;
                 case CharInfoSkillsBlockVM sk: RenderSkills(sk, sink); break;

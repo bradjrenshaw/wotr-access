@@ -67,6 +67,14 @@ namespace WrathAccess.Exploration
                 for (int i = 0; i < interactions.Count; i++)
                 {
                     var part = interactions[i];
+                    // A one-way door (DisableOnOpen) disables its part once opened, but the doorway is
+                    // still a navigation landmark — keep it a DOOR. A disabled CLOSED door stays out
+                    // (HiddenPart gating / scripts) so secret doors don't leak.
+                    if (part is InteractionDoorPart dr)
+                    {
+                        if (part.Enabled || dr.IsOpen) cats.Add(ScanCategory.Doors);
+                        continue;
+                    }
                     // A HiddenPart gates the object's OTHER interactions: while unrevealed it disables them
                     // (Enabled = false) and they only turn on once a skill check is passed. Skip disabled
                     // parts so a hidden chest reads as a search point, not a container, until it's opened.
@@ -76,7 +84,6 @@ namespace WrathAccess.Exploration
                         // Unrevealed hidden object → a search point (a skill check to reveal). Once Opened
                         // the real parts are enabled and categorize themselves, so we add nothing here.
                         case HiddenPart h: if (!h.Opened) cats.Add(ScanCategory.SearchPoints); break;
-                        case InteractionDoorPart _: cats.Add(ScanCategory.Doors); break;
                         case InteractionLootPart _: cats.Add(ScanCategory.Containers); break;
                         case InteractionSkillCheckPart _: cats.Add(ScanCategory.SearchPoints); break;
                         case DisableTrapInteractionPart _: cats.Add(ScanCategory.Traps); break; // a discovered trap
@@ -96,7 +103,8 @@ namespace WrathAccess.Exploration
         // traps > search points > mechanisms — with one state flip: an exit DOOR still closed is
         // primarily a door (interacting opens it); once open it's primarily the exit. An unfound
         // HiddenPart reads as a search point (there's something here, but you haven't searched it out);
-        // plain scenery is the silent-by-default scenery node. Skips disabled parts.
+        // plain scenery is the silent-by-default scenery node. Skips disabled parts, EXCEPT an opened
+        // one-way door — that stays a door landmark, on the doors.open node (its own sound).
         public override string Primary
         {
             get
@@ -107,11 +115,16 @@ namespace WrathAccess.Exploration
                 for (int i = 0; i < interactions.Count; i++)
                 {
                     var part = interactions[i];
+                    if (part is InteractionDoorPart d)
+                    {
+                        // disabled-but-open = an opened one-way door, still a door landmark (see Categories)
+                        if (part.Enabled || d.IsOpen) { door = true; doorOpen = d.IsOpen; }
+                        continue;
+                    }
                     if (!part.Enabled) continue;
                     switch (part)
                     {
                         case InteractionLootPart l: loot = l; break;
-                        case InteractionDoorPart d: door = true; doorOpen = d.IsOpen; break;
                         case DisableTrapInteractionPart _: trap = true; break;
                         case HiddenPart h: if (!h.Opened) hidden = true; break;
                         case InteractionSkillCheckPart _: skill = true; break;
@@ -122,7 +135,7 @@ namespace WrathAccess.Exploration
                 bool exit = _obj.Get<AreaTransitionPart>() != null;
                 if (exit && !(door && !doorOpen)) return SonarTaxonomy.Exits;
                 if (loot != null) return LootNode(loot);
-                if (door) return SonarTaxonomy.Doors;
+                if (door) return doorOpen ? SonarTaxonomy.DoorsOpen : SonarTaxonomy.Doors;
                 if (trap) return SonarTaxonomy.Traps;
                 if (hidden || skill) return SonarTaxonomy.SearchPoints;
                 if (mechanism) return SonarTaxonomy.Mechanisms;
@@ -185,6 +198,8 @@ namespace WrathAccess.Exploration
             get
             {
                 var bits = new List<string>();
+                var doorPart = _obj.Get<InteractionDoorPart>();
+                if (doorPart != null && doorPart.IsOpen) bits.Add(Loc.T("object.open"));
                 if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add(Loc.T("object.restricted"));
                 if (_obj.Get<DisableTrapInteractionPart>() != null) bits.Add(Loc.T("object.trapped"));
                 return bits.Count > 0 ? string.Join(", ", bits.ToArray()) : null;

@@ -17,12 +17,13 @@ namespace WrathAccess.Exploration
     /// </summary>
     internal static class SonarTaxonomy
     {
-        // Node keys (what ScanItem.Primary returns). Containers is the one branch with children.
+        // Node keys (what ScanItem.Primary returns). Containers and Doors are branches with children.
         public const string Poi = "poi";
         public const string Party = "party";
         public const string Enemies = "enemies";
         public const string Neutrals = "neutrals";
         public const string Doors = "doors";
+        public const string DoorsOpen = "doors.open";
         public const string Containers = "containers";
         public const string ContainersChest = "containers.chest";
         public const string ContainersCorpse = "containers.corpse";
@@ -46,7 +47,8 @@ namespace WrathAccess.Exploration
             (Party, null, "Party", "taxonomy.party", "units-ally"),
             (Enemies, null, "Enemies", "taxonomy.enemies", "units-enemy"),
             (Neutrals, null, "Neutrals", "taxonomy.neutrals", "units-neutral"),
-            (Doors, null, "Doors", "taxonomy.doors", "door"),
+            (Doors, null, "All doors", "taxonomy.doors.all", "door"),
+            (DoorsOpen, Doors, "Open doors", "taxonomy.doors.open", "door_open"),
             (Containers, null, "All containers", "taxonomy.containers.all", "loot-generic"),
             (ContainersChest, Containers, "Chests", "taxonomy.containers.chest", "loot-chest"),
             (ContainersCorpse, Containers, "Corpses", "taxonomy.containers.corpse", "loot-corpse"),

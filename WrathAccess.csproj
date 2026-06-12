@@ -39,6 +39,8 @@
     <Reference Include="Owlcat.Runtime.UI"><HintPath>$(ManagedDir)\Owlcat.Runtime.UI.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Owlcat.Runtime.Core"><HintPath>$(ManagedDir)\Owlcat.Runtime.Core.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="Owlcat.Runtime.UniRx"><HintPath>$(ManagedDir)\Owlcat.Runtime.UniRx.dll</HintPath><Private>false</Private></Reference>
+    <!-- RulebookEvent (skill-check results on the rest screen) implements IValidated from here. -->
+    <Reference Include="Owlcat.Runtime.Validation"><HintPath>$(ManagedDir)\Owlcat.Runtime.Validation.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UniRx"><HintPath>$(ManagedDir)\UniRx.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine"><HintPath>$(ManagedDir)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>

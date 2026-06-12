@@ -35,10 +35,25 @@ namespace WrathAccess.UI
         /// lazy children; a subclass with a deferred factory (e.g. TooltipNode drill-in) overrides.</summary>
         public virtual bool Expandable => Shape == ContainerShape.Tree && _children.Count > 0;
 
-        /// <summary>Expand this Tree node. Subclasses with lazy children override to build first.</summary>
-        public virtual void Expand() => Expanded = true;
+        /// <summary>Accordion mode (set on the PARENT): only one child node may be expanded at a time —
+        /// expanding a child collapses its expanded siblings first. Used where the expansion mirrors a
+        /// visual panel swap (the rest screen's role panels), keeping the on-screen UI in step with
+        /// where the tree focus is.</summary>
+        public bool ExclusiveExpansion { get; set; }
 
-        public void Collapse() => Expanded = false;
+        /// <summary>Expand this Tree node. Subclasses with lazy children override to build first
+        /// (call base.Expand() FIRST so accordion siblings collapse before the new content builds).</summary>
+        public virtual void Expand()
+        {
+            if (Parent != null && Parent.ExclusiveExpansion)
+                foreach (var sib in Parent.Children)
+                    if (sib != this && sib is Container c && c.Expanded) c.Collapse();
+            Expanded = true;
+        }
+
+        /// <summary>Collapse this Tree node. Virtual so accordion nodes can tear down (e.g. close the
+        /// game panel their expansion opened).</summary>
+        public virtual void Collapse() => Expanded = false;
 
         /// <summary>Live label override (wins over the static label) — for nodes whose name changes
         /// without a rebuild, e.g. an overlay node that shows "(standard)" based on live order.</summary>

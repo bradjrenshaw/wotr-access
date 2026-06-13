@@ -59,6 +59,8 @@
   "overlay.slope.range": "Pitch range (semitones)",
   "overlay.walltones.range": "Range (feet)",
   "overlay.walltones.tone_set": "Tone set",
+  "overlay.walltones.tone_set.1": "Set 1",
+  "overlay.walltones.tone_set.2": "Set 2",
   "overlay.object.announce_hover": "Announce hover when idle",
   "overlay.log.other": "Other messages",
 

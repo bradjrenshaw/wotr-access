@@ -52,8 +52,10 @@ namespace WrathAccess.UI.Proxies
 
         public override TooltipBaseTemplate GetTooltipTemplate()
         {
+            // The slot packs comparison templates (the EQUIPPED items) first; the focused item's own
+            // template is always LAST — same end the game's ShowInfo reads.
             var t = _slot.Tooltip.Value;
-            return t != null && t.Count > 0 ? t[0] : null;
+            return t != null && t.Count > 0 ? t[t.Count - 1] : null;
         }
 
         public override IEnumerable<ElementAction> GetActions()

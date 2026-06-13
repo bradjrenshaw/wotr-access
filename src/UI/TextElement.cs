@@ -37,6 +37,11 @@ namespace WrathAccess.UI
 
         public virtual string GetText() => _text != null ? _text() : null;
 
+        /// <summary>Whether this element carries a drill-in tooltip — checked WITHOUT building it (the
+        /// factory stays lazy). Lets a document builder split plain multi-line text into one row per
+        /// line while leaving a link/drill-in-bearing row whole.</summary>
+        public bool HasTooltip => _tooltip != null;
+
         public override bool CanFocus => !string.IsNullOrWhiteSpace(GetText());
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()

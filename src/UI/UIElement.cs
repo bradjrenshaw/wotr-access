@@ -95,6 +95,19 @@ namespace WrathAccess.UI
             return null;
         }
 
+        /// <summary>The raw game text this element shows, MARKUP INTACT (pre-strip) — the source for
+        /// inline glossary <c>&lt;link&gt;</c> extraction (Space surfaces them). Defaults to the
+        /// element's own label rendered WITHOUT stripping, so any element whose label is game text
+        /// exposes its links for free; override where the element knows a richer/different source.
+        /// Returns null/markup-free text for our own UI labels (no links → nothing extracted).</summary>
+        public virtual string GetLinkSourceText()
+        {
+            var ctx = new AnnouncementContext(this);
+            foreach (var a in GetFocusAnnouncements())
+                if (a is LabelAnnouncement) { var m = a.Render(ctx); return m != null ? m.ResolveRaw() : null; }
+            return null;
+        }
+
         /// <summary>This element's focus announcements rendered to comma-joined text, optionally limited to
         /// certain announcement types (null = all, in declared order). Used by a table's associated-element
         /// readout to speak the row's control ("Fireball, radio button, selected") on up/down.</summary>

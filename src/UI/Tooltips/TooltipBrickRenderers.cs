@@ -59,6 +59,19 @@ namespace WrathAccess.UI.Tooltips
         }
     }
 
+    // Item tooltip footer (weight | cost). The VM is a plain DoubleText subclass — same rendering,
+    // but the registry dispatches on exact type, so the subclass needs its own registration.
+    public sealed class ItemFooterBrickRenderer : TooltipBrickRenderer<TooltipBrickItemFooterVM>
+    {
+        private static readonly DoubleTextBrickRenderer Inner = new DoubleTextBrickRenderer();
+
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickItemFooterVM vm)
+            => Inner.GetExpandedElements(vm);
+
+        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
+            => Inner.GetNodes(vm);
+    }
+
     public sealed class TripleTextBrickRenderer : TooltipBrickRenderer<TooltipBrickTripleTextVM>
     {
         // Flat path: all three columns on one line. (Left/Right come from the DoubleTextVM base.)

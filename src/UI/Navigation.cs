@@ -17,6 +17,9 @@ namespace WrathAccess.UI
         /// screen like exploration, where arrows bubble to the overlay.</summary>
         public static bool HasFocus => Active != null && Active.Current != null;
 
+        /// <summary>The currently focused element, or null.</summary>
+        public static UIElement Current => Active?.Current;
+
         public static bool DispatchJustPressed(InputAction action) =>
             Active != null && Active.OnInputJustPressed(action);
 

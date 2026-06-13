@@ -93,6 +93,7 @@ namespace WrathAccess.UI.Tooltips
             Register(new ColorizedTextBrickRenderer());
             Register(new TitleBrickRenderer());
             Register(new DoubleTextBrickRenderer());
+            Register(new ItemFooterBrickRenderer());
             Register(new TripleTextBrickRenderer());
             Register(new IconAndNameBrickRenderer());
             Register(new PortraitAndNameBrickRenderer());

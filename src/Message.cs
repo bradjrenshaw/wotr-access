@@ -78,9 +78,16 @@ namespace WrathAccess
             }
         }
 
-        public string Resolve()
+        public string Resolve() => Resolve(strip: true);
+
+        /// <summary>Resolve localization + {variable} substitution but DO NOT strip rich-text markup —
+        /// the raw game text with its TMP tags (notably glossary <c>&lt;link&gt;</c> anchors) intact.
+        /// Used to extract inline links; speech always uses <see cref="Resolve()"/>.</summary>
+        public string ResolveRaw() => Resolve(strip: false);
+
+        private string Resolve(bool strip)
         {
-            if (_parts != null) return ResolveComposite();
+            if (_parts != null) return ResolveComposite(strip);
 
             string text = _rawText != null
                 ? _rawText
@@ -89,17 +96,17 @@ namespace WrathAccess
             if (_vars != null && _vars.Count > 0)
                 text = SubstituteVars(text, _vars);
 
-            return TextUtil.StripRichText(text);
+            return strip ? TextUtil.StripRichText(text) : text;
         }
 
         public override string ToString() => Resolve();
 
-        private string ResolveComposite()
+        private string ResolveComposite(bool strip)
         {
             var sb = new StringBuilder();
             foreach (var part in _parts)
             {
-                var r = part.Resolve();
+                var r = part.Resolve(strip);
                 if (string.IsNullOrEmpty(r)) continue;
                 if (sb.Length > 0) sb.Append(_separator);
                 sb.Append(r);

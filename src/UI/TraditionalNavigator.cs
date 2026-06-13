@@ -93,19 +93,46 @@ namespace WrathAccess.UI
                     // Nothing focused → don't consume (in exploration the Space chord resolves to
                     // explore.pause before this dispatches; the guard is belt-and-braces).
                     if (Current == null) return false;
-                    var tpl = Current.GetTooltipTemplate();
-                    // A cell with no tooltip of its own falls back to its row's associated element (the
-                    // control the row defers to), then to the row's tooltip — so Space works on any cell.
-                    if (tpl == null) { var assoc = Associated(Current); if (assoc != null && assoc != Current) tpl = assoc.GetTooltipTemplate(); }
-                    if (tpl == null && Current.Parent is Table grid) tpl = grid.RowTooltipForCell(Current);
-                    if (tpl == null && Current.Parent is FlowSheet sheet) tpl = sheet.RowTooltipForCell(Current);
-                    if (tpl != null) WrathAccess.Screens.TooltipScreen.Open(tpl);
-                    else Speak(Loc.T("nav.no_tooltip"));
+                    OpenTooltipOrLinks(Current);
                     return true;
                 }
                 default:
                     return false; // not a nav key → bubble to globals
             }
+        }
+
+        // Space on an element offers everything it can drill into: its own tooltip (the brick document)
+        // PLUS any inline glossary <link> targets in its text. One target → open it straight away (the
+        // common item case); several → a menu page in the tooltip reader (its own tooltip first, then
+        // each link). The menu lives inside the reader's own drill stack, so selecting/backing keeps
+        // focus and announces once (no separate chooser screen).
+        private void OpenTooltipOrLinks(UIElement el)
+        {
+            var tpl = el.GetTooltipTemplate();
+            // A cell with no tooltip of its own falls back to its row's associated element (the control
+            // the row defers to), then to the row's tooltip — so Space works on any cell.
+            if (tpl == null) { var assoc = Associated(el); if (assoc != null && assoc != el) tpl = assoc.GetTooltipTemplate(); }
+            if (tpl == null && el.Parent is Table grid) tpl = grid.RowTooltipForCell(el);
+            if (tpl == null && el.Parent is FlowSheet sheet) tpl = sheet.RowTooltipForCell(el);
+
+            var links = WrathAccess.UI.Tooltips.TooltipLinks.Extract(el.GetLinkSourceText());
+
+            int targets = (tpl != null ? 1 : 0) + links.Count;
+            if (targets == 0) { Speak(Loc.T("nav.no_tooltip")); return; }
+            // Instant-open ONLY when the lone target is the element's own tooltip. A single LINK still
+            // goes through the menu: its destination page may have no title, so the menu's labelled
+            // entry is what tells you which page you've landed on.
+            if (tpl != null && links.Count == 0)
+            {
+                WrathAccess.Screens.TooltipScreen.Open(tpl);
+                return;
+            }
+
+            var labels = new System.Collections.Generic.List<string>();
+            var opens = new System.Collections.Generic.List<System.Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate>>();
+            if (tpl != null) { var own = tpl; labels.Add(Loc.T("tooltip.view")); opens.Add(() => own); }
+            foreach (var lk in links) { labels.Add(lk.Label); opens.Add(lk.Open); }
+            WrathAccess.Screens.TooltipScreen.OpenMenu(Loc.T("tooltip.links_title"), labels, opens);
         }
 
         private bool Arrow(NavDirection dir)

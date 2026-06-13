@@ -53,9 +53,12 @@ namespace WrathAccess.UI.Proxies
 
         public override TooltipBaseTemplate GetTooltipTemplate()
         {
+            // Equip slots get a single-template list today (the comparison block only runs for plain
+            // stash slots), but read the LAST entry anyway — that's the item's own template by the
+            // slot contract (game's ShowInfo does the same).
             if (!HasItem) return null;
             var t = _slot.Tooltip.Value;
-            return t != null && t.Count > 0 ? t[0] : null;
+            return t != null && t.Count > 0 ? t[t.Count - 1] : null;
         }
 
         public override IEnumerable<ElementAction> GetActions()

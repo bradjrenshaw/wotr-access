@@ -47,11 +47,12 @@ namespace WrathAccess.UI.Proxies
             if (NeedsSkinning) yield return new ValueAnnouncement(Message.Localized("ui", "loot.needs_skinning"));
         }
 
-        // Live each time Space is pressed (per the tooltips-live-not-cached rule); first of the slot's list.
+        // Live each time Space is pressed (per the tooltips-live-not-cached rule). LAST of the slot's
+        // list — comparison templates (the EQUIPPED items) come first, the item's own template last.
         public override TooltipBaseTemplate GetTooltipTemplate()
         {
             var t = _slot.Tooltip.Value;
-            return t != null && t.Count > 0 ? t[0] : null;
+            return t != null && t.Count > 0 ? t[t.Count - 1] : null;
         }
 
         public override IEnumerable<ElementAction> GetActions()

@@ -47,8 +47,11 @@ namespace WrathAccess.Audio
 
         private static uint Fnv30(string name) => Fnv32(name) & 0x3FFFFFFF;
 
-        /// <summary>Build the bank from (stem, wav-bytes) pairs. Event name per wav: "wa_&lt;stem&gt;".</summary>
-        public static byte[] Build(IEnumerable<KeyValuePair<string, byte[]>> wavs, string bankName, out uint bankId)
+        /// <summary>Build the bank from (stem, wav-bytes) pairs. Event name per wav: "wa_&lt;stem&gt;".
+        /// Stems in <paramref name="loopStems"/> get an infinite LOOP (prop 58 = 0, as the game's
+        /// ambience sounds encode it) — stop the voice via its playing id.</summary>
+        public static byte[] Build(IEnumerable<KeyValuePair<string, byte[]>> wavs, string bankName,
+            ICollection<string> loopStems, out uint bankId)
         {
             uint bid = bankId = Fnv32(bankName); // local copy: out params can't be captured in lambdas
             uint mixerId = Fnv32(bankName + "_mixer");
@@ -77,7 +80,8 @@ namespace WrathAccess.Audio
                 uint evtId = Fnv32("wa_" + stem);
                 media.Add(new KeyValuePair<uint, byte[]>(srcId, wem));
                 soundIds.Add(sndId);
-                hirc.Add(HircObj(2, sndId, SoundPayload(srcId, (uint)wem.Length, mixerId)));
+                bool loop = loopStems != null && loopStems.Contains(stem);
+                hirc.Add(HircObj(2, sndId, SoundPayload(srcId, (uint)wem.Length, mixerId, loop)));
                 tail.Add(HircObj(3, actId, ActionPlayPayload(sndId, bid)));
                 tail.Add(HircObj(4, evtId, EventPayload(actId)));
             }
@@ -145,7 +149,7 @@ namespace WrathAccess.Audio
 
         // Byte-faithful clone of the game's 3D mixer child sound (Wrath_Main_Default 826933298):
         // inherit everything from the parent mixer (positioning bits 0), neutral gain/pitch.
-        private static byte[] SoundPayload(uint sourceId, uint mediaSize, uint parentMixerId)
+        private static byte[] SoundPayload(uint sourceId, uint mediaSize, uint parentMixerId, bool loop)
         {
             using (var ms = new MemoryStream())
             using (var w = new BinaryWriter(ms))
@@ -159,7 +163,15 @@ namespace WrathAccess.Audio
                 w.Write(0u);             // override bus: none — routed via the parent mixer
                 w.Write(parentMixerId);  // direct parent: our copy of the game's 3D mixer
                 w.Write((byte)0);        // byBitVector
-                w.Write((byte)1); w.Write((byte)6); w.Write(0f);              // prop 6 (gain): neutral
+                if (loop)
+                {
+                    // props sorted ascending: 6 (gain) then 58 (loop; the int count bit-cast — 0 = forever)
+                    w.Write((byte)2); w.Write((byte)6); w.Write((byte)58); w.Write(0f); w.Write(0u);
+                }
+                else
+                {
+                    w.Write((byte)1); w.Write((byte)6); w.Write(0f);          // prop 6 (gain): neutral
+                }
                 w.Write((byte)1); w.Write((byte)2); w.Write(0f); w.Write(0f); // ranged prop 2 (pitch): none
                 w.Write((byte)0x00);     // positioning: INHERIT the mixer 3D config
                 w.Write((byte)0);        // aux bits

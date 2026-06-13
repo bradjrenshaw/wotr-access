@@ -115,7 +115,7 @@ namespace WrathAccess.UI
             if (tpl == null && el.Parent is Table grid) tpl = grid.RowTooltipForCell(el);
             if (tpl == null && el.Parent is FlowSheet sheet) tpl = sheet.RowTooltipForCell(el);
 
-            var links = WrathAccess.UI.Tooltips.TooltipLinks.Extract(el.GetLinkSourceText());
+            var links = WrathAccess.UI.Tooltips.TooltipLinks.Extract(el.GetLinkSourceText(), el.ResolveLink);
 
             int targets = (tpl != null ? 1 : 0) + links.Count;
             if (targets == 0) { Speak(Loc.T("nav.no_tooltip")); return; }

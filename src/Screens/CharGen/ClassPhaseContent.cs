@@ -168,12 +168,11 @@ namespace WrathAccess.Screens
         {
             var tpl = Phase.ReactiveTooltipTemplate.Value;
             if (tpl == null) return;
-            var tree = new TreeGroup();
-            foreach (var node in TooltipTreeBuilder.Build(tpl, TooltipTemplateType.Info))
-                tree.Add(node);
-            if (tree.Children.Count == 0) return;
-            TooltipTreeBuilder.ExpandStructural(tree); // read fully on focus; drill-ins stay lazy
-            _detailPanel.Add(tree);
+            // Flow-sheet document: title sections become regions, glossary links follow on Space. Skip
+            // the panel when the template has no content.
+            var sheet = TooltipFlowBuilder.Build(tpl, TooltipTemplateType.Info, includeEmptyNotice: false);
+            if (sheet.RowCount == 0) return;
+            _detailPanel.Add(sheet);
         }
 
         // Mechanic mode reconstructs the game's Detailed PANEL (which is plain VM bindings, NOT a
@@ -182,54 +181,52 @@ namespace WrathAccess.Screens
         // when actually present — the auto-levelup button, as their own tab-stops.
         private void FillMechanic()
         {
-            var tree = new TreeGroup();
+            // Flow-sheet document: name + description lead, then a region per stat group (arrow through,
+            // Ctrl+Up/Down between groups). Each stat row carries the game's glossary tooltip (Space) and
+            // uses the game's own localized label, matching the panel views' SetTitle/SetTooltip calls.
+            var cs = UIStrings.Instance.CharacterSheet;
+            var cg = UIStrings.Instance.CharGen;
+            var sheet = new FlowSheet();
 
+            var lead = sheet.List(null);
             var name = Phase.ClassDisplayName.Value;
-            if (!string.IsNullOrEmpty(name)) tree.Add(TooltipNode.Leaf(name));
+            if (!string.IsNullOrEmpty(name)) lead.Item(new TextElement(name));
             var desc = Phase.ClassDescription.Value;
-            if (!string.IsNullOrEmpty(desc)) tree.Add(TooltipNode.Leaf(desc));
+            if (!string.IsNullOrEmpty(desc)) lead.Item(new TextElement(desc));
 
             // Saves/BAB are progression GRADES here (the panel's representation), not numbers.
             var m = Phase.MartialStatsVM.Value;
             if (m != null)
             {
-                // Each stat carries the game's glossary tooltip as a (collapsed) drill-in — Right to
-                // read what e.g. "Fortitude save" means. Keys match the panel views' SetTooltip calls.
-                var g = TooltipNode.Branch("Martial stats");
-                g.Add(TooltipNode.Leaf("Base attack bonus: " + m.BAB.Value, drillIn: () => new TooltipTemplateGlossary("BaseAttackBonus")));
-                g.Add(TooltipNode.Leaf("Fortitude: " + m.Fortitude.Value, drillIn: () => new TooltipTemplateGlossary("SaveFortitude")));
-                g.Add(TooltipNode.Leaf("Reflex: " + m.Reflex.Value, drillIn: () => new TooltipTemplateGlossary("SaveReflex")));
-                g.Add(TooltipNode.Leaf("Will: " + m.Will.Value, drillIn: () => new TooltipTemplateGlossary("SaveWill")));
-                g.Add(TooltipNode.Leaf("Hit points at first level: " + m.HitPointsFirstLevel.Value, drillIn: () => new TooltipTemplateGlossary("HP")));
-                g.Add(TooltipNode.Leaf("Hit points per level: " + m.HitPointsPerLevel.Value, drillIn: () => new TooltipTemplateGlossary("HPPerLevel")));
-                tree.Add(g);
+                var g = sheet.List(Loc.T("chargen.martial_stats"));
+                g.Item(StatRow((string)cs.BAB, m.BAB.Value, "BaseAttackBonus"));
+                g.Item(StatRow((string)cs.FORTITUDE, m.Fortitude.Value, "SaveFortitude"));
+                g.Item(StatRow((string)cs.REFLEX, m.Reflex.Value, "SaveReflex"));
+                g.Item(StatRow((string)cs.WILL, m.Will.Value, "SaveWill"));
+                g.Item(StatRow((string)cs.HP, m.HitPointsFirstLevel.Value, "HP"));
+                g.Item(StatRow((string)cg.HPPerLevel, m.HitPointsPerLevel.Value, "HPPerLevel"));
             }
 
             var c = Phase.ClassCasterStatsVM.Value;
             if (c != null && c.CanCast.Value)
             {
-                var g = TooltipNode.Branch("Caster stats");
-                g.Add(TooltipNode.Leaf("Maximum spell level: " + c.MaxSpellsLevel.Value, drillIn: () => new TooltipTemplateGlossary("MaxSpellsLevel")));
-                g.Add(TooltipNode.Leaf("Casting ability: " + c.CasterAbilityScore.Value, drillIn: () => new TooltipTemplateGlossary("CasterAbilityScore")));
-                g.Add(TooltipNode.Leaf("Caster type: " + c.CasterMindType.Value, drillIn: () => new TooltipTemplateGlossary("CasterType")));
-                g.Add(TooltipNode.Leaf("Spellbook: " + c.SpellbookUseType.Value, drillIn: () => new TooltipTemplateGlossary("CasterMemoryType")));
-                tree.Add(g);
+                var g = sheet.List(Loc.T("chargen.caster_stats"));
+                g.Item(StatRow((string)cg.MaxSpellsLevel, c.MaxSpellsLevel.Value, "MaxSpellsLevel"));
+                g.Item(StatRow((string)cg.CasterAbilityScore, c.CasterAbilityScore.Value, "CasterAbilityScore"));
+                g.Item(StatRow((string)cg.CasterType, c.CasterMindType.Value, "CasterType"));
+                g.Item(StatRow((string)cg.SpellbookUseType, c.SpellbookUseType.Value, "CasterMemoryType"));
             }
 
             var s = Phase.ClassSkillsVM.Value;
             if (s != null && s.ClassSkills != null && s.ClassSkills.Count > 0)
             {
-                var g = TooltipNode.Branch("Class skills");
+                var g = sheet.List((string)cs.ClassSkills);
                 foreach (var entry in s.ClassSkills)
-                    if (entry != null) g.Add(TooltipNode.Leaf(entry.DisplayName, drillIn: () => entry.TooltipTemplate));
-                tree.Add(g);
+                    if (entry != null) { var e = entry; g.Item(new TextElement(e.DisplayName, null, () => e.TooltipTemplate)); }
             }
 
-            if (tree.Children.Count > 0)
-            {
-                TooltipTreeBuilder.ExpandStructural(tree); // groups expanded so it reads fully
-                _detailPanel.Add(tree);
-            }
+            sheet.Reflow();
+            if (sheet.RowCount > 0) _detailPanel.Add(sheet);
 
             // Progression grid as a Table tab-stop: levels = columns, feature lines = rows (banded by
             // class / Shared). Space on a cell drills into the feature. The chargen class-Mechanic
@@ -254,6 +251,11 @@ namespace WrathAccess.Screens
                     () => al.RequestActivateAutoLevelup()));
             }
         }
+
+        // One mechanic stat row: "Label: grade", with the stat's game glossary tooltip drilled in on Space.
+        private static TextElement StatRow(string label, string value, string glossaryKey)
+            => new TextElement(string.IsNullOrEmpty(value) ? label : label + ": " + value,
+                null, () => new TooltipTemplateGlossary(glossaryKey));
 
         private IEnumerable<CharGenClassSelectorItemVM> Classes()
         {

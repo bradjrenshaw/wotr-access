@@ -34,9 +34,12 @@ namespace WrathAccess.UI.Tooltips
             "<link=\"?(?<id>[^\">]+)\"?>(?<txt>.*?)</link>",
             RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase);
 
-        /// <summary>The resolvable glossary links in <paramref name="raw"/>, in document order, de-duped
-        /// by link ID. Empty when there are none (the common case) or on any failure.</summary>
-        public static List<LinkTarget> Extract(string raw)
+        /// <summary>The followable links in <paramref name="raw"/>, in document order, de-duped by link
+        /// ID. Each link is offered to <paramref name="custom"/> first (an element's own non-glossary
+        /// resolver, e.g. dialogue skill-checks); if it declines, the link falls through to the standard
+        /// glossary/encyclopedia probe. Links that resolve to neither are dropped. Empty when there are
+        /// no links (the common case) or on any failure.</summary>
+        public static List<LinkTarget> Extract(string raw, Func<string, string[], TooltipBaseTemplate> custom = null)
         {
             var targets = new List<LinkTarget>();
             if (string.IsNullOrEmpty(raw) || raw.IndexOf("<link", StringComparison.OrdinalIgnoreCase) < 0)
@@ -51,16 +54,29 @@ namespace WrathAccess.UI.Tooltips
                     if (string.IsNullOrEmpty(id) || !seen.Add(id.ToLowerInvariant())) continue;
 
                     var keys = Keys(id);
-                    // Probe resolution now (cheap, static data): only keep links that actually resolve to
-                    // a glossary entry or encyclopedia page — others (skill-check links) aren't followable.
-                    var probe = new TooltipTemplateGlossary(keys);
-                    if (probe.GlossaryEntry == null && probe.Blueprint == null) continue;
+                    Func<TooltipBaseTemplate> open = null;
+
+                    // 1) The element's own resolver (skill-check links etc.). Re-invoked on each follow so
+                    //    it reads live VM data (the live-not-cached rule).
+                    if (custom != null && custom(id, keys) != null)
+                    {
+                        var ck = keys; var cid = id;
+                        open = () => custom(cid, ck);
+                    }
+
+                    // 2) Otherwise the standard glossary/encyclopedia probe (cheap, static data): keep only
+                    //    links that actually resolve — unresolvable ones (unhandled skill-checks) are dropped.
+                    if (open == null)
+                    {
+                        var probe = new TooltipTemplateGlossary(keys);
+                        if (probe.GlossaryEntry == null && probe.Blueprint == null) continue;
+                        var ck = keys;
+                        open = () => new TooltipTemplateGlossary(ck);
+                    }
 
                     var visible = TextUtil.StripRichText(m.Groups["txt"].Value);
-                    if (string.IsNullOrWhiteSpace(visible)) visible = probe.GlossaryEntry?.Name ?? id;
-
-                    var capturedKeys = keys; // fresh template on each follow, never the probe instance
-                    targets.Add(new LinkTarget(visible, () => new TooltipTemplateGlossary(capturedKeys)));
+                    if (string.IsNullOrWhiteSpace(visible)) visible = id;
+                    targets.Add(new LinkTarget(visible, open));
                 }
             }
             catch (Exception e) { Main.Log?.Error("TooltipLinks.Extract: " + e.Message); }

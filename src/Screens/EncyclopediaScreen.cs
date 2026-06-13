@@ -207,12 +207,10 @@ namespace WrathAccess.Screens
             // game's inspect rules (more details as your knowledge checks succeed).
             if (page.Page is UnitInfoPage uip && uip.UnitInfo != null)
             {
-                var bricks = new TreeGroup();
-                foreach (var node in WrathAccess.UI.Tooltips.TooltipTreeBuilder.Build(
-                    new Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateUnitInspect(uip.UnitInfo.Blueprint)))
-                    bricks.Add(node);
-                WrathAccess.UI.Tooltips.TooltipTreeBuilder.ExpandStructural(bricks);
-                if (bricks.Children.Count > 0) _page.Add(bricks);
+                var bricks = WrathAccess.UI.Tooltips.TooltipFlowBuilder.Build(
+                    new Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateUnitInspect(uip.UnitInfo.Blueprint),
+                    includeEmptyNotice: false);
+                if (bricks.RowCount > 0) _page.Add(bricks);
             }
 
             if (_navigated) { _navigated = false; FocusPage(sheet); }

@@ -43,6 +43,12 @@ namespace WrathAccess.UI
         /// </summary>
         public virtual Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate() => null;
 
+        /// <summary>Resolve a NON-glossary inline link this element specifically knows how to handle —
+        /// e.g. a dialogue skill-check link, built from the element's own check data — given the link's
+        /// raw id and the keys the game parsed from it (<c>UIUtility.GetKeysFromLink</c>). Default null
+        /// ⇒ the standard glossary/encyclopedia resolution applies. Tried BEFORE the glossary probe.</summary>
+        public virtual Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate ResolveLink(string id, string[] keys) => null;
+
         /// <summary>Like <see cref="ReannounceOnActivate"/>, but for the secondary (context) action —
         /// e.g. clearing a key binding should re-announce the now-empty value.</summary>
         public virtual bool ReannounceOnContext => false;

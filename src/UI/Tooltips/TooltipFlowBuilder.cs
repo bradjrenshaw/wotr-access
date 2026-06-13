@@ -23,8 +23,12 @@ namespace WrathAccess.UI.Tooltips
     /// </summary>
     public static class TooltipFlowBuilder
     {
+        /// <param name="includeEmptyNotice">When the template yields no rows, add a single
+        /// "No tooltip information" row (true, for the standalone reader where Space must show
+        /// something) or leave the sheet empty (false, for embedded detail panels that just want
+        /// nothing — the caller checks <see cref="FlowSheet.RowCount"/> and skips adding it).</param>
         public static FlowSheet Build(TooltipBaseTemplate template,
-            TooltipTemplateType type = TooltipTemplateType.Info)
+            TooltipTemplateType type = TooltipTemplateType.Info, bool includeEmptyNotice = true)
         {
             var sheet = new FlowSheet();
             if (template == null) return sheet;
@@ -48,7 +52,7 @@ namespace WrathAccess.UI.Tooltips
                     rows += AddRows(current, el);
             }
 
-            if (rows == 0)
+            if (rows == 0 && includeEmptyNotice)
                 sheet.List(null).Item(new TextElement(() => Loc.T("tooltip.empty")));
             sheet.Reflow();
             return sheet;

@@ -53,14 +53,11 @@ namespace WrathAccess.Screens
             var tpl = Phase.InfoVM != null ? Phase.InfoVM.CurrentTooltip : null;
             if (tpl == null) return;
 
-            // One treeview for the whole build (title ranks → groups), not a stack of section
-            // tab-stops. Structural groups start expanded so it reads fully; drill-ins stay lazy.
-            var tree = new TreeGroup();
-            foreach (var node in TooltipTreeBuilder.Build(tpl))
-                tree.Add(node);
-            if (tree.Children.Count == 0) return;
-            TooltipTreeBuilder.ExpandStructural(tree);
-            _detailPanel.Add(tree);
+            // One flow-sheet document for the whole build (title sections → regions you arrow through
+            // and Ctrl+Up/Down between); glossary links follow on Space. Skip when there's no content.
+            var sheet = TooltipFlowBuilder.Build(tpl, includeEmptyNotice: false);
+            if (sheet.RowCount == 0) return;
+            _detailPanel.Add(sheet);
         }
     }
 }

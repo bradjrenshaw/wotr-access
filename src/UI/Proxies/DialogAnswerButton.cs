@@ -16,7 +16,10 @@ namespace WrathAccess.UI.Proxies
     {
         public static ProxyActionButton For(AnswerVM vm)
             => new ProxyActionButton(() => AnswerText(vm), () => vm != null && vm.Enable.Value,
-                () => vm?.OnChooseAnswer(), suppressActivateSound: true, actionVerb: "choose");
+                () => vm?.OnChooseAnswer(), suppressActivateSound: true, actionVerb: "choose",
+                // The answer text carries a per-stat skill-check DC <link>; resolve it from this
+                // answer's own DC list (Space → the DC-preview tooltip). Glossary links fall through.
+                linkResolver: (id, keys) => DialogLinks.ResolveSkillCheck(keys, null, vm?.Answer?.Value?.SkillChecksDC));
 
         // The bind name matches the view's own (DialogAnswerView builds "DialogChoice{Index}"). Returns TMP
         // rich text ((<link>)-wrapped checks); Tts strips that at speak time. Plain fallback for system answers.

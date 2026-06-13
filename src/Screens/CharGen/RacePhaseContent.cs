@@ -62,12 +62,11 @@ namespace WrathAccess.Screens
             _detailPanel.Clear();
             var tpl = Phase.ReactiveTooltipTemplate.Value;
             if (tpl == null) return;
-            var tree = new TreeGroup();
-            foreach (var node in TooltipTreeBuilder.Build(tpl, TooltipTemplateType.Info))
-                tree.Add(node);
-            if (tree.Children.Count == 0) return;
-            TooltipTreeBuilder.ExpandStructural(tree); // read fully on focus; drill-ins stay lazy
-            _detailPanel.Add(tree);
+            // The detail as a flow-sheet document: title sections become regions you arrow through and
+            // Ctrl+Up/Down between; glossary links follow on Space. Skip the panel when there's no content.
+            var sheet = TooltipFlowBuilder.Build(tpl, TooltipTemplateType.Info, includeEmptyNotice: false);
+            if (sheet.RowCount == 0) return;
+            _detailPanel.Add(sheet);
         }
     }
 }

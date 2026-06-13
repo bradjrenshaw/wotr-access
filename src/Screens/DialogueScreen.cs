@@ -154,7 +154,8 @@ namespace WrathAccess.Screens
             bool hasRealAnswers = vm.Answers.Value != null && vm.Answers.Value.Count > 0;
             // The live line — focus here to repeat it; Enter on it presses Continue when that's the
             // only way forward (never when real choices exist).
-            _cueRow = new CueRow(() => CueLine(vm), () => hasRealAnswers ? null : vm.SystemAnswer.Value);
+            _cueRow = new CueRow(() => CueLine(vm), () => hasRealAnswers ? null : vm.SystemAnswer.Value,
+                () => vm.Cue.Value?.SkillChecks);
             log.Item(_cueRow);
 
             var answers = sheet.List(null); // unlabeled: "Answers" before the choices is auditory noise
@@ -186,13 +187,21 @@ namespace WrathAccess.Screens
         private sealed class CueRow : TextElement
         {
             private readonly Func<AnswerVM> _continueAnswer;
+            private readonly Func<List<Kingmaker.Controllers.Dialog.SkillCheckResult>> _skillChecks;
 
-            public CueRow(Func<string> text, Func<AnswerVM> continueAnswer) : base(text)
+            public CueRow(Func<string> text, Func<AnswerVM> continueAnswer,
+                Func<List<Kingmaker.Controllers.Dialog.SkillCheckResult>> skillChecks) : base(text)
             {
                 _continueAnswer = continueAnswer;
+                _skillChecks = skillChecks;
             }
 
             public override Kingmaker.UI.UISoundType? ActivateSound => null;
+
+            // The cue line carries a skill-check RESULT <link> when a check was just rolled; resolve it
+            // from the cue's result list (Space → the roll breakdown). Glossary links fall through.
+            public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate ResolveLink(string id, string[] keys)
+                => WrathAccess.UI.Proxies.DialogLinks.ResolveSkillCheck(keys, _skillChecks?.Invoke(), null);
 
             public override IEnumerable<ElementAction> GetActions()
             {

@@ -390,6 +390,8 @@
   "chargen.skill_points": "Skill points remaining: {points}, max rank {rank}",
   "chargen.alignments": "Alignments",
   "chargen.archetypes": "Archetypes",
+  "chargen.martial_stats": "Martial stats",
+  "chargen.caster_stats": "Caster stats",
   "chargen.races": "Races",
   "chargen.gender": "Gender",
   "chargen.voices": "Voices",

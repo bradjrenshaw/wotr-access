@@ -19,17 +19,21 @@ namespace WrathAccess.UI.Proxies
         private readonly Func<bool> _canFocus;
         private readonly bool _suppressSound;
         private readonly string _actionVerb;
+        private readonly Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> _linkResolver;
 
         public ProxyActionButton(string label, Func<bool> enabled, Action activate,
-            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate")
-            : this(() => label, enabled, activate, canFocus, suppressActivateSound, actionVerb) { }
+            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate",
+            Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> linkResolver = null)
+            : this(() => label, enabled, activate, canFocus, suppressActivateSound, actionVerb, linkResolver) { }
 
         // Live label — for buttons whose text changes (e.g. a wizard's Next → "Start"). canFocus skips
         // structural entries (e.g. a context-menu separator); suppressActivateSound is for buttons whose
         // activation plays the game's own sound (e.g. a dialogue answer plays NextDialogLine). actionVerb
-        // is a "ui" table key under "action." (e.g. "activate", "choose").
+        // is a "ui" table key under "action." (e.g. "activate", "choose"). linkResolver handles any
+        // non-glossary inline links in the label (e.g. a dialogue answer's skill-check DC link).
         public ProxyActionButton(Func<string> label, Func<bool> enabled, Action activate,
-            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate")
+            Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate",
+            Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> linkResolver = null)
         {
             _label = label;
             _enabled = enabled;
@@ -37,7 +41,11 @@ namespace WrathAccess.UI.Proxies
             _canFocus = canFocus;
             _suppressSound = suppressActivateSound;
             _actionVerb = actionVerb;
+            _linkResolver = linkResolver;
         }
+
+        public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate ResolveLink(string id, string[] keys)
+            => _linkResolver != null ? _linkResolver(id, keys) : null;
 
         public override bool CanFocus => _canFocus == null || _canFocus();
 

@@ -123,6 +123,29 @@ namespace WrathAccess.Exploration.Overlays
                 if (proto is AudioSystem && volumes.GetByKey(proto.Key) == null)
                     volumes.Add(new IntSetting(proto.Key, proto.Name + " volume", 100, 0, 100, 5,
                         "audio.volumes." + proto.Key));
+
+            // The audio listener anchor (the "virtual head" — see ListenerAnchor): where the game's
+            // 3D audio is heard from. Default = the same reference the sonification pans from, so
+            // game audio and our sounds share one spatial frame; "camera" is the vanilla behaviour.
+            var audio = ModSettingsRegistry.EnsureCategory("audio", "Audio", "category.audio");
+            if (audio.GetByKey("engine") == null)
+                audio.Add(new ChoiceSetting("engine", "Sound playback",
+                    new System.Collections.Generic.List<Choice>
+                    {
+                        new Choice("wwise", "Game audio engine (3D, occlusion-capable)", "audio.engine.wwise"),
+                        new Choice("classic", "Classic (flat stereo panning)", "audio.engine.classic"),
+                    }, "wwise", "audio.engine"));
+            if (audio.GetByKey("listener") == null)
+                audio.Add(new ChoiceSetting("listener", "Game audio heard from",
+                    new System.Collections.Generic.List<Choice>
+                    {
+                        new Choice("cursor", "Cursor (falls back to party)", "audio.listener.cursor"),
+                        new Choice("party", "Party leader", "audio.listener.party"),
+                        new Choice("camera", "Camera (game default)", "audio.listener.camera"),
+                    }, "cursor", "audio.listener"));
+            if (audio.GetByKey("listener_height") == null)
+                audio.Add(new IntSetting("listener_height", "Listener height (feet)", 35, 0, 80, 5,
+                    "audio.listener_height"));
         }
 
         private static CategorySetting BuildSlotSettings(string path, string labelPath, string locKey,

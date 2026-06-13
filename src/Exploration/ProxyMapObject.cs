@@ -154,7 +154,10 @@ namespace WrathAccess.Exploration
                 case LootContainerType.Environment: return SonarTaxonomy.ContainersEnvironment;
                 case LootContainerType.PlayerChest: return SonarTaxonomy.ContainersStash;
                 case LootContainerType.OneSlot: return SonarTaxonomy.ContainersSingle;
-                default: return "loot-generic"; // DefaultLoot + anything new
+                // DefaultLoot + anything new → the catch-all container NODE. (This used to return the
+                // raw sound stem "loot-generic", which is not a taxonomy key — Resolve() found no such
+                // node and every DefaultLoot container went SILENT in the sonar/cues.)
+                default: return SonarTaxonomy.ContainersOther;
             }
         }
 

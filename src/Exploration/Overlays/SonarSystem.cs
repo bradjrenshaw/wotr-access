@@ -79,6 +79,8 @@ namespace WrathAccess.Exploration.Overlays
             var stem = Settings?.Get<WrathAccess.Settings.ChoiceSetting>("review_sound")?.ValueId;
             if (string.IsNullOrEmpty(stem) || stem == "silent") return;
 
+            if (WrathAccess.Audio.WwiseAudio.TryPost(stem, item.Position, EffectiveVolume)) return;
+
             var p = item.Position;
             float dx = p.x - from.x, dz = p.z - from.z;
             float dist = Mathf.Sqrt(dx * dx + dz * dz);
@@ -141,6 +143,10 @@ namespace WrathAccess.Exploration.Overlays
             if (!item.IsVisible || !item.CurrentlySeen) return; // went away since the snapshot
             var snd = SonarTaxonomy.Resolve(item.Primary); // live: the user's per-node pick
             if (snd == null) return;
+
+            // Wwise path: a REAL 3D emitter at the thing — the game's listener (the virtual head),
+            // attenuation and mixer do the spatial work; our settings volume still applies.
+            if (WrathAccess.Audio.WwiseAudio.TryPost(snd, item.Position, EffectiveVolume)) return;
 
             var c = overlay.Cursor.Position;
             var p = item.Position;

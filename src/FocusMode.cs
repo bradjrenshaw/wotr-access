@@ -16,6 +16,7 @@ namespace WrathAccess
     public static class FocusMode
     {
         private static IDisposable _guard;
+        private static object _keyboard; // the KeyboardAccess instance the guard belongs to
 
         public static bool Active => _guard != null;
 
@@ -27,7 +28,9 @@ namespace WrathAccess
             if (on)
             {
                 // Game/Keyboard may not exist extremely early; if so, this no-ops.
-                _guard = Game.Instance?.Keyboard?.Disabled.Scope();
+                var kb = Game.Instance?.Keyboard;
+                _guard = kb?.Disabled.Scope();
+                _keyboard = kb;
                 if (_guard == null)
                     Main.Log?.Log("FocusMode: could not engage (game not ready).");
             }
@@ -35,7 +38,23 @@ namespace WrathAccess
             {
                 _guard?.Dispose();
                 _guard = null;
+                _keyboard = null;
             }
+        }
+
+        /// <summary>Per-frame: re-acquire the suppression scope when the game rebuilds its keyboard.
+        /// Returning to the main menu / loading a save constructs a fresh KeyboardAccess, so a scope
+        /// held on the old instance suppresses nothing — the game's own hotkeys come back alive (the
+        /// game's Escape was toggling our freshly opened pause menu straight back shut).</summary>
+        public static void Tick()
+        {
+            if (!Active) return;
+            var kb = Game.Instance?.Keyboard;
+            if (kb == null || ReferenceEquals(kb, _keyboard)) return;
+            _guard.Dispose(); // release the old instance's counter (harmless if it's defunct)
+            _guard = kb.Disabled.Scope();
+            _keyboard = kb;
+            Main.Log?.Log("FocusMode: re-engaged on a fresh KeyboardAccess (scene reload).");
         }
     }
 }

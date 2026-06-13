@@ -143,9 +143,10 @@ namespace WrathAccess.Exploration
             Speak(all.Count + " area parts: " + string.Join("; ", spoken));
         }
 
-        // Debug (F10): dump every map object's identity to Player.log — GameObject/prefab name, blueprint
-        // name, and the local-map marker label — to gauge whether prefab names alone give descriptive
-        // object names (the cheap "tier 1" of describing map objects). Read via the Unity Player.log.
+        // Debug (F10): dump every map object's identity AND its sonar pipeline view to Player.log —
+        // GameObject/prefab name, blueprint, marker label, interaction parts (+Enabled), our Primary
+        // taxonomy node, the resolved sound, and the visibility gates. The one-stop "why doesn't this
+        // thing ping" probe. Read via the Unity Player.log.
         public static void DumpObjectNames()
         {
             if (!Active) return;
@@ -161,7 +162,28 @@ namespace WrathAccess.Exploration
                 var fh = view != null ? view.FactHolder : null;
                 string bp = (fh != null && fh.Blueprint != null) ? fh.Blueprint.name : "";
                 string marker = mo.Get<Kingmaker.View.MapObjects.LocalMapMarkerPart>()?.GetDescription() ?? "";
-                Main.Log?.Log("[objdump] go='" + go + "' bp='" + bp + "' marker='" + marker + "'");
+
+                var parts = new System.Text.StringBuilder();
+                var interactions = mo.Interactions;
+                if (interactions != null)
+                    for (int i = 0; i < interactions.Count; i++)
+                    {
+                        var part = interactions[i];
+                        if (part == null) continue;
+                        if (parts.Length > 0) parts.Append(",");
+                        parts.Append(part.GetType().Name).Append(part.Enabled ? "" : "(disabled)");
+                        if (part is Kingmaker.View.MapObjects.InteractionLootPart lp)
+                            parts.Append("[").Append(lp.Settings != null ? lp.Settings.LootContainerType.ToString() : "?").Append("]");
+                    }
+
+                var proxy = new ProxyMapObject(mo);
+                string primary = proxy.Primary ?? "null";
+                string snd = SonarTaxonomy.Resolve(proxy.Primary) ?? "silent";
+                Main.Log?.Log("[objdump] go='" + go + "' bp='" + bp + "' marker='" + marker + "'"
+                    + " parts=[" + parts + "]"
+                    + " primary=" + primary + " sound=" + snd
+                    + " vis=" + proxy.IsVisible + " seen=" + proxy.CurrentlySeen
+                    + " inGame=" + mo.IsInGame + " revealed=" + mo.IsRevealed + " percept=" + mo.IsPerceptionCheckPassed);
                 n++;
             }
             Main.Log?.Log("[objdump] === " + n + " map objects ===");

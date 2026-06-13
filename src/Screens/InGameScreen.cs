@@ -124,6 +124,11 @@ namespace WrathAccess.Screens
                 () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText),
                 () => true,
                 RestAction.TryRest));
+            // The game's gear button: opens the pause/Escape menu (EscMenuScreen takes over).
+            menu.Add(new ProxyActionButton(Loc.T("hud.game_menu"), () => true,
+                () => Kingmaker.PubSubSystem.EventBus.RaiseEvent(
+                    delegate(Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); }),
+                actionVerb: "open"));
             Add(menu);
 
             // Service-window buttons (the game's bottom bar): one Tab-stop list after Log. Activating one

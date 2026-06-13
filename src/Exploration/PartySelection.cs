@@ -50,7 +50,11 @@ namespace WrathAccess.Exploration
             var sm = Game.Instance?.UI?.SelectionManager;
             if (sm == null) return;
             sm.SelectAll();
-            int n = Game.Instance.SelectionCharacter.SelectedUnits.Count;
+            // Count only units that survive the game's controllability purge (capital party mode
+            // leaves just the main character + their pets commandable).
+            int n = 0;
+            foreach (var u in Game.Instance.SelectionCharacter.SelectedUnits)
+                if (u != null && u.IsDirectlyControllable) n++;
             Tts.Speak(n == 1 ? Loc.T("party.selected_all_one") : Loc.T("party.selected_all", new { count = n }), interrupt: true);
         }
 
@@ -60,6 +64,15 @@ namespace WrathAccess.Exploration
             if (ring.Count == 0)
             {
                 Tts.Speak(Loc.T("party.no_member", new { index = index + 1 }), interrupt: true);
+                return;
+            }
+            // Capital party mode (e.g. the Defender's Heart): companions roam as NPCs — the game
+            // purges non-controllable units from the selection every frame (SelectionManagerBase
+            // .LateUpdate gates on IsDirectlyControllable), so "selecting" them is a lie that
+            // silently reverts to the main character. Say so instead.
+            if (!ring[0].IsDirectlyControllable)
+            {
+                Tts.Speak(Loc.T("party.not_commandable", new { name = ring[0].CharacterName }), interrupt: true);
                 return;
             }
 

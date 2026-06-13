@@ -80,6 +80,9 @@ namespace WrathAccess
                 var ticker = new GameObject("WrathAccess.Ticker");
                 UnityEngine.Object.DontDestroyOnLoad(ticker);
                 ticker.AddComponent<Ticker>();
+                // The virtual audio head (+10000: its LateUpdate must land AFTER the game's camera
+                // snap so the listener override wins while active).
+                ticker.AddComponent<WrathAccess.Exploration.ListenerAnchor>();
 
                 Log.Log("WrathAccess initialized. " + BuildStamp());
                 Tts.Speak(Loc.T("app.loaded"));
@@ -126,6 +129,8 @@ namespace WrathAccess
                 FocusMode.Set(true); // silent: the first screen announcement signals we're live
             }
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
+            FocusMode.Tick(); // re-acquire the hotkey-suppression scope if the game rebuilt its keyboard
+            WrathAccess.Audio.WwiseAudio.Tick(); // generate+load our Wwise bank once the engine is up
             InputManager.Tick();
             ScreenManager.Tick();
             WrathAccess.UI.Navigation.TickTypeahead(); // typed letters → type-ahead search (after dispatch)
@@ -383,8 +388,15 @@ namespace WrathAccess
             // leader's compass region within the section's map bounds.
             InputManager.Register("explore.whereAmI", "Where am I", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.Y);
-            InputManager.Register("explore.cancelTargeting", "Cancel targeting", InputCategory.Exploration,
-                () => { if (WrathAccess.Exploration.Targeting.Aiming) WrathAccess.Exploration.Targeting.Cancel(); })
+            InputManager.Register("explore.cancelTargeting", "Cancel targeting / game menu", InputCategory.Exploration,
+                () =>
+                {
+                    if (WrathAccess.Exploration.Targeting.Aiming) { WrathAccess.Exploration.Targeting.Cancel(); return; }
+                    // Nothing to cancel → Escape opens the game's pause menu, exactly like the game's
+                    // own Esc key (the handler toggles, and EscMenuScreen takes over while it's open).
+                    Kingmaker.PubSubSystem.EventBus.RaiseEvent(
+                        delegate(Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); });
+                })
                 .AddBinding(KeyCode.Escape);
 
             // Party selection - drives the game's real selection, which decides move-to-cursor's

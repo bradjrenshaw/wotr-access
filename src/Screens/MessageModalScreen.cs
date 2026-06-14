@@ -12,8 +12,9 @@ namespace WrathAccess.Screens
     /// message text and exposes the Accept / Decline buttons, activating them via the VM
     /// (OnAcceptPressed / OnDeclinePressed). Layer 30 (above everything else).
     ///
-    /// Input-box / item-list modal variants aren't handled yet — only the message + buttons
-    /// (the common confirm case).
+    /// Text-field modals (e.g. the save overwrite-rename prompt) add an editable name field that opens
+    /// our text-entry overlay; Accept reads the field (the VM's OnAcceptPressed passes InputText on).
+    /// The item-list modal variant isn't handled yet.
     /// </summary>
     public sealed class MessageModalScreen : Screen
     {
@@ -61,6 +62,15 @@ namespace WrathAccess.Screens
             // all direct children of the root panel, so they're individual Tab-stops.
             if (!string.IsNullOrEmpty(vm.MessageText))
                 Add(new TextElement(vm.MessageText));
+
+            // Text-field modal (e.g. save overwrite-rename): an editable field. Enter opens our text-entry
+            // overlay prefilled with the current value; Accept below submits it (OnAcceptPressed reads InputText).
+            if (vm.ModalType == Kingmaker.UI.MessageModalBase.ModalType.TextField)
+                Add(new ProxyActionButton(
+                    () => Loc.T("modal.edit_name", new { value = vm.InputText.Value }),
+                    () => true,
+                    () => ModTextEntryScreen.Open(Loc.T("modal.name"), vm.InputText.Value, t => vm.InputText.Value = t),
+                    actionVerb: "edit"));
 
             Add(new ProxyActionButton(vm.AcceptText, () => true, () => vm.OnAcceptPressed()));
             if (vm.ShowDecline)

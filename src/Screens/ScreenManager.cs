@@ -113,7 +113,7 @@ namespace WrathAccess.Screens
 
             // Overlays (can sit on top of a context/window). Settings lives on the
             // shared CommonVM, so this same screen also covers the in-game pause menu.
-            Register(new PredicateScreen("overlay.saveload", Loc.T("screen.saveload"), 20, () => RC()?.SaveLoadIsShown ?? false));
+            Register(new SaveLoadScreen()); // save/load window (CommonVM.SaveLoadVM), layer 20
             Register(new SettingsScreen());
             Register(new ChoiceSubmenuScreen()); // mod-pushed, layer 26 (above settings)
             Register(new KeyBindCaptureScreen()); // key-binding capture, layer 27 (raw-input passthrough)

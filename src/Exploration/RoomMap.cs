@@ -54,7 +54,9 @@ namespace WrathAccess.Exploration
         /// (closed) have no connections there — the scanner adds door items to the V-cycle separately.</summary>
         public sealed class Exit
         {
-            public Vector3 Position;
+            public Vector3 Position;   // the opening's centre — the cursor target
+            public Vector3[] Edges;    // navmesh portal edges (flat endpoint pairs) — fallback geometry
+            public Vector3[] Boundary; // the watershed boundary cells of this opening (complete; preferred)
             public Room To;
         }
 
@@ -586,6 +588,40 @@ namespace WrathAccess.Exploration
         // its floor and ate the exit), and a cliff edge has no connection at all — so this is
         // exact in both directions. Portal points cluster per room pair (single-link, 2m);
         // each cluster = one Exit on both rooms.
+        // The watershed boundary between every adjacent room pair: the world midpoints of cell edges
+        // where one room's cells meet another's (height-continuous only — a cliff edge isn't a crossing).
+        // This is the COMPLETE opening threshold, unlike navmesh portal edges (which only land where a
+        // triangle edge happens to lie on the boundary). Keyed by the (min,max) room label pair.
+        private static Dictionary<long, List<Vector3>> GridBoundaries()
+        {
+            var map = new Dictionary<long, List<Vector3>>();
+            if (_label == null) return map;
+            for (int z = 0; z < _h; z++)
+                for (int x = 0; x < _w; x++)
+                {
+                    int i = z * _w + x;
+                    int la = _label[i];
+                    if (la < 0) continue;
+                    if (x + 1 < _w) AddBoundaryCell(map, i, la, z * _w + (x + 1));   // +x neighbour
+                    if (z + 1 < _h) AddBoundaryCell(map, i, la, (z + 1) * _w + x);   // +z neighbour
+                }
+            return map;
+        }
+
+        private static void AddBoundaryCell(Dictionary<long, List<Vector3>> map, int i, int la, int j)
+        {
+            int lb = _label[j];
+            if (lb < 0 || lb == la) return;
+            if (Math.Abs(_cellY[i] - _cellY[j]) > DyGate) return; // cliff edge over another floor: not a crossing
+            long key = ((long)Math.Min(la, lb) << 32) | (uint)Math.Max(la, lb);
+            List<Vector3> pts;
+            if (!map.TryGetValue(key, out pts)) { pts = new List<Vector3>(); map[key] = pts; }
+            int gxi = i % _w, gzi = i / _w, gxj = j % _w, gzj = j / _w;
+            float cx = _x0 + ((gxi + gxj) * 0.5f - 0.5f) * _cell;
+            float cz = _z0 + ((gzi + gzj) * 0.5f - 0.5f) * _cell;
+            pts.Add(new Vector3(cx, (_cellY[i] + _cellY[j]) * 0.5f, cz));
+        }
+
         private static void BuildExits()
         {
             var graphs = AstarPath.active?.data?.graphs;
@@ -638,10 +674,15 @@ namespace WrathAccess.Exploration
                 });
             }
             const float VertEps2 = 0.05f * 0.05f; // shared navmesh vertices are exact; small tolerance for float
+            var gridBounds = GridBoundaries(); // the watershed boundary cells, keyed by room-label pair
             foreach (var kv in portals)
             {
                 var a = _rooms[(int)(kv.Key >> 32) - 1];
                 var b = _rooms[(int)(kv.Key & 0xFFFFFFFF) - 1];
+                int la = (int)(kv.Key >> 32) - 1, lb = (int)(kv.Key & 0xFFFFFFFF) - 1; // grid labels
+                long bkey = ((long)Math.Min(la, lb) << 32) | (uint)Math.Max(la, lb);
+                List<Vector3> boundaryCells;
+                gridBounds.TryGetValue(bkey, out boundaryCells);
                 var pts = kv.Value;
                 // Cluster by boundary connectivity: portals join if their edges share an endpoint (one
                 // contiguous opening, however wide/curved — large+small triangles still share vertices),
@@ -661,27 +702,42 @@ namespace WrathAccess.Exploration
                             int ri = find(i), rj = find(j);
                             if (ri != rj) root[ri] = rj;
                         }
-                var sums = new Dictionary<int, Vector3>();
-                var counts = new Dictionary<int, int>();
+                var groups = new Dictionary<int, List<PortalEdge>>();
                 for (int i = 0; i < pts.Count; i++)
                 {
                     int r = find(i);
-                    Vector3 sum;
-                    sums.TryGetValue(r, out sum);
-                    sums[r] = sum + pts[i].Mid;
-                    int c;
-                    counts.TryGetValue(r, out c);
-                    counts[r] = c + 1;
+                    List<PortalEdge> g;
+                    if (!groups.TryGetValue(r, out g)) { g = new List<PortalEdge>(); groups[r] = g; }
+                    g.Add(pts[i]);
                 }
-                foreach (var cl in sums)
+                foreach (var g in groups.Values)
                 {
-                    var pos = cl.Value / counts[cl.Key];
-                    // The centroid of a curved portal chain can drift off the mesh; snap it back to
-                    // the walkable surface — the cursor is planted RAW on this point (Home/Slash).
+                    Vector3 sum = Vector3.zero;
+                    foreach (var e in g) sum += e.Mid;
+                    var pos = sum / g.Count;
+                    // The centroid of a curved portal chain can drift off the mesh; snap it back to the
+                    // walkable surface — the cursor is planted RAW on this point (Home/Slash).
                     var snap = NavmeshProbe.Sample(pos.x, pos.z, pos.y);
                     if (snap.Point != Vector3.zero) pos = snap.Point;
-                    a.Exits.Add(new Exit { Position = pos, To = b });
-                    b.Exits.Add(new Exit { Position = pos, To = a });
+                    // Navmesh portal edges — fallback geometry (only catches where a triangle edge lies
+                    // on the boundary; used when the grid boundary missed this opening, e.g. a ramp).
+                    var edges = new Vector3[g.Count * 2];
+                    for (int i = 0; i < g.Count; i++) { edges[i * 2] = g[i].A; edges[i * 2 + 1] = g[i].B; }
+                    // Preferred geometry: the watershed boundary cells of THIS opening — the complete
+                    // threshold (including where it cuts mid-triangle), scoped to this cluster's centroid.
+                    Vector3[] boundary = null;
+                    if (boundaryCells != null)
+                    {
+                        var near = new List<Vector3>();
+                        foreach (var c in boundaryCells)
+                        {
+                            float dx = c.x - pos.x, dz = c.z - pos.z;
+                            if (dx * dx + dz * dz <= 6f * 6f) near.Add(c);
+                        }
+                        if (near.Count > 0) boundary = near.ToArray();
+                    }
+                    a.Exits.Add(new Exit { Position = pos, Edges = edges, Boundary = boundary, To = b });
+                    b.Exits.Add(new Exit { Position = pos, Edges = edges, Boundary = boundary, To = a });
                 }
             }
         }

@@ -202,7 +202,7 @@ namespace WrathAccess.Exploration
 
             var refPos = ScanFrom;
             foreach (var list in _items.Values)
-                list.Sort((a, b) => Geo.Distance(refPos, a.Position).CompareTo(Geo.Distance(refPos, b.Position)));
+                list.Sort((a, b) => a.DistanceTo(refPos).CompareTo(b.DistanceTo(refPos)));
         }
 
         private static void Add(ScanItem item)
@@ -300,7 +300,14 @@ namespace WrathAccess.Exploration
             private readonly RoomMap.Exit _exit;
             public RoomExitItem(RoomMap.Exit exit) { _exit = exit; }
             public override string Name => Loc.T("exit.to_room", new { room = RoomMap.Describe(_exit.To) });
-            public override Vector3 Position => _exit.Position;
+            public override Vector3 Position => _exit.Position; // centre of the opening (cursor target)
+            // Distance/bearing report the nearest part of the opening: the watershed boundary cells (the
+            // complete threshold) when we have them, else the navmesh portal edges (e.g. a ramp the grid
+            // missed). The cursor still targets the centre.
+            public override ScanBounds Bounds
+                => _exit.Boundary != null && _exit.Boundary.Length > 0
+                    ? ScanBounds.Cloud(_exit.Position, _exit.Boundary)
+                    : ScanBounds.Segments(_exit.Position, _exit.Edges);
             public override IEnumerable<ScanCategory> Categories { get { yield return ScanCategory.Exits; } }
         }
 
@@ -352,7 +359,7 @@ namespace WrathAccess.Exploration
                 if (!covered) candidates.Add(new RoomExitItem(exit));
             }
             if (candidates.Count == 0) { Speak(emptyMsg); return; }
-            candidates.Sort((a, b) => Geo.Distance(refPos, a.Position).CompareTo(Geo.Distance(refPos, b.Position)));
+            candidates.Sort((a, b) => a.DistanceTo(refPos).CompareTo(b.DistanceTo(refPos)));
 
             // Continue from the current target when it's one of these exits; openings match by
             // position, since RoomExitItems are recreated on every press.
@@ -393,7 +400,7 @@ namespace WrathAccess.Exploration
                 Speak(Loc.T("scan.category_empty", new { label = ReviewGroupLabel(group) }));
                 return;
             }
-            candidates.Sort((a, b) => Geo.Distance(refPos, a.Position).CompareTo(Geo.Distance(refPos, b.Position)));
+            candidates.Sort((a, b) => a.DistanceTo(refPos).CompareTo(b.DistanceTo(refPos)));
 
             // Continue from the current target when it's in this group; otherwise enter at the nearest
             // (or, cycling backward into a fresh group, the farthest). Distances are live, so the order

@@ -43,6 +43,15 @@ namespace WrathAccess.Exploration
         /// </summary>
         public virtual float Footprint => 0f;
 
+        /// <summary>The thing's spatial extent. Default: a circle of <see cref="Footprint"/> (a point when
+        /// 0). Things with a non-circular shape override — e.g. an exit is the doorway's opening span — so
+        /// distance/bearing report the nearest PART of the thing while the cursor still targets its centre.</summary>
+        public virtual ScanBounds Bounds
+            => Footprint > 0f ? ScanBounds.Circle(Position, Footprint) : ScanBounds.Point(Position);
+
+        /// <summary>Distance from <paramref name="from"/> to the nearest part of the thing (not its centre).</summary>
+        public float DistanceTo(Vector3 from) => Geo.Distance(from, Bounds.NearestPoint(from));
+
         /// <summary>
         /// The PRIMARY taxonomy node (<see cref="SonarTaxonomy"/> key) — the single, state-aware role
         /// this thing sounds as right now (a dead lootable enemy is primary containers.corpse; an exit
@@ -63,7 +72,9 @@ namespace WrathAccess.Exploration
         {
             var name = string.IsNullOrEmpty(Name) ? Loc.T("scan.unnamed") : Name;
             var extra = Extra;
-            var rel = Geo.Relative(reference, Position);
+            // Bearing/distance to the nearest PART of the thing; the reported coordinate stays its centre
+            // (where the cursor would snap).
+            var rel = Geo.Relative(reference, Bounds.NearestPoint(reference), Position);
             return string.IsNullOrEmpty(extra) ? name + ", " + rel : name + ", " + extra + ", " + rel;
         }
 

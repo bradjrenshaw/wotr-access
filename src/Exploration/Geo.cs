@@ -65,13 +65,18 @@ namespace WrathAccess.Exploration
         public static string Raw(Vector3 v) => Loc.T("geo.pos", new { x = v.x.ToString("0.0"), y = v.y.ToString("0.0"), z = v.z.ToString("0.0") });
 
         /// <summary>"&lt;bearing&gt;, &lt;dist&gt; ft[, above/below], pos x y z" relative to a reference point.</summary>
-        public static string Relative(Vector3 from, Vector3 to)
+        public static string Relative(Vector3 from, Vector3 to) => Relative(from, to, to);
+
+        /// <summary>As <see cref="Relative(Vector3,Vector3)"/>, but bearing/distance/verticality measure to
+        /// <paramref name="measureTo"/> (the nearest part of a sized thing) while the reported "pos x y z"
+        /// stays <paramref name="posTo"/> (its centre — where the cursor snaps).</summary>
+        public static string Relative(Vector3 from, Vector3 measureTo, Vector3 posTo)
         {
-            if (IsHere(from, to)) return Loc.T("geo.here") + ", " + Raw(to);
-            var s = Bearing(from, to) + ", " + FeetStr(Distance(from, to));
-            var vert = Vertical(from, to);
+            if (IsHere(from, measureTo)) return Loc.T("geo.here") + ", " + Raw(posTo);
+            var s = Bearing(from, measureTo) + ", " + FeetStr(Distance(from, measureTo));
+            var vert = Vertical(from, measureTo);
             if (vert != null) s += ", " + vert;
-            return s + ", " + Raw(to);
+            return s + ", " + Raw(posTo);
         }
     }
 }

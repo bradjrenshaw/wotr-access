@@ -6,12 +6,12 @@ namespace WrathAccess.Speech
 {
     /// <summary>
     /// Windows SAPI 5 driven directly over COM through <see cref="ComDispatch"/> (manual IDispatch —
-    /// see that class for why: Unity's Mono implements neither System.Speech's registry internals nor
-    /// managed COM activation). Rate / volume / voice settings; the no-screen-reader fallback.
-    ///
-    /// Also the audio RENDERER for world-positioned speech: <see cref="RenderToAudio"/> synthesizes to
-    /// an <c>SpMemoryStream</c> on a second, independent SpVoice (so rendering never disturbs live
-    /// speech — and it works even when the active handler is Prism/NVDA).
+    /// Unity's Mono implements neither System.Speech's registry internals nor managed COM activation).
+    /// Param-driven: rate / volume / voice are read from the speaking <see cref="SpeechConfig"/> and
+    /// applied to the SpVoice each call (voice selection — the expensive part — only re-runs when the
+    /// chosen voice actually changes). Also the audio RENDERER for world-positioned speech:
+    /// <see cref="RenderToAudio"/> synthesizes on a second, independent SpVoice (so rendering never
+    /// disturbs live speech, and works even when the active live handler is Prism/NVDA).
     /// </summary>
     public class SapiHandler : ISpeechHandler
     {
@@ -24,48 +24,31 @@ namespace WrathAccess.Speech
 
         private ComDispatch _voice;        // live speech
         private ComDispatch _renderVoice;  // render-to-memory (independent of live speech)
-        private CategorySetting _settings;
-        private IntSetting _rate;
-        private IntSetting _volume;
-        private ChoiceSetting _voiceSetting;
+        private string _liveVoiceName;     // last voice selected on _voice (skip redundant SelectVoice)
+        private string _renderVoiceName;   // last voice selected on _renderVoice
+        private static List<Choice> _voiceChoices; // enumerated once
 
         public string Key => "sapi";
         public string Label => "SAPI";
         public string LocalizationKey => "speech.sapi";
 
-        public CategorySetting GetSettings()
+        public void BuildSettings(CategorySetting into)
         {
-            if (_settings != null) return _settings;
+            into.Add(new IntSetting("rate", "Rate", 2, -10, 10, 1, "speech.sapi.rate"));
+            into.Add(new IntSetting("volume", "Volume", 100, 0, 100, 5, "speech.sapi.volume"));
+            var voices = VoiceChoices();
+            into.Add(new ChoiceSetting("voice", "Voice", voices, voices[0].Id, "speech.sapi.voice"));
+        }
 
-            _settings = new CategorySetting(Key, Label, localizationKey: "speech.sapi");
-            _rate = new IntSetting("rate", "Rate", 2, -10, 10, 1, "speech.sapi.rate");
-            _volume = new IntSetting("volume", "Volume", 100, 0, 100, 5, "speech.sapi.volume");
-
+        private static List<Choice> VoiceChoices()
+        {
+            if (_voiceChoices != null) return _voiceChoices;
             var voices = new List<Choice>();
-            try
-            {
-                foreach (var name in VoiceNames()) voices.Add(new Choice(name, name));
-            }
-            catch (Exception ex)
-            {
-                Main.Log?.Warning("[speech] Failed to enumerate SAPI voices: " + ex.Message);
-            }
+            try { foreach (var name in VoiceNames()) voices.Add(new Choice(name, name)); }
+            catch (Exception ex) { Main.Log?.Warning("[speech] Failed to enumerate SAPI voices: " + ex.Message); }
             if (voices.Count == 0) voices.Add(new Choice("default", "Default"));
-            _voiceSetting = new ChoiceSetting("voice", "Voice", voices, voices[0].Id, "speech.sapi.voice");
-
-            _settings.Add(_rate);
-            _settings.Add(_volume);
-            _settings.Add(_voiceSetting);
-
-            _rate.Changed += v => { try { _voice?.Set("Rate", v); } catch { } };
-            _volume.Changed += v => { try { _voice?.Set("Volume", v); } catch { } };
-            _voiceSetting.Changed += v =>
-            {
-                try { if (_voice != null) SelectVoice(_voice, v); }
-                catch (Exception ex) { Main.Log?.Error("[speech] Voice select failed: " + ex.Message); }
-            };
-
-            return _settings;
+            _voiceChoices = voices;
+            return _voiceChoices;
         }
 
         public bool Detect()
@@ -90,7 +73,6 @@ namespace WrathAccess.Speech
                     Main.Log?.Error("[speech] SapiHandler: SAPI.SpVoice not available.");
                     return false;
                 }
-                Apply(_voice);
                 Main.Log?.Log("[speech] SAPI handler loaded (manual COM).");
                 return true;
             }
@@ -109,13 +91,16 @@ namespace WrathAccess.Speech
             _voice = null;
             _renderVoice?.Dispose();
             _renderVoice = null;
+            _liveVoiceName = null;
+            _renderVoiceName = null;
         }
 
-        public bool Speak(string text, bool interrupt = false)
+        public bool Speak(string text, bool interrupt, CategorySetting config)
         {
             if (_voice == null) return false;
             try
             {
+                Apply(_voice, config, ref _liveVoiceName);
                 _voice.Call("Speak", text, interrupt ? SVSFlagsAsync | SVSFPurgeBeforeSpeak : SVSFlagsAsync);
                 return true;
             }
@@ -126,7 +111,7 @@ namespace WrathAccess.Speech
             }
         }
 
-        public bool Output(string text, bool interrupt = false) => Speak(text, interrupt);
+        public bool Output(string text, bool interrupt, CategorySetting config) => Speak(text, interrupt, config);
 
         public bool Silence()
         {
@@ -144,7 +129,7 @@ namespace WrathAccess.Speech
 
         public bool SupportsAudioRender => true;
 
-        public SpeechAudio RenderToAudio(string text)
+        public SpeechAudio RenderToAudio(string text, CategorySetting config)
         {
             if (string.IsNullOrEmpty(text)) return null;
             ComDispatch stream = null, format = null;
@@ -157,7 +142,7 @@ namespace WrathAccess.Speech
                     _renderVoice = ComDispatch.Create("SAPI.SpVoice");
                     if (_renderVoice == null) return null;
                 }
-                Apply(_renderVoice);
+                Apply(_renderVoice, config, ref _renderVoiceName);
 
                 // Fresh memory stream per utterance, pinned to a known PCM format. Without
                 // AllowAudioOutputFormatChangesOnNextSet=false SAPI rewrites the stream's format to the
@@ -195,15 +180,19 @@ namespace WrathAccess.Speech
 
         // ---- shared voice plumbing ----
 
-        /// <summary>Apply the user's rate/volume/voice settings to a SpVoice instance.</summary>
-        private void Apply(ComDispatch voice)
+        /// <summary>Apply a config's rate/volume/voice to a SpVoice. Rate/volume are cheap (set every
+        /// call); voice selection enumerates the registry, so it's skipped unless the name changed.</summary>
+        private void Apply(ComDispatch voice, CategorySetting config, ref string lastVoiceName)
         {
-            try { voice.Set("Rate", _rate != null ? _rate.Get() : 2); } catch { }
-            try { voice.Set("Volume", _volume != null ? _volume.Get() : 100); } catch { }
-            var name = _voiceSetting?.Current?.Id;
-            if (!string.IsNullOrEmpty(name) && name != "default")
+            int rate = config?.Get<IntSetting>("rate")?.Get() ?? 2;
+            int volume = config?.Get<IntSetting>("volume")?.Get() ?? 100;
+            string name = config?.Get<ChoiceSetting>("voice")?.Current?.Id;
+            try { voice.Set("Rate", rate); } catch { }
+            try { voice.Set("Volume", volume); } catch { }
+            if (!string.IsNullOrEmpty(name) && name != "default" && name != lastVoiceName)
             {
-                try { SelectVoice(voice, name); } catch { }
+                try { SelectVoice(voice, name); lastVoiceName = name; }
+                catch (Exception ex) { Main.Log?.Error("[speech] Voice select failed: " + ex.Message); }
             }
         }
 

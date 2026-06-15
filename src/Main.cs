@@ -70,6 +70,8 @@ namespace WrathAccess
                 // Overlays are built AFTER load: the saved overlay-id list (incl. user-added ones) is only
                 // known once settings have loaded, then their saved values are re-applied to the new subtrees.
                 WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.BuildOverlays();
+                // Build the saved additional speech configs + re-apply their values (same post-load pattern).
+                WrathAccess.Speech.SpeechConfigRegistry.BuildConfigs();
                 ScreenManager.Initialize();
                 // Game-log reading (barks, rolls, loot, …) lives in the overlays' Log system — see
                 // Overlays.LogSystem (per-overlay, per-message-type toggles) fed by the LogFeed Harmony tap.
@@ -307,6 +309,9 @@ namespace WrathAccess
             var speech = new WrathAccess.Settings.CategorySetting("speech", "Speech", localizationKey: "category.speech");
             WrathAccess.Speech.SpeechManager.RegisterSettings(speech);
             WrathAccess.Settings.ModSettings.Root.Add(speech);
+            // The additional-speech-config roster (advanced; the events system speaks through these).
+            // Pre-load like overlays: create the id list now so Load restores it; subtrees built after.
+            WrathAccess.Speech.SpeechConfigRegistry.Register();
         }
 
         private static void RegisterInput()

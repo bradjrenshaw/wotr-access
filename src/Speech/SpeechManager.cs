@@ -5,16 +5,21 @@ using WrathAccess.Settings;
 namespace WrathAccess.Speech
 {
     /// <summary>
-    /// Owns the speech handlers (ported from SayTheSpire2): an ordered list (Prism → SAPI → Clipboard),
-    /// a "handler" choice setting (auto = first that detects and loads), each handler's own settings
-    /// subtree nested under the Speech category, and hot-swap on change with a spoken confirmation.
-    /// <see cref="Tts"/> is the call-site facade over this.
+    /// Owns the speech handlers (Prism → SAPI → Clipboard) and resolves them LOAD-ON-DEMAND so any number
+    /// of <see cref="SpeechConfig"/>s can speak through different handlers at once (they're independent
+    /// native engines). The DEFAULT config is the root Speech settings and drives all UI/announcement/
+    /// dialogue speech (<see cref="Speak"/>/<see cref="Output"/>); the events system speaks specific things
+    /// through additional configs. The same schema (handler choice + each handler's params) is built into
+    /// every config via <see cref="BuildConfigSchema"/>. <see cref="Tts"/> is the call-site facade.
     /// </summary>
     public static class SpeechManager
     {
-        private static ISpeechHandler _activeHandler;
         private static bool _initialized;
-        private static ChoiceSetting _handlerSetting;
+        private static ChoiceSetting _handlerSetting;          // the DEFAULT config's handler choice
+        private static readonly HashSet<ISpeechHandler> _loaded = new HashSet<ISpeechHandler>();
+
+        /// <summary>The default speech config — the root Speech settings; everything speaks through it.</summary>
+        public static SpeechConfig Default { get; private set; }
 
         public static readonly IReadOnlyList<ISpeechHandler> Handlers = new List<ISpeechHandler>
         {
@@ -23,131 +28,108 @@ namespace WrathAccess.Speech
             new ClipboardHandler(),
         };
 
-        /// <summary>Build the Speech settings tree: the handler dropdown, then each handler's subtree.</summary>
+        /// <summary>Build the DEFAULT config into the Speech category (handler dropdown + each handler's
+        /// params), and adopt it as <see cref="Default"/>.</summary>
         public static void RegisterSettings(CategorySetting speechCategory)
+        {
+            BuildConfigSchema(speechCategory);
+            _handlerSetting = speechCategory.Get<ChoiceSetting>("handler");
+            if (_handlerSetting != null) _handlerSetting.Changed += OnDefaultHandlerChanged;
+            Default = new SpeechConfig(speechCategory);
+        }
+
+        /// <summary>The schema every speech config shares: a "handler" choice + one subnode per handler
+        /// holding that handler's params. Reused for the default config and each additional config.</summary>
+        public static void BuildConfigSchema(CategorySetting into)
         {
             var handlerChoices = new List<Choice> { new Choice("auto", "Auto", "speech.auto") };
             foreach (var handler in Handlers)
                 handlerChoices.Add(new Choice(handler.Key, handler.Label, handler.LocalizationKey));
-            _handlerSetting = new ChoiceSetting("handler", "Speech handler", handlerChoices, "auto", "speech.handler");
-            speechCategory.Add(_handlerSetting);
-            _handlerSetting.Changed += OnHandlerChanged;
+            into.Add(new ChoiceSetting("handler", "Speech handler", handlerChoices, "auto", "speech.handler"));
 
             foreach (var handler in Handlers)
             {
-                var handlerSettings = handler.GetSettings();
-                if (handlerSettings != null) speechCategory.Add(handlerSettings);
+                var sub = new CategorySetting(handler.Key, handler.Label, localizationKey: "speech." + handler.Key);
+                handler.BuildSettings(sub);
+                if (sub.Children.Count > 0) into.Add(sub);
             }
         }
 
-        /// <summary>Activate the configured handler. Called AFTER settings load (the choice persists).</summary>
+        /// <summary>Activate the default config's handler now (after settings load) so the first utterance
+        /// is instant.</summary>
         public static void Initialize()
         {
-            ActivateHandler(_handlerSetting?.Current?.Id ?? "auto");
+            _initialized = true;
+            ResolveHandler(Default?.HandlerKey ?? "auto");
         }
 
-        public static bool Ready => _initialized && _activeHandler != null;
+        public static bool Ready => _initialized && Default != null;
 
-        public static void Speak(string text, bool interrupt = false)
-        {
-            if (Ready) _activeHandler.Speak(text, interrupt);
-        }
+        // ---- the default-config speak/render API (UI / announcements / dialogue) ----
 
-        /// <summary>Speech AND braille where the backend supports it — the default output path.</summary>
-        public static void Output(string text, bool interrupt = false)
-        {
-            if (Ready) _activeHandler.Output(text, interrupt);
-        }
+        public static void Speak(string text, bool interrupt = false) { if (Ready) Default.Speak(text, interrupt); }
+        public static void Output(string text, bool interrupt = false) { if (Ready) Default.Output(text, interrupt); }
+        public static void Silence() { if (Ready) Default.Silence(); }
 
-        public static void Silence()
-        {
-            if (Ready) _activeHandler.Silence();
-        }
-
-        /// <summary>
-        /// Render text to PCM for world-positioned playback (damage numbers at the enemy's position,
-        /// etc.): the active handler if it can render, else the first handler that can (handlers'
-        /// render paths are self-sufficient — they don't require being the live handler). Null if no
-        /// handler can render.
-        /// </summary>
+        /// <summary>Render text to PCM for world-positioned playback through the default config.</summary>
         public static SpeechAudio RenderToAudio(string text)
+            => Ready ? Default.RenderToAudio(text) : RenderToAudioFallback(text);
+
+        /// <summary>Render via the first render-capable handler, applying the DEFAULT config's params for
+        /// it — used when a config's chosen handler can't render (e.g. Prism). Independent of the live path.</summary>
+        public static SpeechAudio RenderToAudioFallback(string text)
         {
             if (string.IsNullOrEmpty(text)) return null;
-            if (Ready && _activeHandler.SupportsAudioRender)
-                return _activeHandler.RenderToAudio(text);
             foreach (var handler in Handlers)
-                if (handler.SupportsAudioRender)
-                    return handler.RenderToAudio(text);
+                if (handler.SupportsAudioRender && EnsureLoaded(handler))
+                    return handler.RenderToAudio(text, Default?.Tree?.Get<CategorySetting>(handler.Key));
             return null;
         }
 
-        private static void OnHandlerChanged(string key)
-        {
-            if (!_initialized) return; // pre-init writes are just the settings file loading
-            ActivateHandler(key);
-            if (_activeHandler != null)
-                Output(Message.Localized("ui", "speech.handler_changed", new { handler = _activeHandler.Label }).Resolve());
-        }
+        // ---- load-on-demand handler resolution (shared by every config) ----
 
-        private static void ActivateHandler(string key)
+        /// <summary>The loaded handler for a config's "handler" choice: "auto" = the first that detects +
+        /// loads; a specific key = that handler (falling back to auto if it can't load). Null if none load.</summary>
+        public static ISpeechHandler ResolveHandler(string key)
         {
-            _activeHandler?.Unload();
-            _activeHandler = null;
-            _initialized = false;
-
-            if (key == "auto")
+            if (string.IsNullOrEmpty(key) || key == "auto")
             {
                 foreach (var handler in Handlers)
-                {
-                    try
-                    {
-                        Main.Log?.Log("[speech] Trying handler: " + handler.Key);
-                        if (handler.Detect() && handler.Load())
-                        {
-                            _activeHandler = handler;
-                            _initialized = true;
-                            Main.Log?.Log("[speech] Active handler: " + handler.Key);
-                            return;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Main.Log?.Error("[speech] Handler " + handler.Key + " failed: " + ex);
-                    }
-                }
+                    if (EnsureLoaded(handler)) return handler;
                 Main.Log?.Error("[speech] No speech handler could be loaded!");
-                return;
+                return null;
             }
 
-            // A specific handler; fall back to auto if it can't load.
-            ISpeechHandler chosen = null;
             foreach (var handler in Handlers)
-                if (handler.Key == key) { chosen = handler; break; }
-            if (chosen == null)
-            {
-                Main.Log?.Error("[speech] Unknown speech handler: " + key);
-                ActivateHandler("auto");
-                return;
-            }
+                if (handler.Key == key)
+                    return EnsureLoaded(handler) ? handler : ResolveHandler("auto");
+
+            Main.Log?.Error("[speech] Unknown speech handler: " + key);
+            return ResolveHandler("auto");
+        }
+
+        private static bool EnsureLoaded(ISpeechHandler handler)
+        {
+            if (_loaded.Contains(handler)) return true;
             try
             {
-                if (chosen.Load())
+                if (handler.Detect() && handler.Load())
                 {
-                    _activeHandler = chosen;
-                    _initialized = true;
-                    Main.Log?.Log("[speech] Active handler: " + chosen.Key);
-                }
-                else
-                {
-                    Main.Log?.Error("[speech] Handler " + key + " failed to load; falling back to auto");
-                    ActivateHandler("auto");
+                    _loaded.Add(handler);
+                    Main.Log?.Log("[speech] handler loaded: " + handler.Key);
+                    return true;
                 }
             }
-            catch (Exception ex)
-            {
-                Main.Log?.Error("[speech] Handler " + key + " failed: " + ex + "; falling back to auto");
-                ActivateHandler("auto");
-            }
+            catch (Exception ex) { Main.Log?.Error("[speech] Handler " + handler.Key + " failed: " + ex.Message); }
+            return false;
+        }
+
+        private static void OnDefaultHandlerChanged(string key)
+        {
+            if (!_initialized) return; // pre-init writes are just the settings file loading
+            var handler = ResolveHandler(key);
+            if (handler != null)
+                Default.Output(Message.Localized("ui", "speech.handler_changed", new { handler = handler.Label }).Resolve());
         }
     }
 }

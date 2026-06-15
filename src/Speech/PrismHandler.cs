@@ -7,8 +7,9 @@ namespace WrathAccess.Speech
     /// <summary>
     /// Speech handler routing through Prism (https://github.com/ethindp/prism) — a unified native
     /// abstraction over screen-reader and TTS backends (NVDA, JAWS, SAPI, OneCore, …). The primary
-    /// handler. Ported from SayTheSpire2, including its lesson: the backend feature bitmask is cached
-    /// at acquire time (querying it per call costs an NVDA RPC round-trip on every Output).
+    /// handler. Param-driven: a config's "backend" choice is applied on change (rebinding only when it
+    /// actually differs, since the feature query / rebind cost a native round-trip). Screen-reader
+    /// passthrough, so it cannot render to PCM (no positional speech) — that's the SAPI handler's job.
     /// </summary>
     public class PrismHandler : ISpeechHandler
     {
@@ -17,22 +18,23 @@ namespace WrathAccess.Speech
         private IntPtr _ctx = IntPtr.Zero;
         private IntPtr _backend = IntPtr.Zero;
         private PrismNative.BackendFeatures _backendFeatures;
-        private CategorySetting _settings;
-        private ChoiceSetting _backendSetting;
+        private string _currentBackend = AutoBackend; // last backend applied from a config (apply-on-change)
+        private static List<Choice> _backendChoices;   // enumerated once (the registry probe is expensive)
 
         public string Key => "prism";
         public string Label => "Prism";
         public string LocalizationKey => "speech.prism";
 
-        public CategorySetting GetSettings()
+        public void BuildSettings(CategorySetting into)
         {
-            if (_settings != null) return _settings;
+            into.Add(new ChoiceSetting("backend", "Backend", BackendChoices(), AutoBackend, "speech.prism.backend"));
+        }
 
-            _settings = new CategorySetting(Key, Label, localizationKey: "speech.prism");
-
-            // Enumerate prism's registry and keep only backends whose engine is actually available on
-            // this machine (SupportedAtRuntime is advisory — init may still fail — but it filters out
-            // the obviously-irrelevant entries, e.g. JAWS with no JAWS installed).
+        // Enumerate prism's registry once and keep only backends whose engine is actually available on
+        // this machine (SupportedAtRuntime filters out the obviously-irrelevant, e.g. JAWS with no JAWS).
+        private static List<Choice> BackendChoices()
+        {
+            if (_backendChoices != null) return _backendChoices;
             var choices = new List<Choice> { new Choice(AutoBackend, "Auto (Best Available)", "speech.backend_auto") };
             try
             {
@@ -47,7 +49,6 @@ namespace WrathAccess.Speech
                             var id = PrismNative.RegistryIdAt(probeCtx, (UIntPtr)(uint)i);
                             var name = PrismNative.RegistryName(probeCtx, id);
                             if (string.IsNullOrEmpty(name)) continue;
-
                             var backend = PrismNative.RegistryCreate(probeCtx, id);
                             if (backend == IntPtr.Zero) continue;
                             try
@@ -64,17 +65,12 @@ namespace WrathAccess.Speech
             }
             catch (DllNotFoundException) { /* prism.dll missing — the bare Auto choice remains */ }
             catch (Exception ex) { Main.Log?.Warning("[speech] Prism backend enumeration failed: " + ex.Message); }
-
-            _backendSetting = new ChoiceSetting("backend", "Backend", choices, AutoBackend, "speech.prism.backend");
-            _settings.Add(_backendSetting);
-            _backendSetting.Changed += _ => RebindBackend();
-
-            return _settings;
+            _backendChoices = choices;
+            return _backendChoices;
         }
 
         public bool Detect()
         {
-            // Probing the runtime requires loading prism.dll, which is exactly what Load does.
             try
             {
                 var ctx = PrismNative.Init(IntPtr.Zero);
@@ -106,7 +102,8 @@ namespace WrathAccess.Speech
                     Main.Log?.Error("[speech] PrismHandler: prism_init returned NULL.");
                     return false;
                 }
-                return AcquireBackend();
+                _currentBackend = AutoBackend;
+                return AcquireBackend(AutoBackend); // the config's backend is applied on first speak
             }
             catch (Exception ex)
             {
@@ -130,10 +127,29 @@ namespace WrathAccess.Speech
                 _ctx = IntPtr.Zero;
             }
             _backendFeatures = 0;
+            _currentBackend = AutoBackend;
         }
 
-        public bool Speak(string text, bool interrupt = false)
+        // Apply a config's backend choice, rebinding only when it differs from what's bound (rebinding is
+        // a native teardown/acquire — never per utterance).
+        private void ApplyConfig(CategorySetting config)
         {
+            var pref = config?.Get<ChoiceSetting>("backend")?.Current?.Id ?? AutoBackend;
+            if (pref == _currentBackend && _backend != IntPtr.Zero) return;
+            _currentBackend = pref;
+            if (_backend != IntPtr.Zero)
+            {
+                try { PrismNative.BackendStop(_backend); } catch { }
+                PrismNative.BackendFree(_backend);
+                _backend = IntPtr.Zero;
+                _backendFeatures = 0;
+            }
+            AcquireBackend(pref);
+        }
+
+        public bool Speak(string text, bool interrupt, CategorySetting config)
+        {
+            ApplyConfig(config);
             if (_backend == IntPtr.Zero) return false;
             try
             {
@@ -146,8 +162,9 @@ namespace WrathAccess.Speech
             }
         }
 
-        public bool Output(string text, bool interrupt = false)
+        public bool Output(string text, bool interrupt, CategorySetting config)
         {
+            ApplyConfig(config);
             if (_backend == IntPtr.Zero) return false;
             try
             {
@@ -160,7 +177,7 @@ namespace WrathAccess.Speech
                     if (err != PrismNative.PrismError.NotImplemented)
                         Main.Log?.Log("[speech] PrismHandler.Output -> " + err + ", falling back to Speak.");
                 }
-                return Speak(text, interrupt);
+                return PrismNative.BackendSpeak(_backend, text, interrupt) == PrismNative.PrismError.Ok;
             }
             catch (Exception ex)
             {
@@ -186,14 +203,14 @@ namespace WrathAccess.Speech
         // Prism's API has a SupportsSpeakToMemory feature flag, so a render path is possible later;
         // the binding isn't ported yet.
         public bool SupportsAudioRender => false;
-        public SpeechAudio RenderToAudio(string text) => null;
+        public SpeechAudio RenderToAudio(string text, CategorySetting config) => null;
 
-        /// <summary>Acquire a backend per the user's preference (auto = highest-priority that
-        /// initializes; otherwise the named registry backend, falling back to auto).</summary>
-        private bool AcquireBackend()
+        /// <summary>Acquire the named backend (auto = highest-priority that initializes; otherwise the
+        /// named registry backend, falling back to auto).</summary>
+        private bool AcquireBackend(string preferred)
         {
             if (_ctx == IntPtr.Zero) return false;
-            var preferred = _backendSetting != null ? _backendSetting.Current?.Id ?? AutoBackend : AutoBackend;
+            preferred = preferred ?? AutoBackend;
 
             if (preferred == AutoBackend)
             {
@@ -241,19 +258,6 @@ namespace WrathAccess.Speech
             Main.Log?.Log("[speech] PrismHandler loaded. Backend: " + (PrismNative.BackendName(_backend) ?? "<unknown>")
                 + " (features=0x" + ((ulong)_backendFeatures).ToString("X") + ")");
             return true;
-        }
-
-        private void RebindBackend()
-        {
-            if (_ctx == IntPtr.Zero) return;
-            if (_backend != IntPtr.Zero)
-            {
-                try { PrismNative.BackendStop(_backend); } catch { }
-                PrismNative.BackendFree(_backend);
-                _backend = IntPtr.Zero;
-                _backendFeatures = 0;
-            }
-            AcquireBackend();
         }
     }
 }

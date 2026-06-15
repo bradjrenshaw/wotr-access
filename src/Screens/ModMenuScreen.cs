@@ -36,6 +36,12 @@ namespace WrathAccess.Screens
         private UIElement _addButton;
         private readonly Dictionary<string, Container> _overlayNodes = new Dictionary<string, Container>();
 
+        // Speech tab: the additional-speech-config subtree + its Add button + id→node map (same in-place
+        // add/remove pattern as overlays).
+        private Container _speechConfigsTree;
+        private UIElement _speechAddButton;
+        private readonly Dictionary<string, Container> _speechConfigNodes = new Dictionary<string, Container>();
+
         // Explicit tabs (the settings Root holds bindings/announcements/ui, which don't map 1:1 to tabs:
         // the UI tab composes the global announcement settings + the per-element-type overrides).
         // Alphabetical by label, so the tab list is easy to scan.
@@ -109,6 +115,7 @@ namespace WrathAccess.Screens
             if (_content == null) return;
             _content.Clear();
             _overlaysTree = null; _overlayNodes.Clear(); // (re)set when the overlays tab builds
+            _speechConfigsTree = null; _speechConfigNodes.Clear(); // (re)set when the speech tab builds
             // Unlabeled = the structural tree root (silent, never focused as a node); only real sub-groups
             // announce expand/collapse. The category is already conveyed by the selected tab.
             var tree = new TreeGroup();
@@ -194,10 +201,27 @@ namespace WrathAccess.Screens
             }
             else if (key == "speech")
             {
-                // The handler dropdown, then each handler's own settings subtree as a collapsible node.
+                // The DEFAULT config (handler dropdown + each handler's subtree) first, then the advanced
+                // "Additional speech configurations" node — each config a clone of the same schema with
+                // Rename/Remove, and an Add button at the bottom (in-place add/remove like overlays).
                 var speech = ModSettings.Root.Get<CategorySetting>("speech");
                 if (speech != null)
-                    foreach (var s in speech.Children) BuildSettingNode(tree, s);
+                    foreach (var s in speech.Children)
+                    {
+                        if (s is CategorySetting cs && cs.Key == "additional") continue; // rendered specially below
+                        BuildSettingNode(tree, s);
+                    }
+
+                var configs = new TreeGroup(Loc("speech.additional", "Additional speech configurations"));
+                _speechConfigsTree = configs;
+                foreach (var id in WrathAccess.Speech.SpeechConfigRegistry.Ids())
+                {
+                    var cc = SpeechConfigCat(id);
+                    if (cc != null) configs.Add(BuildSpeechConfigNode(cc, id));
+                }
+                _speechAddButton = new ProxyActionButton(Loc("speech.config.add", "Add speech configuration"), null, AddSpeechConfig);
+                configs.Add(_speechAddButton);
+                tree.Add(configs);
             }
             else if (key == "sonar")
             {
@@ -443,6 +467,62 @@ namespace WrathAccess.Screens
                 if (string.IsNullOrWhiteSpace(name)) return;
                 WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SetOverlayName(id, name);
                 // The node's label is a live LabelProvider, so it already reflects the new name.
+                Tts.Speak(Loc("overlay.renamed", "Renamed to") + " " + name);
+            });
+        }
+
+        // ---- additional speech configs (same in-place add / remove / rename as overlays) ----
+
+        private static CategorySetting SpeechConfigCat(string id)
+            => ModSettings.Root.Get<CategorySetting>("speech")?.Get<CategorySetting>("additional")?.Get<CategorySetting>(id);
+
+        // One config = a collapsible node (the cloned handler/params schema; the hidden name is skipped)
+        // with Rename + Remove. Returned (not added) so the caller can add or insert it.
+        private Container BuildSpeechConfigNode(CategorySetting cc, string id)
+        {
+            var group = new TreeGroup(WrathAccess.Speech.SpeechConfigRegistry.Name(id))
+            {
+                LabelProvider = () => WrathAccess.Speech.SpeechConfigRegistry.Name(id)
+            };
+            foreach (var s in cc.Children) BuildSettingNode(group, s); // the hidden "name" is skipped
+            group.Add(new ProxyActionButton(Loc("speech.config.rename", "Rename"), null, () => RenameSpeechConfig(id)));
+            group.Add(new ProxyActionButton(Loc("speech.config.remove", "Remove"), null, () => RemoveSpeechConfig(id)));
+            _speechConfigNodes[id] = group;
+            return group;
+        }
+
+        private void AddSpeechConfig()
+        {
+            var id = WrathAccess.Speech.SpeechConfigRegistry.Add();
+            var cc = SpeechConfigCat(id);
+            if (cc == null || _speechConfigsTree == null) return;
+            var node = BuildSpeechConfigNode(cc, id);
+            int at = _speechAddButton != null ? _speechConfigsTree.IndexOf(_speechAddButton) : _speechConfigsTree.Children.Count;
+            _speechConfigsTree.Insert(at, node);
+            Tts.Speak(Loc("speech.config.added", "Speech configuration added"));
+            Navigation.Focus(node);
+        }
+
+        private void RemoveSpeechConfig(string id)
+        {
+            if (_speechConfigsTree == null || !_speechConfigNodes.TryGetValue(id, out var node)) return;
+            if (!WrathAccess.Speech.SpeechConfigRegistry.Remove(id)) return;
+            int idx = _speechConfigsTree.IndexOf(node);
+            _speechConfigsTree.Remove(node);
+            _speechConfigNodes.Remove(id);
+            var kids = _speechConfigsTree.Children;
+            UIElement target = kids.Count == 0 ? null : kids[idx < kids.Count ? idx : kids.Count - 1];
+            Tts.Speak(Loc("speech.config.removed", "Speech configuration removed"));
+            Navigation.Focus(target);
+        }
+
+        private void RenameSpeechConfig(string id)
+        {
+            var current = WrathAccess.Speech.SpeechConfigRegistry.Name(id);
+            ModTextEntryScreen.Open(Loc("speech.config.rename", "Rename"), current, name =>
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                WrathAccess.Speech.SpeechConfigRegistry.SetName(id, name); // node label is a live LabelProvider
                 Tts.Speak(Loc("overlay.renamed", "Renamed to") + " " + name);
             });
         }

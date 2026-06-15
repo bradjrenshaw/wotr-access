@@ -4,7 +4,6 @@ using Kingmaker.DialogSystem.Blueprints; // BlueprintBookPage
 using Kingmaker.UI.MVVM._VM.Dialog.BookEvent; // BookEventVM
 using Kingmaker.UI.MVVM._VM.Dialog.Interchapter; // InterchapterVM (a BookEventVM subclass)
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
 
 namespace WrathAccess.Screens
 {
@@ -54,36 +53,42 @@ namespace WrathAccess.Screens
             if (page == null) return; // VM exists a frame before the first page is pushed
 
             if (page != _builtPage) { _builtPage = page; Rebuild(vm); }
-            if (page != _spokenPage) { _spokenPage = page; Tts.Speak(Passage(vm), interrupt: true); }
+            if (page != _spokenPage) { _spokenPage = page; Speak(vm); }
         }
 
+        // Same transcript FlowSheet as ordinary dialogue: the passage as the log region, the choices as
+        // the answers region. Focus lands at the top of the passage; Down reaches the choices.
         private void Rebuild(BookEventVM vm)
         {
             Clear();
-            Add(new TextElement(() => Passage(vm))); // the whole passage — focus here to re-read it
-
-            var answers = new ListContainer(Loc.T("dialog.answers"));
-            var list = vm.Answers.Value;
-            if (list != null)
-                foreach (var a in list)
-                    if (a != null) answers.Add(DialogAnswerButton.For(a));
-            if (answers.Children.Count > 0) Add(answers);
-
-            Navigation.Attach(this); // re-bind to the rebuilt tree (silent; focus → the passage)
+            var sheet = DialogTranscript.Build(PassageLines(vm), null, vm.Answers.Value, out var focus);
+            Add(sheet);
+            Navigation.Attach(this);
+            Navigation.Focus(focus, announce: false);
         }
 
-        // All the page's cues (paragraphs) joined — the plain text, no speaker formatting. Interchapter pages
-        // also carry a title ("Trapped in the Darkness"), read first.
-        private static string Passage(BookEventVM vm)
+        // Speak the whole passage once per page, QUEUED (never interrupting — the dialogue rule). Re-reading
+        // individual paragraphs is done by arrowing the rows.
+        private void Speak(BookEventVM vm)
         {
-            var parts = new List<string>();
-            if (vm is InterchapterVM ic && !string.IsNullOrWhiteSpace(ic.Title.Value)) parts.Add(ic.Title.Value);
+            var lines = PassageLines(vm);
+            if (lines.Count > 0) Tts.Speak(string.Join("\n", lines.ToArray()), interrupt: false);
+        }
+
+        // The page as transcript lines: the interchapter title first (e.g. "Trapped in the Darkness"), then
+        // one line per cue paragraph (raw text — kept un-stripped so glossary links survive for Space).
+        private static List<string> PassageLines(BookEventVM vm)
+        {
+            var lines = new List<string>();
+            if (vm is InterchapterVM ic && !string.IsNullOrWhiteSpace(ic.Title.Value)) lines.Add(ic.Title.Value);
             foreach (var cue in vm.Cues)
             {
                 var t = cue?.BaseText;
-                if (!string.IsNullOrWhiteSpace(t)) parts.Add(t);
+                if (string.IsNullOrWhiteSpace(t)) continue;
+                foreach (var part in t.Split('\n'))
+                    if (!string.IsNullOrWhiteSpace(part)) lines.Add(part.Trim());
             }
-            return string.Join("\n", parts);
+            return lines;
         }
     }
 }

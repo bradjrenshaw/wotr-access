@@ -58,6 +58,11 @@ namespace WrathAccess.Exploration
             public Room To;
         }
 
+        // One navmesh portal crossing the boundary between two rooms: the shared triangle edge (A→B)
+        // and its midpoint. Clustering by shared ENDPOINT (not midpoint distance) keeps one wide or
+        // curved opening as a single exit — adjacent border edges share a vertex however long they are.
+        private struct PortalEdge { public Vector3 A, B, Mid; }
+
         private static string _builtFor;      // areaName|partName the grid was built for
         private static int[] _label;          // per-cell room index (-1 = not walkable), row-major [z*W+x]
         private static float[] _cellY;        // per-cell surface height (last rasterized)
@@ -595,7 +600,7 @@ namespace WrathAccess.Exploration
                 roomOf[t] = r;
                 return r;
             };
-            var portals = new Dictionary<long, List<Vector3>>();
+            var portals = new Dictionary<long, List<PortalEdge>>();
             foreach (var g in graphs)
             {
                 if (!(g is NavmeshBase)) continue;
@@ -611,39 +616,47 @@ namespace WrathAccess.Exploration
                         if (o == null) continue;
                         var rb = roomFor(o);
                         if (rb == null || rb == ra) continue;
-                        Vector3 portal;
+                        PortalEdge portal;
                         if (conn.shapeEdge != byte.MaxValue)
                         {
-                            // the midpoint of the triangle edge this connection crosses
-                            portal = ((Vector3)t.GetVertex(conn.shapeEdge)
-                                      + (Vector3)t.GetVertex((conn.shapeEdge + 1) % 3)) * 0.5f;
+                            // the triangle edge this connection crosses (endpoints kept for clustering)
+                            portal.A = (Vector3)t.GetVertex(conn.shapeEdge);
+                            portal.B = (Vector3)t.GetVertex((conn.shapeEdge + 1) % 3);
+                            portal.Mid = (portal.A + portal.B) * 0.5f;
                         }
                         else
                         {
                             var cb = ((Vector3)o.GetVertex(0) + (Vector3)o.GetVertex(1) + (Vector3)o.GetVertex(2)) / 3f;
                             var ca = ((Vector3)t.GetVertex(0) + (Vector3)t.GetVertex(1) + (Vector3)t.GetVertex(2)) / 3f;
-                            portal = (ca + cb) * 0.5f; // custom/off-mesh link: no shared edge
+                            portal.A = portal.B = portal.Mid = (ca + cb) * 0.5f; // off-mesh link: no shared edge
                         }
                         long key = ((long)Math.Min(ra.Id, rb.Id) << 32) | (uint)Math.Max(ra.Id, rb.Id);
-                        List<Vector3> pts;
-                        if (!portals.TryGetValue(key, out pts)) { pts = new List<Vector3>(); portals[key] = pts; }
+                        List<PortalEdge> pts;
+                        if (!portals.TryGetValue(key, out pts)) { pts = new List<PortalEdge>(); portals[key] = pts; }
                         pts.Add(portal);
                     }
                 });
             }
+            const float VertEps2 = 0.05f * 0.05f; // shared navmesh vertices are exact; small tolerance for float
             foreach (var kv in portals)
             {
                 var a = _rooms[(int)(kv.Key >> 32) - 1];
                 var b = _rooms[(int)(kv.Key & 0xFFFFFFFF) - 1];
                 var pts = kv.Value;
-                // single-link clustering: one wide doorway = one exit; separate doorways stay separate
+                // Cluster by boundary connectivity: portals join if their edges share an endpoint (one
+                // contiguous opening, however wide/curved — large+small triangles still share vertices),
+                // with a 2m midpoint fallback for off-mesh links and minor gaps. Separate doorways, whose
+                // edges share no vertex and sit apart, stay separate exits.
                 var root = new int[pts.Count];
                 for (int i = 0; i < root.Length; i++) root[i] = i;
                 Func<int, int> find = null;
                 find = x => { while (root[x] != x) { root[x] = root[root[x]]; x = root[x]; } return x; };
+                Func<PortalEdge, PortalEdge, bool> shareVertex = (p, q) =>
+                    (p.A - q.A).sqrMagnitude <= VertEps2 || (p.A - q.B).sqrMagnitude <= VertEps2
+                    || (p.B - q.A).sqrMagnitude <= VertEps2 || (p.B - q.B).sqrMagnitude <= VertEps2;
                 for (int i = 0; i < pts.Count; i++)
                     for (int j = i + 1; j < pts.Count; j++)
-                        if ((pts[i] - pts[j]).sqrMagnitude <= 2f * 2f)
+                        if (shareVertex(pts[i], pts[j]) || (pts[i].Mid - pts[j].Mid).sqrMagnitude <= 2f * 2f)
                         {
                             int ri = find(i), rj = find(j);
                             if (ri != rj) root[ri] = rj;
@@ -655,7 +668,7 @@ namespace WrathAccess.Exploration
                     int r = find(i);
                     Vector3 sum;
                     sums.TryGetValue(r, out sum);
-                    sums[r] = sum + pts[i];
+                    sums[r] = sum + pts[i].Mid;
                     int c;
                     counts.TryGetValue(r, out c);
                     counts[r] = c + 1;

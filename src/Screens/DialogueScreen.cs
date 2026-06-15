@@ -143,41 +143,23 @@ namespace WrathAccess.Screens
         private void Rebuild(DialogVM vm)
         {
             Clear();
-            var sheet = new FlowSheet();
-
-            var log = sheet.List(null); // the transcript; unlabeled so region entry stays quiet
-            foreach (var row in _rows)
-            {
-                var text = row;
-                log.Item(new TextElement(() => text));
-            }
             bool hasRealAnswers = vm.Answers.Value != null && vm.Answers.Value.Count > 0;
             // The live line — focus here to repeat it; Enter on it presses Continue when that's the
             // only way forward (never when real choices exist).
             _cueRow = new CueRow(() => CueLine(vm), () => hasRealAnswers ? null : vm.SystemAnswer.Value,
                 () => vm.Cue.Value?.SkillChecks);
-            log.Item(_cueRow);
 
-            var answers = sheet.List(null); // unlabeled: "Answers" before the choices is auditory noise
-            int count = 0;
-            if (vm.Answers.Value != null && vm.Answers.Value.Count > 0)
-            {
-                foreach (var a in vm.Answers.Value)
-                    if (a != null) { answers.Item(DialogAnswerButton.For(a)); count++; }
-            }
-            else if (vm.SystemAnswer.Value != null)
-            {
-                answers.Item(DialogAnswerButton.For(vm.SystemAnswer.Value));
-                count++;
-            }
-            if (count == 0) sheet.RemoveRegion(answers);
+            // Real answers, else the system Continue when that's the only way forward, else none.
+            List<AnswerVM> answers = null;
+            if (hasRealAnswers) answers = new List<AnswerVM>(vm.Answers.Value);
+            else if (vm.SystemAnswer.Value != null) answers = new List<AnswerVM> { vm.SystemAnswer.Value };
 
-            sheet.Reflow();
+            var sheet = DialogTranscript.Build(_rows, _cueRow, answers, out var focus);
             Add(sheet);
             Navigation.Attach(this);
             // Land on the current line silently (the delivery announcement speaks it): Down reaches the
             // answers, Up scrolls back through the conversation so far.
-            Navigation.Focus(_cueRow, announce: false);
+            Navigation.Focus(focus, announce: false);
         }
 
         // The current-line row: focusing repeats the line; when the only way forward is the system

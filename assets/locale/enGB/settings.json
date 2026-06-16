@@ -137,6 +137,8 @@
   "event.damage": "Damage",
   "event.buff_gained": "Buff gained",
   "event.buff_lost": "Buff lost",
+  "event.unit_death": "Unit death",
+  "event.stat_damage": "Ability damage",
   "event.enabled": "Announce",
   "event.speech_config": "Speech configuration",
   "event.positional": "Positional audio",

@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Kingmaker.EntitySystem.Entities;   // UnitEntityData
-using Kingmaker.PubSubSystem;             // EventBus, IDamageHandler, IUnitBuffHandler
+using Kingmaker.PubSubSystem;             // EventBus, IDamageHandler, IUnitBuffHandler, IUnitHandler, IRulebookHandler
+using Kingmaker.RuleSystem.Rules;         // RuleDealStatDamage
 using Kingmaker.RuleSystem.Rules.Damage;  // RuleDealDamage
 using Kingmaker.UnitLogic.Buffs;          // Buff
 
@@ -14,9 +15,11 @@ namespace WrathAccess.Events
     /// double-fires, and hidden system buffs), so we mirror its combat-log filter (skip
     /// <c>Blueprint.IsHiddenInUI</c> / empty-name buffs) and reconcile per frame against an active set:
     /// only a genuine gain (newly active) or loss (was active, not re-added this frame — i.e. not a
-    /// refresh) is announced.
+    /// refresh) is announced. Unit death (<see cref="IUnitHandler"/>) and ability damage/drain
+    /// (<see cref="IRulebookHandler{T}"/> over RuleDealStatDamage) fire per instance, no de-noising.
     /// </summary>
-    internal sealed class EventBusAdapter : IDamageHandler, IUnitBuffHandler
+    internal sealed class EventBusAdapter
+        : IDamageHandler, IUnitBuffHandler, IUnitHandler, IGlobalRulebookHandler<RuleDealStatDamage>
     {
         private static EventBusAdapter _instance;
 
@@ -41,6 +44,24 @@ namespace WrathAccess.Events
         {
             if (dealDamage?.Target != null && dealDamage.Result > 0)
                 EventDispatcher.Raise(new DamageEvent(dealDamage.Target, dealDamage.Result));
+        }
+
+        // IUnitHandler — death fires once per unit; the other members are no-ops we just have to carry.
+        public void HandleUnitDeath(UnitEntityData unit)
+        {
+            if (unit != null) EventDispatcher.Raise(new UnitDeathEvent(unit));
+        }
+        public void HandleUnitDestroyed(UnitEntityData unit) { }
+        public void HandleUnitSpawned(UnitEntityData unit) { }
+
+        // IGlobalRulebookHandler<RuleDealStatDamage> — ability score damage/drain, after the rule resolves.
+        // Must be the *Global* variant: it carries IGlobalRulebookSubscriber, which is what
+        // RulebookEventBus.Subscribe actually registers — bare IRulebookHandler<T> would never fire.
+        public void OnEventAboutToTrigger(RuleDealStatDamage evt) { }
+        public void OnEventDidTrigger(RuleDealStatDamage evt)
+        {
+            if (evt?.Target != null && !evt.Immune && evt.Result > 0)
+                EventDispatcher.Raise(new StatDamageEvent(evt.Target, evt.Stat.Type, evt.Result, evt.IsDrain));
         }
 
         public void HandleBuffDidAdded(Buff buff)

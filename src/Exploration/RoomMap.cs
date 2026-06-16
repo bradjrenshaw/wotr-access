@@ -38,7 +38,6 @@ namespace WrathAccess.Exploration
         private const float FurnitureMax = 12f;  // m^2 — interior obstacle islands up to this cast no clearance shadow
         private const float MaxCells = 1.7e6f;   // grid budget; coarsen the cell size beyond it
         private const float LevelGap = 3f;       // |y| beyond which a cell is "another floor"
-        private const float AnnounceDwell = 0.5f; // seconds inside a new room before announcing
 
         public sealed class Room
         {
@@ -141,10 +140,9 @@ namespace WrathAccess.Exploration
             TickAnnounce();
         }
 
-        // ---- announce on room change (dwell-gated against boundary dithering) ----
+        // ---- announce on room change (instant; no dwell/guard) ----
 
-        private static Room _announced, _pending;
-        private static float _pendingSince;
+        private static Room _announced;
 
         private static bool AnnounceEnabled =>
             WrathAccess.Settings.ModSettings.GetCategory("defaults.cursor")
@@ -155,15 +153,13 @@ namespace WrathAccess.Exploration
             if (!Ready || !FocusMode.Active
                 || ScreenManager.Current == null || ScreenManager.Current.Key != "ctx.ingame"
                 || !AnnounceEnabled)
-            { _pending = null; return; }
+            { return; }
 
             var pos = Cursor.Has ? Cursor.Position.Value : Overlays.Cursor.PlayerPosition;
             var room = RoomAt(pos);
-            if (room == null || room == _announced) { _pending = null; return; }
-            if (room != _pending) { _pending = room; _pendingSince = Time.unscaledTime; return; }
-            if (Time.unscaledTime - _pendingSince < AnnounceDwell) return;
+            if (room == null || room == _announced) return;
+
             _announced = room;
-            _pending = null;
             WrathAccess.Events.EventDispatcher.Raise(new WrathAccess.Events.RoomChangedEvent(room));
         }
 

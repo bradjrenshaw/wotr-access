@@ -155,6 +155,7 @@
   "speech.backend_auto": "Auto (best available)",
   "speech.sapi.rate": "Rate",
   "speech.sapi.volume": "Volume",
+  "speech.sapi.boost": "Volume boost",
   "speech.sapi.voice": "Voice",
   "speech.additional": "Additional speech configurations",
   "speech.config.add": "Add speech configuration",

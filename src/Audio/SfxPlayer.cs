@@ -41,7 +41,8 @@ namespace WrathAccess.Audio
                 if (audio?.Pcm == null || audio.Pcm.Length == 0) return;
                 EnsureStarted();
                 var buf = Decode(audio);
-                if (buf != null && buf.Length > 0) _mixer.AddMixerInput(new OneShot(buf, Rate, volume, pan));
+                // audio.Gain lets a SAPI config push past SAPI's volume ceiling; folds into the voice gain.
+                if (buf != null && buf.Length > 0) _mixer.AddMixerInput(new OneShot(buf, Rate, volume * audio.Gain, pan));
             }
             catch (Exception e) { Main.Log?.Error("[sfx] speech play failed — " + e); }
         }

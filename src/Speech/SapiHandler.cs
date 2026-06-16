@@ -36,6 +36,9 @@ namespace WrathAccess.Speech
         {
             into.Add(new IntSetting("rate", "Rate", 2, -10, 10, 1, "speech.sapi.rate"));
             into.Add(new IntSetting("volume", "Volume", 100, 0, 100, 5, "speech.sapi.volume"));
+            // Playback gain above SAPI's 100 ceiling, applied only to RENDERED speech (events / positional)
+            // when mixed through the mod's own audio — which is otherwise quiet. 100 = no boost.
+            into.Add(new IntSetting("boost", "Volume boost", 100, 100, 400, 10, "speech.sapi.boost"));
             var voices = VoiceChoices();
             into.Add(new ChoiceSetting("voice", "Voice", voices, voices[0].Id, "speech.sapi.voice"));
         }
@@ -158,12 +161,14 @@ namespace WrathAccess.Speech
 
                 var data = stream.Call("GetData") as byte[];
                 if (data == null || data.Length == 0) return null;
+                int boost = config?.Get<IntSetting>("boost")?.Get() ?? 100;
                 return new SpeechAudio
                 {
                     Pcm = data,
                     SampleRate = RenderSampleRate,
                     Channels = 1,
                     BitsPerSample = 16,
+                    Gain = boost / 100f,
                 };
             }
             catch (Exception ex)

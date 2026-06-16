@@ -52,5 +52,10 @@ namespace WrathAccess.Speech
         public int SampleRate = 22050;
         public int Channels = 1;
         public int BitsPerSample = 16;
+
+        /// <summary>Playback gain multiplier applied when this is mixed (see <c>SfxPlayer.Play</c>). Lets a
+        /// config push past SAPI's volume ceiling (100) — rendered speech is otherwise quiet, especially
+        /// after positional attenuation and the constant-power-pan centre loss. 1 = as rendered.</summary>
+        public float Gain = 1f;
     }
 }

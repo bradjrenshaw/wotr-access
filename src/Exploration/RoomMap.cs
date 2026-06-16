@@ -164,7 +164,7 @@ namespace WrathAccess.Exploration
             if (Time.unscaledTime - _pendingSince < AnnounceDwell) return;
             _announced = room;
             _pending = null;
-            Tts.Speak(Describe(room), interrupt: false);
+            WrathAccess.Events.EventDispatcher.Raise(new WrathAccess.Events.RoomChangedEvent(room));
         }
 
         public static string Describe(Room room)

@@ -48,6 +48,7 @@ namespace WrathAccess.Screens
         private static readonly (string key, string label, string loc)[] Tabs =
         {
             ("audio", "Audio", "category.audio"),
+            ("events", "Events", "category.events"),
             ("exploration", "Exploration", "category.exploration"),
             ("input", "Input", "category.input"),
             ("log", "Log", "category.log"),
@@ -222,6 +223,14 @@ namespace WrathAccess.Screens
                 _speechAddButton = new ProxyActionButton(Loc("speech.config.add", "Add speech configuration"), null, AddSpeechConfig);
                 configs.Add(_speechAddButton);
                 tree.Add(configs);
+            }
+            else if (key == "events")
+            {
+                // Each event (room changed, damage, buffs) renders generically: sourceless events show
+                // enable + speech config directly; sourced ones a party/enemy/neutral sub-node each.
+                var events = ModSettings.Root.Get<CategorySetting>("events");
+                if (events != null)
+                    foreach (var s in events.Children) BuildSettingNode(tree, s);
             }
             else if (key == "sonar")
             {

@@ -72,10 +72,13 @@ namespace WrathAccess
                 WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.BuildOverlays();
                 // Build the saved additional speech configs + re-apply their values (same post-load pattern).
                 WrathAccess.Speech.SpeechConfigRegistry.BuildConfigs();
+                // Event settings (built after the config roster so the speech-config pickers list them).
+                WrathAccess.Events.EventRegistry.RegisterDefaults();
                 ScreenManager.Initialize();
                 // Game-log reading (barks, rolls, loot, …) lives in the overlays' Log system — see
                 // Overlays.LogSystem (per-overlay, per-message-type toggles) fed by the LogFeed Harmony tap.
                 WarningReader.Initialize(); // speak the game's "can't do that" warnings (refusal reasons)
+                WrathAccess.Events.EventBusAdapter.Initialize(); // turn game damage/buff events into mod events
 
                 // The native mod system has no per-frame callback — drive our loops from our own
                 // persistent MonoBehaviour (survives scene loads via DontDestroyOnLoad).
@@ -147,6 +150,8 @@ namespace WrathAccess
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
             // wall tones, fog/object cues) read the fresh position.
             OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime);
+            WrathAccess.Events.EventBusAdapter.Tick(); // reconcile this frame's buff churn into gain/loss events
+            WrathAccess.Events.EventDispatcher.Tick(); // flush this frame's queued events (damage, buffs, room changes)
         }
 
         // Space's exploration job: toggle the game's pause. Only when focus mode owns the keyboard AND

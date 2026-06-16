@@ -32,6 +32,20 @@ namespace WrathAccess.Audio
             catch (Exception e) { Main.Log?.Error("[sfx] play failed: " + path + " — " + e); }
         }
 
+        /// <summary>Play rendered speech PCM (16-bit) as a one-shot voice — so many can overlap (combat
+        /// readouts simultaneously) instead of queuing on the screen reader. Not cached (each is unique).</summary>
+        public void Play(WrathAccess.Speech.SpeechAudio audio, float volume = 1f, float pan = 0f)
+        {
+            try
+            {
+                if (audio?.Pcm == null || audio.Pcm.Length == 0) return;
+                EnsureStarted();
+                var buf = Decode(audio);
+                if (buf != null && buf.Length > 0) _mixer.AddMixerInput(new OneShot(buf, Rate, volume, pan));
+            }
+            catch (Exception e) { Main.Log?.Error("[sfx] speech play failed — " + e); }
+        }
+
         private void EnsureStarted()
         {
             if (_out != null) return;
@@ -60,6 +74,26 @@ namespace WrathAccess.Audio
 
                 var all = new List<float>(Rate); // grows as needed
                 var tmp = new float[Rate * 2];    // ~1 s of stereo
+                int n;
+                while ((n = sp.Read(tmp, 0, tmp.Length)) > 0)
+                    for (int i = 0; i < n; i++) all.Add(tmp[i]);
+                return all.ToArray();
+            }
+        }
+
+        // Normalise rendered PCM to the mixer format (44.1 kHz stereo float), as Decode(path) does for files.
+        private static float[] Decode(WrathAccess.Speech.SpeechAudio audio)
+        {
+            var fmt = new WaveFormat(audio.SampleRate, audio.BitsPerSample, audio.Channels);
+            using (var ms = new System.IO.MemoryStream(audio.Pcm))
+            using (var raw = new RawSourceWaveStream(ms, fmt))
+            {
+                ISampleProvider sp = raw.ToSampleProvider();
+                if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
+                if (sp.WaveFormat.Channels == 1) sp = new MonoToStereoSampleProvider(sp);
+
+                var all = new List<float>(Rate);
+                var tmp = new float[Rate * 2];
                 int n;
                 while ((n = sp.Read(tmp, 0, tmp.Length)) > 0)
                     for (int i = 0; i < n; i++) all.Add(tmp[i]);

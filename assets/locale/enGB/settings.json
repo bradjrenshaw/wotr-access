@@ -139,6 +139,7 @@
   "event.buff_lost": "Buff lost",
   "event.enabled": "Announce",
   "event.speech_config": "Speech configuration",
+  "event.positional": "Positional audio",
   "event.config_default": "Default",
   "source.party": "Party",
   "source.enemy": "Enemy",

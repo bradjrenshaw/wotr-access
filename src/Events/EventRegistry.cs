@@ -74,6 +74,10 @@ namespace WrathAccess.Events
                 into.Add(new BoolSetting("enabled", "Announce", true, "event.enabled"));
             if (into.GetByKey("speech_config") == null)
                 into.Add(new ChoiceSetting("speech_config", "Speech configuration", ConfigChoices(), "default", "event.speech_config"));
+            // Read at the unit's world position when the chosen config's handler can render (SAPI);
+            // a no-op for screen-reader configs (Prism) and sourceless events.
+            if (into.GetByKey("positional") == null)
+                into.Add(new BoolSetting("positional", "Positional audio", true, "event.positional"));
         }
 
         // Default + the user's additional speech configs. Fixed at startup: a config added later needs a
@@ -93,6 +97,9 @@ namespace WrathAccess.Events
 
         public static string ConfigId(ModEvent e)
             => ModSettings.GetSetting<ChoiceSetting>(BasePath(e) + ".speech_config")?.Current?.Id ?? "default";
+
+        public static bool Positional(ModEvent e)
+            => ModSettings.GetSetting<BoolSetting>(BasePath(e) + ".positional")?.Get() ?? true;
 
         private static string BasePath(ModEvent e)
         {

@@ -37,8 +37,23 @@ namespace WrathAccess.Events
                 if (!Main.Enabled || !e.Visible || !EventRegistry.Enabled(e)) return;
                 var msg = e.GetMessage();
                 if (msg == null || msg.IsEmpty) return;
+                var text = msg.Resolve();
                 var config = SpeechConfigRegistry.Get(EventRegistry.ConfigId(e));
-                config.Output(msg.Resolve(), interrupt: false);
+
+                // Render-capable configs (SAPI) read through the mod's mixer so utterances OVERLAP (combat
+                // bursts) instead of queuing — positioned at the unit when the event opts in. Screen-reader
+                // configs (Prism) can't render: fall back to live speech (which queues).
+                if (config.SupportsPositional)
+                {
+                    var audio = config.RenderToAudio(text);
+                    if (audio != null)
+                    {
+                        bool positional = EventRegistry.Positional(e) && e.Source != EventSources.None;
+                        WrathAccess.Audio.PositionalSpeech.Play(audio, positional ? e.Position : (UnityEngine.Vector3?)null);
+                        return;
+                    }
+                }
+                config.Output(text, interrupt: false);
             }
             catch (Exception ex) { Main.Log?.Error("[events] dispatch failed: " + ex.Message); }
         }

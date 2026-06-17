@@ -58,11 +58,10 @@ namespace WrathAccess.Exploration
         public float DistanceTo(Vector3 from) => Geo.Distance(from, Bounds.NearestPoint(from));
 
         /// <summary>
-        /// The PRIMARY taxonomy node (<see cref="SonarTaxonomy"/> key) — the single, state-aware role
-        /// this thing sounds as right now (a dead lootable enemy is primary containers.corpse; an exit
-        /// door flips doors→exits when opened). Null = not part of the taxonomy at all (sound is then
-        /// the user's per-node pick via <see cref="SonarTaxonomy.Resolve"/>; membership for the scanner
-        /// stays the full <see cref="Categories"/> set).
+        /// The PRIMARY <see cref="ScanTaxonomy"/> node — the single, state-aware role this thing sounds as
+        /// right now (a dead lootable enemy is primary containers.corpse; an exit door flips doors→exits
+        /// when opened). Null = not part of the taxonomy at all (sound is then the user's per-node pick via
+        /// <see cref="ScanSounds.Resolve"/>; membership for the scanner stays the full <see cref="Nodes"/> set).
         /// </summary>
         public virtual string Primary => null;
 

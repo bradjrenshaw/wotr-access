@@ -129,7 +129,7 @@ namespace WrathAccess.Exploration.Overlays
             {
                 // CurrentlySeen: the sonar is a "what's around right now" lens, like the review
                 // cycles — a remembered door back under fog shouldn't keep pinging (user report).
-                if (!it.IsVisible || !it.CurrentlySeen || SonarTaxonomy.Resolve(it.Primary) == null) continue;
+                if (!it.IsVisible || !it.CurrentlySeen || ScanSounds.Resolve(it.Primary) == null) continue;
                 float dx = it.Position.x - c.x, dz = it.Position.z - c.z;
                 float edge = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - it.Footprint);
                 if (edge > maxDist) continue;
@@ -141,7 +141,7 @@ namespace WrathAccess.Exploration.Overlays
         private void FirePing(ScanItem item, Overlay overlay)
         {
             if (!item.IsVisible || !item.CurrentlySeen) return; // went away since the snapshot
-            var snd = SonarTaxonomy.Resolve(item.Primary); // live: the user's per-node pick
+            var snd = ScanSounds.Resolve(item.Primary); // live: the user's per-node pick
             if (snd == null) return;
 
             // Wwise path: a REAL 3D emitter at the thing — the game's listener (the virtual head),

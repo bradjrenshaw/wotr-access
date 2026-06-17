@@ -220,7 +220,7 @@ namespace WrathAccess.Exploration
 
                 var proxy = new ProxyMapObject(mo);
                 string primary = proxy.Primary ?? "null";
-                string snd = SonarTaxonomy.Resolve(proxy.Primary) ?? "silent";
+                string snd = ScanSounds.Resolve(proxy.Primary) ?? "silent";
                 Main.Log?.Log("[objdump] go='" + go + "' bp='" + bp + "' marker='" + marker + "'"
                     + " parts=[" + parts + "]"
                     + " primary=" + primary + " sound=" + snd
@@ -331,13 +331,13 @@ namespace WrathAccess.Exploration
             if (p == null) return false;
             switch (g)
             {
-                case ReviewGroup.Party: return p == SonarTaxonomy.Party;
-                case ReviewGroup.Enemies: return p == SonarTaxonomy.Enemies;
-                case ReviewGroup.Neutrals: return p == SonarTaxonomy.Neutrals;
-                case ReviewGroup.Poi: return p == SonarTaxonomy.Poi;
-                default: return p != SonarTaxonomy.Party && p != SonarTaxonomy.Enemies
-                    && p != SonarTaxonomy.Neutrals && p != SonarTaxonomy.Scenery
-                    && p != SonarTaxonomy.Poi;
+                case ReviewGroup.Party: return p == ScanTaxonomy.UnitsParty;
+                case ReviewGroup.Enemies: return p == ScanTaxonomy.UnitsEnemies;
+                case ReviewGroup.Neutrals: return p == ScanTaxonomy.UnitsNeutrals;
+                case ReviewGroup.Poi: return p == ScanTaxonomy.Poi;
+                default: return p != ScanTaxonomy.UnitsParty && p != ScanTaxonomy.UnitsEnemies
+                    && p != ScanTaxonomy.UnitsNeutrals && p != ScanTaxonomy.Scenery
+                    && p != ScanTaxonomy.Poi;
             }
         }
 

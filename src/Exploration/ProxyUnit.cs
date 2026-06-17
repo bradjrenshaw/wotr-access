@@ -30,9 +30,9 @@ namespace WrathAccess.Exploration
             get
             {
                 if (_unit.State.IsDead)
-                    return _unit.IsDeadAndHasLoot ? SonarTaxonomy.ContainersCorpse : null;
-                return _unit.IsPlayerFaction ? SonarTaxonomy.Party
-                    : _unit.IsPlayersEnemy ? SonarTaxonomy.Enemies : SonarTaxonomy.Neutrals;
+                    return _unit.IsDeadAndHasLoot ? ScanTaxonomy.ContainersCorpse : null;
+                return _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
+                    : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : ScanTaxonomy.UnitsNeutrals;
             }
         }
 

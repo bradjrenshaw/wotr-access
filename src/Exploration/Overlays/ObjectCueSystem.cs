@@ -49,7 +49,7 @@ namespace WrathAccess.Exploration.Overlays
                 float dx = p.x - c.x, dz = p.z - c.z;
                 float dist = Mathf.Sqrt(dx * dx + dz * dz);
                 float fp = it.Footprint;
-                if ((SonarTaxonomy.Resolve(it.Primary) != null || it.IsUnit) && dist <= fp && dist < best && Mathf.Abs(p.y - c.y) <= LevelGap)
+                if ((ScanSounds.Resolve(it.Primary) != null || it.IsUnit) && dist <= fp && dist < best && Mathf.Abs(p.y - c.y) <= LevelGap)
                 {
                     best = dist; inside = it;
                 }

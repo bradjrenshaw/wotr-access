@@ -135,13 +135,13 @@ namespace WrathAccess.Exploration
                 }
 
                 bool exit = _obj.Get<AreaTransitionPart>() != null;
-                if (exit && !(door && !doorOpen)) return SonarTaxonomy.Exits;
+                if (exit && !(door && !doorOpen)) return ScanTaxonomy.Exits;
                 if (loot != null) return LootNode(loot);
-                if (door) return doorOpen ? SonarTaxonomy.DoorsOpen : SonarTaxonomy.Doors;
-                if (trap) return SonarTaxonomy.Traps;
-                if (hidden || skill) return SonarTaxonomy.SearchPoints;
-                if (mechanism) return SonarTaxonomy.Mechanisms;
-                return SonarTaxonomy.Scenery;
+                if (door) return doorOpen ? ScanTaxonomy.DoorsOpen : ScanTaxonomy.Doors;
+                if (trap) return ScanTaxonomy.Traps;
+                if (hidden || skill) return ScanTaxonomy.SearchPoints;
+                if (mechanism) return ScanTaxonomy.Mechanisms;
+                return ScanTaxonomy.Scenery;
             }
         }
 
@@ -149,15 +149,15 @@ namespace WrathAccess.Exploration
         {
             switch (loot.Settings.LootContainerType) // Settings is public on InteractionPart<T>
             {
-                case LootContainerType.Chest: return SonarTaxonomy.ContainersChest;
-                case LootContainerType.Unit: return SonarTaxonomy.ContainersCorpse;
-                case LootContainerType.Environment: return SonarTaxonomy.ContainersEnvironment;
-                case LootContainerType.PlayerChest: return SonarTaxonomy.ContainersStash;
-                case LootContainerType.OneSlot: return SonarTaxonomy.ContainersSingle;
+                case LootContainerType.Chest: return ScanTaxonomy.ContainersChest;
+                case LootContainerType.Unit: return ScanTaxonomy.ContainersCorpse;
+                case LootContainerType.Environment: return ScanTaxonomy.ContainersEnvironment;
+                case LootContainerType.PlayerChest: return ScanTaxonomy.ContainersStash;
+                case LootContainerType.OneSlot: return ScanTaxonomy.ContainersSingle;
                 // DefaultLoot + anything new → the catch-all container NODE. (This used to return the
                 // raw sound stem "loot-generic", which is not a taxonomy key — Resolve() found no such
                 // node and every DefaultLoot container went SILENT in the sonar/cues.)
-                default: return SonarTaxonomy.ContainersOther;
+                default: return ScanTaxonomy.ContainersOther;
             }
         }
 

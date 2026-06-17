@@ -30,7 +30,7 @@ namespace WrathAccess.Exploration
 
         public override IEnumerable<string> Nodes { get { yield return "poi"; } }
 
-        public override string Primary => SonarTaxonomy.Poi; // silent by default; assignable in Sounds
+        public override string Primary => ScanTaxonomy.Poi; // silent by default; assignable in Sounds
 
         protected override string AnnounceKey => "marker";
 

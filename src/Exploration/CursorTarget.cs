@@ -21,7 +21,7 @@ namespace WrathAccess.Exploration
             foreach (var it in WorldModel.Items)
             {
                 if (!it.IsVisible) continue;
-                if (!SonarTaxonomy.IsInteractive(it.Primary) && !it.IsUnit) continue; // units + interactables only
+                if (!ScanTaxonomy.IsInteractive(it.Primary) && !it.IsUnit) continue; // units + interactables only
                 var p = it.Position;
                 if (Mathf.Abs(p.y - c.y) > LevelGap) continue;
                 float dx = p.x - c.x, dz = p.z - c.z, sqr = dx * dx + dz * dz;

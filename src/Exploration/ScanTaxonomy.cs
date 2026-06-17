@@ -14,12 +14,11 @@ namespace WrathAccess.Exploration
     /// (Units → Party/Enemies/Neutrals; Containers → Chests/Corpses/…). Every category also has an implicit
     /// "All" entry (the category node itself) — browsing the union and serving as the inherit base for its
     /// children. Node keys are dotted: "units", "units.enemies", "containers.corpse". An item reports the
-    /// (sub)categories it belongs to (many-to-many), one state-aware node that SOUNDS, and one stable node
-    /// it ANNOUNCES as; all three are keys into this one tree.
+    /// (sub)categories it belongs to (<see cref="ScanItem.Nodes"/>, many-to-many), one state-aware node
+    /// that SOUNDS (<see cref="ScanItem.Primary"/>), and one stable node it ANNOUNCES as; all are keys here.
     ///
-    /// Phase 1: the data model + structural helpers only — nothing reads it yet. Settings-coupled
-    /// resolution (sound-with-inherit, per-node announcement overrides) lands when those systems are
-    /// rewired onto it; <c>SonarTaxonomy</c> / <c>ScanCategory</c> are removed then.
+    /// The scanner navigation and sonar sounds (<see cref="ScanSounds"/>) run on this tree; the old flat
+    /// <c>ScanCategory</c> and the separate <c>SonarTaxonomy</c> are gone. (Announcements move onto it next.)
     /// </summary>
     internal static class ScanTaxonomy
     {
@@ -27,6 +26,31 @@ namespace WrathAccess.Exploration
         public const string Silent = "silent";
         /// <summary>A child sound pick meaning "use the parent category's pick".</summary>
         public const string Inherit = "inherit";
+
+        // Node-key constants — what ScanItem.Nodes / .Primary return (avoids magic strings).
+        public const string Units = "units";
+        public const string UnitsParty = "units.party";
+        public const string UnitsEnemies = "units.enemies";
+        public const string UnitsNeutrals = "units.neutrals";
+        public const string Containers = "containers";
+        public const string ContainersChest = "containers.chest";
+        public const string ContainersCorpse = "containers.corpse";
+        public const string ContainersEnvironment = "containers.environment";
+        public const string ContainersSingle = "containers.single";
+        public const string ContainersStash = "containers.stash";
+        public const string ContainersOther = "containers.other";
+        public const string Doors = "doors";
+        public const string DoorsOpen = "doors.open";
+        public const string Exits = "exits";
+        public const string SearchPoints = "searchpoints";
+        public const string Traps = "traps";
+        public const string Mechanisms = "mechanisms";
+        public const string Scenery = "scenery";
+        public const string Poi = "poi";
+
+        /// <summary>True for nodes that mark a real interactive thing (cursor targeting cares about these
+        /// regardless of what sound — if any — the user assigned). POI/Scenery are not interactive.</summary>
+        public static bool IsInteractive(string key) => key != null && key != Poi && key != Scenery;
 
         internal sealed class Node
         {

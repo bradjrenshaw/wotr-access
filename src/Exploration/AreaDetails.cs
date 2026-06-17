@@ -81,6 +81,6 @@ namespace WrathAccess.Exploration
             get { yield return "poi"; }
         }
 
-        public override string Primary => SonarTaxonomy.Poi;
+        public override string Primary => ScanTaxonomy.Poi;
     }
 }

@@ -40,9 +40,11 @@ namespace WrathAccess.Audio
                 _mixer.SetChannel(Dir.East, east, pan: 1f);   // hard right
                 _mixer.SetChannel(Dir.West, west, pan: -1f);  // hard left
 
-                // Default is 300 ms / 2 buffers (~150 ms each), so volume changes lag badly. Small buffers
-                // make the proximity tones track the cursor responsively. (Tunable; lower if still laggy.)
-                _out = new WaveOutEvent { DesiredLatency = 50, NumberOfBuffers = 4 };
+                // Buffer must ride through managed-thread (GC/CPU) pauses or they drop brief silences into the
+                // continuous tone: a 50 ms buffer was smaller than a ~57 ms full-GC pause, so it underran. 100 ms
+                // (matching SfxPlayer) clears that; the cost is volume tracks the cursor ~100 ms slower. Tunable,
+                // but must stay above the worst managed pause or the gaps return.
+                _out = new WaveOutEvent { DesiredLatency = 100, NumberOfBuffers = 4 };
                 _out.Init(_mixer);
                 _out.Play();
                 return true;

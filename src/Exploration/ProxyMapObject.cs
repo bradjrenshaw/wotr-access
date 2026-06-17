@@ -58,21 +58,21 @@ namespace WrathAccess.Exploration
             }
         }
 
-        public override IEnumerable<ScanCategory> Categories
+        public override IEnumerable<string> Nodes
         {
             get
             {
-                var cats = new HashSet<ScanCategory>();
+                var nodes = new HashSet<string>();
                 var interactions = _obj.Interactions; // InteractionPart parts only
                 for (int i = 0; i < interactions.Count; i++)
                 {
                     var part = interactions[i];
                     // A one-way door (DisableOnOpen) disables its part once opened, but the doorway is
-                    // still a navigation landmark — keep it a DOOR. A disabled CLOSED door stays out
-                    // (HiddenPart gating / scripts) so secret doors don't leak.
+                    // still a navigation landmark — keep it a DOOR (open → the "open doors" subcategory).
+                    // A disabled CLOSED door stays out (HiddenPart gating / scripts) so secret doors don't leak.
                     if (part is InteractionDoorPart dr)
                     {
-                        if (part.Enabled || dr.IsOpen) cats.Add(ScanCategory.Doors);
+                        if (part.Enabled || dr.IsOpen) nodes.Add(dr.IsOpen ? "doors.open" : "doors");
                         continue;
                     }
                     // A HiddenPart gates the object's OTHER interactions: while unrevealed it disables them
@@ -83,21 +83,21 @@ namespace WrathAccess.Exploration
                     {
                         // Unrevealed hidden object → a search point (a skill check to reveal). Once Opened
                         // the real parts are enabled and categorize themselves, so we add nothing here.
-                        case HiddenPart h: if (!h.Opened) cats.Add(ScanCategory.SearchPoints); break;
-                        case InteractionLootPart _: cats.Add(ScanCategory.Containers); break;
-                        case InteractionSkillCheckPart _: cats.Add(ScanCategory.SearchPoints); break;
+                        case HiddenPart h: if (!h.Opened) nodes.Add("searchpoints"); break;
+                        case InteractionLootPart l: nodes.Add(LootNode(l)); break; // "containers.<subtype>"
+                        case InteractionSkillCheckPart _: nodes.Add("searchpoints"); break;
                         // A discovered trap — only while ARMED (TrapActive flips off on disarm/trigger;
                         // the game's highlight and interaction gate on it the same way).
-                        case DisableTrapInteractionPart t: if (t.Owner != null && t.Owner.TrapActive) cats.Add(ScanCategory.Traps); break;
-                        default: cats.Add(ScanCategory.Other); break; // dialog, combine, button, device, bark
+                        case DisableTrapInteractionPart t: if (t.Owner != null && t.Owner.TrapActive) nodes.Add("traps"); break;
+                        default: nodes.Add("mechanisms"); break; // dialog, combine, button, device, bark
                     }
                 }
                 // Area transitions and restrictions are separate entity parts, not InteractionParts.
-                if (_obj.Get<AreaTransitionPart>() != null) cats.Add(ScanCategory.Exits);
+                if (_obj.Get<AreaTransitionPart>() != null) nodes.Add("exits");
                 // No interactable role → plain scenery (a prop). Surfaced so it can be browsed; visibility
                 // still gates whether it's listed.
-                if (cats.Count == 0) cats.Add(ScanCategory.Scenery);
-                return cats;
+                if (nodes.Count == 0) nodes.Add("scenery");
+                return nodes;
             }
         }
 
@@ -172,10 +172,23 @@ namespace WrathAccess.Exploration
             return string.IsNullOrEmpty(prefab) ? null : prefab; // the designer's prefab name ("Bag", "Jug")
         }
 
-        // The object's type word: its first category's singular ("Door", "Container", …).
+        // The object's type word: the singular of its first node's category ("Door", "Container", …).
         private string TypeWord()
         {
-            foreach (var c in Categories) return ScanCategories.Singular(c);
+            foreach (var key in Nodes)
+            {
+                var node = ScanTaxonomy.Get(key);
+                var catKey = node == null ? null : node.IsCategory ? node.Key : node.Parent?.Key;
+                switch (catKey)
+                {
+                    case "doors": return Loc.T("scan.singular.door");
+                    case "containers": return Loc.T("scan.singular.container");
+                    case "exits": return Loc.T("scan.singular.exit");
+                    case "searchpoints": return Loc.T("scan.singular.search_point");
+                    case "traps": return Loc.T("scan.singular.trap");
+                    default: return Loc.T("scan.singular.object"); // mechanisms / scenery / unknown
+                }
+            }
             return Loc.T("scan.singular.object");
         }
 

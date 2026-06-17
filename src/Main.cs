@@ -442,6 +442,10 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.NextCategory).AddBinding(KeyCode.PageDown, ctrl: true).Repeating().Grouped("scanner");
             InputManager.Register("scan.categoryPrev", "Scanner: previous category", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("scanner");
+            InputManager.Register("scan.subcategoryNext", "Scanner: next subcategory", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.NextSubcategory).AddBinding(KeyCode.PageDown, shift: true).Repeating().Grouped("scanner");
+            InputManager.Register("scan.subcategoryPrev", "Scanner: previous subcategory", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.PrevSubcategory).AddBinding(KeyCode.PageUp, shift: true).Repeating().Grouped("scanner");
             // Home and Slash: plant the movement cursor ON the review target (the explicit opt-in jump).
             InputManager.Register("scan.cursorToItem", "Move cursor to review target", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.CursorToSelected)

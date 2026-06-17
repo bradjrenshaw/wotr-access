@@ -28,7 +28,7 @@ namespace WrathAccess.Exploration
 
         public override bool IsVisible => _marker.IsVisible();
 
-        public override IEnumerable<ScanCategory> Categories { get { yield return ScanCategory.PointsOfInterest; } }
+        public override IEnumerable<string> Nodes { get { yield return "poi"; } }
 
         public override string Primary => SonarTaxonomy.Poi; // silent by default; assignable in Sounds
 

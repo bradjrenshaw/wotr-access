@@ -76,9 +76,9 @@ namespace WrathAccess.Exploration
             get { try { return !FogOfWarController.IsInFogOfWar(Position); } catch { return false; } }
         }
 
-        public override IEnumerable<ScanCategory> Categories
+        public override IEnumerable<string> Nodes
         {
-            get { yield return ScanCategory.PointsOfInterest; }
+            get { yield return "poi"; }
         }
 
         public override string Primary => SonarTaxonomy.Poi;

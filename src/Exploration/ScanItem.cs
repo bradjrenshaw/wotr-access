@@ -14,7 +14,12 @@ namespace WrathAccess.Exploration
     {
         public abstract string Name { get; }
         public abstract Vector3 Position { get; }
-        public abstract IEnumerable<ScanCategory> Categories { get; }
+
+        /// <summary>The <see cref="ScanTaxonomy"/> leaf node keys this thing belongs to (many-to-many — a
+        /// lootable corpse is both "units.enemies" and "containers.corpse"). The scanner buckets it into
+        /// each leaf's subcategory list and its parent category's "All" list. Distinct from
+        /// <see cref="Primary"/> (the single state-aware node that SOUNDS).</summary>
+        public abstract IEnumerable<string> Nodes { get; }
 
         /// <summary>Only listed when the player could actually know about it (fog/vision). Default: yes.</summary>
         public virtual bool IsVisible => true;

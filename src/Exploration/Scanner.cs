@@ -30,13 +30,53 @@ namespace WrathAccess.Exploration
     /// </summary>
     internal static class Scanner
     {
-        private static readonly Dictionary<ScanCategory, List<ScanItem>> _items =
-            new Dictionary<ScanCategory, List<ScanItem>>();
+        // Two-level buckets, rebuilt each action: one list per taxonomy node (a category's own list IS
+        // its "All" — the union of its subcategories), plus the synthetic top-level "Everything".
+        private static readonly Dictionary<string, List<ScanItem>> _byNode =
+            new Dictionary<string, List<ScanItem>>();
+        private static readonly List<ScanItem> _everything = new List<ScanItem>();
 
-        private static int _catIndex;   // index into ScanCategories.Order
-        private static int _itemIndex;   // index into the current category's list
+        // Category cursor: 0 = the synthetic "Everything", 1.. = ScanTaxonomy.Categories. Subcategory
+        // cursor: index into NavSubcategories(currentCategory) (0 = the category's "All" entry).
+        private static int _catIndex;
+        private static int _subIndex;
+        private static int _itemIndex;   // index into the current (sub)category's list
         private static bool _entered;    // first scanner key announces the current spot without moving
         private static bool _debugAll;   // debug (F11): list everything, ignoring the visibility filter
+
+        private static int CatCount => ScanTaxonomy.Categories.Count + 1; // +1 for Everything
+        private static bool OnEverything => _catIndex <= 0;
+        private static ScanTaxonomy.Node CurrentCategory
+            => OnEverything ? null : ScanTaxonomy.Categories[_catIndex - 1];
+        private static IReadOnlyList<ScanTaxonomy.Node> CurrentSubs
+            => OnEverything ? null : ScanTaxonomy.NavSubcategories(CurrentCategory);
+        // The (sub)category node whose item list we're browsing (null on Everything).
+        private static ScanTaxonomy.Node CurrentNode
+        {
+            get
+            {
+                if (OnEverything) return null;
+                var subs = CurrentSubs;
+                return subs[Mathf.Clamp(_subIndex, 0, subs.Count - 1)];
+            }
+        }
+        private static List<ScanItem> CurrentList
+        {
+            get
+            {
+                if (OnEverything) return _everything;
+                var node = CurrentNode;
+                return node != null && _byNode.TryGetValue(node.Key, out var l) ? l : null;
+            }
+        }
+
+        private static string SpokenLabel(ScanTaxonomy.Node n) => Loc.T(n.LocKey);
+        private static string CategoryLabel
+            => OnEverything ? Loc.T("scan.everything") : SpokenLabel(CurrentCategory);
+        private static string SubcategoryLabel
+            => OnEverything ? Loc.T("scan.everything")
+             : _subIndex <= 0 ? Loc.T("scan.all_of", new { label = SpokenLabel(CurrentCategory) })
+             : SpokenLabel(CurrentNode);
 
         private static bool Active =>
             FocusMode.Active && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";
@@ -60,6 +100,8 @@ namespace WrathAccess.Exploration
         public static void PrevItem() { if (Active) StepItem(-1); }
         public static void NextCategory() { if (Active) StepCategory(1); }
         public static void PrevCategory() { if (Active) StepCategory(-1); }
+        public static void NextSubcategory() { if (Active) StepSubcategory(1); }
+        public static void PrevSubcategory() { if (Active) StepSubcategory(-1); }
         public static void CursorToSelected() { if (Active) CommitCursor(); }
         public static void AnnounceCursor() { if (Active) SpeakCursor(); }
         public static void AnnounceWhereAmI() { if (Active) SpeakWhereAmI(); }
@@ -192,16 +234,18 @@ namespace WrathAccess.Exploration
 
         private static void Rebuild()
         {
-            foreach (var c in ScanCategories.Order)
+            _everything.Clear();
+            foreach (var n in ScanTaxonomy.AllNodes())
             {
-                if (_items.TryGetValue(c, out var existing)) existing.Clear();
-                else _items[c] = new List<ScanItem>();
+                if (_byNode.TryGetValue(n.Key, out var existing)) existing.Clear();
+                else _byNode[n.Key] = new List<ScanItem>();
             }
 
-            foreach (var item in WorldModel.Items) Add(item); // Add filters to visible + buckets by category
+            foreach (var item in WorldModel.Items) Add(item); // Add filters to visible + buckets by node
 
             var refPos = ScanFrom;
-            foreach (var list in _items.Values)
+            _everything.Sort((a, b) => a.DistanceTo(refPos).CompareTo(b.DistanceTo(refPos)));
+            foreach (var list in _byNode.Values)
                 list.Sort((a, b) => a.DistanceTo(refPos).CompareTo(b.DistanceTo(refPos)));
         }
 
@@ -209,26 +253,29 @@ namespace WrathAccess.Exploration
         {
             if (item == null) return;
             if (!_debugAll && !item.IsVisible) return; // debug (F11) lists hidden things too
-            bool inAll = false;
-            foreach (var cat in item.Categories)
+            bool inEverything = false;
+            foreach (var key in item.Nodes)
             {
-                if (_items.TryGetValue(cat, out var list)) list.Add(item);
-                // "All" aggregates the real things — not scenery-only props, not the curated POI markers
-                // (which duplicate entities). Added once, however many categories the item has.
-                if (cat != ScanCategory.Scenery && cat != ScanCategory.PointsOfInterest) inAll = true;
+                var node = ScanTaxonomy.Get(key);
+                if (node == null) continue;
+                // The leaf's own list, plus its parent category's "All" (so "All units" sees every faction).
+                if (_byNode.TryGetValue(node.Key, out var nl) && !nl.Contains(item)) nl.Add(item);
+                var cat = node.IsCategory ? node : node.Parent;
+                if (cat != null && cat.Key != node.Key
+                    && _byNode.TryGetValue(cat.Key, out var cl) && !cl.Contains(item)) cl.Add(item);
+                // "Everything" aggregates the real things — not scenery-only props, not the curated POI
+                // markers (which duplicate entities). Added once however many nodes the item has.
+                if (cat != null && cat.Key != "scenery" && cat.Key != "poi") inEverything = true;
             }
-            if (inAll && _items.TryGetValue(ScanCategory.All, out var all)) all.Add(item);
+            if (inEverything && !_everything.Contains(item)) _everything.Add(item);
         }
-
-        private static List<ScanItem> Current =>
-            _items.TryGetValue(ScanCategories.Order[_catIndex], out var l) ? l : null;
 
         private static ScanItem Selected
         {
             get
             {
                 if (_selectionOverride != null) return _selectionOverride;
-                var l = Current;
+                var l = CurrentList;
                 return (l != null && _itemIndex >= 0 && _itemIndex < l.Count) ? l[_itemIndex] : null;
             }
         }
@@ -237,22 +284,35 @@ namespace WrathAccess.Exploration
         {
             _selectionOverride = null;
             Rebuild();
-            int n = ScanCategories.Order.Length;
+            int n = CatCount;
             if (_entered) _catIndex = ((_catIndex + dir) % n + n) % n;
             _entered = true;
+            _subIndex = 0;   // land on the category's "All"
             _itemIndex = 0;
-            AnnounceCategory();
+            AnnounceList(CategoryLabel);
+        }
+
+        private static void StepSubcategory(int dir)
+        {
+            _selectionOverride = null;
+            Rebuild();
+            if (OnEverything) { _entered = true; Speak(Loc.T("scan.no_subcategories")); return; }
+            int n = CurrentSubs.Count;
+            if (_entered) _subIndex = ((_subIndex + dir) % n + n) % n;
+            _entered = true;
+            _itemIndex = 0;
+            AnnounceList(SubcategoryLabel);
         }
 
         private static void StepItem(int dir)
         {
             _selectionOverride = null;
             Rebuild();
-            var list = Current;
+            var list = CurrentList;
             if (list == null || list.Count == 0)
             {
                 _entered = true;
-                Speak(Loc.T("scan.category_empty", new { label = ScanCategories.Label(ScanCategories.Order[_catIndex]) }));
+                Speak(Loc.T("scan.category_empty", new { label = OnEverything ? CategoryLabel : SubcategoryLabel }));
                 return;
             }
             _itemIndex = Mathf.Clamp(_itemIndex, 0, list.Count - 1);
@@ -285,10 +345,10 @@ namespace WrathAccess.Exploration
         {
             switch (g)
             {
-                case ReviewGroup.Party: return ScanCategories.Label(ScanCategory.Party);
-                case ReviewGroup.Enemies: return ScanCategories.Label(ScanCategory.Enemies);
-                case ReviewGroup.Neutrals: return ScanCategories.Label(ScanCategory.Neutrals);
-                case ReviewGroup.Poi: return ScanCategories.Label(ScanCategory.PointsOfInterest);
+                case ReviewGroup.Party: return Loc.T("taxonomy.units.party");
+                case ReviewGroup.Enemies: return Loc.T("taxonomy.units.enemies");
+                case ReviewGroup.Neutrals: return Loc.T("taxonomy.units.neutrals");
+                case ReviewGroup.Poi: return Loc.T("taxonomy.poi");
                 default: return Loc.T("review.others");
             }
         }
@@ -308,7 +368,7 @@ namespace WrathAccess.Exploration
                 => _exit.Boundary != null && _exit.Boundary.Length > 0
                     ? ScanBounds.Cloud(_exit.Position, _exit.Boundary)
                     : ScanBounds.Segments(_exit.Position, _exit.Edges);
-            public override IEnumerable<ScanCategory> Categories { get { yield return ScanCategory.Exits; } }
+            public override IEnumerable<string> Nodes { get { yield return "exits"; } }
         }
 
         // The V-cycle's landing when it's a geometric opening: openings aren't WorldModel items, so
@@ -322,7 +382,7 @@ namespace WrathAccess.Exploration
             Rebuild();
             var refPos = ScanFrom;
             var room = RoomMap.RoomAt(refPos);
-            var emptyMsg = Loc.T("scan.category_empty", new { label = ScanCategories.Label(ScanCategory.Exits) });
+            var emptyMsg = Loc.T("scan.category_empty", new { label = Loc.T("taxonomy.exits") });
             if (room == null) { Speak(emptyMsg); return; }
 
             // Door/transition items in (or adjacent to) this room — probe around the thing, since a
@@ -332,8 +392,8 @@ namespace WrathAccess.Exploration
             {
                 if (!_debugAll && !it.IsVisible) continue;
                 bool isExit = false;
-                foreach (var cat in it.Categories)
-                    if (cat == ScanCategory.Doors || cat == ScanCategory.Exits) { isExit = true; break; }
+                foreach (var key in it.Nodes)
+                    if (key == "exits" || key == "doors" || key == "doors.open") { isExit = true; break; }
                 if (!isExit) continue;
                 var p = it.Position;
                 bool inRoom = false;
@@ -427,28 +487,38 @@ namespace WrathAccess.Exploration
             overlay?.Get<Overlays.SonarSystem>()?.PlayReview(item, ScanFrom);
         }
 
-        // Point the scanner's browse position at this item (its first concrete category in cycle order,
-        // skipping the All aggregate) so PageUp/Down continues from the review target in context.
+        // Point the scanner's browse position at this item so PageUp/Down continues from the review target
+        // in context — landing on the most specific subcategory that contains it, else the category's All.
         private static void SyncSelectionTo(ScanItem item)
         {
-            for (int c = 0; c < ScanCategories.Order.Length; c++)
+            var cats = ScanTaxonomy.Categories;
+            for (int c = 0; c < cats.Count; c++)
             {
-                var cat = ScanCategories.Order[c];
-                if (cat == ScanCategory.All) continue;
-                if (!_items.TryGetValue(cat, out var list)) continue;
-                int i = list.IndexOf(item);
-                if (i >= 0) { _catIndex = c; _itemIndex = i; _entered = true; return; }
+                var subs = ScanTaxonomy.NavSubcategories(cats[c]);
+                for (int s = 1; s < subs.Count; s++) // specific subcategories first
+                    if (_byNode.TryGetValue(subs[s].Key, out var sl))
+                    {
+                        int i = sl.IndexOf(item);
+                        if (i >= 0) { _catIndex = c + 1; _subIndex = s; _itemIndex = i; _entered = true; return; }
+                    }
+                if (_byNode.TryGetValue(cats[c].Key, out var al)) // then the category's All
+                {
+                    int i = al.IndexOf(item);
+                    if (i >= 0) { _catIndex = c + 1; _subIndex = 0; _itemIndex = i; _entered = true; return; }
+                }
             }
+            int ie = _everything.IndexOf(item); // fallback: the Everything list
+            if (ie >= 0) { _catIndex = 0; _subIndex = 0; _itemIndex = ie; _entered = true; }
         }
 
-        private static void AnnounceCategory()
+        // Announce the current (sub)category: its label + count, and the first item if any.
+        private static void AnnounceList(string label)
         {
-            var cat = ScanCategories.Order[_catIndex];
-            var list = Current;
+            var list = CurrentList;
             int count = list != null ? list.Count : 0;
             var msg = count == 1
-                ? Loc.T("scan.category_one", new { label = ScanCategories.Label(cat) })
-                : Loc.T("scan.category_many", new { label = ScanCategories.Label(cat), count });
+                ? Loc.T("scan.category_one", new { label })
+                : Loc.T("scan.category_many", new { label, count });
             if (count > 0) { _itemIndex = Mathf.Clamp(_itemIndex, 0, count - 1); msg += ". " + ItemLine(list); PlayReviewPing(Selected); }
             Speak(msg);
         }

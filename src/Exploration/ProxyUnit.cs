@@ -40,14 +40,14 @@ namespace WrathAccess.Exploration
         // Large/Huge creature correctly reports a footprint spanning several tiles.
         public override float Footprint => (_unit.View as Kingmaker.View.UnitEntityView)?.Corpulence ?? 0f;
 
-        public override IEnumerable<ScanCategory> Categories
+        public override IEnumerable<string> Nodes
         {
             get
             {
-                if (_unit.IsPlayerFaction) yield return ScanCategory.Party;
-                else if (_unit.IsPlayersEnemy) yield return ScanCategory.Enemies;
-                else yield return ScanCategory.Neutrals;
-                if (_unit.IsDeadAndHasLoot) yield return ScanCategory.Containers;
+                yield return _unit.IsPlayerFaction ? "units.party"
+                    : _unit.IsPlayersEnemy ? "units.enemies" : "units.neutrals";
+                // A lootable corpse is also a container (its faction stays its identity for browsing).
+                if (_unit.IsDeadAndHasLoot) yield return "containers.corpse";
             }
         }
 

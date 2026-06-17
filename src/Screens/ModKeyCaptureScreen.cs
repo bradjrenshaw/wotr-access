@@ -5,57 +5,62 @@ using WrathAccess.Input;
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Captures a key combo for one of OUR <see cref="InputAction"/>s (mod-pushed, distinct from the
-    /// game-binding <see cref="KeyBindCaptureScreen"/>). It sets <see cref="Screen.CapturesRawInput"/> so
-    /// the InputManager stands down (our nav won't eat the keypress), and reads the next non-modifier
-    /// keydown directly in <see cref="OnUpdate"/>, capturing the current Ctrl/Shift/Alt state. Focus mode
-    /// stays on (the mod menu engaged it), so the game's own keys remain muted. Escape cancels.
+    /// Captures a key combo for one of OUR <see cref="InputAction"/>s (distinct from the game-binding
+    /// <see cref="KeyBindCaptureScreen"/>). Pushed as a CHILD SCREEN of whatever opened it (the mod menu's
+    /// binding row). It sets <see cref="Screen.CapturesRawInput"/> so the InputManager stands down (our nav
+    /// won't eat the keypress), and reads the next non-modifier keydown directly in <see cref="OnUpdate"/>,
+    /// capturing the current Ctrl/Shift/Alt state. Focus mode stays on, so the game's own keys remain muted;
+    /// Escape cancels. Closing returns focus to the binding row.
     /// </summary>
     public sealed class ModKeyCaptureScreen : Screen
     {
-        private static InputAction s_action;
-        private static bool s_append;       // add to the existing bindings instead of replacing them
-        private static bool s_armed;        // the key that opened the dialog has released; ready to capture
-        private static bool s_awaitRelease; // bound; staying up until the confirming key releases
-        private static KeyCode s_releaseKey;
+        private readonly InputAction _action;
+        private readonly bool _append;     // add to the existing bindings instead of replacing them
+        private bool _armed;               // the key that opened the dialog has released; ready to capture
+        private bool _awaitRelease;        // bound; staying up until the confirming key releases
+        private KeyCode _releaseKey;
 
+        private ModKeyCaptureScreen(InputAction action, bool append) { _action = action; _append = append; }
+
+        /// <summary>Open the capture dialog as a child of the current screen.</summary>
         public static void Open(InputAction action, bool append = false)
-        { s_action = action; s_append = append; s_armed = false; s_awaitRelease = false; }
+        {
+            if (action != null) ScreenManager.Current?.PushChild(new ModKeyCaptureScreen(action, append));
+        }
 
         public override string Key => "overlay.modkeycapture";
-        public override int Layer => 36; // just above the mod menu (35)
         public override bool CapturesRawInput => true;
-        public override bool IsActive() => s_action != null;
+        public override bool IsActive() => false; // only ever a child screen
 
         public override void OnFocus()
             => Tts.Speak(Message.Localized("settings", "rebind.prompt",
-                new { action = s_action != null ? s_action.DisplayLabel : "" }).Resolve());
+                new { action = _action != null ? _action.DisplayLabel : "" }).Resolve());
 
         public override void OnUpdate()
         {
-            var action = s_action;
+            var action = _action;
             if (action == null) return;
 
             // After a successful bind, keep the screen up (input still stood down) until the confirming key
             // is released — otherwise that same press propagates into the menu/new binding (a cascade).
-            if (s_awaitRelease)
+            if (_awaitRelease)
             {
-                if (!UnityEngine.Input.GetKey(s_releaseKey)) { s_action = null; s_awaitRelease = false; }
+                if (!UnityEngine.Input.GetKey(_releaseKey)) Close();
                 return;
             }
 
             if (UnityEngine.Input.GetKeyDown(KeyCode.Escape))
             {
                 Tts.Speak(Message.Localized("settings", "rebind.cancelled").Resolve());
-                s_action = null;
+                Close();
                 return;
             }
 
             // Wait for the opening key (the Enter/activate press that got us here) to release before we
             // start reading — otherwise that very press is captured as the new binding.
-            if (!s_armed)
+            if (!_armed)
             {
-                if (!UnityEngine.Input.anyKey) s_armed = true;
+                if (!UnityEngine.Input.anyKey) _armed = true;
                 return;
             }
 
@@ -71,7 +76,7 @@ namespace WrathAccess.Screens
 
                 // Reject a combo already bound to another action — otherwise one keypress fires two
                 // actions. In append mode, also reject a combo this action already has.
-                if (s_append && HasBinding(action, binding))
+                if (_append && HasBinding(action, binding))
                 {
                     Tts.Speak(Message.Localized("settings", "rebind.conflict",
                         new { combo = binding.DisplayName, other = action.DisplayLabel }).Resolve(), interrupt: true);
@@ -88,15 +93,17 @@ namespace WrathAccess.Screens
                         new { combo = binding.DisplayName, other = conflict.DisplayLabel }).Resolve(), interrupt: true);
                 }
 
-                if (!s_append) action.ClearBindings(); // append mode ADDS an alternative combo
+                if (!_append) action.ClearBindings(); // append mode ADDS an alternative combo
                 action.AddBinding(binding); // BindingsChanged → BindingSetting auto-saves
                 Tts.Speak(Message.Localized("settings", "rebind.bound",
                     new { action = action.DisplayLabel, combo = binding.DisplayName }).Resolve());
-                s_releaseKey = key;
-                s_awaitRelease = true; // close once the key is released
+                _releaseKey = key;
+                _awaitRelease = true; // close once the key is released
                 return;
             }
         }
+
+        private void Close() => ParentScreen?.RemoveChild(this);
 
         private static bool HasBinding(InputAction action, InputBinding binding)
         {

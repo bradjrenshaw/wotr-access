@@ -149,8 +149,8 @@ namespace WrathAccess.Screens
             Register(new TutorialScreen()); // modal tutorial popup (movement/camera etc.), layer 28
             Register(new MessageModalScreen()); // generic confirm/message modal, layer 30
             Register(new ModMenuScreen()); // mod settings menu (Ctrl+M), layer 35
-            Register(new ModKeyCaptureScreen()); // mod key-binding capture, layer 36 (raw-input passthrough)
-            Register(new ModTextEntryScreen()); // mod text entry (overlay rename etc.), layer 38 (raw-input)
+            // ModKeyCaptureScreen + ModTextEntryScreen are no longer registered — both are CHILD screens
+            // pushed on the current screen via their static Open(...) (key capture / text entry overlays).
             // TooltipScreen is no longer registered — each tooltip page is a CHILD screen pushed on the
             // current screen/page via TooltipScreen.Open/OpenMenu; the child stack is the drill stack.
 

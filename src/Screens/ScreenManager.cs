@@ -151,7 +151,8 @@ namespace WrathAccess.Screens
             Register(new ModMenuScreen()); // mod settings menu (Ctrl+M), layer 35
             Register(new ModKeyCaptureScreen()); // mod key-binding capture, layer 36 (raw-input passthrough)
             Register(new ModTextEntryScreen()); // mod text entry (overlay rename etc.), layer 38 (raw-input)
-            Register(new TooltipScreen()); // on-demand brick-tooltip reader, layer 40 (top)
+            // TooltipScreen is no longer registered — each tooltip page is a CHILD screen pushed on the
+            // current screen/page via TooltipScreen.Open/OpenMenu; the child stack is the drill stack.
 
             Main.Log?.Log("ScreenManager: " + _registered.Count + " screens registered.");
         }

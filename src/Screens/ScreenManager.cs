@@ -17,18 +17,21 @@ namespace WrathAccess.Screens
     {
         private static readonly List<Screen> _registered = new List<Screen>();
         private static List<Screen> _stack = new List<Screen>();
+        private static Screen _focused; // the deepest screen the navigator is currently attached to
 
-        public static Screen Current => _stack.Count > 0 ? _stack[_stack.Count - 1] : null;
+        // The focused screen = the deepest active child of the top outer screen (== the top when no
+        // child sub-screens are pushed).
+        public static Screen Current => _stack.Count > 0 ? _stack[_stack.Count - 1].DeepestActiveScreen() : null;
         public static IReadOnlyList<Screen> Stack => _stack;
 
         public static void Register(Screen screen) => _registered.Add(screen);
 
         public static void Tick()
         {
-            var next = Resolve();
-            Dispatch(_stack, next);
-            _stack = next;
-            Current?.OnUpdate();
+            ApplyDiff(Resolve()); // poll the outer (game-driven) screens → push/pop on the persistent stack
+            SyncFocus();          // focus the deepest screen (outer changes; before OnUpdate, as before)
+            Current?.OnUpdate();  // may push/remove child sub-screens
+            SyncFocus();          // re-sync if OnUpdate (or this frame's input) changed the child tree
             // Standardized first-focus: once the focused screen has built its content (some build lazily in
             // OnUpdate), make sure something is focused. No-op when focus already exists or the screen is
             // intentionally unfocused (exploration).
@@ -54,26 +57,37 @@ namespace WrathAccess.Screens
             }
         }
 
-        // OnUnfocus(old top) → OnPop(removed, top→bottom) → OnPush(added, bottom→top) → OnFocus(new top).
-        private static void Dispatch(List<Screen> oldStack, List<Screen> newStack)
+        // Diff the polled active set against the persistent stack: pop outer screens that went inactive
+        // (each with its whole child subtree, top→bottom) and push newly-active ones (bottom→top). Focus
+        // is handled separately by SyncFocus so child-tree changes and outer changes go through one path.
+        private static void ApplyDiff(List<Screen> desired)
         {
-            var oldTop = oldStack.Count > 0 ? oldStack[oldStack.Count - 1] : null;
-            var newTop = newStack.Count > 0 ? newStack[newStack.Count - 1] : null;
+            for (int i = _stack.Count - 1; i >= 0; i--)
+                if (!desired.Contains(_stack[i])) PopTree(_stack[i]);
+            for (int i = 0; i < desired.Count; i++)
+                if (!_stack.Contains(desired[i])) { var s = desired[i]; Safe(() => s.OnPush(), s, "OnPush"); }
+            _stack = desired;
+        }
 
-            if (oldTop != newTop) Safe(() => oldTop?.OnUnfocus(), oldTop, "OnUnfocus");
+        // An outer screen leaving the stack disposes its child subtree (deepest-first), then OnPops itself.
+        private static void PopTree(Screen s)
+        {
+            if (s.ActiveChild != null) s.RemoveChild(s.ActiveChild);
+            Safe(() => s.OnPop(), s, "OnPop");
+        }
 
-            for (int i = oldStack.Count - 1; i >= 0; i--)
-                if (!newStack.Contains(oldStack[i])) { var s = oldStack[i]; Safe(() => s.OnPop(), s, "OnPop"); }
-
-            for (int i = 0; i < newStack.Count; i++)
-                if (!oldStack.Contains(newStack[i])) { var s = newStack[i]; Safe(() => s.OnPush(), s, "OnPush"); }
-
-            if (newTop != oldTop)
-            {
-                Safe(() => newTop?.OnFocus(), newTop, "OnFocus");
-                WrathAccess.UI.Navigation.Attach(newTop); // (re)bind the navigator to the focused screen
-                if (WrathAccess.FocusMode.Active) WrathAccess.UI.Navigation.AnnounceCurrent();
-            }
+        // Re-attach the navigator whenever the deepest (focused) screen changes — from an outer push/pop
+        // OR a child-tree push/remove. No screen overrides OnUnfocus, so firing it after a pop is harmless.
+        // Idempotent (no-op when the focused screen is unchanged).
+        private static void SyncFocus()
+        {
+            var cur = Current;
+            if (ReferenceEquals(cur, _focused)) return;
+            _focused?.OnUnfocus();
+            _focused = cur;
+            Safe(() => cur?.OnFocus(), cur, "OnFocus");
+            WrathAccess.UI.Navigation.Attach(cur); // (re)bind the navigator to the focused screen
+            if (WrathAccess.FocusMode.Active) WrathAccess.UI.Navigation.AnnounceCurrent();
         }
 
         private static void Safe(Action a, Screen s, string hook)

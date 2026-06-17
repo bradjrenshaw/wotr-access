@@ -70,6 +70,51 @@ namespace WrathAccess.Screens
         public virtual void OnPop() { }
         public virtual void OnUpdate() { }
 
+        // ---- child screen tree (mod-driven sub-screens within a screen) ----
+        // A screen can host a single ActiveChild (which can host its own child, forming a chain) — e.g. a
+        // dropdown's choice list, a confirm modal, a dialogue sub-choice. The focused screen is the chain's
+        // deepest. The poll-driven OUTER stack lives in ScreenManager; these children are pushed/removed
+        // imperatively by their parent. ScreenManager re-syncs focus each frame, so a push/remove here is
+        // picked up automatically; removing an outer screen disposes its whole child subtree.
+
+        /// <summary>The screen hosting this one as a child, or null for an outer (poll-driven) screen.
+        /// Named ParentScreen to avoid hiding <see cref="UIElement.Parent"/> (the element-tree parent used
+        /// for focus-path announcements — a Screen is its own root container, so that stays null).</summary>
+        public Screen ParentScreen { get; private set; }
+
+        /// <summary>This screen's single active child sub-screen, or null.</summary>
+        public Screen ActiveChild { get; private set; }
+
+        /// <summary>The deepest screen in this chain (this screen if it has no active child).</summary>
+        public Screen DeepestActiveScreen()
+        {
+            var s = this;
+            while (s.ActiveChild != null) s = s.ActiveChild;
+            return s;
+        }
+
+        /// <summary>Push a sub-screen as this screen's active child (replacing any existing child). The
+        /// child becomes the focused screen; ScreenManager re-syncs focus on its next tick.</summary>
+        public void PushChild(Screen child)
+        {
+            if (child == null || child == ActiveChild) return;
+            if (ActiveChild != null) RemoveChild(ActiveChild);
+            child.ParentScreen = this;
+            ActiveChild = child;
+            child.OnPush();
+        }
+
+        /// <summary>Remove this screen's active child, disposing its whole subtree first (deepest-first
+        /// OnPop). Focus falls back to this screen on the next ScreenManager tick.</summary>
+        public void RemoveChild(Screen child)
+        {
+            if (child == null || ActiveChild != child) return;
+            if (child.ActiveChild != null) child.RemoveChild(child.ActiveChild); // recurse: grandchildren first
+            child.OnPop();
+            child.ParentScreen = null;
+            ActiveChild = null;
+        }
+
         public virtual List<string> GetHelpMessages() => new List<string>();
     }
 }

@@ -196,15 +196,25 @@ namespace WrathAccess
         // don't chime on the first sample or across area loads (entering mid-intro-cutscene chimes "gained"
         // only when it ends).
         private static readonly SfxPlayer _controlSfx = new SfxPlayer();
-        private static bool? _hadControl;
+        private static bool _hadControl = true;   // last CHIMED state; default in control, so losing it (intro cutscene) chimes
+        private static bool _pendingControl = true;
+        private static float _pendingSince;
+        private const float ChimeDebounceSeconds = 0.5f; // a state must hold this long before we chime it
         private static void TickControl()
         {
             var game = Game.Instance;
-            if (game == null || game.RootUiContext == null || !game.RootUiContext.IsInGame) { _hadControl = null; return; }
-            bool hasControl = !game.CutsceneLock.Active;
-            if (_hadControl.HasValue && hasControl != _hadControl.Value)
-                _controlSfx.Play(System.IO.Path.Combine(OverlayAudio.Dir, hasControl ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
-            _hadControl = hasControl;
+            if (game == null || game.RootUiContext == null || !game.RootUiContext.IsInGame) { _hadControl = true; _pendingControl = true; return; }
+            bool hasControl = ControlState.HasControl; // single source of truth — see ControlState
+            float now = UnityEngine.Time.unscaledTime;
+
+            // Debounce the chime: only act on a state held for ChimeDebounceSeconds, so the brief
+            // ClickEventsController blips between cutscene beats don't replay the chime (the audio stutter).
+            if (hasControl != _pendingControl) { _pendingControl = hasControl; _pendingSince = now; }
+            if (_hadControl != _pendingControl && now - _pendingSince >= ChimeDebounceSeconds)
+            {
+                _controlSfx.Play(System.IO.Path.Combine(OverlayAudio.Dir, _pendingControl ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
+                _hadControl = _pendingControl;
+            }
         }
 
         // Game modes where a quick-save is sensible — normal play, paused, world/global map, kingdom, and

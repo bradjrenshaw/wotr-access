@@ -31,13 +31,14 @@ namespace WrathAccess.Exploration.Announce
 
         public bool ResolveBool(string part, string setting, bool def)
         {
-            // Walk the node up to its category; first explicit override (not "inherit") wins.
-            for (var n = ScanTaxonomy.Get(_node); n != null; n = n.Parent)
-            {
-                var ov = ModSettings.GetSetting<NullableBoolSetting>(
-                    "proxy_elem." + n.Key + "." + part + "." + setting);
-                if (ov != null && ov.IsOverridden) return ov.LocalValue.Value;
-            }
+            // Only the whole-part "enabled" is overridable per node; walk node → category, first explicit
+            // override wins. Other settings (the spatial sub-toggles) are global-only.
+            if (setting == "enabled")
+                for (var n = ScanTaxonomy.Get(_node); n != null; n = n.Parent)
+                {
+                    var ov = ModSettings.GetSetting<NullableBoolSetting>("proxy_elem." + n.Key + "." + part);
+                    if (ov != null && ov.IsOverridden) return ov.LocalValue.Value;
+                }
             var global = ModSettings.GetSetting<BoolSetting>("proxy_announce." + part + "." + setting);
             return global != null ? global.Get() : def;
         }

@@ -53,7 +53,7 @@ namespace WrathAccess.Screens
             ("input", "Input", "category.input"),
             ("log", "Log", "category.log"),
             ("overlays", "Overlays", "category.overlays"),
-            ("sonar", "Sonar", "category.sonar"),
+            ("scanner", "Scanner", "category.scanner"),
             ("speech", "Speech", "category.speech"),
             ("ui", "UI", "category.ui"),
         };
@@ -232,14 +232,37 @@ namespace WrathAccess.Screens
                 if (events != null)
                     foreach (var s in events.Children) BuildSettingNode(tree, s);
             }
-            else if (key == "sonar")
+            else if (key == "scanner")
             {
-                // The shared sonar defaults, flat (every overlay follows these unless customized).
+                // One unified system: per-entity-type settings (sound + announcements, mirroring the
+                // taxonomy) under Entities, then the sonar's own tunables under Sonar.
+                var entities = new TreeGroup(Loc("scanner.entities", "Entities"));
+
+                // The global announcement base every entity inherits.
+                var paRoot = ModSettings.Root.Get<CategorySetting>("proxy_announce");
+                if (paRoot != null)
+                {
+                    var defaults = new TreeGroup(Loc("scanner.ann_defaults", "Announcement defaults"));
+                    foreach (var p in paRoot.Children)
+                    {
+                        // One-toggle parts read flat; the spatial part (sub-toggles) keeps its subgroup.
+                        if (p is CategorySetting pc && pc.Children.Count == 1
+                            && pc.Get<BoolSetting>("enabled") is BoolSetting en)
+                            defaults.Add(new ProxyBoolToggle(pc.Label, en.Get, () => en.Set(!en.Get())));
+                        else
+                            BuildSettingNode(defaults, p);
+                    }
+                    if (defaults.Children.Count > 0) entities.Add(defaults);
+                }
+
+                foreach (var cat in WrathAccess.Exploration.ScanTaxonomy.Categories)
+                    BuildEntityNode(cat, entities);
+                tree.Add(entities);
+
+                var sonar = new TreeGroup(Loc("category.sonar", "Sonar"));
                 var d = SystemDefaults("sonar");
-                if (d != null)
-                    foreach (var s in d.Children) BuildSettingNode(tree, s);
-                // The per-category sound picks (global, not per-overlay — like the volumes).
-                BuildSettingNode(tree, ModSettings.Root.Get<CategorySetting>("sounds"));
+                if (d != null) foreach (var s in d.Children) BuildSettingNode(sonar, s);
+                if (sonar.Children.Count > 0) tree.Add(sonar);
             }
             else if (key == "log")
             {
@@ -259,32 +282,6 @@ namespace WrathAccess.Screens
                 {
                     var d = SystemDefaults(sysKey);
                     if (d != null) BuildSettingNode(tree, d);
-                }
-
-                // Scan-item announcements (units / objects / markers in the scanner & review cursor): the
-                // simple on/off per part first, then the full per-part settings + per-proxy-type overrides.
-                var paRoot = ModSettings.Root.Get<CategorySetting>("proxy_announce");
-                if (paRoot != null)
-                {
-                    var simple = new TreeGroup(Loc("exploration.proxy_announce", "Proxy announcements"));
-                    foreach (var child in paRoot.Children)
-                    {
-                        if (!(child is CategorySetting c)) continue;
-                        var en = c.Get<BoolSetting>("enabled");
-                        if (en != null)
-                            simple.Add(new ProxyBoolToggle(c.Label, en.Get, () => en.Set(!en.Get())));
-                    }
-                    tree.Add(simple);
-
-                    var overrides = new TreeGroup(Loc("exploration.proxy_overrides", "Proxy announcement overrides"));
-                    var global = new TreeGroup(Loc("global.group", "Global"));
-                    foreach (var s in paRoot.Children) BuildSettingNode(global, s);
-                    if (global.Children.Count > 0) overrides.Add(global);
-                    var peRoot = ModSettings.Root.Get<CategorySetting>("proxy_elem");
-                    if (peRoot != null)
-                        foreach (var s in peRoot.Children.OrderBy(c => c.Label, System.StringComparer.CurrentCultureIgnoreCase))
-                            BuildSettingNode(overrides, s);
-                    if (overrides.Children.Count > 0) tree.Add(overrides);
                 }
             }
         }
@@ -442,7 +439,7 @@ namespace WrathAccess.Screens
                 };
                 case "input": return new[] { "bindings" };
                 case "log": return new[] { "defaults.log" };
-                case "sonar": return new[] { "defaults.sonar", "sounds" };
+                case "scanner": return new[] { "defaults.sonar", "sounds", "proxy_announce", "proxy_elem" };
                 case "speech": return new[] { "speech" };
                 case "ui": return new[] { "announcements", "ui" };
                 default: return new string[0];
@@ -562,6 +559,32 @@ namespace WrathAccess.Screens
             });
         }
 
+
+        // One entity node of the Scanner tab's Entities tree: its sound dropdown + an Announcements
+        // subgroup (the per-part tri-states), then its subcategories recursively. Mirrors ScanTaxonomy.
+        private static void BuildEntityNode(WrathAccess.Exploration.ScanTaxonomy.Node node, Container parent)
+        {
+            var group = new TreeGroup(Loc(node.LocKey, node.Label));
+
+            var sound = WrathAccess.Exploration.ScanSounds.SoundSetting(node.Key);
+            if (sound != null)
+                group.Add(new ProxyChoiceDropdown(Loc("scanner.sound", "Sound"),
+                    sound.Choices.Select(ch => ch.Label).ToList(),
+                    () => IndexOfChoice(sound),
+                    idx => { if (idx >= 0 && idx < sound.Choices.Count) sound.Set(sound.Choices[idx].Id); }));
+
+            var annCat = ModSettings.GetCategory("proxy_elem." + node.Key);
+            if (annCat != null)
+            {
+                var ann = new TreeGroup(Loc("scanner.announcements", "Announcements"));
+                foreach (var c in annCat.Children)
+                    if (c is NullableBoolSetting nb) ann.Add(new ProxyOverrideToggle(nb));
+                if (ann.Children.Count > 0) group.Add(ann);
+            }
+
+            foreach (var child in node.Children) BuildEntityNode(child, group);
+            parent.Add(group);
+        }
 
         // Map a setting to a navigable control; categories recurse into collapsible tree groups.
         private static void BuildSettingNode(Container parent, Setting s)

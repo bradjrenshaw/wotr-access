@@ -94,6 +94,10 @@ namespace WrathAccess.Exploration
             return node != null && node.IsBranch ? "sounds." + key + ".all" : "sounds." + key;
         }
 
+        /// <summary>The sound dropdown setting for a taxonomy node (for the Scanner-tab Entities tree).</summary>
+        public static ChoiceSetting SoundSetting(string nodeKey)
+            => ModSettings.GetSetting<ChoiceSetting>(PathFor(nodeKey));
+
         /// <summary>The wav stem the given taxonomy node should play, honouring Inherit, or null for
         /// silent/unknown nodes. Read live (settings dictionary lookups — cheap enough per ping).</summary>
         public static string Resolve(string nodeKey)

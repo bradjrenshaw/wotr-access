@@ -72,21 +72,23 @@ namespace WrathAccess.Exploration.Announce
                 }
             }
 
-            // Per-entity-type overrides: every taxonomy node, the whole-part "enabled" of each part its
-            // class offers, inheriting the matching global.
+            // Per-entity-type overrides: a category per taxonomy node, holding one tri-state per part its
+            // class offers (the whole-part "enabled", keyed by the part, labelled with the part). Only the
+            // enabled flag is per-node; spatial sub-toggles stay global. node→category→global resolution
+            // lives in ScanAnnounceContext; the part tri-state path is proxy_elem.<nodeKey>.<part>.
             foreach (var node in ScanTaxonomy.AllNodes())
+            {
+                var cat = EnsureNodeCat(node);
                 foreach (var part in PartsFor(node.Class))
-                {
-                    var cat = EnsureNodePart(node, part);
-                    if (cat.GetByKey("enabled") == null)
-                        cat.Add(new NullableBoolSetting("enabled", OptLabel["enabled"],
-                            globals[part + ".enabled"], "proxyann.enabled"));
-                }
+                    if (cat.GetByKey(part) == null)
+                        cat.Add(new NullableBoolSetting(part, PartLabel[part],
+                            globals[part + ".enabled"], "proxyann." + part));
+            }
         }
 
-        // proxy_elem.<nodeKey>.<part>, with label/loc paths walking the node hierarchy so each segment
-        // (category, subcategory, part) gets its taxonomy/part loc key.
-        private static CategorySetting EnsureNodePart(ScanTaxonomy.Node node, string part)
+        // proxy_elem.<nodeKey>, with label/loc paths walking the node hierarchy so each segment
+        // (category, subcategory) gets its taxonomy loc key.
+        private static CategorySetting EnsureNodeCat(ScanTaxonomy.Node node)
         {
             var labels = new List<string> { "Scan overrides" };
             var locs = new List<string>();
@@ -98,12 +100,8 @@ namespace WrathAccess.Exploration.Announce
                 labels.Add(n != null ? n.Label : seg);
                 locs.Add("taxonomy." + cum);
             }
-            labels.Add(PartLabel[part]);
-            locs.Add("proxyann." + part);
             return ModSettingsRegistry.EnsureCategory(
-                "proxy_elem." + node.Key + "." + part,
-                string.Join("/", labels),
-                "/" + string.Join("/", locs));
+                "proxy_elem." + node.Key, string.Join("/", labels), "/" + string.Join("/", locs));
         }
     }
 }

@@ -19,22 +19,23 @@ namespace WrathAccess.Exploration.Announce
     }
 
     /// <summary>
-    /// Resolves a scan announcement's settings with the per-proxy-type cascade: a per-element override
-    /// (<c>proxy_elem.{element}.{part}.{setting}</c>) when explicitly set, else the global
-    /// (<c>proxy_announce.{part}.{setting}</c>), else the code default. <paramref name="elementKey"/> null
-    /// ⇒ globals only (the generic ScanItem default, which declares no element identity).
+    /// Resolves a scan announcement's setting with the per-entity-type inherit chain: the announce-node's
+    /// own override, then its parent category's, then the global default — most specific wins. Overrides
+    /// live at <c>proxy_elem.{nodeKey}.{part}.{setting}</c> (tri-state NullableBool: inherit/on/off);
+    /// globals at <c>proxy_announce.{part}.{setting}</c>. A null/unknown node ⇒ globals only.
     /// </summary>
     internal sealed class ScanAnnounceContext
     {
-        private readonly string _element;
-        public ScanAnnounceContext(string elementKey) { _element = elementKey; }
+        private readonly string _node;
+        public ScanAnnounceContext(string nodeKey) { _node = nodeKey; }
 
         public bool ResolveBool(string part, string setting, bool def)
         {
-            if (!string.IsNullOrEmpty(_element))
+            // Walk the node up to its category; first explicit override (not "inherit") wins.
+            for (var n = ScanTaxonomy.Get(_node); n != null; n = n.Parent)
             {
                 var ov = ModSettings.GetSetting<NullableBoolSetting>(
-                    "proxy_elem." + _element + "." + part + "." + setting);
+                    "proxy_elem." + n.Key + "." + part + "." + setting);
                 if (ov != null && ov.IsOverridden) return ov.LocalValue.Value;
             }
             var global = ModSettings.GetSetting<BoolSetting>("proxy_announce." + part + "." + setting);

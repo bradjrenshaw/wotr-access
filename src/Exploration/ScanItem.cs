@@ -69,9 +69,12 @@ namespace WrathAccess.Exploration
         /// interactables for the object enter/exit cue while leaving plain scenery out.</summary>
         public virtual bool IsUnit => false;
 
-        /// <summary>The per-proxy-type key for announcement overrides ("unit"/"map_object"/"marker"), or
-        /// null for the generic default (globals only, no per-type override entries).</summary>
-        protected virtual string AnnounceKey => null;
+        /// <summary>The stable <see cref="ScanTaxonomy"/> node this thing ANNOUNCES as — the key for its
+        /// per-entity-type announcement overrides (which inherit node → category → global). Distinct from
+        /// the state-aware sound <see cref="Primary"/>: default is Primary, but units override to their
+        /// FACTION so a lootable corpse still announces as its faction (unit parts), not as a container.
+        /// Null ⇒ globals only.</summary>
+        protected virtual string AnnounceNode => Primary;
 
         /// <summary>The identity/state announcement parts, in canonical order, WITHOUT the spatial part
         /// (added by <see cref="Describe"/>). Default: just the name (with the unnamed fallback). Concrete
@@ -101,13 +104,13 @@ namespace WrathAccess.Exploration
             // Bearing/distance/height to the nearest PART of the thing; coordinates (debug) report the
             // centre (where the cursor would snap).
             parts.Add(new Announce.SpatialPart(reference, Bounds.NearestPoint(reference), Position));
-            return Announce.ScanAnnounceComposer.Compose(AnnounceKey, parts);
+            return Announce.ScanAnnounceComposer.Compose(AnnounceNode, parts);
         }
 
         /// <summary>The spoken line for the thing itself, no position — for at-cursor announcements
         /// (the cursor is on it, so distance/bearing would be noise).</summary>
         public string DescribeInPlace()
-            => Announce.ScanAnnounceComposer.Compose(AnnounceKey, new List<Announce.ScanAnnouncement>(StateParts()));
+            => Announce.ScanAnnounceComposer.Compose(AnnounceNode, new List<Announce.ScanAnnouncement>(StateParts()));
 
         /// <summary>
         /// Interact with this item — mirroring the game's click (auto-path + act), driven through the

@@ -32,8 +32,7 @@ namespace WrathAccess.Exploration
 
         public override string Primary => ScanTaxonomy.Poi; // silent by default; assignable in Sounds
 
-        protected override string AnnounceKey => "marker";
-
+        // Announce-node = Primary (poi); marker part-set (name + location only).
         // Name only (the game's curated, localized description) + spatial. The marker KIND (an unlocalized
         // enum) was a dev aid the old line tacked on — and double-spoke when there was no description; we
         // drop it rather than ship a raw enum word. (A localized kind/type could be added later.)

@@ -4,22 +4,23 @@ using WrathAccess.Settings;
 namespace WrathAccess.Exploration.Announce
 {
     /// <summary>
-    /// Builds the scan-announcement settings (the proxy parallel to <c>AnnouncementRegistry</c>, kept
-    /// separate so scan items needn't be UI elements). Two trees under the settings Root:
+    /// Builds the scan-announcement settings over the unified <see cref="ScanTaxonomy"/> (the proxy
+    /// parallel to <c>AnnouncementRegistry</c>, kept separate so scan items needn't be UI elements):
     /// <list type="bullet">
-    /// <item><c>proxy_announce.{part}</c> — global per-part settings (an <c>enabled</c> toggle, plus the
-    /// spatial part's distance/direction/height/coordinates sub-toggles).</item>
-    /// <item><c>proxy_elem.{element}.{part}</c> — per-proxy-type tri-state overrides (NullableBool
-    /// inheriting the matching global) for the parts that element actually emits.</item>
+    /// <item><c>proxy_announce.{part}</c> — global per-part settings (the inherited base): an <c>enabled</c>
+    /// toggle, plus the spatial part's distance/direction/height/coordinates sub-toggles.</item>
+    /// <item><c>proxy_elem.{nodeKey}.{part}.enabled</c> — per-entity-type tri-state overrides, one per
+    /// taxonomy node for the parts that node's <see cref="ScanClass"/> offers. Node → category → global
+    /// inheritance is resolved in <see cref="ScanAnnounceContext"/>. Only the whole-part <c>enabled</c> is
+    /// per-node; the spatial sub-toggles stay global (configured once).</item>
     /// </list>
-    /// The set is small and fixed, so it's declared explicitly (no reflection). Registered pre-load with
-    /// the other static categories, so persistence restores it normally.
+    /// Registered pre-load with the other static categories, so persistence restores it normally.
     /// </summary>
     internal static class ScanAnnounceRegistry
     {
         private struct Opt { public string Key; public bool Def; public Opt(string k, bool d) { Key = k; Def = d; } }
 
-        // Each part and the settings it carries.
+        // Each global part and the settings it carries (the spatial sub-toggles live here, global-only).
         private static readonly (string part, Opt[] opts)[] Parts =
         {
             ("name",         new[] { new Opt("enabled", true) }),
@@ -32,15 +33,18 @@ namespace WrathAccess.Exploration.Announce
                                      new Opt("coordinates", false) }),
         };
 
-        // Which parts each proxy type emits → which override entries to build.
-        private static readonly (string element, string[] parts)[] Elements =
+        // The parts a node offers, by its class (subcategories inherit the category's class).
+        private static string[] PartsFor(ScanClass cls)
         {
-            ("unit",       new[] { "name", "type", "hp", "condition", "spatial" }),
-            ("map_object", new[] { "name", "type", "object_state", "spatial" }),
-            ("marker",     new[] { "name", "spatial" }),
-        };
+            switch (cls)
+            {
+                case ScanClass.Unit: return new[] { "name", "type", "hp", "condition", "spatial" };
+                case ScanClass.Marker: return new[] { "name", "spatial" };
+                default: return new[] { "name", "type", "object_state", "spatial" }; // Object
+            }
+        }
 
-        // English fallbacks (the real labels come from the "settings" locale table by these keys).
+        // English fallbacks (real labels come from the "settings" locale table by these keys).
         private static readonly Dictionary<string, string> PartLabel = new Dictionary<string, string>
         {
             { "name", "Name" }, { "type", "Type" }, { "hp", "Health" }, { "condition", "Condition" },
@@ -51,15 +55,11 @@ namespace WrathAccess.Exploration.Announce
             { "enabled", "Announce" }, { "distance", "Distance" }, { "direction", "Direction" },
             { "height", "Height difference" }, { "coordinates", "Coordinates (debug)" },
         };
-        private static readonly Dictionary<string, string> ElementLabel = new Dictionary<string, string>
-        {
-            { "unit", "Unit" }, { "map_object", "Map object" }, { "marker", "Marker" },
-        };
 
         public static void RegisterDefaults()
         {
-            // Globals, remembering each created BoolSetting so the overrides can inherit it.
-            var globals = new Dictionary<string, BoolSetting>(); // "part.setting" -> global
+            // Globals (the inherited base) — full schema per part.
+            var globals = new Dictionary<string, BoolSetting>(); // "part.opt" -> global
             foreach (var (part, opts) in Parts)
             {
                 var cat = ModSettingsRegistry.EnsureCategory(
@@ -72,29 +72,38 @@ namespace WrathAccess.Exploration.Announce
                 }
             }
 
-            // Per-proxy-type overrides (only the parts that type emits).
-            foreach (var (element, parts) in Elements)
-            {
-                foreach (var part in parts)
+            // Per-entity-type overrides: every taxonomy node, the whole-part "enabled" of each part its
+            // class offers, inheriting the matching global.
+            foreach (var node in ScanTaxonomy.AllNodes())
+                foreach (var part in PartsFor(node.Class))
                 {
-                    var cat = ModSettingsRegistry.EnsureCategory(
-                        "proxy_elem." + element + "." + part,
-                        "Scan overrides/" + ElementLabel[element] + "/" + PartLabel[part],
-                        "/proxyelem." + element + "/proxyann." + part);
-                    foreach (var o in OptsFor(part))
-                    {
-                        if (cat.GetByKey(o.Key) != null) continue;
-                        cat.Add(new NullableBoolSetting(o.Key, OptLabel[o.Key],
-                            globals[part + "." + o.Key], "proxyann." + o.Key));
-                    }
+                    var cat = EnsureNodePart(node, part);
+                    if (cat.GetByKey("enabled") == null)
+                        cat.Add(new NullableBoolSetting("enabled", OptLabel["enabled"],
+                            globals[part + ".enabled"], "proxyann.enabled"));
                 }
-            }
         }
 
-        private static Opt[] OptsFor(string part)
+        // proxy_elem.<nodeKey>.<part>, with label/loc paths walking the node hierarchy so each segment
+        // (category, subcategory, part) gets its taxonomy/part loc key.
+        private static CategorySetting EnsureNodePart(ScanTaxonomy.Node node, string part)
         {
-            foreach (var p in Parts) if (p.part == part) return p.opts;
-            return new Opt[0];
+            var labels = new List<string> { "Scan overrides" };
+            var locs = new List<string>();
+            string cum = "";
+            foreach (var seg in node.Key.Split('.'))
+            {
+                cum = cum.Length == 0 ? seg : cum + "." + seg;
+                var n = ScanTaxonomy.Get(cum);
+                labels.Add(n != null ? n.Label : seg);
+                locs.Add("taxonomy." + cum);
+            }
+            labels.Add(PartLabel[part]);
+            locs.Add("proxyann." + part);
+            return ModSettingsRegistry.EnsureCategory(
+                "proxy_elem." + node.Key + "." + part,
+                string.Join("/", labels),
+                "/" + string.Join("/", locs));
         }
     }
 }

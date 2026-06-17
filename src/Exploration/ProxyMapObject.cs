@@ -218,8 +218,7 @@ namespace WrathAccess.Exploration
             return s.Length > 0 ? s : null;
         }
 
-        protected override string AnnounceKey => "map_object";
-
+        // Announce-node = Primary (the leaf: doors / containers.corpse / …); object part-set.
         protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
         {
             foreach (var p in NameAndType(RealName(), TypeWord())) yield return p;

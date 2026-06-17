@@ -51,7 +51,10 @@ namespace WrathAccess.Exploration
             }
         }
 
-        protected override string AnnounceKey => "unit";
+        // Announce as the faction (stable) even when dead/looted — so a corpse reads "<name>, enemy,
+        // dead", not as a container. (The sound Primary still flips to containers.corpse.)
+        protected override string AnnounceNode => _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
+            : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : ScanTaxonomy.UnitsNeutrals;
 
         // name, type (faction), then either a terminal condition (dead/unconscious) OR hp (+ in-combat).
         protected override IEnumerable<Announce.ScanAnnouncement> StateParts()

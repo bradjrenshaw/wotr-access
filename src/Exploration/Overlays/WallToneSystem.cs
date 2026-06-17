@@ -1,5 +1,6 @@
 using System.IO;
-using Kingmaker.View; // ObstacleAnalyzer.TraceAlongNavmesh
+using Kingmaker.View; // ObstacleAnalyzer
+using Pathfinding; // NNInfo / NavmeshBase / GraphNode — share one nearest-node query across the 4 traces
 using UnityEngine;
 using WrathAccess.Audio;
 
@@ -32,8 +33,10 @@ namespace WrathAccess.Exploration.Overlays
         private WallToneEngine _engine;
         private string _loadedSet; // which set the engine has loaded, so a tone_set change reloads
 
+        private GraphNode _cursorNode; // last frame's nearest navmesh node — reused as the GetNearest hint
+
         private string ToneSet => ChoiceId("tone_set", "1");
-        private string SetDir => Path.Combine(OverlayAudio.Dir, "walltones", ToneSet);
+        private string SetDir => System.IO.Path.Combine(OverlayAudio.Dir, "walltones", ToneSet);
 
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
@@ -65,6 +68,13 @@ namespace WrathAccess.Exploration.Overlays
             var c = overlay.Cursor.Position;
             float v = EffectiveVolume;
 
+            // All four direction traces start at the cursor, so the nearest-navmesh-node query is identical
+            // for each — compute it ONCE here, hinted from last frame so GetNearest is skipped while the
+            // cursor stays in the same triangle. This query was the wall-tone GC churn; the per-direction
+            // Linecasts below are the cheap part and still run every frame, so accuracy is unchanged.
+            NNInfo node = ObstacleAnalyzer.GetNearestNode(c, _cursorNode);
+            _cursorNode = node.node;
+
             if (WwiseAudio.Active)
             {
                 if (!_wwise || _loopSet != ToneSet) StartWwise(c);
@@ -73,7 +83,7 @@ namespace WrathAccess.Exploration.Overlays
                     _engine?.Mute();
                     for (int i = 0; i < 4; i++)
                     {
-                        var hit = ObstacleAnalyzer.TraceAlongNavmesh(c, c + DirVecs[i] * Range);
+                        var hit = TraceFrom(c, node, c + DirVecs[i] * Range);
                         WwiseAudio.UpdateLoop(_loops[i], hit, Curve(c, hit) * v);
                     }
                     return;
@@ -88,10 +98,10 @@ namespace WrathAccess.Exploration.Overlays
             EnsureLoaded();
             if (_engine == null || !_engine.IsLoaded) return;
             _engine.SetVolumes(
-                WallVolume(c, Vector3.forward) * v, // +Z north
-                WallVolume(c, Vector3.back) * v,    // -Z south
-                WallVolume(c, Vector3.right) * v,   // +X east
-                WallVolume(c, Vector3.left) * v);   // -X west
+                WallVolume(c, node, Vector3.forward) * v, // +Z north
+                WallVolume(c, node, Vector3.back) * v,    // -Z south
+                WallVolume(c, node, Vector3.right) * v,   // +X east
+                WallVolume(c, node, Vector3.left) * v);   // -X west
         }
 
         private void StartWwise(Vector3 c)
@@ -139,10 +149,20 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         // 0 (no wall within range) → 1 (right at the wall), curved so it bites close in.
-        private float WallVolume(Vector3 c, Vector3 dir)
+        private float WallVolume(Vector3 c, NNInfo node, Vector3 dir)
         {
-            var hit = ObstacleAnalyzer.TraceAlongNavmesh(c, c + dir * Range);
+            var hit = TraceFrom(c, node, c + dir * Range);
             return Curve(c, hit);
+        }
+
+        // ObstacleAnalyzer.TraceAlongNavmesh, but with a precomputed nearest node so the GetNearest query
+        // isn't repeated per direction. The Linecast (null trace list) is the cheap stack-walking part.
+        private static Vector3 TraceFrom(Vector3 start, NNInfo node, Vector3 end)
+        {
+            float dx = start.x - node.position.x, dz = start.z - node.position.z;
+            if (dx * dx + dz * dz > 0.0001f) return node.position; // cursor off-navmesh → clamp (matches the game's trace)
+            NavmeshBase.Linecast(node.node.Graph as NavmeshBase, start, end, node.node, out var hit, null);
+            return hit.point;
         }
 
         private float Curve(Vector3 c, Vector3 hit)

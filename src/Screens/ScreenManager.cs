@@ -98,9 +98,10 @@ namespace WrathAccess.Screens
             if (ReferenceEquals(cur, _focused)) return;
             _focused?.OnUnfocus();
             _focused = cur;
-            Safe(() => cur?.OnFocus(), cur, "OnFocus");
-            WrathAccess.UI.Navigation.Attach(cur); // (re)bind the navigator to the focused screen
-            if (WrathAccess.FocusMode.Active) WrathAccess.UI.Navigation.AnnounceCurrent();
+            Safe(() => cur?.OnFocus(), cur, "OnFocus"); // speaks the screen name
+            // Bind the navigator; the initial-focus landing is announced by EnsureFocus once the screen's
+            // content exists (handles lazy builds + build-time silent Attach uniformly).
+            WrathAccess.UI.Navigation.Attach(cur);
         }
 
         private static void Safe(Action a, Screen s, string hook)
@@ -142,7 +143,8 @@ namespace WrathAccess.Screens
             // shared CommonVM, so this same screen also covers the in-game pause menu.
             Register(new SaveLoadScreen()); // save/load window (CommonVM.SaveLoadVM), layer 20
             Register(new SettingsScreen());
-            Register(new ChoiceSubmenuScreen()); // mod-pushed, layer 26 (above settings)
+            // ChoiceSubmenuScreen is no longer registered — it's a CHILD screen, pushed on its opener via
+            // ChoiceSubmenuScreen.Open (a dropdown's value list), and removed when a choice is made.
             Register(new KeyBindCaptureScreen()); // key-binding capture, layer 27 (raw-input passthrough)
             Register(new TutorialScreen()); // modal tutorial popup (movement/camera etc.), layer 28
             Register(new MessageModalScreen()); // generic confirm/message modal, layer 30

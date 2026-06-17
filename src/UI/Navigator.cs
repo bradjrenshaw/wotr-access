@@ -20,11 +20,20 @@ namespace WrathAccess.UI
         protected readonly List<UIElement> Path = new List<UIElement>();
         protected Screen Screen { get; private set; }
 
+        // The screen we still owe an INITIAL-focus announcement for (set on screen entry, cleared once the
+        // landing is announced or a screen takes over via Focus). Lets EnsureFocus deliver the landing even
+        // when a screen's own build-time Attach established focus silently — the "read the thing you landed
+        // on" after the screen name.
+        private Screen _awaitingAnnounce;
+
         public UIElement Current => Path.Count > 0 ? Path[Path.Count - 1] : null;
 
-        /// <summary>Bind to a screen and set initial focus (silently). Subclass decides how.</summary>
+        /// <summary>Bind to a screen and set initial focus (silently). Subclass decides how. A NEW screen
+        /// entry arms the initial-focus announcement (delivered by EnsureFocus once focus exists); a
+        /// re-attach to the SAME screen (e.g. a content rebuild) doesn't re-arm it, so rebuilds stay quiet.</summary>
         public void Attach(Screen screen)
         {
+            if (!ReferenceEquals(screen, Screen)) _awaitingAnnounce = screen;
             Screen = screen;
             Path.Clear();
             if (screen != null) BuildInitialFocus();
@@ -47,7 +56,14 @@ namespace WrathAccess.UI
             // initial focus ran before a lazily-built screen filled its content panel (a Panel reports
             // focusable, so the descent stops on it). In both cases re-establish focus now that content exists.
             bool stranded = Current is Container c && c.Shape == ContainerShape.Panel;
-            if (Current != null && !stranded) return;
+            if (Current != null && !stranded)
+            {
+                // Focus is already established — but if a screen's build set it SILENTLY (build-time Attach)
+                // and we still owe this screen's initial-focus announcement, deliver it now. This is the
+                // landing read after the screen name (was missing for every Attach-only screen).
+                if (ReferenceEquals(_awaitingAnnounce, Screen) && FocusMode.Active) AnnounceCurrent();
+                return;
+            }
 
             BuildInitialFocus();          // descends through the (now-populated) panels to a real leaf/cell
             var target = Current;
@@ -75,13 +91,18 @@ namespace WrathAccess.UI
         /// changes) — diff from empty, so container labels + the focused leaf are read,
         /// e.g. "Main Menu, Continue".
         /// </summary>
-        public void AnnounceCurrent() => AnnounceDelta(EmptyPath);
+        public void AnnounceCurrent()
+        {
+            _awaitingAnnounce = null; // announcing settles the initial-focus debt
+            AnnounceDelta(EmptyPath);
+        }
 
         /// <summary>Move focus to a specific element (e.g. a node just inserted into the tree) and announce
         /// the change. Queues (doesn't interrupt) so a preceding feedback line still plays.</summary>
         public void Focus(UIElement target, bool announce = true)
         {
             if (target == null) return;
+            _awaitingAnnounce = null; // the screen set focus itself — it owns the initial announce (or its silence)
             var snapshot = new List<UIElement>(Path);
             BuildPathTo(target);
             if (announce) AnnounceDelta(snapshot);

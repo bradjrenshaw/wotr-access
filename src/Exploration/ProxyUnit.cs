@@ -51,18 +51,27 @@ namespace WrathAccess.Exploration
             }
         }
 
-        protected override string Extra
+        protected override string AnnounceKey => "unit";
+
+        // name, type (faction), then either a terminal condition (dead/unconscious) OR hp (+ in-combat).
+        protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
         {
-            get
+            foreach (var p in NameAndType(_unit.CharacterName, FactionWord())) yield return p;
+
+            var state = _unit.State;
+            if (state.IsDead) yield return new Announce.ConditionPart("unit.dead");
+            else if (!state.IsConscious) yield return new Announce.ConditionPart("unit.unconscious");
+            else
             {
-                var state = _unit.State;
-                if (state.IsDead) return Loc.T("unit.dead");
-                if (!state.IsConscious) return Loc.T("unit.unconscious");
-                var hp = Loc.T("unit.hp", new { hp = _unit.HPLeft, max = _unit.MaxHP });
-                if (_unit.IsInCombat) hp += ", " + Loc.T("unit.in_combat");
-                return hp;
+                yield return new Announce.HpPart(_unit.HPLeft, _unit.MaxHP);
+                if (_unit.IsInCombat) yield return new Announce.ConditionPart("unit.in_combat");
             }
         }
+
+        private string FactionWord()
+            => _unit.IsPlayerFaction ? Loc.T("scan.faction.party")
+             : _unit.IsPlayersEnemy ? Loc.T("scan.faction.enemy")
+             : Loc.T("scan.faction.neutral");
 
         // Same as clicking the unit: the handler selects/talks/attacks/loots as appropriate and derives
         // the acting unit itself (nearest selected + main-player-preferred).

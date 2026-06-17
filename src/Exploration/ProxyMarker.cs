@@ -32,7 +32,14 @@ namespace WrathAccess.Exploration
 
         public override string Primary => SonarTaxonomy.Poi; // silent by default; assignable in Sounds
 
-        // The marker's own kind (exit/loot/poi/unit…) — handy while comparing against the entity data.
-        protected override string Extra => _marker.GetMarkerType().ToString().ToLowerInvariant();
+        protected override string AnnounceKey => "marker";
+
+        // Name only (the game's curated, localized description) + spatial. The marker KIND (an unlocalized
+        // enum) was a dev aid the old line tacked on — and double-spoke when there was no description; we
+        // drop it rather than ship a raw enum word. (A localized kind/type could be added later.)
+        protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
+        {
+            foreach (var p in NameAndType(_marker.GetDescription(), null)) yield return p;
+        }
     }
 }

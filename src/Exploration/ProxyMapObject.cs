@@ -161,18 +161,25 @@ namespace WrathAccess.Exploration
             }
         }
 
-        public override string Name
+        // The object's real name (curated marker label, else the designer's prefab name), or null when it
+        // has neither — the announcement then falls back to the TYPE word (NameAndType), and the Name
+        // property below keeps its old desc→prefab→category→"object" behaviour for other consumers.
+        private string RealName()
         {
-            get
-            {
-                var desc = _obj.Get<LocalMapMarkerPart>()?.GetDescription();
-                if (!string.IsNullOrEmpty(desc)) return desc; // curated/localized marker label wins
-                var prefab = CleanName(_obj.View?.name);
-                if (!string.IsNullOrEmpty(prefab)) return prefab; // the designer's prefab name ("Bag", "Jug")
-                foreach (var c in Categories) return ScanCategories.Singular(c); // first category's singular
-                return Loc.T("scan.singular.object");
-            }
+            var desc = _obj.Get<LocalMapMarkerPart>()?.GetDescription();
+            if (!string.IsNullOrEmpty(desc)) return desc; // curated/localized marker label wins
+            var prefab = CleanName(_obj.View?.name);
+            return string.IsNullOrEmpty(prefab) ? null : prefab; // the designer's prefab name ("Bag", "Jug")
         }
+
+        // The object's type word: its first category's singular ("Door", "Container", …).
+        private string TypeWord()
+        {
+            foreach (var c in Categories) return ScanCategories.Singular(c);
+            return Loc.T("scan.singular.object");
+        }
+
+        public override string Name => RealName() ?? TypeWord();
 
         // Turn the designer's GameObject/prefab name into a readable object name: "Loot_Bag_Big 2" → "Bag
         // Big", "Horgus_Dialogue" → "Horgus", "Go_To_Sull" → "Go To Sull". Owlcat names map-object prefabs
@@ -198,18 +205,25 @@ namespace WrathAccess.Exploration
             return s.Length > 0 ? s : null;
         }
 
-        protected override string Extra
+        protected override string AnnounceKey => "map_object";
+
+        protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
         {
-            get
-            {
-                var bits = new List<string>();
-                var doorPart = _obj.Get<InteractionDoorPart>();
-                if (doorPart != null && doorPart.IsOpen) bits.Add(Loc.T("object.open"));
-                if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add(Loc.T("object.restricted"));
-                var trapPart = _obj.Get<DisableTrapInteractionPart>();
-                if (trapPart?.Owner != null && trapPart.Owner.TrapActive) bits.Add(Loc.T("object.trapped"));
-                return bits.Count > 0 ? string.Join(", ", bits.ToArray()) : null;
-            }
+            foreach (var p in NameAndType(RealName(), TypeWord())) yield return p;
+            var states = StateWords();
+            if (states.Count > 0) yield return new Announce.ObjectStatePart(states);
+        }
+
+        // open / restricted / trapped — the same flags the old Extra joined.
+        private List<string> StateWords()
+        {
+            var bits = new List<string>();
+            var doorPart = _obj.Get<InteractionDoorPart>();
+            if (doorPart != null && doorPart.IsOpen) bits.Add(Loc.T("object.open"));
+            if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add(Loc.T("object.restricted"));
+            var trapPart = _obj.Get<DisableTrapInteractionPart>();
+            if (trapPart?.Owner != null && trapPart.Owner.TrapActive) bits.Add(Loc.T("object.trapped"));
+            return bits;
         }
 
         // Same as clicking the object: paths to it and runs its interaction. We pass the current

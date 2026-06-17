@@ -65,27 +65,45 @@ namespace WrathAccess.Exploration
         /// interactables for the object enter/exit cue while leaving plain scenery out.</summary>
         public virtual bool IsUnit => false;
 
-        /// <summary>Subtype state folded into the spoken line (HP, "locked", marker type, …), or null.</summary>
-        protected virtual string Extra => null;
+        /// <summary>The per-proxy-type key for announcement overrides ("unit"/"map_object"/"marker"), or
+        /// null for the generic default (globals only, no per-type override entries).</summary>
+        protected virtual string AnnounceKey => null;
+
+        /// <summary>The identity/state announcement parts, in canonical order, WITHOUT the spatial part
+        /// (added by <see cref="Describe"/>). Default: just the name (with the unnamed fallback). Concrete
+        /// proxies add type / hp / condition / object-state via <see cref="NameAndType"/>.</summary>
+        protected virtual IEnumerable<Announce.ScanAnnouncement> StateParts()
+        {
+            yield return new Announce.NamePart(string.IsNullOrEmpty(Name) ? Loc.T("scan.unnamed") : Name);
+        }
+
+        /// <summary>Yield Name (+ Type) honouring the rule: when there's a real name, Name carries it and
+        /// Type is a separate part; when there's NO real name the type word becomes the name (so nothing
+        /// goes nameless, and we never say the same word twice); with neither, the unnamed fallback.</summary>
+        protected IEnumerable<Announce.ScanAnnouncement> NameAndType(string realName, string typeWord)
+        {
+            if (!string.IsNullOrEmpty(realName))
+            {
+                yield return new Announce.NamePart(realName);
+                if (!string.IsNullOrEmpty(typeWord)) yield return new Announce.TypePart(typeWord);
+            }
+            else if (!string.IsNullOrEmpty(typeWord)) yield return new Announce.NamePart(typeWord);
+            else yield return new Announce.NamePart(Loc.T("scan.unnamed"));
+        }
 
         public string Describe(Vector3 reference)
         {
-            var name = string.IsNullOrEmpty(Name) ? Loc.T("scan.unnamed") : Name;
-            var extra = Extra;
-            // Bearing/distance to the nearest PART of the thing; the reported coordinate stays its centre
-            // (where the cursor would snap).
-            var rel = Geo.Relative(reference, Bounds.NearestPoint(reference), Position);
-            return string.IsNullOrEmpty(extra) ? name + ", " + rel : name + ", " + extra + ", " + rel;
+            var parts = new List<Announce.ScanAnnouncement>(StateParts());
+            // Bearing/distance/height to the nearest PART of the thing; coordinates (debug) report the
+            // centre (where the cursor would snap).
+            parts.Add(new Announce.SpatialPart(reference, Bounds.NearestPoint(reference), Position));
+            return Announce.ScanAnnounceComposer.Compose(AnnounceKey, parts);
         }
 
         /// <summary>The spoken line for the thing itself, no position — for at-cursor announcements
         /// (the cursor is on it, so distance/bearing would be noise).</summary>
         public string DescribeInPlace()
-        {
-            var name = string.IsNullOrEmpty(Name) ? Loc.T("scan.unnamed") : Name;
-            var extra = Extra;
-            return string.IsNullOrEmpty(extra) ? name : name + ", " + extra;
-        }
+            => Announce.ScanAnnounceComposer.Compose(AnnounceKey, new List<Announce.ScanAnnouncement>(StateParts()));
 
         /// <summary>
         /// Interact with this item — mirroring the game's click (auto-path + act), driven through the

@@ -260,6 +260,32 @@ namespace WrathAccess.Screens
                     var d = SystemDefaults(sysKey);
                     if (d != null) BuildSettingNode(tree, d);
                 }
+
+                // Scan-item announcements (units / objects / markers in the scanner & review cursor): the
+                // simple on/off per part first, then the full per-part settings + per-proxy-type overrides.
+                var paRoot = ModSettings.Root.Get<CategorySetting>("proxy_announce");
+                if (paRoot != null)
+                {
+                    var simple = new TreeGroup(Loc("exploration.proxy_announce", "Proxy announcements"));
+                    foreach (var child in paRoot.Children)
+                    {
+                        if (!(child is CategorySetting c)) continue;
+                        var en = c.Get<BoolSetting>("enabled");
+                        if (en != null)
+                            simple.Add(new ProxyBoolToggle(c.Label, en.Get, () => en.Set(!en.Get())));
+                    }
+                    tree.Add(simple);
+
+                    var overrides = new TreeGroup(Loc("exploration.proxy_overrides", "Proxy announcement overrides"));
+                    var global = new TreeGroup(Loc("global.group", "Global"));
+                    foreach (var s in paRoot.Children) BuildSettingNode(global, s);
+                    if (global.Children.Count > 0) overrides.Add(global);
+                    var peRoot = ModSettings.Root.Get<CategorySetting>("proxy_elem");
+                    if (peRoot != null)
+                        foreach (var s in peRoot.Children.OrderBy(c => c.Label, System.StringComparer.CurrentCultureIgnoreCase))
+                            BuildSettingNode(overrides, s);
+                    if (overrides.Children.Count > 0) tree.Add(overrides);
+                }
             }
         }
 

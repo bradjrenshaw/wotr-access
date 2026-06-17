@@ -51,7 +51,7 @@ namespace WrathAccess.Audio
         {
             if (_out != null) return;
             _mixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(Rate, 2)) { ReadFully = true };
-            _out = new WaveOutEvent { DesiredLatency = 50, NumberOfBuffers = 4 };
+            _out = new WaveOutEvent { DesiredLatency = 100, NumberOfBuffers = 4 }; // buffer rides through managed-thread (GC/CPU) pauses; >57ms GC with margin
             _out.Init(_mixer);
             _out.Play();
         }

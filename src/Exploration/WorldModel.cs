@@ -37,20 +37,24 @@ namespace WrathAccess.Exploration
             // area change and flow through the same registry, keyed by their entry objects.
             AreaDetails.Refresh(Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null);
 
+            // Poll live every frame, but only build a proxy (and its capturing factory closure) for a
+            // GENUINELY NEW entity — the ContainsKey guard keeps the common "already tracked" path
+            // allocation-free. The kept proxy reads the entity's live state on demand, so a door opening,
+            // HP change, etc. is still seen instantly; we just stop manufacturing garbage every frame.
             _present.Clear();
-            foreach (var u in state.Units) { Ensure(u, () => new ProxyUnit(u)); _present.Add(u); }
-            foreach (var o in state.MapObjects) { Ensure(o, () => new ProxyMapObject(o)); _present.Add(o); }
+            foreach (var u in state.Units) { if (!_items.ContainsKey(u)) Ensure(u, () => new ProxyUnit(u)); _present.Add(u); }
+            foreach (var o in state.MapObjects) { if (!_items.ContainsKey(o)) Ensure(o, () => new ProxyMapObject(o)); _present.Add(o); }
             foreach (var m in LocalMapModel.Markers)
             {
                 if (m == null) continue;
                 try { if (!LocalMapModel.IsInCurrentArea(m.GetPosition())) continue; } catch { continue; }
-                Ensure(m, () => new ProxyMarker(m));
+                if (!_items.ContainsKey(m)) Ensure(m, () => new ProxyMarker(m));
                 _present.Add(m);
             }
             foreach (var d in AreaDetails.Current)
             {
-                var entry = d; // capture per-iteration for the factory closure
-                Ensure(entry, () => new ProxyDetail(entry));
+                var entry = d; // capture per-iteration for the factory closure (only built when new)
+                if (!_items.ContainsKey(entry)) Ensure(entry, () => new ProxyDetail(entry));
                 _present.Add(entry);
             }
 

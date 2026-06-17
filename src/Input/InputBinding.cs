@@ -21,6 +21,12 @@ namespace WrathAccess.Input
         /// <summary>Serialize this binding's data; round-trips through <see cref="Deserialize"/>.</summary>
         public abstract string Serialize();
 
+        // Stable identity key for chord shadowing (Type + serialized data). A binding is immutable — a
+        // rebind makes a NEW binding — so this is constant and cached: InputManager.RebuildLive runs every
+        // frame and used to rebuild this string per binding, which dominated the mod's per-frame allocation.
+        private string _chord;
+        public string Chord => _chord ?? (_chord = Type + "\n" + Serialize());
+
         /// <summary>Rebuild a binding from a (type, data) pair, or null if the type is unknown/invalid.</summary>
         public static InputBinding Deserialize(string type, string data)
         {

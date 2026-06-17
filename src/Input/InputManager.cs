@@ -89,7 +89,7 @@ namespace WrathAccess.Input
                     for (int j = 0; j < a.Bindings.Count; j++)
                     {
                         var b = a.Bindings[j];
-                        var chord = b.Type + "\n" + b.Serialize();
+                        var chord = b.Chord; // cached per binding — was rebuilt every frame (the input GC churn)
                         if (_chordRank.TryGetValue(chord, out int owner))
                         {
                             if (owner < rank) continue; // shadowed by a higher category

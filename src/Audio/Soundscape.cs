@@ -23,8 +23,8 @@ namespace WrathAccess.Audio
     /// keyed by their <see cref="VoiceSpec.Key"/> (the WorldModel item) so they persist and track as the
     /// cursor moves. <see cref="Update"/> syncs the live voice set each frame (add new, update vol/pan,
     /// drop gone); <see cref="Clear"/> silences. Sound buffers are decoded to mono 44.1k once and shared
-    /// across voices that use the same file. Mono so we can pan; distinct from the looping but fixed-channel
-    /// <see cref="WallToneEngine"/> and the one-shot <see cref="SfxPlayer"/>.
+    /// across voices that use the same file. Mono so we can pan; distinct from the fixed-channel wall-tone
+    /// voices and the one-shot <see cref="SfxPlayer"/>.
     /// </summary>
     internal sealed class Soundscape : IDisposable
     {

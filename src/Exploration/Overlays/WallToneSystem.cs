@@ -1,19 +1,17 @@
-using System.IO;
 using Kingmaker.View; // ObstacleAnalyzer
-using Pathfinding; // NNInfo / NavmeshBase / GraphNode — share one nearest-node query across the 4 traces
+using Pathfinding;    // NNInfo / NavmeshBase / GraphNode
 using UnityEngine;
-using WrathAccess.Audio;
+using WrathAccess.Audio; // Audio.Engine / IWallTones
 
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
     /// Directional <b>wall tones</b>: four looping sounds whose volumes rise as a wall nears in that
-    /// cardinal direction. Each frame it traces along the navmesh in each direction and converts the
-    /// distance-to-wall into a volume. On the Wwise path the four loops are real 3D emitters parked
-    /// AT the traced wall hit points — each wall hums from where it actually is, in the same spatial
-    /// frame as the rest of the game's audio; the NAudio engine (north/south centred, east/west
-    /// panned) remains as the classic/fallback path. Self-gates on <see cref="OverlayManager.Active"/>
-    /// (mutes when a menu's up); releases its voices on exit.
+    /// cardinal direction. Each frame it traces the navmesh in each direction and turns the distance-to-wall
+    /// into a 0..1 volume, then hands the four (hit, volume) pairs to the active audio engine's wall-tone
+    /// voices — NAudio spatializes them with a fixed compass pan (E/W hard L/R, N/S centred), Wwise places
+    /// 3D emitters at the hit points. Self-gates on <see cref="OverlayManager.Active"/> (mutes when a menu's
+    /// up); releases its voices on exit.
     /// </summary>
     internal sealed class WallToneSystem : AudioSystem
     {
@@ -22,21 +20,14 @@ namespace WrathAccess.Exploration.Overlays
 
         private float Range => Int("range", 10) * Geo.MetresPerFoot;
 
-        // Wwise path: one looping emitter per cardinal direction.
-        private static readonly string[] DirNames = { "north", "south", "east", "west" };
-        private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left };
-        private readonly WwiseAudio.Loop[] _loops = new WwiseAudio.Loop[4];
-        private bool _wwise;       // loops are running
-        private string _loopSet;   // tone set the running loops were started from
-
-        // Classic path (NAudio flat stereo).
-        private WallToneEngine _engine;
-        private string _loadedSet; // which set the engine has loaded, so a tone_set change reloads
-
-        private GraphNode _cursorNode; // last frame's nearest navmesh node — reused as the GetNearest hint
-
+        private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left }; // N,S,E,W
         private string ToneSet => ChoiceId("tone_set", "1");
-        private string SetDir => System.IO.Path.Combine(OverlayAudio.Dir, "walltones", ToneSet);
+
+        private IWallTones _tones;
+        private IAudioEngine _engineUsed; // the engine _tones was built from — rebuild on a live engine swap
+        private string _setUsed;
+        private readonly Vector3[] _hits = new Vector3[4];
+        private readonly float[] _vols = new float[4];
 
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
@@ -49,110 +40,50 @@ namespace WrathAccess.Exploration.Overlays
                 }, "1", "overlay.walltones.tone_set"));
         }
 
-        // Playback starts lazily in Tick: the Wwise bank comes up asynchronously during boot, so the
-        // path choice can't be made at enter time.
         public override void OnEnter(Overlay overlay) { }
 
         public override void OnExit(Overlay overlay)
         {
-            StopWwise();
-            _engine?.Dispose();
-            _engine = null;
-            _loadedSet = null;
+            _tones?.Dispose();
+            _tones = null; _engineUsed = null; _setUsed = null;
         }
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !Enabled) { MuteAll(); return; }
+            if (!OverlayManager.Active || !Enabled) { Mute(); return; }
+
+            // (Re)build the voices on first use, when the user picks a different tone set, or when the audio
+            // engine is swapped live (Audio.Engine returns a different cached instance).
+            var engine = AudioEngines.Active;
+            if (_tones == null || !ReferenceEquals(_engineUsed, engine) || _setUsed != ToneSet)
+            {
+                _tones?.Dispose();
+                _engineUsed = engine; _setUsed = ToneSet;
+                _tones = engine.CreateWallTones(ToneSet);
+            }
 
             var c = overlay.Cursor.Position;
             float v = EffectiveVolume;
 
-            // All four direction traces start at the cursor, so the nearest-navmesh-node query is identical
-            // for each — compute it ONCE here, hinted from last frame so GetNearest is skipped while the
-            // cursor stays in the same triangle. This query was the wall-tone GC churn; the per-direction
-            // Linecasts below are the cheap part and still run every frame, so accuracy is unchanged.
-            NNInfo node = ObstacleAnalyzer.GetNearestNode(c, _cursorNode);
-            _cursorNode = node.node;
-
-            if (WwiseAudio.Active)
-            {
-                if (!_wwise || _loopSet != ToneSet) StartWwise(c);
-                if (_wwise)
-                {
-                    _engine?.Mute();
-                    for (int i = 0; i < 4; i++)
-                    {
-                        var hit = TraceFrom(c, node, c + DirVecs[i] * Range);
-                        WwiseAudio.UpdateLoop(_loops[i], hit, Curve(c, hit) * v);
-                    }
-                    return;
-                }
-                // StartWwise failed (stems missing from the bank) → classic below.
-            }
-            else if (_wwise)
-            {
-                StopWwise(); // engine setting flipped to classic mid-session
-            }
-
-            EnsureLoaded();
-            if (_engine == null || !_engine.IsLoaded) return;
-            _engine.SetVolumes(
-                WallVolume(c, node, Vector3.forward) * v, // +Z north
-                WallVolume(c, node, Vector3.back) * v,    // -Z south
-                WallVolume(c, node, Vector3.right) * v,   // +X east
-                WallVolume(c, node, Vector3.left) * v);   // -X west
-        }
-
-        private void StartWwise(Vector3 c)
-        {
-            StopWwise();
-            var set = ToneSet;
-            bool ok = true;
+            // Nearest node once per frame, reused for the 4 direction Linecasts. A FRESH query (no cross-frame
+            // hint): the hint short-circuited the game's y/area node selection, which drifted the trace near
+            // walls (triangle edges) and shifted the L/R balance. Fresh-once is bit-identical to the original
+            // per-direction TraceAlongNavmesh — same node, same Linecasts — just GetNearest run 1x not 4x.
+            NNInfo node = ObstacleAnalyzer.GetNearestNode(c);
             for (int i = 0; i < 4; i++)
             {
-                _loops[i] = WwiseAudio.StartLoop("walltones_" + set + "_" + DirNames[i], c);
-                if (_loops[i] == null) ok = false;
+                _hits[i] = TraceFrom(c, node, c + DirVecs[i] * Range);
+                _vols[i] = Curve(c, _hits[i]) * v;
             }
-            if (!ok) { StopWwise(); return; } // all four or nothing — a partial compass misleads
-            _wwise = true;
-            _loopSet = set;
+            _tones.Update(_hits, _vols);
         }
 
-        private void StopWwise()
+        // Inactive (menu up / disabled): keep the voices alive but silent, so they resume seamlessly.
+        private void Mute()
         {
-            for (int i = 0; i < 4; i++)
-            {
-                WwiseAudio.StopLoop(_loops[i]);
-                _loops[i] = null;
-            }
-            _wwise = false;
-            _loopSet = null;
-        }
-
-        private void MuteAll()
-        {
-            _engine?.Mute();
-            if (_wwise)
-                for (int i = 0; i < 4; i++)
-                    WwiseAudio.SetLoopVolume(_loops[i], 0f);
-        }
-
-        // Load the configured tone set on demand; rebuild the engine if the user picked a different one.
-        private void EnsureLoaded()
-        {
-            if (_engine != null && _engine.IsLoaded && _loadedSet == ToneSet) return;
-            if (_engine != null && _loadedSet != ToneSet) { _engine.Dispose(); _engine = null; }
-            if (_engine == null) _engine = new WallToneEngine();
-            if (!_engine.IsLoaded) _engine.Load(SetDir);
-            _loadedSet = ToneSet;
-        }
-
-        // 0 (no wall within range) → 1 (right at the wall), curved so it bites close in.
-        private float WallVolume(Vector3 c, NNInfo node, Vector3 dir)
-        {
-            var hit = TraceFrom(c, node, c + dir * Range);
-            return Curve(c, hit);
+            if (_tones == null) return;
+            for (int i = 0; i < _vols.Length; i++) _vols[i] = 0f;
+            _tones.Update(_hits, _vols);
         }
 
         // ObstacleAnalyzer.TraceAlongNavmesh, but with a precomputed nearest node so the GetNearest query
@@ -165,6 +96,7 @@ namespace WrathAccess.Exploration.Overlays
             return hit.point;
         }
 
+        // 0 (no wall within range) → 1 (right at the wall), curved so it bites close in.
         private float Curve(Vector3 c, Vector3 hit)
         {
             float dx = hit.x - c.x, dz = hit.z - c.z;

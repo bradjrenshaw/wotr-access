@@ -10,8 +10,8 @@ namespace WrathAccess.Audio
     /// cues like fog enter/exit or an interactable ping. A persistent output device feeds a
     /// <see cref="MixingSampleProvider"/>; <see cref="Play"/> adds a voice the mixer auto-removes when it
     /// ends. Clips are decoded once and normalised to the mixer format (44.1 kHz stereo float — so any
-    /// source rate/channel count works), cached by path. Distinct from <see cref="WallToneEngine"/>, which
-    /// is the continuous looping wall tones.
+    /// source rate/channel count works), cached by path. Distinct from the wall-tone voices, which are
+    /// continuous loops. (Being folded into <see cref="NAudioEngine"/>'s shared output.)
     /// </summary>
     internal sealed class SfxPlayer : IDisposable
     {

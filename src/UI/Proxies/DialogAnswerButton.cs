@@ -15,7 +15,10 @@ namespace WrathAccess.UI.Proxies
     public static class DialogAnswerButton
     {
         public static ProxyActionButton For(AnswerVM vm)
-            => new ProxyActionButton(() => AnswerText(vm), () => vm != null && vm.Enable.Value,
+            // Enabled also requires the dialogue window to be shown — a cutscene transition hides it and
+            // disables the real buttons; without this we'd let the player "choose" through a hidden window.
+            => new ProxyActionButton(() => AnswerText(vm),
+                () => vm != null && vm.Enable.Value && WrathAccess.DialogVisibility.Shown,
                 () => vm?.OnChooseAnswer(), suppressActivateSound: true, actionVerb: "choose",
                 // The answer text carries a per-stat skill-check DC <link>; resolve it from this
                 // answer's own DC list (Space → the DC-preview tooltip). Glossary links fall through.

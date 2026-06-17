@@ -79,6 +79,7 @@ namespace WrathAccess
                 // Overlays.LogSystem (per-overlay, per-message-type toggles) fed by the LogFeed Harmony tap.
                 WarningReader.Initialize(); // speak the game's "can't do that" warnings (refusal reasons)
                 WrathAccess.Events.EventBusAdapter.Initialize(); // turn game damage/buff events into mod events
+                DialogVisibility.Initialize(); // track when the dialogue window is actually shown/clickable
 
                 // The native mod system has no per-frame callback — drive our loops from our own
                 // persistent MonoBehaviour (survives scene loads via DontDestroyOnLoad).

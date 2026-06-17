@@ -71,10 +71,17 @@ namespace WrathAccess.Screens
             return g != null && g.CurrentMode == GameModeType.Dialog;
         }
 
-        public override bool IsActive() => Vm() != null;
+        // Active only while the conversation exists AND its window is actually shown. When a cutscene
+        // transition hides the window we POP off the stack so the in-game context beneath regains the
+        // keyboard (Escape, sonar, etc. keep working) and there's no hidden dialogue to browse ahead in;
+        // we re-push when the window returns.
+        public override bool IsActive() => Vm() != null && DialogVisibility.Shown;
 
-        public override void OnPush() { Clear(); Reset(); }
-        public override void OnPop() { Clear(); Reset(); }
+        // A hide is a pop-while-the-conversation-continues: keep the transcript + notification subscription
+        // (so nothing is lost across the cutscene), and just force a rebuild on the way back in. Only fully
+        // reset when the conversation has actually ended (the VM is gone).
+        public override void OnPush() { Clear(); _builtCue = null; }
+        public override void OnPop() { Clear(); if (Vm() == null) Reset(); }
 
         private void Reset()
         {
@@ -187,8 +194,10 @@ namespace WrathAccess.Screens
 
             public override IEnumerable<ElementAction> GetActions()
             {
+                // Only while the window is actually shown — during a cutscene transition the game hides it
+                // and the button isn't clickable, so we must not let Enter spam-advance the dialogue.
                 var a = _continueAnswer();
-                if (a != null && a.Enable.Value)
+                if (a != null && a.Enable.Value && DialogVisibility.Shown)
                     yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.choose"),
                         _ => a.OnChooseAnswer());
             }

@@ -6,12 +6,15 @@ namespace WrathAccess.Input
 {
     /// <summary>
     /// Registry + per-frame poll, ticked from Main.OnUpdate. Actions live in CATEGORIES
-    /// (<see cref="InputCategory"/>): each frame the live categories are the top screen's declared
-    /// list (in its priority order) plus Global, and an identical chord bound in two live categories
-    /// resolves to the higher-priority one (its lower twin is SHADOWED — not an error; that's how the
-    /// same arrows mean HUD nav focused and cursor movement unfocused). UI-category presses dispatch
-    /// into the active navigator; every other category fires its handler directly. With focus mode
-    /// off only Global is live, so the game keeps its own keys.
+    /// (<see cref="InputCategory"/>): each frame the live categories are the union of EVERY active screen's
+    /// declared list, walked focus-first (the focused screen's deepest child down to the base context) so a
+    /// deeper screen's categories take priority — until an <see cref="WrathAccess.Screens.Screen.Exclusive"/>
+    /// screen, which blocks everything below it — plus Global. So a screen claims only its own categories and
+    /// lets lower screens' categories pass through (a dialogue doesn't kill the in-game screen's exploration
+    /// keys); an identical chord in two live categories resolves to the higher-priority (deeper) one (its
+    /// lower twin is SHADOWED — that's how the same arrows mean HUD nav focused and cursor movement unfocused).
+    /// UI-category presses dispatch into the active navigator; every other category fires its handler
+    /// directly. With focus mode off only Global is live, so the game keeps its own keys.
     /// </summary>
     public static class InputManager
     {
@@ -55,19 +58,22 @@ namespace WrathAccess.Input
             return false;
         }
 
-        // Live categories = the TOP screen's declaration (priority order) + Global; focus mode off =
-        // Global only. Then walk categories in priority order marking bindings live, shadowing any
-        // identical chord already claimed by an earlier (higher-priority) category. Same-category
-        // duplicates are both live (the rebind capture prevents them; first registered wins the press).
+        // Live categories = the union of every active screen's declaration, walked focus-first (so a deeper
+        // screen's categories rank higher), stopping at the first Exclusive screen (it blocks the rest of
+        // the stack), + Global; focus mode off = Global only. Then walk categories in priority order marking
+        // bindings live, shadowing any identical chord already claimed by an earlier (higher-priority)
+        // category. Same-category duplicates are both live (the rebind capture prevents them; first wins).
         private static void RebuildLive()
         {
             _activeCats.Clear();
             if (FocusMode.Active)
             {
-                var top = WrathAccess.Screens.ScreenManager.Current;
-                if (top != null)
-                    foreach (var c in top.InputCategories)
+                foreach (var screen in WrathAccess.Screens.ScreenManager.FocusedFirst())
+                {
+                    foreach (var c in screen.InputCategories)
                         if (!_activeCats.Contains(c)) _activeCats.Add(c);
+                    if (screen.Exclusive) break; // a modal owns the keyboard — block lower screens' categories
+                }
             }
             if (!_activeCats.Contains(InputCategory.Global)) _activeCats.Add(InputCategory.Global);
 

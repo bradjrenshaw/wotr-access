@@ -24,6 +24,19 @@ namespace WrathAccess.Screens
         public static Screen Current => _stack.Count > 0 ? _stack[_stack.Count - 1].DeepestActiveScreen() : null;
         public static IReadOnlyList<Screen> Stack => _stack;
 
+        /// <summary>Active screens in focus-priority order — the focused screen first (top outer screen's
+        /// deepest child), then outward/down to the base context. This is the order the input claim-chain
+        /// walks: a deeper screen's categories take precedence (shadow) over a shallower one's.</summary>
+        public static IEnumerable<Screen> FocusedFirst()
+        {
+            for (int i = _stack.Count - 1; i >= 0; i--)
+            {
+                var chain = new List<Screen>();
+                for (var s = _stack[i]; s != null; s = s.ActiveChild) chain.Add(s); // outer → deepest
+                for (int j = chain.Count - 1; j >= 0; j--) yield return chain[j];    // deepest → outer
+            }
+        }
+
         public static void Register(Screen screen) => _registered.Add(screen);
 
         public static void Tick()

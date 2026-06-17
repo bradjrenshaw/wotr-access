@@ -56,6 +56,12 @@ namespace WrathAccess.Screens
         /// navigation. The in-game screen adds Exploration and flips the order with HUD focus.</summary>
         public virtual System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories => UiOnly;
 
+        /// <summary>When true, this screen blocks the input categories of screens BELOW it in the stack:
+        /// only its own <see cref="InputCategories"/> (plus Global) stay live — a true modal that owns the
+        /// keyboard. Default false: a screen claims just its declared categories and lets lower screens'
+        /// categories pass through (so e.g. a dialogue doesn't kill exploration keys the in-game screen owns).</summary>
+        public virtual bool Exclusive => false;
+
         public virtual void OnPush() { }
 
         public virtual void OnFocus()

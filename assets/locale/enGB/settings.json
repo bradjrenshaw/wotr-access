@@ -135,6 +135,7 @@
   "category.events": "Events",
   "event.room_changed": "Room changed",
   "event.damage": "Damage",
+  "event.heal": "Heal",
   "event.buff_gained": "Buff gained",
   "event.buff_lost": "Buff lost",
   "event.unit_death": "Unit death",

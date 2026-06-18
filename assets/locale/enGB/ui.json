@@ -262,6 +262,7 @@
   "nav.no_details": "No details",
   "tooltip.empty": "No tooltip information.",
   "event.damage": "{name} takes {amount} damage",
+  "event.heal": "{name} heals {amount}",
   "event.buff_gained": "{name} gained {buff}",
   "event.buff_lost": "{name} lost {buff}",
   "event.death": "{name} died",

@@ -10,7 +10,7 @@ namespace WrathAccess.Events
 {
     /// <summary>
     /// The adapter layer: a persistent EventBus subscriber (like <see cref="WrathAccess.WarningReader"/>)
-    /// turning raw game events into <see cref="ModEvent"/>s. Damage fires per instance. Buffs are
+    /// turning raw game events into <see cref="ModEvent"/>s. Damage and healing fire per instance. Buffs are
     /// DE-NOISED — the game raises add/remove on every attach/detach (refreshes, re-applications,
     /// double-fires, and hidden system buffs), so we mirror its combat-log filter (skip
     /// <c>Blueprint.IsHiddenInUI</c> / empty-name buffs) and reconcile per frame against an active set:
@@ -19,7 +19,7 @@ namespace WrathAccess.Events
     /// (<see cref="IRulebookHandler{T}"/> over RuleDealStatDamage) fire per instance, no de-noising.
     /// </summary>
     internal sealed class EventBusAdapter
-        : IDamageHandler, IUnitBuffHandler, IUnitHandler, IGlobalRulebookHandler<RuleDealStatDamage>
+        : IDamageHandler, IHealingHandler, IUnitBuffHandler, IUnitHandler, IGlobalRulebookHandler<RuleDealStatDamage>
     {
         private static EventBusAdapter _instance;
 
@@ -44,6 +44,15 @@ namespace WrathAccess.Events
         {
             if (dealDamage?.Target != null && dealDamage.Result > 0)
                 EventDispatcher.Raise(new DamageEvent(dealDamage.Target, dealDamage.Result));
+        }
+
+        // IHealingHandler — fires per heal instance, after the rule applies. Value is the actual HP restored
+        // (already clamped to missing health); gate on > 0 like the game's own combat text / overtips do, so
+        // a no-op heal (target at full, IsFake, interrupted) stays silent.
+        public void HandleHealing(RuleHealDamage healDamage)
+        {
+            if (healDamage?.Target != null && healDamage.Value > 0)
+                EventDispatcher.Raise(new HealEvent(healDamage.Target, healDamage.Value));
         }
 
         // IUnitHandler — death fires once per unit; the other members are no-ops we just have to carry.

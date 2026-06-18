@@ -19,7 +19,6 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Sonar";
         public override string Key => "sonar";
 
-        private readonly SfxPlayer _sfx = new SfxPlayer();
         private readonly List<ScanItem> _sweep = new List<ScanItem>(); // ordered snapshot for the current sweep
         private int _index;   // next thing in _sweep to ping
         private float _timer; // seconds until the next ping / until the end-of-sweep rest elapses
@@ -79,8 +78,6 @@ namespace WrathAccess.Exploration.Overlays
             var stem = Settings?.Get<WrathAccess.Settings.ChoiceSetting>("review_sound")?.ValueId;
             if (string.IsNullOrEmpty(stem) || stem == "silent") return;
 
-            if (WrathAccess.Audio.WwiseAudio.TryPost(stem, item.Position, EffectiveVolume)) return;
-
             var p = item.Position;
             float dx = p.x - from.x, dz = p.z - from.z;
             float dist = Mathf.Sqrt(dx * dx + dz * dz);
@@ -90,7 +87,7 @@ namespace WrathAccess.Exploration.Overlays
             float edge = Mathf.Max(0f, dist - fp);
             float vol = Mathf.Clamp(refDist / (refDist + edge), MinVol, 1f) * EffectiveVolume;
             float pan = dist > fp ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
-            _sfx.Play(Path.Combine(OverlayAudio.Dir, stem + ".wav"), vol, pan);
+            AudioEngines.Active.PlayOneShot(stem, Path.Combine(OverlayAudio.Dir, stem + ".wav"), p, vol, pan);
         }
 
         public override void OnExit(Overlay overlay) => ResetSweep();
@@ -144,10 +141,6 @@ namespace WrathAccess.Exploration.Overlays
             var snd = ScanSounds.Resolve(item.Primary); // live: the user's per-node pick
             if (snd == null) return;
 
-            // Wwise path: a REAL 3D emitter at the thing — the game's listener (the virtual head),
-            // attenuation and mixer do the spatial work; our settings volume still applies.
-            if (WrathAccess.Audio.WwiseAudio.TryPost(snd, item.Position, EffectiveVolume)) return;
-
             var c = overlay.Cursor.Position;
             var p = item.Position;
             float dx = p.x - c.x, dz = p.z - c.z;
@@ -162,7 +155,7 @@ namespace WrathAccess.Exploration.Overlays
             // Pan: lateral offset up close, bearing farther out; centred when within the footprint.
             float pan = dist > fp ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
 
-            _sfx.Play(Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"), vol, pan);
+            AudioEngines.Active.PlayOneShot(snd, Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"), p, vol, pan);
         }
 
         // gap = clamp(K/count, gap_min, gap_max): spacious for a few, compressing toward the floor as the

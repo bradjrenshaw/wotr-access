@@ -49,6 +49,76 @@ namespace WrathAccess.Audio
             _out = null; _mixer = null;
         }
 
+        // One-shots: decode the file once (cached), then add a self-removing OneShot voice to the shared mixer.
+        // stem/worldPos are the Wwise inputs and ignored here; NAudio plays the file at (volume, pan).
+        private readonly Dictionary<string, float[]> _cache = new Dictionary<string, float[]>();
+
+        public void PlayOneShot(string stem, string file, Vector3 worldPos, float volume, float pan)
+        {
+            try
+            {
+                EnsureStarted();
+                var buf = Get(file);
+                if (buf != null && buf.Length > 0) _mixer.AddMixerInput(new OneShot(buf, Rate, volume, pan));
+            }
+            catch (Exception e) { Main.Log?.Error("[naudio] one-shot " + file + " — " + e); }
+        }
+
+        private float[] Get(string path)
+        {
+            if (_cache.TryGetValue(path, out var cached)) return cached;
+            var buf = Decode(path);
+            _cache[path] = buf;
+            return buf;
+        }
+
+        // Decode a WAV, normalised to the mixer format (44.1 kHz stereo float). Ported from SfxPlayer.
+        private static float[] Decode(string path)
+        {
+            using (var reader = new AudioFileReader(path))
+            {
+                ISampleProvider sp = reader;
+                if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
+                if (sp.WaveFormat.Channels == 1) sp = new MonoToStereoSampleProvider(sp);
+                var all = new List<float>(Rate);
+                var tmp = new float[Rate * 2];
+                int n;
+                while ((n = sp.Read(tmp, 0, tmp.Length)) > 0)
+                    for (int i = 0; i < n; i++) all.Add(tmp[i]);
+                return all.ToArray();
+            }
+        }
+
+        // Plays a cached interleaved-stereo buffer once with a constant-power pan; returns < count at the end
+        // so the mixer auto-removes it. Ported verbatim from SfxPlayer.OneShot.
+        private sealed class OneShot : ISampleProvider
+        {
+            private readonly float[] _buf;
+            private readonly float _gainL, _gainR;
+            private int _pos;
+
+            public OneShot(float[] buf, int rate, float vol, float pan)
+            {
+                _buf = buf;
+                float t = (pan + 1f) * 0.5f * (float)(Math.PI / 2.0);
+                _gainL = vol * (float)Math.Cos(t);
+                _gainR = vol * (float)Math.Sin(t);
+                WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(rate, 2);
+            }
+
+            public WaveFormat WaveFormat { get; }
+
+            public int Read(float[] buffer, int offset, int count)
+            {
+                int remaining = _buf.Length - _pos;
+                int n = Math.Min(count, remaining);
+                for (int i = 0; i < n; i++)
+                    buffer[offset + i] = _buf[_pos + i] * (((_pos + i) & 1) == 0 ? _gainL : _gainR);
+                _pos += n;
+                return n;
+            }
+        }
+
         // Four looping mono channels summed to stereo with a fixed constant-power pan (E/W hard right/left,
         // N/S centred), added as ONE input to the shared mixer. Ported verbatim from WallToneEngine.Mixer
         // so the pan amounts + loop wraparound are byte-for-byte identical — only the output is now shared.

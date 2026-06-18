@@ -18,6 +18,12 @@ namespace WrathAccess.Audio
         /// <summary>Whether this backend can actually play right now (device open / bank loaded).</summary>
         bool Available { get; }
 
+        /// <summary>Fire-and-forget positional one-shot. The caller computes the stereo placement and passes
+        /// everything; each engine uses what it needs — NAudio plays <paramref name="file"/> at (volume, pan);
+        /// Wwise posts a 3D emitter at <paramref name="worldPos"/> with volume (stem = bank event). Keeping
+        /// the NAudio (volume, pan) authoritative means the stereo sound is unchanged; Wwise attenuates on top.</summary>
+        void PlayOneShot(string stem, string file, Vector3 worldPos, float volume, float pan);
+
         /// <summary>The four directional wall-tone voices for a tone set, spatialized this engine's way.</summary>
         IWallTones CreateWallTones(string toneSet);
     }

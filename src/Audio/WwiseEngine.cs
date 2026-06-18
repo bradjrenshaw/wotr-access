@@ -11,6 +11,10 @@ namespace WrathAccess.Audio
     {
         public bool Available => WwiseAudio.Active; // bank loaded AND the engine setting isn't "classic"
 
+        // 3D emitter at worldPos via the bank event (stem); file/pan are the NAudio inputs, ignored here.
+        public void PlayOneShot(string stem, string file, Vector3 worldPos, float volume, float pan)
+            => WwiseAudio.TryPost(stem, worldPos, volume);
+
         public IWallTones CreateWallTones(string toneSet) => new WallTones(toneSet);
 
         // Four looping 3D emitters, one per direction, placed at the traced wall hit points each frame.

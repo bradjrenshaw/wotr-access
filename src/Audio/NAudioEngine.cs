@@ -4,6 +4,7 @@ using System.IO;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using UnityEngine;
+using WrathAccess.Speech; // SpeechAudio (rendered positional speech PCM)
 
 namespace WrathAccess.Audio
 {
@@ -55,6 +56,39 @@ namespace WrathAccess.Audio
 
         /// <summary>Non-positional (stereo-centred) one-shot — UI/cue sounds, on the same shared output.</summary>
         public void Play2D(string file, float volume) => PlayOneShot(null, file, Vector3.zero, volume, 0f);
+
+        /// <summary>Play rendered speech PCM at (volume, pan) — positional speech, on the shared output. Not
+        /// cached (each utterance is unique). NAudio-only: Wwise can't play arbitrary PCM. Ported from SfxPlayer.</summary>
+        public void PlayPcm(SpeechAudio audio, float volume, float pan)
+        {
+            if (audio?.Pcm == null || audio.Pcm.Length == 0) return;
+            try
+            {
+                EnsureStarted();
+                var buf = DecodePcm(audio);
+                // audio.Gain lets a SAPI config push past SAPI's volume ceiling; folds into the voice gain.
+                if (buf != null && buf.Length > 0) _mixer.AddMixerInput(new OneShot(buf, Rate, volume * audio.Gain, pan));
+            }
+            catch (Exception e) { Main.Log?.Error("[naudio] speech — " + e); }
+        }
+
+        private static float[] DecodePcm(SpeechAudio audio)
+        {
+            var fmt = new WaveFormat(audio.SampleRate, audio.BitsPerSample, audio.Channels);
+            using (var ms = new MemoryStream(audio.Pcm))
+            using (var raw = new RawSourceWaveStream(ms, fmt))
+            {
+                ISampleProvider sp = raw.ToSampleProvider();
+                if (sp.WaveFormat.SampleRate != Rate) sp = new WdlResamplingSampleProvider(sp, Rate);
+                if (sp.WaveFormat.Channels == 1) sp = new MonoToStereoSampleProvider(sp);
+                var all = new List<float>(Rate);
+                var tmp = new float[Rate * 2];
+                int n;
+                while ((n = sp.Read(tmp, 0, tmp.Length)) > 0)
+                    for (int i = 0; i < n; i++) all.Add(tmp[i]);
+                return all.ToArray();
+            }
+        }
 
         public void PlayOneShot(string stem, string file, Vector3 worldPos, float volume, float pan)
         {

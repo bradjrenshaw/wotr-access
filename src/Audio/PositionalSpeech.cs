@@ -5,16 +5,14 @@ using WrathAccess.Speech;               // SpeechAudio
 namespace WrathAccess.Audio
 {
     /// <summary>
-    /// Plays rendered speech PCM through the MOD's own NAudio mixer (<see cref="SfxPlayer"/>) so utterances
-    /// OVERLAP — many combat readouts at once — instead of queuing on the screen reader. Positioned with the
-    /// SAME pan/volume model as the sonar's classic path (north-up frame, distance attenuation), relative to
-    /// the listener (cursor if placed, else the player). NOT the game's Wwise: that plays baked WAVs, not
-    /// runtime TTS PCM, and we only touch it when it's the selected engine — which doesn't apply here.
+    /// Plays rendered speech PCM through the MOD's own NAudio mixer (<see cref="NAudioEngine"/>'s shared
+    /// output) so utterances OVERLAP — many combat readouts at once — instead of queuing on the screen
+    /// reader. Positioned with the SAME pan/volume model as the sonar's classic path (north-up frame,
+    /// distance attenuation), relative to the listener (cursor if placed, else the player). NAudio-only:
+    /// Wwise plays baked WAVs, not runtime TTS PCM.
     /// </summary>
     internal static class PositionalSpeech
     {
-        private static readonly SfxPlayer _player = new SfxPlayer();
-
         private const float RefDistFeet = 10f;  // distance at which volume is ~half
         private const float PanWidthFeet = 10f; // lateral crossover (matches sonar)
         private const float MinVol = 0.2f;
@@ -24,7 +22,7 @@ namespace WrathAccess.Audio
         public static void Play(SpeechAudio audio, Vector3? worldPos)
         {
             if (audio == null) return;
-            if (worldPos == null) { _player.Play(audio, 1f, 0f); return; } // centred, still overlapping
+            if (worldPos == null) { AudioEngines.NAudio.PlayPcm(audio, 1f, 0f); return; } // centred, still overlapping
 
             var from = Listener();
             var p = worldPos.Value;
@@ -34,7 +32,7 @@ namespace WrathAccess.Audio
             float panWidth = PanWidthFeet * Geo.MetresPerFoot;
             float vol = Mathf.Clamp(refDist / (refDist + dist), MinVol, 1f);
             float pan = Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f);
-            _player.Play(audio, vol, pan);
+            AudioEngines.NAudio.PlayPcm(audio, vol, pan);
         }
 
         // The listener "ears" — the same reference the scanner/cursor work from (cursor if placed, else player).

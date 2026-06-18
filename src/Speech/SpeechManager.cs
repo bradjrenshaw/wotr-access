@@ -14,6 +14,10 @@ namespace WrathAccess.Speech
     /// </summary>
     public static class SpeechManager
     {
+        /// <summary>Sentinel value for an additional config's setting that follows the default config (the
+        /// choice id; the loc key is "choice.inherit"). The default config never uses it — it's the base.</summary>
+        internal const string Inherit = "inherit";
+
         private static bool _initialized;
         private static ChoiceSetting _handlerSetting;          // the DEFAULT config's handler choice
         private static readonly HashSet<ISpeechHandler> _loaded = new HashSet<ISpeechHandler>();
@@ -39,19 +43,60 @@ namespace WrathAccess.Speech
         }
 
         /// <summary>The schema every speech config shares: a "handler" choice + one subnode per handler
-        /// holding that handler's params. Reused for the default config and each additional config.</summary>
-        public static void BuildConfigSchema(CategorySetting into)
+        /// holding that handler's params. The default config (<paramref name="inheritFrom"/> null) gets plain
+        /// settings; an additional config gets INHERIT-aware ones — every setting can follow the default
+        /// config (<see cref="Inherit"/>) until overridden — wired to <paramref name="inheritFrom"/>'s
+        /// matching subtree as the source. Resolution happens in <see cref="SpeechConfig"/>, so handlers
+        /// stay inherit-agnostic.</summary>
+        public static void BuildConfigSchema(CategorySetting into, CategorySetting inheritFrom = null)
         {
-            var handlerChoices = new List<Choice> { new Choice("auto", "Auto", "speech.auto") };
+            bool inherit = inheritFrom != null;
+
+            var handlerChoices = new List<Choice>();
+            if (inherit) handlerChoices.Add(new Choice(Inherit, "Inherit", "choice.inherit"));
+            handlerChoices.Add(new Choice("auto", "Auto", "speech.auto"));
             foreach (var handler in Handlers)
                 handlerChoices.Add(new Choice(handler.Key, handler.Label, handler.LocalizationKey));
-            into.Add(new ChoiceSetting("handler", "Speech handler", handlerChoices, "auto", "speech.handler"));
+            into.Add(new ChoiceSetting("handler", "Speech handler", handlerChoices,
+                inherit ? Inherit : "auto", "speech.handler"));
 
             foreach (var handler in Handlers)
             {
                 var sub = new CategorySetting(handler.Key, handler.Label, localizationKey: "speech." + handler.Key);
-                handler.BuildSettings(sub);
+                if (inherit)
+                    BuildInheritParams(sub, handler, inheritFrom.Get<CategorySetting>(handler.Key));
+                else
+                    handler.BuildSettings(sub);
                 if (sub.Children.Count > 0) into.Add(sub);
+            }
+        }
+
+        // Translate a handler's normal param schema into inherit-aware settings: each int becomes a
+        // NullableIntSetting that follows the default config's same int; each choice gains an "Inherit"
+        // option (default). The handler builds its plain schema into a scratch node (it knows nothing of
+        // inherit), which we read to mirror keys/ranges/choices. defaultSub = the same handler's params in
+        // the default config (the inheritance source; may be null if it has none).
+        private static void BuildInheritParams(CategorySetting into, ISpeechHandler handler, CategorySetting defaultSub)
+        {
+            var scratch = new CategorySetting(handler.Key, handler.Label);
+            handler.BuildSettings(scratch);
+            foreach (var child in scratch.Children)
+            {
+                switch (child)
+                {
+                    case IntSetting i:
+                        into.Add(new NullableIntSetting(i.Key, i.Label, defaultSub?.Get<IntSetting>(i.Key),
+                            i.Min, i.Max, i.Step, i.LocalizationKey));
+                        break;
+                    case ChoiceSetting c:
+                        var choices = new List<Choice> { new Choice(Inherit, "Inherit", "choice.inherit") };
+                        foreach (var ch in c.Choices) choices.Add(ch);
+                        into.Add(new ChoiceSetting(c.Key, c.Label, choices, Inherit, c.LocalizationKey));
+                        break;
+                    default:
+                        into.Add(child); // any other type passes through (none today)
+                        break;
+                }
             }
         }
 

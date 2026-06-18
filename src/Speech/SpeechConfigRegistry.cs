@@ -48,7 +48,7 @@ namespace WrathAccess.Speech
         {
             if (string.IsNullOrEmpty(id) || id == "default") return SpeechManager.Default;
             var cat = ConfigCat(id);
-            return cat != null ? new SpeechConfig(cat) : SpeechManager.Default;
+            return cat != null ? new SpeechConfig(cat, SpeechManager.Default) : SpeechManager.Default;
         }
 
         public static string Add()
@@ -91,9 +91,10 @@ namespace WrathAccess.Speech
                 cat.Add(name);
             }
             cat.LabelProvider = () => name.Get(); // the menu node reads the live name
-            // The shared config schema (handler choice + each handler's params) — identical to the default.
+            // The shared config schema (handler choice + each handler's params), inherit-aware: every
+            // setting follows the default config (SpeechManager.Default) until the user overrides it.
             if (cat.Get<ChoiceSetting>("handler") == null)
-                SpeechManager.BuildConfigSchema(cat);
+                SpeechManager.BuildConfigSchema(cat, SpeechManager.Default?.Tree);
         }
 
         // ---- list helpers ----

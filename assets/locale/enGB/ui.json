@@ -51,6 +51,7 @@
   "value.current": "current",
   "value.completed": "completed",
   "value.overridden": "overridden",
+  "value.inherited": "inherited",
   "value.not_accessible": "not accessible yet",
   "value.maximum": "maximum",
   "value.minimum": "minimum",

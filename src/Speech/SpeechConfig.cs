@@ -15,16 +15,61 @@ namespace WrathAccess.Speech
         /// <summary>The config's settings subtree: a "handler" choice + one subnode per handler.</summary>
         public CategorySetting Tree { get; }
 
-        public SpeechConfig(CategorySetting tree) { Tree = tree; }
+        // The config this one inherits from (the default config) — null for the default config itself, which
+        // is the terminal base. An inheriting config's "inherit" settings fall back to this config's values.
+        private readonly SpeechConfig _base;
 
-        /// <summary>The chosen handler key ("auto" = best available), from the config's handler dropdown.</summary>
-        public string HandlerKey => Tree?.Get<ChoiceSetting>("handler")?.Current?.Id ?? "auto";
+        public SpeechConfig(CategorySetting tree, SpeechConfig baseConfig = null) { Tree = tree; _base = baseConfig; }
+
+        /// <summary>The chosen handler key ("auto" = best available), from the config's handler dropdown;
+        /// "inherit" resolves to the base (default) config's handler.</summary>
+        public string HandlerKey
+        {
+            get
+            {
+                var raw = Tree?.Get<ChoiceSetting>("handler")?.Current?.Id ?? "auto";
+                return raw == SpeechManager.Inherit && _base != null ? _base.HandlerKey : raw;
+            }
+        }
 
         // The resolved, loaded handler for this config (load-on-demand + auto/fallback via SpeechManager).
         private ISpeechHandler Handler => SpeechManager.ResolveHandler(HandlerKey);
 
-        // This handler's own params subtree within the config (null for paramless handlers like clipboard).
-        private CategorySetting Params(ISpeechHandler h) => h != null ? Tree?.Get<CategorySetting>(h.Key) : null;
+        // This handler's params for this config (null for paramless handlers like clipboard). The default
+        // config returns its raw subtree; an inheriting config returns a RESOLVED snapshot — each setting is
+        // its explicit override if set, else the value inherited from the base config — so the handler reads
+        // plain settings and never sees "inherit".
+        private CategorySetting Params(ISpeechHandler h)
+        {
+            if (h == null) return null;
+            var mine = Tree?.Get<CategorySetting>(h.Key);
+            return _base == null ? mine : Resolve(mine, _base.Tree?.Get<CategorySetting>(h.Key), h);
+        }
+
+        // Merge an inheriting config's param subtree over the base's: walk the base (canonical) subtree and,
+        // per setting, take the explicit override (NullableInt set / Choice != Inherit) or the base's value.
+        private static CategorySetting Resolve(CategorySetting mine, CategorySetting baseSub, ISpeechHandler h)
+        {
+            if (baseSub == null) return mine; // nothing to inherit from
+            var resolved = new CategorySetting(h.Key, h.Label);
+            foreach (var b in baseSub.Children)
+            {
+                switch (b)
+                {
+                    case IntSetting bi:
+                        int v = mine?.Get<NullableIntSetting>(bi.Key) is NullableIntSetting ni && ni.IsOverridden
+                            ? ni.LocalValue.Value : bi.Get();
+                        resolved.Add(new IntSetting(bi.Key, bi.Label, v, bi.Min, bi.Max, bi.Step, bi.LocalizationKey));
+                        break;
+                    case ChoiceSetting bc:
+                        var mc = mine?.Get<ChoiceSetting>(bc.Key);
+                        string id = mc != null && mc.ValueId != SpeechManager.Inherit ? mc.ValueId : bc.ValueId;
+                        resolved.Add(new ChoiceSetting(bc.Key, bc.Label, bc.Choices, id, bc.LocalizationKey));
+                        break;
+                }
+            }
+            return resolved;
+        }
 
         /// <summary>Can speech through this config be positioned in the world (handler renders to PCM)?
         /// SAPI yes, Prism/clipboard no. The "use positional" CHOICE is a separate, event-side option.</summary>

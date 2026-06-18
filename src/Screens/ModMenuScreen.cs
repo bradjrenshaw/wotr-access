@@ -606,6 +606,9 @@ namespace WrathAccess.Screens
                 case NullableBoolSetting nb:
                     parent.Add(new ProxyOverrideToggle(nb));
                     break;
+                case NullableIntSetting ni:
+                    parent.Add(new ProxyNullableIntSetting(ni));
+                    break;
                 case IntSetting i:
                     parent.Add(new ProxyIntSetting(i));
                     break;

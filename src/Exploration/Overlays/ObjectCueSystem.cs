@@ -20,7 +20,6 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Object cue";
         public override string Key => "object";
 
-        private readonly SfxPlayer _sfx = new SfxPlayer();
         private ScanItem _inside;   // the object the cursor is currently inside (nearest), or null
         private ScanItem _spoken;   // what the idle hover announce last spoke (null = armed to announce)
         private bool _baselined;    // false until the first active tick (don't fire on entry)
@@ -58,7 +57,7 @@ namespace WrathAccess.Exploration.Overlays
             if (!_baselined) { _inside = inside; _spoken = inside; _baselined = true; return; }
             if (inside != _inside)
             {
-                _sfx.Play(Path.Combine(OverlayAudio.Dir, inside != null ? "object_enter.wav" : "object_exit.wav"), EffectiveVolume);
+                AudioEngines.NAudio.Play2D(Path.Combine(OverlayAudio.Dir, inside != null ? "object_enter.wav" : "object_exit.wav"), EffectiveVolume);
                 _inside = inside;
             }
 

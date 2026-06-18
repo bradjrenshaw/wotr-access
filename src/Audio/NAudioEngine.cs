@@ -53,6 +53,9 @@ namespace WrathAccess.Audio
         // stem/worldPos are the Wwise inputs and ignored here; NAudio plays the file at (volume, pan).
         private readonly Dictionary<string, float[]> _cache = new Dictionary<string, float[]>();
 
+        /// <summary>Non-positional (stereo-centred) one-shot — UI/cue sounds, on the same shared output.</summary>
+        public void Play2D(string file, float volume) => PlayOneShot(null, file, Vector3.zero, volume, 0f);
+
         public void PlayOneShot(string stem, string file, Vector3 worldPos, float volume, float pan)
         {
             try

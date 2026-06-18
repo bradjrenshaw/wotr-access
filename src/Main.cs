@@ -195,7 +195,6 @@ namespace WrathAccess
         // local area (menus leave the lock false, so opening windows never chimes); nullable baseline so we
         // don't chime on the first sample or across area loads (entering mid-intro-cutscene chimes "gained"
         // only when it ends).
-        private static readonly SfxPlayer _controlSfx = new SfxPlayer();
         private static bool _hadControl = true;   // last CHIMED state; default in control, so losing it (intro cutscene) chimes
         private static bool _pendingControl = true;
         private static float _pendingSince;
@@ -212,7 +211,7 @@ namespace WrathAccess
             if (hasControl != _pendingControl) { _pendingControl = hasControl; _pendingSince = now; }
             if (_hadControl != _pendingControl && now - _pendingSince >= ChimeDebounceSeconds)
             {
-                _controlSfx.Play(System.IO.Path.Combine(OverlayAudio.Dir, _pendingControl ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
+                WrathAccess.Audio.AudioEngines.NAudio.Play2D(System.IO.Path.Combine(OverlayAudio.Dir, _pendingControl ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
                 _hadControl = _pendingControl;
             }
         }

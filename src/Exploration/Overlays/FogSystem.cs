@@ -14,7 +14,6 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Fog cue";
         public override string Key => "fog";
 
-        private readonly SfxPlayer _sfx = new SfxPlayer();
         private bool? _wasFogged; // null = no baseline yet (don't fire on the first sample)
 
         public override void OnExit(Overlay overlay) => _wasFogged = null;
@@ -26,7 +25,7 @@ namespace WrathAccess.Exploration.Overlays
             var c = overlay.Cursor.Position;
             bool fogged = FogOfWarController.IsInFogOfWar(c);
             if (_wasFogged.HasValue && fogged != _wasFogged.Value)
-                _sfx.Play(Path.Combine(OverlayAudio.Dir, fogged ? "fog_enter.wav" : "fog_exit.wav"), EffectiveVolume);
+                AudioEngines.NAudio.Play2D(Path.Combine(OverlayAudio.Dir, fogged ? "fog_enter.wav" : "fog_exit.wav"), EffectiveVolume);
             _wasFogged = fogged;
         }
     }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Kingmaker.UI; // UISoundType
 using WrathAccess.Settings;
 using WrathAccess.Speech;
 using WrathAccess.UI;
@@ -349,7 +350,10 @@ namespace WrathAccess.Screens
         {
             var steps = ActiveSteps();
             int i = Array.IndexOf(steps, s_step) + delta;
-            if (i < 0 || i >= steps.Length) { Close(); return; }
+            // Stepping forward off the end = Finish: play the same fanfare the chargen wizard plays on
+            // completion. Backing off the front (i < 0) is a cancel, so no sound there.
+            if (i >= steps.Length) { UiSound.Play(UISoundType.ChargenCompleteClick); Close(); return; }
+            if (i < 0) { Close(); return; }
             s_step = steps[i];
             s_phase = new object();
         }

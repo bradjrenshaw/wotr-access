@@ -65,6 +65,8 @@
        code is all #if DEBUG, so a Release build neither compiles against nor ships this. -->
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
     <Reference Include="Mono.CSharp"><HintPath>$(VendorDir)\Mono.CSharp.dll</HintPath><Private>false</Private></Reference>
+    <!-- ScreenCapture for the dev server's /screenshot (game assembly; reference only, never copied). -->
+    <Reference Include="UnityEngine.ScreenCaptureModule"><HintPath>$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
   <!-- Deploy to the game's native Modifications folder after a Debug build, then restart the game. -->

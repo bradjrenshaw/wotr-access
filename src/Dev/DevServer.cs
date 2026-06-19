@@ -1,8 +1,12 @@
 #if DEBUG
 using System;
 using System.Collections.Concurrent;
+using System.IO;
+using System.Text;
 using System.Threading;
+using WrathAccess.Input;
 using WrathAccess.Speech;
+using WrathAccess.UI;
 
 namespace WrathAccess.Dev
 {
@@ -133,6 +137,21 @@ namespace WrathAccess.Dev
                 return OnMainThread(() => _evaluator.Eval(body));
             }
 
+            if (route == "/gui" && method == "GET")
+                return OnMainThread(() => GuiInspector.Dump());
+
+            if (route == "/input" && method == "POST")
+            {
+                string verb = (body ?? "").Trim();
+                return OnMainThread(() => Inject(verb));
+            }
+
+            if (route == "/screenshot" && method == "GET")
+                return Screenshot();
+
+            if (route == "/loadsave" && method == "POST")
+                return LoadSave(body);
+
             if (route == "/speech" && method == "GET")
             {
                 long since = 0;
@@ -147,6 +166,118 @@ namespace WrathAccess.Dev
             if (route == "/health" || route == "/") return "ok\n";
 
             return "[404] " + method + " " + route + "\n";
+        }
+
+        // Fire one of our InputActions by key, exactly as InputManager.Tick routes a real press: a UI action
+        // goes to the navigator; anything else fires its handler. Lets the dev driver drive nav (ui.down,
+        // ui.activate, ui.next…) and global hotkeys. Unknown key → list what's available. Main-thread only.
+        private static string Inject(string key)
+        {
+            foreach (var a in InputManager.Actions)
+            {
+                if (a.Key != key) continue;
+                bool consumed = a.Category == InputCategory.UI && Navigation.DispatchJustPressed(a);
+                if (!consumed) a.InvokePerformed();
+                return "fired " + key + (consumed ? " (navigator)" : " (handler)") + "\n";
+            }
+            var sb = new StringBuilder("[unknown action] " + key + "\navailable:\n");
+            foreach (var a in InputManager.Actions) sb.Append("  ").Append(a.Key).Append('\n');
+            return sb.ToString();
+        }
+
+        // Load a save from the main menu and BLOCK until the gameplay scene is interactive, so the driver
+        // can script "drop me in-game" in one call. body = "latest" (default) | "quick" | an index into the
+        // save list. Drives Game.LoadGameFromMainMenu (the CONTINUE-button path), then polls for loading to
+        // finish + a play context to be active. We drive nav via /input + /eval (our InputManager), so we
+        // don't need the game's keyboard focus — no focus fix required (the dev server already keeps the loop
+        // running unfocused). Save metadata loads async at the title screen, so a too-early call returns a
+        // retryable "[not ready]"/"[no save]".
+        private string LoadSave(string body)
+        {
+            string sel = (body ?? "").Trim();
+            if (sel.Length == 0) sel = "latest";
+
+            string kick = OnMainThread(() =>
+            {
+                var game = Kingmaker.Game.Instance;
+                if (game == null || game.SaveManager == null) return "[not ready] no SaveManager yet; retry\n";
+                // Don't kick a load while a loading screen is up — the dev server answers /health at the
+                // GameStarter entry point, well before the main menu exists, and LoadGameFromMainMenu mid-boot
+                // destabilizes the game. Wait until we're idle at a real screen (caller retries).
+                var lp = Kingmaker.EntitySystem.Persistence.LoadingProcess.Instance;
+                if (lp == null || lp.IsLoadingScreenActive) return "[not ready] still on a loading screen; retry\n";
+                var save = ResolveSave(game.SaveManager, sel);
+                if (save == null) return "[no save] '" + sel + "' not found (saves still loading? retry)\n";
+                game.LoadGameFromMainMenu(save);
+                return "ok\n";
+            });
+            if (kick != "ok\n") return kick;
+
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            while (timer.Elapsed.TotalSeconds < 90)
+            {
+                string status = OnMainThread(() =>
+                {
+                    var lp = Kingmaker.EntitySystem.Persistence.LoadingProcess.Instance;
+                    if (lp != null && lp.IsLoadingScreenActive) return "";
+                    // A play context becoming active is our "interactive" signal; at the menu it's
+                    // ctx.mainmenu (not in-play), so we can't falsely return before the load even starts.
+                    string key = WrathAccess.Screens.ScreenManager.Current?.Key;
+                    bool inPlay = key == "ctx.ingame" || key == "ctx.tacticalcombat" || key == "ctx.globalmap";
+                    return inPlay ? "loaded '" + sel + "': screen=" + key + "\n" : "";
+                });
+                if (status.Length > 0) return status;
+                Thread.Sleep(150);
+            }
+            return "[timeout] load '" + sel + "' did not become interactive within 90s\n";
+        }
+
+        private static Kingmaker.EntitySystem.Persistence.SaveInfo ResolveSave(
+            Kingmaker.EntitySystem.Persistence.SaveManager mgr, string sel)
+        {
+            if (sel == "latest") return mgr.GetLatestSave();
+            if (sel == "quick") return mgr.GetNewestQuickslot();
+            if (int.TryParse(sel, out int idx))
+            {
+                int i = 0;
+                foreach (var s in mgr) if (i++ == idx) return s;
+                return null;
+            }
+            return mgr.GetLatestSave();
+        }
+
+        // Capture the game framebuffer to a PNG (works unfocused) and return its path for the driver to Read.
+        // ScreenCapture writes asynchronously over the next frame(s): trigger on the main thread, then wait
+        // here (HTTP thread) for the file to appear and its size to settle.
+        private string Screenshot()
+        {
+            string path = Path.Combine(Path.GetTempPath(), "wa_shot.png");
+            OnMainThread(() =>
+            {
+                try { if (File.Exists(path)) File.Delete(path); } catch { }
+                UnityEngine.ScreenCapture.CaptureScreenshot(path);
+                return "requested";
+            });
+
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            while (timer.Elapsed.TotalSeconds < 8)
+            {
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        long size = new FileInfo(path).Length;
+                        if (size > 0)
+                        {
+                            Thread.Sleep(60); // let the write settle, then confirm the size is stable
+                            if (new FileInfo(path).Length == size) return path + "\n";
+                        }
+                    }
+                }
+                catch { }
+                Thread.Sleep(50);
+            }
+            return "[timeout] screenshot not written within 8s\n";
         }
     }
 }

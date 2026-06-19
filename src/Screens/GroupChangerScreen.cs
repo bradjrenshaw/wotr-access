@@ -8,13 +8,15 @@ using WrathAccess.UI.Proxies;
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The Group manager (<see cref="GroupChangerVM"/>) — party selection shown when leaving an area for
-    /// the world map. Two arrow-navigated lists (Current Party / Companions); Enter on a character moves it
-    /// between them (<c>MoveCharacter</c>, mirroring the portrait click), respecting the locked main
-    /// character and the 6-slot cap. An Accept stop commits the party and leaves (<c>Go</c>); Escape cancels
-    /// and stays in the area (<c>Close</c>, only when the party is already valid — like the game's X, which
-    /// hides otherwise). Driven, like the loot window, off the in-game static HUD
-    /// (<c>GroupChangerContextVM.GroupChangerVM</c>), not a RootUIContext service window.
+    /// The Group manager (<see cref="GroupChangerVM"/>) — party selection, most commonly when leaving an
+    /// area for the world map, but also on recruit, capital management, scripted ShowPartySelection, a party
+    /// split (the Detach subclass), and from the world map itself. Two arrow-navigated lists (Current Party /
+    /// Companions); Enter on a character moves it between them (<c>MoveCharacter</c>, mirroring the portrait
+    /// click), respecting the locked main character and the slot cap. An Accept stop commits the party and
+    /// leaves (<c>Go</c>); Escape cancels and stays (<c>Close</c>, only when the party is already valid — like
+    /// the game's X, which hides otherwise; the Detach variant never allows cancel). Driven, like the loot
+    /// window, off a <c>GroupChangerContextVM</c> — the in-game static HUD's, or the global map's (see
+    /// <see cref="Vm"/>) — not a RootUIContext service window.
     /// </summary>
     public sealed class GroupChangerScreen : Screen
     {
@@ -35,7 +37,13 @@ namespace WrathAccess.Screens
         private static GroupChangerVM Vm()
         {
             var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
-            return rc?.InGameVM?.StaticPartVM?.GroupChangerContextVM?.GroupChangerVM?.Value;
+            if (rc == null) return null;
+            // The group changer has two hosts, each alive only in its context: the in-game static HUD (area
+            // exit / recruit / capital / scripted ShowPartySelection / party split), and the world map's own
+            // context ("change party" on the global map, the islands map). Both surface the SAME base
+            // GroupChangerVM (Common or Detach), so one screen covers all of it.
+            return rc.InGameVM?.StaticPartVM?.GroupChangerContextVM?.GroupChangerVM?.Value
+                ?? rc.GlobalMapVM?.GroupChangerContextVM?.GroupChangerVM?.Value;
         }
 
         public override bool IsActive() => Vm() != null;

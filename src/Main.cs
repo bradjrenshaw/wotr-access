@@ -90,6 +90,12 @@ namespace WrathAccess
                 // snap so the listener override wins while active).
                 ticker.AddComponent<WrathAccess.Exploration.ListenerAnchor>();
 
+#if DEBUG
+                // Dev-only in-process HTTP driver (eval/speech/health), gated again behind WRATHACCESS_DEV=1.
+                // Compiled out entirely in Release — see src/Dev/.
+                WrathAccess.Dev.DevServer.Instance.Start();
+#endif
+
                 Log.Log("WrathAccess initialized. " + BuildStamp());
                 Tts.Speak(Loc.T("app.loaded"));
             }
@@ -128,6 +134,11 @@ namespace WrathAccess
 
         private static void OnFrame()
         {
+#if DEBUG
+            // Run queued dev-eval jobs on the main thread even when the mod is toggled off, so the dev
+            // driver stays usable. Inert unless WRATHACCESS_DEV=1.
+            WrathAccess.Dev.DevServer.Instance.Pump();
+#endif
             if (!Enabled) return;
             if (_bootFocusPending && Game.Instance?.Keyboard != null)
             {

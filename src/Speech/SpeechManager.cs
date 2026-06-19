@@ -112,8 +112,17 @@ namespace WrathAccess.Speech
 
         // ---- the default-config speak/render API (UI / announcements / dialogue) ----
 
-        public static void Speak(string text, bool interrupt = false) { if (Ready) Default.Speak(text, interrupt); }
-        public static void Output(string text, bool interrupt = false) { if (Ready) Default.Output(text, interrupt); }
+        public static void Speak(string text, bool interrupt = false) { Tap(text); if (Ready) Default.Speak(text, interrupt); }
+        public static void Output(string text, bool interrupt = false) { Tap(text); if (Ready) Default.Output(text, interrupt); }
+
+#if DEBUG
+        /// <summary>Dev-only tap: every string spoken through the default path is mirrored here so the dev
+        /// server's /speech log can read back what was said. Null in a normal run; set by the dev server.</summary>
+        public static Action<string> Observer;
+        private static void Tap(string text) { if (!string.IsNullOrEmpty(text)) Observer?.Invoke(text); }
+#else
+        private static void Tap(string text) { } // no-op; the dev speech tap exists only in Debug builds
+#endif
         public static void Silence() { if (Ready) Default.Silence(); }
 
         /// <summary>Render text to PCM for world-positioned playback through the default config.</summary>

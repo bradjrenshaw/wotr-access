@@ -60,6 +60,13 @@
     <PackageReference Include="NAudio" Version="1.10.0" GeneratePathProperty="true" />
   </ItemGroup>
 
+  <!-- Mono.CSharp: the runtime C# REPL compiler behind the DEBUG-only dev server's /eval (src/Dev/).
+       Vendored (NuGet 4.0.0.143; works on the game's Unity Mono). Referenced ONLY in Debug — the dev
+       code is all #if DEBUG, so a Release build neither compiles against nor ships this. -->
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <Reference Include="Mono.CSharp"><HintPath>$(VendorDir)\Mono.CSharp.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
   <!-- Deploy to the game's native Modifications folder after a Debug build, then restart the game. -->
   <Target Name="DeployMod" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
     <!-- Bundles/Blueprints must EXIST (empty is fine): the loader enumerates them and a missing
@@ -75,6 +82,9 @@
     <Delete Files="$(ModDeployDir)\Assemblies\TolkDotNet.dll;$(ModDeployDir)\Assemblies\System.Speech.dll" ContinueOnError="true" />
     <!-- NAudio (managed; no native dll). -->
     <Copy SourceFiles="$(PkgNAudio)\lib\net35\NAudio.dll" DestinationFolder="$(ModDeployDir)\Assemblies" />
+    <!-- Mono.CSharp for the DEBUG-only dev server's /eval. The native mod loader LoadFrom's every dll in
+         Assemblies/, so this resolves at first use. Debug deploy only (this whole target is Debug-gated). -->
+    <Copy SourceFiles="$(VendorDir)\Mono.CSharp.dll" DestinationFolder="$(ModDeployDir)\Assemblies" />
     <!-- Bundled assets (audio, locale), at the MOD ROOT (resolved via Main.ModDir). -->
     <ItemGroup>
       <ModAsset Include="$(MSBuildProjectDirectory)\assets\**\*.*" />

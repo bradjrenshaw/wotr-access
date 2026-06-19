@@ -125,6 +125,7 @@ namespace WrathAccess.Screens
             Register(new DialogueScreen()); // in-game conversation (common DialogVM); layer 15, above contexts + service windows
             Register(new LootScreen()); // loot window (container/corpse); layer 15, above contexts + service windows
             Register(new RestScreen()); // camping window (management/in-process/results); layer 15, same family
+            Register(new GroupChangerScreen()); // party selection on area exit (Group manager); layer 16, hard modal
             Register(new EscMenuScreen()); // the in-game pause/Escape menu (EscMenuVM buttons); layer 24
             Register(new BookEventScreen()); // book event (storybook passage + choices); layer 15
             Register(new PredicateScreen("ctx.kingdom", Loc.T("screen.kingdom"), 0, () => RC()?.IsKingdom ?? false));

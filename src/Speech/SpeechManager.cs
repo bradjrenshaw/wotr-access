@@ -53,12 +53,16 @@ namespace WrathAccess.Speech
             bool inherit = inheritFrom != null;
 
             var handlerChoices = new List<Choice>();
-            if (inherit) handlerChoices.Add(new Choice(Inherit, "Inherit", "choice.inherit"));
+            if (inherit) handlerChoices.Add(new Choice(Inherit, "Inherit default", "choice.inherit_default"));
             handlerChoices.Add(new Choice("auto", "Auto", "speech.auto"));
             foreach (var handler in Handlers)
                 handlerChoices.Add(new Choice(handler.Key, handler.Label, handler.LocalizationKey));
-            into.Add(new ChoiceSetting("handler", "Speech handler", handlerChoices,
-                inherit ? Inherit : "auto", "speech.handler"));
+            var handlerSetting = new ChoiceSetting("handler", "Speech handler", handlerChoices,
+                inherit ? Inherit : "auto", "speech.handler");
+            if (inherit)
+                handlerSetting.InheritedValue = () => handlerSetting.ValueId == Inherit
+                    ? inheritFrom.Get<ChoiceSetting>("handler")?.Current?.Label : null;
+            into.Add(handlerSetting);
 
             foreach (var handler in Handlers)
             {
@@ -89,9 +93,12 @@ namespace WrathAccess.Speech
                             i.Min, i.Max, i.Step, i.LocalizationKey));
                         break;
                     case ChoiceSetting c:
-                        var choices = new List<Choice> { new Choice(Inherit, "Inherit", "choice.inherit") };
+                        var choices = new List<Choice> { new Choice(Inherit, "Inherit default", "choice.inherit_default") };
                         foreach (var ch in c.Choices) choices.Add(ch);
-                        into.Add(new ChoiceSetting(c.Key, c.Label, choices, Inherit, c.LocalizationKey));
+                        var cs = new ChoiceSetting(c.Key, c.Label, choices, Inherit, c.LocalizationKey);
+                        var defChoice = defaultSub?.Get<ChoiceSetting>(c.Key);
+                        cs.InheritedValue = () => cs.ValueId == Inherit ? defChoice?.Current?.Label : null;
+                        into.Add(cs);
                         break;
                     default:
                         into.Add(child); // any other type passes through (none today)

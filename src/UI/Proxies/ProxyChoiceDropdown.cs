@@ -20,18 +20,24 @@ namespace WrathAccess.UI.Proxies
         private readonly Func<int> _current;
         private readonly Action<int> _onSelect;
         private readonly int _selectable;
+        private readonly Func<string> _inheritedValue;
 
         /// <param name="selectableCount">Options beyond this index are VIRTUAL: the dropdown can display
         /// them as its current value (e.g. a derived "Custom" state) but they're not offered in the
         /// chooser. -1 (default) = everything selectable.</param>
+        /// <param name="inheritedValue">Optional: when the current selection is an "Inherit default" option,
+        /// returns the display of the value it resolves to. When it returns non-empty the focused value is
+        /// announced as "inheriting default value X" (matching the sliders/toggles) instead of "Inherit
+        /// default". Returns null/empty otherwise.</param>
         public ProxyChoiceDropdown(string label, List<string> options, Func<int> current, Action<int> onSelect,
-            int selectableCount = -1)
+            int selectableCount = -1, Func<string> inheritedValue = null)
         {
             _label = label;
             _options = options;
             _current = current;
             _onSelect = onSelect;
             _selectable = (selectableCount < 0 || options == null) ? (options?.Count ?? 0) : selectableCount;
+            _inheritedValue = inheritedValue;
         }
 
         private int Current => _current != null ? _current() : -1;
@@ -40,9 +46,13 @@ namespace WrathAccess.UI.Proxies
         {
             yield return new LabelAnnouncement(Message.Raw(_label ?? ""));
             yield return new RoleAnnouncement("combo box");
+            // On the "Inherit default" option, say what it resolves to (e.g. "inheriting default value
+            // David"), matching the inherit-aware sliders/toggles; otherwise the plain option label.
+            string inh = _inheritedValue != null ? _inheritedValue() : null;
             int i = Current;
-            yield return new ValueAnnouncement(Message.Raw(
-                (_options != null && i >= 0 && i < _options.Count) ? _options[i] : ""));
+            yield return new ValueAnnouncement(!string.IsNullOrEmpty(inh)
+                ? Message.Localized("ui", "value.inheriting_default", new { value = inh })
+                : Message.Raw((_options != null && i >= 0 && i < _options.Count) ? _options[i] : ""));
         }
 
         public override IEnumerable<ElementAction> GetActions()

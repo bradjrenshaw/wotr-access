@@ -620,7 +620,8 @@ namespace WrathAccess.Screens
                     parent.Add(new ProxyChoiceDropdown(c.Label,
                         c.Choices.Select(ch => ch.Label).ToList(),
                         () => IndexOfChoice(c),
-                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); }));
+                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); },
+                        inheritedValue: c.InheritedValue));
                     break;
             }
         }

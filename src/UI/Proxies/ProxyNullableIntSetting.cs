@@ -24,9 +24,11 @@ namespace WrathAccess.UI.Proxies
         {
             yield return new LabelAnnouncement(Message.Raw(_setting.Label));
             yield return new RoleAnnouncement("slider");
-            yield return new ValueAnnouncement(Message.Join(", ",
-                Message.Raw(_setting.Resolved.ToString()),
-                Message.Localized("ui", _setting.IsOverridden ? "value.overridden" : "value.inherited")));
+            // Overridden: the explicit value + "overridden". Inheriting: spell out that it's following the
+            // default AND what that default value currently is, so it's unambiguous (not a bare "inherited").
+            yield return new ValueAnnouncement(_setting.IsOverridden
+                ? Message.Join(", ", Message.Raw(_setting.Resolved.ToString()), Message.Localized("ui", "value.overridden"))
+                : Message.Localized("ui", "value.inheriting_default", new { value = _setting.Resolved }));
         }
 
         public override IEnumerable<ElementAction> GetActions()

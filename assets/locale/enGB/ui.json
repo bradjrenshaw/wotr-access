@@ -52,6 +52,7 @@
   "value.completed": "completed",
   "value.overridden": "overridden",
   "value.inherited": "inherited",
+  "value.inheriting_default": "inheriting default value {value}",
   "value.not_accessible": "not accessible yet",
   "value.maximum": "maximum",
   "value.minimum": "minimum",

@@ -255,6 +255,7 @@
   "taxonomy.scenery": "Scenery",
   "choice.silent": "Silent",
   "choice.inherit": "Inherit",
+  "choice.inherit_default": "Inherit default",
   "sound.door": "Door",
   "sound.door_open": "Door open",
   "sound.loot-chest": "Chest",

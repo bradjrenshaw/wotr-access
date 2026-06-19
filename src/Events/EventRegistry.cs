@@ -116,7 +116,12 @@ namespace WrathAccess.Events
             if (into.GetByKey("enabled") == null)
                 into.Add(new NullableBoolSetting("enabled", "Announce", global?.Get<BoolSetting>("enabled"), "event.enabled"));
             if (into.GetByKey("speech_config") == null)
-                into.Add(new ChoiceSetting("speech_config", "Speech configuration", () => ConfigChoices(true), Inherit, "event.speech_config"));
+            {
+                var sc = new ChoiceSetting("speech_config", "Speech configuration", () => ConfigChoices(true), Inherit, "event.speech_config");
+                var globalSc = global?.Get<ChoiceSetting>("speech_config");
+                sc.InheritedValue = () => sc.ValueId == Inherit ? globalSc?.Current?.Label : null;
+                into.Add(sc);
+            }
             if (into.GetByKey("positional") == null)
                 into.Add(new NullableBoolSetting("positional", "Positional audio", global?.Get<BoolSetting>("positional"), "event.positional"));
         }
@@ -127,7 +132,7 @@ namespace WrathAccess.Events
         private static List<Choice> ConfigChoices(bool includeInherit)
         {
             var choices = new List<Choice>();
-            if (includeInherit) choices.Add(new Choice(Inherit, "Inherit", "choice.inherit"));
+            if (includeInherit) choices.Add(new Choice(Inherit, "Inherit default", "choice.inherit_default"));
             choices.Add(new Choice("default", "Default", "event.config_default"));
             foreach (var id in SpeechConfigRegistry.Ids())
                 choices.Add(new Choice(id, SpeechConfigRegistry.Name(id)));

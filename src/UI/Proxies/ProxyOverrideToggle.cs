@@ -27,9 +27,14 @@ namespace WrathAccess.UI.Proxies
         {
             yield return new LabelAnnouncement(Message.Raw(_setting.Label));
             yield return new RoleAnnouncement("toggle");
-            yield return new ValueAnnouncement(Message.Join(", ",
-                _setting.Resolved ? Message.Localized("ui", "value.on") : Message.Localized("ui", "value.off"),
-                _setting.IsOverridden ? Message.Localized("ui", "value.overridden") : null));
+            // Overridden: the explicit on/off + "overridden". Inheriting: spell out that it's following the
+            // default AND what that default value (on/off) currently is, instead of a bare resolved value.
+            yield return new ValueAnnouncement(_setting.IsOverridden
+                ? Message.Join(", ",
+                    _setting.Resolved ? Message.Localized("ui", "value.on") : Message.Localized("ui", "value.off"),
+                    Message.Localized("ui", "value.overridden"))
+                : Message.Localized("ui", "value.inheriting_default",
+                    new { value = Message.Localized("ui", _setting.Resolved ? "value.on" : "value.off").Resolve() }));
         }
 
         public override IEnumerable<ElementAction> GetActions()

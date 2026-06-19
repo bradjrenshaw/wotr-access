@@ -24,8 +24,12 @@ namespace WrathAccess.Exploration.Overlays
             _active = -1;
         }
 
+        // We're "exploring" (overlay live, audio + cursor active) only when focus mode owns the keyboard,
+        // the plain in-game context is on top, AND we actually have control — so a cutscene/scripted event
+        // over the in-game view silences the overlay (no sonar/wall tones/cursor) like it does our keys.
         private static bool InExploration =>
-            FocusMode.Active && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";
+            FocusMode.Active && WrathAccess.ControlState.HasControl
+            && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";
 
         public static bool Active => InExploration && _active >= 0;
 

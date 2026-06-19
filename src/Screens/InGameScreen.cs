@@ -43,12 +43,23 @@ namespace WrathAccess.Screens
         // while unshared exploration keys (Shift+arrows, scanner, party) keep working underneath.
         // Unfocused: Exploration first — arrows move the cursor — while unshared UI keys (Tab) still
         // reach the navigator, which is how Tab ENTERS the HUD.
+        // Always-live base in-game keys (InGame: Escape → pause menu) sit alongside the control-gated
+        // Exploration set. Order matters for SHARED chords — Escape is bound in both InGame (cancel/menu)
+        // and UI (ui.back): Focused → UI first (Escape backs out, arrows nav the HUD); Unfocused → InGame
+        // before UI so Escape opens the menu, Exploration first so arrows move the cursor.
         private static readonly WrathAccess.Input.InputCategory[] FocusedCats =
-            { WrathAccess.Input.InputCategory.UI, WrathAccess.Input.InputCategory.Exploration };
+            { WrathAccess.Input.InputCategory.UI, WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.Exploration };
         private static readonly WrathAccess.Input.InputCategory[] UnfocusedCats =
-            { WrathAccess.Input.InputCategory.Exploration, WrathAccess.Input.InputCategory.UI };
+            { WrathAccess.Input.InputCategory.Exploration, WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.UI };
+        // While we DON'T have control (cutscene, dialogue/storybook, loading, full-screen menus —
+        // ControlState.HasControl), drop Exploration so movement/scanner/party go dead, but KEEP InGame
+        // (Escape still opens the pause menu) and UI (the HUD stays reachable). Overlay audio idles in
+        // parallel (OverlayManager.Active is gated on control too).
+        private static readonly WrathAccess.Input.InputCategory[] NoControlCats =
+            { WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.UI };
         public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories
-            => WrathAccess.UI.Navigation.HasFocus ? FocusedCats : UnfocusedCats;
+            => !ControlState.HasControl ? NoControlCats
+             : WrathAccess.UI.Navigation.HasFocus ? FocusedCats : UnfocusedCats;
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
 
         public override void OnPush() { BuildShell(); _sig = null; _turnSig = null; _lastRestoreLabel = null; }

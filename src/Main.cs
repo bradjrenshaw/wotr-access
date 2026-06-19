@@ -427,7 +427,9 @@ namespace WrathAccess
             // leader's compass region within the section's map bounds.
             InputManager.Register("explore.whereAmI", "Where am I", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.Y);
-            InputManager.Register("explore.cancelTargeting", "Cancel targeting / game menu", InputCategory.Exploration,
+            // InGame (not Exploration): this must keep working when we DON'T have control — opening the
+            // pause menu mid-cutscene/dialogue is a base in-game key, so it isn't gated off with movement.
+            InputManager.Register("explore.cancelTargeting", "Cancel targeting / game menu", InputCategory.InGame,
                 () =>
                 {
                     if (WrathAccess.Exploration.Targeting.Aiming) { WrathAccess.Exploration.Targeting.Cancel(); return; }

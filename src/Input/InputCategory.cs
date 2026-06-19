@@ -16,7 +16,13 @@ namespace WrathAccess.Input
         Global,
         /// <summary>Screen/menu navigation — live when the focused screen declares it.</summary>
         UI,
-        /// <summary>The in-game world: cursor movement, interaction, scanner, overlays, party, combat.</summary>
+        /// <summary>The in-game world: cursor movement, interaction, scanner, overlays, party, combat.
+        /// CONTROL-GATED — the in-game screen drops this whenever we don't have control (a cutscene,
+        /// dialogue, loading), so movement/scanner/etc. go dead then (see ControlState / InGameScreen).</summary>
         Exploration,
+        /// <summary>Base in-game keys that must work EVEN without control — opening the pause menu /
+        /// cancelling targeting. The in-game screen claims this whenever it's in a game, control or not, so
+        /// Escape still opens the menu during a cutscene/dialogue while <see cref="Exploration"/> is gated off.</summary>
+        InGame,
     }
 }

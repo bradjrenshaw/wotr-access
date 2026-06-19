@@ -83,6 +83,17 @@ namespace WrathAccess.Screens
         public override void OnPush() { Clear(); _builtCue = null; }
         public override void OnPop() { Clear(); if (Vm() == null) Reset(); }
 
+        // Escape opens the game's pause menu, exactly like the game's own Esc key during a conversation —
+        // required for save/load/quit/settings mid-dialogue. Without this the dialogue screen swallows
+        // Escape (its UI category claims ui.back) and nothing happens; the InGame Escape only kicks in
+        // during the cutscene gaps when this screen pops. EscMenuScreen takes over while it's open.
+        public override IEnumerable<ElementAction> GetActions()
+        {
+            yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "hud.game_menu"),
+                _ => Kingmaker.PubSubSystem.EventBus.RaiseEvent(
+                    delegate(Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); }));
+        }
+
         private void Reset()
         {
             _builtCue = null;

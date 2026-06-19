@@ -37,7 +37,13 @@ namespace WrathAccess.Screens
         public override bool Exclusive => true; // owns the keyboard while open
 
         public static void Open() { s_open = true; s_step = Step.Backend; s_phase = new object(); }
-        private static void Close() { s_open = false; }
+        private static void Close()
+        {
+            s_open = false;
+            // First-run: remember the wizard's been shown so it won't auto-launch on future boots. Any
+            // dismissal (Finish, backing off the first step, or Escape) counts; re-run from the Ctrl+M menu.
+            ModSettings.GetSetting<BoolSetting>("wizard.completed")?.Set(true);
+        }
 
         protected override object WizardVm() => s_open ? Session : null;
         protected override object CurrentPhase() => s_phase;

@@ -132,6 +132,13 @@ namespace WrathAccess
         // manual toggle-off stays off.
         private static bool _bootFocusPending = true;
 
+        // Auto-open the setup wizard once when we first reach the main menu, but only until the user has
+        // been through it once (gated on the persisted wizard.completed flag). Per-launch one-shot.
+        private static bool _setupWizardPending = true;
+
+        private static bool WizardAlreadyShown()
+            => WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>("wizard.completed")?.Get() ?? false;
+
         private static void OnFrame()
         {
 #if DEBUG
@@ -149,6 +156,16 @@ namespace WrathAccess
             FocusMode.Tick(); // re-acquire the hotkey-suppression scope if the game rebuilt its keyboard
             WrathAccess.Audio.WwiseAudio.Tick(); // generate+load our Wwise bank once the engine is up
             InputManager.Tick();
+            // First-run experience: the instant we reach the main menu (after the boot "loaded" readout),
+            // open the setup wizard — but only until it's been shown once (wizard.completed, set on dismissal).
+            // Done BEFORE ScreenManager.Tick so the wizard lands on top in the SAME frame and the menu (and its
+            // Continue button) is never read out first; gated on the game's IsMainMenu rather than our menu
+            // screen being Current (which would already have announced).
+            if (_setupWizardPending && !WizardAlreadyShown() && (Game.Instance?.RootUiContext?.IsMainMenu ?? false))
+            {
+                _setupWizardPending = false;
+                WrathAccess.Screens.SetupWizardScreen.Open();
+            }
             ScreenManager.Tick();
             WrathAccess.UI.Navigation.TickTypeahead(); // typed letters → type-ahead search (after dispatch)
             TickPause(); // announce the game's pause state whenever it changes (ours OR the game's own)
@@ -334,6 +351,8 @@ namespace WrathAccess
             var wizard = new WrathAccess.Settings.CategorySetting("wizard", "Wizard", localizationKey: "category.wizard");
             wizard.Add(new WrathAccess.Settings.StringSetting("enemy_config", "Enemy event speech config", "", "wizard.enemy_config") { Hidden = true });
             wizard.Add(new WrathAccess.Settings.StringSetting("ally_config", "Ally event speech config", "", "wizard.ally_config") { Hidden = true });
+            // First-run flag: set when the user dismisses the wizard; gates the launch auto-open below.
+            wizard.Add(new WrathAccess.Settings.BoolSetting("completed", "Setup wizard shown", false, "wizard.completed") { Hidden = true });
             WrathAccess.Settings.ModSettings.Root.Add(wizard);
             // The shared sonar-sound taxonomy (global, like the volumes): per-node sound picks the
             // sonar/object cues resolve live. Shown on the Sonar tab.
@@ -371,13 +390,10 @@ namespace WrathAccess
             InputManager.Register("game.quickSave", "Quick save", InputCategory.Global, QuickSave)
                 .AddBinding(KeyCode.F5);
 
-            // Mod menu - Ctrl+M, available everywhere (fires in either focus mode).
+            // Mod menu - Ctrl+M, available everywhere (fires in either focus mode). The setup wizard is
+            // reached from here (and auto-runs on first launch); no dedicated hotkey.
             InputManager.Register("mod.menu", "Open mod menu", InputCategory.Global,
                 () => WrathAccess.Screens.ModMenuScreen.Toggle()).AddBinding(KeyCode.M, ctrl: true);
-
-            // Setup wizard - temporary opener (first-launch auto-run + a menu entry to replace this).
-            InputManager.Register("mod.setupWizard", "Open setup wizard", InputCategory.Global,
-                () => WrathAccess.Screens.SetupWizardScreen.Open()).AddBinding(KeyCode.W, ctrl: true, shift: true);
 
             // ---- UI: screen/menu navigation (dispatched into the active navigator) ----
             InputManager.Register("ui.up", "Navigate up", InputCategory.UI).AddBinding(KeyCode.UpArrow).Repeating();

@@ -4,18 +4,20 @@ using Kingmaker;
 using Kingmaker.Globalmap.View;
 using Kingmaker.PubSubSystem; // IEscMenuHandler
 using UnityEngine;
-using WrathAccess.Exploration; // GlobalMapModel, Geo
+using WrathAccess.Exploration; // GlobalMapModel, GlobalMapActions, GlobalMapScanner, Geo
+using WrathAccess.Input; // InputCategory
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The world map (global map) base context — replaces the bare placeholder screen. INCREMENT 1:
-    /// recognise the map and browse the revealed locations (distance-sorted, with bearing + state); Enter
-    /// travels to a location (or enters the area you're standing on), driving the game's own
-    /// <c>GoToLocationRevealed</c>/<c>EnterLocation</c>. The spatial cursor/sonar/scanner reuse, the
-    /// world-map hotkeys (<c>/ . , m b</c>), armies, the full multi-option enter panel, and the
+    /// The world map (global map) base context — replaces the bare placeholder screen. Two ways to browse:
+    /// a Tab-stop location list (arrow through it, Enter travels/enters), and the isolated
+    /// <see cref="GlobalMapScanner"/> (PageUp/Down points, Ctrl+PageUp/Down categories, I travel/enter) on
+    /// the dedicated <see cref="InputCategory.WorldMap"/> keys. Travel/enter drives the game's own
+    /// <c>GoToLocationRevealed</c>/<c>EnterLocation</c> via <see cref="GlobalMapActions"/>. The spatial
+    /// cursor/sonar, the <c>/ . , m b</c> review hotkeys, armies, the full enter panel, and the
     /// Exploration/Scanner setting additions come in later increments.
     /// </summary>
     public sealed class GlobalMapScreen : Screen
@@ -26,8 +28,14 @@ namespace WrathAccess.Screens
 
         public override bool IsActive() => GlobalMapModel.Active;
 
+        // UI (the location list's arrows) + the world-map scanner keys, both live at once: the scanner's
+        // PageUp/Down etc. are WorldMap-only, so they don't clash with the list's UI arrows/Tab/Enter.
+        private static readonly IReadOnlyList<InputCategory> Cats =
+            new[] { InputCategory.UI, InputCategory.WorldMap };
+        public override IReadOnlyList<InputCategory> InputCategories => Cats;
+
         private bool _built;
-        public override void OnPush() { _built = false; }
+        public override void OnPush() { _built = false; GlobalMapScanner.Reset(); }
         public override void OnPop() { Clear(); _built = false; }
 
         public override void OnUpdate()
@@ -45,50 +53,10 @@ namespace WrathAccess.Screens
             foreach (var p in GlobalMapModel.Locations.OrderBy(p => Geo.Distance(from, p.transform.position)))
             {
                 var pv = p; // capture per-iteration for the closures
-                list.Add(new ProxyActionButton(() => LocationLabel(pv), () => true, () => Activate(pv)));
+                list.Add(new ProxyActionButton(() => GlobalMapActions.Label(pv), () => true, () => GlobalMapActions.Go(pv)));
             }
             if (list.Children.Count > 0) Add(list);
             Navigation.Attach(this);
-        }
-
-        // Name + compass bearing from the party + a state tag (here / closed).
-        private static string LocationLabel(GlobalMapPointView p)
-        {
-            var parts = new List<string> { (string)p.Blueprint.Name };
-            if (p.Blueprint == GlobalMapModel.CurrentLocation)
-            {
-                parts.Add(Loc.T("worldmap.you_are_here"));
-            }
-            else
-            {
-                var bearing = Geo.Bearing(GlobalMapModel.TravelerPos, p.transform.position);
-                if (!string.IsNullOrEmpty(bearing)) parts.Add(bearing);
-                if (p.State.IsClosed) parts.Add(Loc.T("worldmap.closed"));
-            }
-            return string.Join(", ", parts);
-        }
-
-        // Enter on a location: enter the area if we're standing on it, else travel there. Mirrors the two
-        // common branches of GlobalMapEnterMessageVM.Accept (the resource/warcamp/settlement branches and the
-        // full multi-option panel come later); announces the outcome / the reason it can't proceed.
-        private void Activate(GlobalMapPointView pv)
-        {
-            var view = GlobalMapView.Instance;
-            if (view == null) return;
-            string name = (string)pv.Blueprint.Name;
-
-            if (pv.Blueprint == GlobalMapModel.CurrentLocation)
-            {
-                if (pv.State.IsClosed) { Tts.Speak(Loc.T("worldmap.is_closed", new { name })); return; }
-                view.EnterLocation();
-                Tts.Speak(Loc.T("worldmap.entering", new { name }));
-                return;
-            }
-
-            var path = view.CalculatePlayerPathToLocation(pv.Blueprint);
-            if (path == null) { Tts.Speak(Loc.T("worldmap.no_route", new { name })); return; }
-            view.GoToLocationRevealed(pv);
-            Tts.Speak(Loc.T("worldmap.traveling", new { name }));
         }
 
         // Escape opens the game menu (the game's own EscManager is muted while focus mode owns the keyboard),

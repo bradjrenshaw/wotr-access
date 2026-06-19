@@ -519,6 +519,20 @@ namespace WrathAccess
             InputManager.Register("scan.debugRooms", "Read room map stats (debug)", InputCategory.Exploration,
                 WrathAccess.Exploration.RoomMap.DebugSpeak).AddBinding(KeyCode.F8).Grouped("scanner");
 
+            // World-map scanner (InputCategory.WorldMap — isolated from the in-area scanner): a categorised,
+            // nearest-first browse of the map's revealed points. Same physical keys as the in-area scanner,
+            // but they only fire on the world-map screen, routed to the separate world-map systems.
+            InputManager.Register("worldmap.scanNext", "World map: next point", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.NextItem).AddBinding(KeyCode.PageDown).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.scanPrev", "World map: previous point", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.PrevItem).AddBinding(KeyCode.PageUp).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.catNext", "World map: next category", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.NextCategory).AddBinding(KeyCode.PageDown, ctrl: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.catPrev", "World map: previous category", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.interact", "World map: travel to / enter point", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.Interact).AddBinding(KeyCode.I).Grouped("worldmap");
+
             // Area overlays: swappable spatial views. Arrows drive the active overlay's cursor (see the
             // explore.cursor* actions above).
             InputManager.Register("overlay.cycle", "Cycle area overlay", InputCategory.Exploration,

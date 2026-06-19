@@ -24,5 +24,9 @@ namespace WrathAccess.Input
         /// cancelling targeting. The in-game screen claims this whenever it's in a game, control or not, so
         /// Escape still opens the menu during a cutscene/dialogue while <see cref="Exploration"/> is gated off.</summary>
         InGame,
+        /// <summary>The world (global) map: its own scanner / cursor / travel keys. A SEPARATE category from
+        /// <see cref="Exploration"/> so the world-map systems are fully isolated from the in-area ones — the
+        /// same physical keys (PageUp/Down, …) route to whichever screen is up. Declared by the world-map screen.</summary>
+        WorldMap,
     }
 }

@@ -229,8 +229,8 @@ namespace WrathAccess.Screens
             }
             else if (key == "events")
             {
-                // Each event (room changed, damage, buffs) renders generically: sourceless events show
-                // enable + speech config directly; sourced ones a party/enemy/neutral sub-node each.
+                // Two nodes, both rendered generically: "Event settings" (per-source global defaults) and
+                // "Individual event customization" (per-event, per-source, inheriting those globals).
                 var events = ModSettings.Root.Get<CategorySetting>("events");
                 if (events != null)
                     foreach (var s in events.Children) BuildSettingNode(tree, s);

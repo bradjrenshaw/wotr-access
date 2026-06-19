@@ -133,6 +133,8 @@
 
   "category.speech": "Speech",
   "category.events": "Events",
+  "event.settings": "Event settings",
+  "event.custom": "Individual event customization",
   "event.room_changed": "Room changed",
   "event.damage": "Damage",
   "event.heal": "Heal",
@@ -147,6 +149,7 @@
   "source.party": "Party",
   "source.enemy": "Enemy",
   "source.neutral": "Neutral",
+  "source.unitless": "Other (no unit)",
   "speech.handler": "Speech handler",
   "speech.auto": "Auto",
   "speech.prism": "Prism",

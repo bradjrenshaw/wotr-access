@@ -28,7 +28,16 @@ namespace WrathAccess.Settings
     /// <summary>A pick-one-of-N setting (→ a dropdown in the menu). Persisted by the chosen option's Id.</summary>
     public sealed class ChoiceSetting : Setting
     {
-        public IReadOnlyList<Choice> Choices { get; }
+        private readonly IReadOnlyList<Choice> _choices;
+        private readonly Func<IReadOnlyList<Choice>> _choicesProvider;
+
+        /// <summary>The options. With a provider (e.g. the live speech-config roster, which the user adds
+        /// to / removes from at runtime) this re-evaluates on every read, so a freshly-built dropdown always
+        /// reflects the current set; otherwise it's the fixed list passed at construction.</summary>
+        public IReadOnlyList<Choice> Choices => _choicesProvider != null
+            ? (_choicesProvider() ?? System.Array.Empty<Choice>())
+            : _choices;
+
         public string Default { get; }
         public string ValueId { get; private set; }
         public event Action<string> Changed;
@@ -36,7 +45,17 @@ namespace WrathAccess.Settings
         public ChoiceSetting(string key, string label, IReadOnlyList<Choice> choices, string defaultId,
             string localizationKey = "") : base(key, label, localizationKey)
         {
-            Choices = choices ?? new List<Choice>();
+            _choices = choices ?? new List<Choice>();
+            Default = defaultId;
+            ValueId = defaultId;
+        }
+
+        /// <summary>Live-options overload — the dropdown re-reads <paramref name="choicesProvider"/> on each
+        /// access (for option sets that change at runtime, e.g. the speech-config roster).</summary>
+        public ChoiceSetting(string key, string label, Func<IReadOnlyList<Choice>> choicesProvider,
+            string defaultId, string localizationKey = "") : base(key, label, localizationKey)
+        {
+            _choicesProvider = choicesProvider;
             Default = defaultId;
             ValueId = defaultId;
         }

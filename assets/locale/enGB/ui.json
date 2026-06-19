@@ -422,6 +422,7 @@
   "wizard.back": "Back",
   "wizard.next": "Next",
   "wizard.finish": "Finish",
+  "wizard.steps": "Steps",
   "wizard.step_unavailable": "This step is not accessible yet.",
   "wizard.speech.backend_title": "Choose a speech engine",
   "wizard.speech.backend_help": "Pick the engine that reads this mod aloud. Selecting one plays a sample so you can hear it. You can change this any time from the menu.",

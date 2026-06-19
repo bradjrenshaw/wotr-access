@@ -17,11 +17,16 @@ namespace WrathAccess.UI.Proxies
         typeof(SelectedAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
     public sealed class ProxyTab : UIElement
     {
-        private readonly string _label;
+        private readonly Func<string> _label;
         private readonly Func<bool> _isSelected;
         private readonly Action _onSelect;
 
         public ProxyTab(string label, Func<bool> isSelected, Action onSelect)
+            : this(() => label, isSelected, onSelect) { }
+
+        /// <summary>Live-label overload — the label is re-read on each focus, so a tab showing a changing
+        /// summary (e.g. a wizard roadmap entry: "Movement: Continuous") stays current without a rebuild.</summary>
+        public ProxyTab(Func<string> label, Func<bool> isSelected, Action onSelect)
         {
             _label = label;
             _isSelected = isSelected;
@@ -32,7 +37,7 @@ namespace WrathAccess.UI.Proxies
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
-            yield return new LabelAnnouncement(Message.Raw(_label));
+            yield return new LabelAnnouncement(Message.Raw(_label != null ? _label() : ""));
             yield return new RoleAnnouncement("tab");
             yield return new SelectedAnnouncement(_isSelected != null && _isSelected());
         }

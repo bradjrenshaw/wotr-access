@@ -40,15 +40,59 @@ namespace WrathAccess.Screens
         protected override object WizardVm() => s_open ? Session : null;
         protected override object CurrentPhase() => s_phase;
 
-        protected override string PhaseLabel()
+        protected override string PhaseLabel() => TitleFor(s_step);
+
+        private static string TitleFor(Step step)
         {
-            switch (s_step)
+            switch (step)
             {
                 case Step.Backend: return Loc.T("wizard.speech.backend_title");
                 case Step.HandlerSettings: return Loc.T("wizard.speech.settings_title", new { name = SelectedHandlerLabel() });
                 case Step.Navigation: return Loc.T("wizard.nav.title");
                 default: return "";
             }
+        }
+
+        // The roadmap header: one jump-target per active phase (like chargen's), each with a LIVE one-line
+        // summary of its current choice so you can see what to revisit and jump straight back to it.
+        protected override void BuildHeader(Container root)
+        {
+            var list = new ListContainer(Loc.T("wizard.steps"));
+            foreach (var step in ActiveSteps())
+            {
+                var s = step; // capture for the live closures
+                list.Add(new ProxyTab(() => RoadmapLabel(s), () => s_step == s, () => JumpTo(s)));
+            }
+            root.Add(list);
+        }
+
+        private static string RoadmapLabel(Step step)
+        {
+            var title = TitleFor(step);
+            var summary = SummaryFor(step);
+            return string.IsNullOrEmpty(summary) ? title : title + ": " + summary;
+        }
+
+        private static string SummaryFor(Step step)
+        {
+            switch (step)
+            {
+                case Step.Backend: return SelectedHandlerLabel();
+                case Step.Navigation:
+                    var m = PrimaryMode();
+                    return m == "continuous" ? Loc.T("wizard.nav.continuous")
+                         : m == "tiled" ? Loc.T("wizard.nav.tiled") : "";
+                default: return "";
+            }
+        }
+
+        // Jump straight to a phase from the roadmap — any active phase, forward or back (the wizard's phases
+        // are independent settings, no gating); this is the "go back and adjust later" path.
+        private static void JumpTo(Step step)
+        {
+            if (s_step == step) return;
+            s_step = step;
+            s_phase = new object();
         }
 
         protected override void BuildContent(Container content)

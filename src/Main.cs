@@ -355,6 +355,10 @@ namespace WrathAccess
             InputManager.Register("mod.menu", "Open mod menu", InputCategory.Global,
                 () => WrathAccess.Screens.ModMenuScreen.Toggle()).AddBinding(KeyCode.M, ctrl: true);
 
+            // Setup wizard - temporary opener (first-launch auto-run + a menu entry to replace this).
+            InputManager.Register("mod.setupWizard", "Open setup wizard", InputCategory.Global,
+                () => WrathAccess.Screens.SetupWizardScreen.Open()).AddBinding(KeyCode.W, ctrl: true, shift: true);
+
             // ---- UI: screen/menu navigation (dispatched into the active navigator) ----
             InputManager.Register("ui.up", "Navigate up", InputCategory.UI).AddBinding(KeyCode.UpArrow).Repeating();
             InputManager.Register("ui.down", "Navigate down", InputCategory.UI).AddBinding(KeyCode.DownArrow).Repeating();

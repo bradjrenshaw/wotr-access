@@ -201,14 +201,19 @@ namespace WrathAccess.Dev
             {
                 var game = Kingmaker.Game.Instance;
                 if (game == null || game.SaveManager == null) return "[not ready] no SaveManager yet; retry\n";
-                // Don't kick a load while a loading screen is up — the dev server answers /health at the
-                // GameStarter entry point, well before the main menu exists, and LoadGameFromMainMenu mid-boot
-                // destabilizes the game. Wait until we're idle at a real screen (caller retries).
+                // Must be idle at the title screen. The server answers /health at the GameStarter entry point
+                // (before the menu exists), and loading mid-boot half-initializes the game.
                 var lp = Kingmaker.EntitySystem.Persistence.LoadingProcess.Instance;
                 if (lp == null || lp.IsLoadingScreenActive) return "[not ready] still on a loading screen; retry\n";
+                var mm = game.UI?.MainMenu;
+                if (mm == null) return "[not ready] not at the main menu (load only from the title screen); retry\n";
                 var save = ResolveSave(game.SaveManager, sel);
                 if (save == null) return "[no save] '" + sel + "' not found (saves still loading? retry)\n";
-                game.LoadGameFromMainMenu(save);
+                // Drive the real Continue-button path: MainMenu.LoadGame wraps the load in EnterGame, which
+                // shows the loading screen, tears down the menu (stopping its music) + EscManager, loads the
+                // obligatory scenes, THEN runs LoadGameFromMainMenu. Calling LoadGameFromMainMenu directly
+                // skips that transition and leaves a broken half-load (menu music + no party).
+                mm.LoadGame(save);
                 return "ok\n";
             });
             if (kick != "ok\n") return kick;

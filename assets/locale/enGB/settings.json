@@ -274,6 +274,7 @@
   "input.global": "Global",
   "input.ui": "Menus and UI",
   "input.explore": "Exploration",
+  "input.ingame": "In game",
   "rebind.stolen": "{combo} was unbound from {other}",
   "bind.toggle_focus": "Toggle focus mode",
   "bind.speak_test": "Speak test",

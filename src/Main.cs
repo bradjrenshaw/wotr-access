@@ -281,6 +281,7 @@ namespace WrathAccess
                 (InputCategory.Global, "global", "Global"),
                 (InputCategory.UI, "ui", "Menus and UI"),
                 (InputCategory.Exploration, "explore", "Exploration"),
+                (InputCategory.InGame, "ingame", "In game"),
             };
             foreach (var (cat, key, label) in inputCats)
             {
@@ -326,6 +327,14 @@ namespace WrathAccess
             var audio = new WrathAccess.Settings.CategorySetting("audio", "Audio", localizationKey: "category.audio");
             audio.Add(new WrathAccess.Settings.IntSetting("master_volume", "Master volume", 100, 0, 100, 5, "audio.master_volume"));
             WrathAccess.Settings.ModSettings.Root.Add(audio);
+
+            // Internal wizard state (hidden): the ids of the two speech configs the setup wizard created for
+            // positional events (a distinct enemy voice + ally voice), so a re-run reuses/re-tunes them
+            // instead of piling up duplicates.
+            var wizard = new WrathAccess.Settings.CategorySetting("wizard", "Wizard", localizationKey: "category.wizard");
+            wizard.Add(new WrathAccess.Settings.StringSetting("enemy_config", "Enemy event speech config", "", "wizard.enemy_config") { Hidden = true });
+            wizard.Add(new WrathAccess.Settings.StringSetting("ally_config", "Ally event speech config", "", "wizard.ally_config") { Hidden = true });
+            WrathAccess.Settings.ModSettings.Root.Add(wizard);
             // The shared sonar-sound taxonomy (global, like the volumes): per-node sound picks the
             // sonar/object cues resolve live. Shown on the Sonar tab.
             WrathAccess.Exploration.ScanSounds.RegisterSettings();

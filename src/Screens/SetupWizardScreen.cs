@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using WrathAccess.Settings;
 using WrathAccess.Speech;
 using WrathAccess.UI;
@@ -22,7 +23,7 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class SetupWizardScreen : WizardScreen
     {
-        private enum Step { Backend, HandlerSettings, Navigation }
+        private enum Step { Backend, HandlerSettings, Navigation, EventFeedback, EnemyVoice, AllyVoice }
 
         private static bool s_open;
         private static Step s_step;
@@ -49,6 +50,9 @@ namespace WrathAccess.Screens
                 case Step.Backend: return Loc.T("wizard.speech.backend_title");
                 case Step.HandlerSettings: return Loc.T("wizard.speech.settings_title", new { name = SelectedHandlerLabel() });
                 case Step.Navigation: return Loc.T("wizard.nav.title");
+                case Step.EventFeedback: return Loc.T("wizard.events.title");
+                case Step.EnemyVoice: return Loc.T("wizard.events.enemy_voice_title");
+                case Step.AllyVoice: return Loc.T("wizard.events.ally_voice_title");
                 default: return "";
             }
         }
@@ -82,6 +86,7 @@ namespace WrathAccess.Screens
                     var m = PrimaryMode();
                     return m == "continuous" ? Loc.T("wizard.nav.continuous")
                          : m == "tiled" ? Loc.T("wizard.nav.tiled") : "";
+                case Step.EventFeedback: return Loc.T("wizard.events." + CurrentMode());
                 default: return "";
             }
         }
@@ -102,6 +107,9 @@ namespace WrathAccess.Screens
                 case Step.Backend: BuildBackendStep(content); break;
                 case Step.HandlerSettings: BuildHandlerSettingsStep(content); break;
                 case Step.Navigation: BuildNavigationStep(content); break;
+                case Step.EventFeedback: BuildEventFeedbackStep(content); break;
+                case Step.EnemyVoice: BuildEnemyVoiceStep(content); break;
+                case Step.AllyVoice: BuildAllyVoiceStep(content); break;
             }
         }
 
@@ -144,7 +152,16 @@ namespace WrathAccess.Screens
                 content.Add(new TextElement(() => Loc.T("wizard.step_unavailable")));
                 return;
             }
-            foreach (var child in sub.Children) ModSettingsScreen.BuildSettingNode(content, child);
+            content.Add(SettingsTree(sub.Children));
+        }
+
+        // Build settings the way the menu does: into an UNLABELED structural TreeGroup root, so the controls
+        // are ONE Tab-stop navigated by up/down arrows (not a Tab per control).
+        private static TreeGroup SettingsTree(IEnumerable<Setting> settings)
+        {
+            var tree = new TreeGroup();
+            foreach (var s in settings) ModSettingsScreen.BuildSettingNode(tree, s);
+            return tree;
         }
 
         // ---- Step 3: exploration movement (one choice → several cursor settings) ----
@@ -187,6 +204,129 @@ namespace WrathAccess.Screens
         private static void SetSpeed(string slot, int feet)
             => ModSettings.GetSetting<IntSetting>("defaults.cursor." + slot + ".speed")?.Set(feet);
 
+        // ---- Step: event feedback (one mode choice → events + log + SAPI voices). "Events" not "combat":
+        //      damage / healing / spellcasts etc. fire in AND out of combat. ----
+
+        private const string EnemySlot = "wizard.enemy_config"; // persisted ids of the wizard's two SAPI configs
+        private const string AllySlot = "wizard.ally_config";
+        private static readonly string[] SourceBuckets = { "party", "enemy", "neutral" };
+
+        private static void BuildEventFeedbackStep(Container content)
+        {
+            content.Add(new TextElement(() => Loc.T("wizard.events.help")));
+            var list = new ListContainer();
+            list.Add(new ProxyRadioOption(() => Loc.T("wizard.events.positional"),
+                () => CurrentMode() == "positional", ApplyPositional));
+            list.Add(new ProxyRadioOption(() => Loc.T("wizard.events.screen_reader"),
+                () => CurrentMode() == "screen_reader", ApplyScreenReader));
+            list.Add(new ProxyRadioOption(() => Loc.T("wizard.events.log"),
+                () => CurrentMode() == "log", ApplyLog));
+            content.Add(list);
+        }
+
+        // Positional: events spoken spatially, with DISTINCT enemy vs ally voices for clarity; the duplicate
+        // Combat + Magic game-log groups go off (the events cover them, incl. the spellcast events to come).
+        // Neutrals share the ally voice (everything that isn't an enemy reads in the "ally" voice).
+        private static void ApplyPositional() => ModSettings.Batch(() =>
+        {
+            var enemy = EnsureConfig(EnemySlot, "wizard.events.enemy_config_name");
+            var ally = EnsureConfig(AllySlot, "wizard.events.ally_config_name");
+            SetEventSource("enemy", enabled: true, config: enemy, positional: true);
+            SetEventSource("party", enabled: true, config: ally, positional: true);
+            SetEventSource("neutral", enabled: true, config: ally, positional: true);
+            SetLogGroup("combat", false);
+            SetLogGroup("magic", false);
+        });
+
+        // Screen reader: events through your normal (default) config, non-positional; Combat + Magic log
+        // stays off (the events convey it, no need to double up).
+        private static void ApplyScreenReader() => ModSettings.Batch(() =>
+        {
+            foreach (var b in SourceBuckets) SetEventSource(b, enabled: true, config: "default", positional: false);
+            SetLogGroup("combat", false);
+            SetLogGroup("magic", false);
+        });
+
+        // Game log: no event speech — the screen reader reads the game's own log instead, so Combat + Magic
+        // log groups go on and the events go off (no duplication).
+        private static void ApplyLog() => ModSettings.Batch(() =>
+        {
+            foreach (var b in SourceBuckets) SetEventSource(b, enabled: false, config: "default", positional: false);
+            SetLogGroup("combat", true);
+            SetLogGroup("magic", true);
+        });
+
+        // Which mode the live settings reflect (read off the enemy bucket) — a heuristic for the radio
+        // "selected" marker + roadmap summary; the menu's per-source controls remain the source of truth.
+        private static string CurrentMode()
+        {
+            var b = ModSettings.GetCategory("events.settings.enemy");
+            if (!(b?.Get<BoolSetting>("enabled")?.Get() ?? true)) return "log";
+            bool positional = b?.Get<BoolSetting>("positional")?.Get() ?? true;
+            var cfg = b?.Get<ChoiceSetting>("speech_config")?.ValueId;
+            return positional && !string.IsNullOrEmpty(cfg) && cfg != "default" ? "positional" : "screen_reader";
+        }
+
+        // Set one source bucket's global event output (the per-source defaults the events inherit).
+        private static void SetEventSource(string bucket, bool enabled, string config, bool positional)
+        {
+            var b = ModSettings.GetCategory("events.settings." + bucket);
+            b?.Get<BoolSetting>("enabled")?.Set(enabled);
+            b?.Get<ChoiceSetting>("speech_config")?.Set(config);
+            b?.Get<BoolSetting>("positional")?.Set(positional);
+        }
+
+        // Turn a whole log message group (combat / magic) on or off — the Default overlay's log defaults.
+        private static void SetLogGroup(string group, bool on)
+        {
+            var cat = ModSettings.GetCategory("defaults.log." + group);
+            if (cat == null) return;
+            foreach (var child in cat.Children)
+                if (child is BoolSetting b) b.Set(on);
+        }
+
+        // Reuse the slot's remembered SAPI config if it still exists, else create a fresh SAPI config and
+        // remember its id (so re-runs reuse/re-tune the same enemy/ally voices, not pile up duplicates).
+        private static string EnsureConfig(string slotPath, string nameKey)
+        {
+            var slot = ModSettings.GetSetting<StringSetting>(slotPath);
+            var id = slot?.Get();
+            if (!string.IsNullOrEmpty(id) && SpeechConfigRegistry.Ids().Contains(id)) return id;
+            id = SpeechConfigRegistry.Add();
+            SpeechConfigRegistry.SetName(id, Loc.T(nameKey));
+            SpeechConfigRegistry.Get(id)?.Tree?.Get<ChoiceSetting>("handler")?.Set("sapi");
+            slot?.Set(id);
+            return id;
+        }
+
+        // ---- Steps: tune the enemy / ally voices (each config's own settings tree + a test line) ----
+
+        private static void BuildEnemyVoiceStep(Container content)
+            => BuildVoiceStep(content, EnemySlot, "wizard.events.enemy_voice_help");
+
+        private static void BuildAllyVoiceStep(Container content)
+            => BuildVoiceStep(content, AllySlot, "wizard.events.ally_voice_help");
+
+        private static void BuildVoiceStep(Container content, string slotPath, string helpKey)
+        {
+            content.Add(new TextElement(() => Loc.T(helpKey)));
+            var sapi = ConfigParams(slotPath);
+            if (sapi != null) content.Add(SettingsTree(sapi.Children));
+            content.Add(new ProxyActionButton(() => Loc.T("wizard.events.test"), null, () => TestVoice(slotPath)));
+        }
+
+        private static CategorySetting ConfigParams(string slotPath)
+        {
+            var id = ModSettings.GetSetting<StringSetting>(slotPath)?.Get();
+            return string.IsNullOrEmpty(id) ? null : SpeechConfigRegistry.Get(id)?.Tree?.Get<CategorySetting>("sapi");
+        }
+
+        private static void TestVoice(string slotPath)
+        {
+            var id = ModSettings.GetSetting<StringSetting>(slotPath)?.Get();
+            if (!string.IsNullOrEmpty(id)) SpeechConfigRegistry.Get(id)?.Speak(Loc.T("wizard.events.test_line"), interrupt: true);
+        }
+
         // ---- navigation ----
 
         // The active step sequence (dynamic — the engine-settings step drops out for a paramless engine,
@@ -196,6 +336,8 @@ namespace WrathAccess.Screens
             var steps = new List<Step> { Step.Backend };
             if (HasHandlerSettings()) steps.Add(Step.HandlerSettings);
             steps.Add(Step.Navigation);
+            steps.Add(Step.EventFeedback);
+            if (CurrentMode() == "positional") { steps.Add(Step.EnemyVoice); steps.Add(Step.AllyVoice); } // tune the two SAPI voices
             return steps.ToArray();
         }
 

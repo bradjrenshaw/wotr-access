@@ -19,8 +19,7 @@ namespace WrathAccess.Exploration
     /// </summary>
     internal static class GlobalMapCursor
     {
-        private const float SpeedUnitsPerSec = 18f; // tunable by feel; a settings entry comes later
-        private const float SnapRadius = 8f;        // "on" / interact / cue radius around a point (world units)
+        private const float SnapRadius = 8f; // "on" / interact / cue radius around a point (world units)
 
         private static Vector3? _pos;
         private static GlobalMapPointView _inside; // the point the cursor is on (for the enter/leave cue)
@@ -38,13 +37,14 @@ namespace WrathAccess.Exploration
         {
             if (!GlobalMapModel.Active) { _inside = null; _spoken = null; _baselined = false; return; }
 
-            HeldVector(out int ix, out int iz);
-            bool moving = ix != 0 || iz != 0;
+            // Primary (WASD) + secondary (Shift+WASD) each glide at their own world-map speed (held both →
+            // additive). The two slots reuse the in-area cursor's settings home (Exploration → Cursor).
+            var move = SlotMove("worldmap.cursor", "primary", dt) + SlotMove("worldmap.secondary", "secondary", dt);
+            bool moving = move.sqrMagnitude > 0f;
             if (moving)
             {
                 if (!_pos.HasValue) _pos = GlobalMapModel.TravelerPos; // plant at the party on first move
-                var dir = new Vector3(ix, 0f, iz).normalized;
-                _pos = _pos.Value + dir * (SpeedUnitsPerSec * dt);
+                _pos = _pos.Value + move;
             }
 
             var inside = NearestWithin(SnapRadius);
@@ -60,14 +60,22 @@ namespace WrathAccess.Exploration
             else if (inside != _spoken) { Tts.Speak(GlobalMapActions.InPlace(inside)); _spoken = inside; }
         }
 
-        private static void HeldVector(out int dx, out int dz)
+        // One slot's per-frame movement vector: its held arrows (+Z north, +X east) × its world-map speed.
+        private static Vector3 SlotMove(string prefix, string slot, float dt)
         {
-            dx = 0; dz = 0;
-            if (InputManager.Held("worldmap.cursorUp")) dz += 1;     // +Z = north
-            if (InputManager.Held("worldmap.cursorDown")) dz -= 1;
-            if (InputManager.Held("worldmap.cursorRight")) dx += 1;  // +X = east
-            if (InputManager.Held("worldmap.cursorLeft")) dx -= 1;
+            int dx = 0, dz = 0;
+            if (InputManager.Held(prefix + "Up")) dz += 1;
+            if (InputManager.Held(prefix + "Down")) dz -= 1;
+            if (InputManager.Held(prefix + "Right")) dx += 1;
+            if (InputManager.Held(prefix + "Left")) dx -= 1;
+            if (dx == 0 && dz == 0) return Vector3.zero;
+            return new Vector3(dx, 0f, dz).normalized * (Speed(slot) * dt);
         }
+
+        // The slot's world-map speed in miles/sec. The global map equates 1 world unit with 1 mile (see
+        // GlobalMapMovementController), so this is also units/sec — no conversion needed when gliding _pos.
+        private static float Speed(string slot)
+            => ModSettings.GetSetting<IntSetting>("defaults.cursor." + slot + ".worldmap_speed")?.Get() ?? 18;
 
         private static void PlayCue(bool enter)
         {

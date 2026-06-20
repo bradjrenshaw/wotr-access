@@ -560,6 +560,15 @@ namespace WrathAccess
                 .AddBinding(KeyCode.LeftArrow).AddBinding(KeyCode.A).Repeating().Grouped("worldmap");
             InputManager.Register("worldmap.cursorRight", "World map: move cursor right", InputCategory.WorldMap)
                 .AddBinding(KeyCode.RightArrow).AddBinding(KeyCode.D).Repeating().Grouped("worldmap");
+            // Secondary cursor (Shift+WASD/arrows): the same cursor point at the secondary slot's speed.
+            InputManager.Register("worldmap.secondaryUp", "World map: secondary cursor up", InputCategory.WorldMap)
+                .AddBinding(KeyCode.UpArrow, shift: true).AddBinding(KeyCode.W, shift: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.secondaryDown", "World map: secondary cursor down", InputCategory.WorldMap)
+                .AddBinding(KeyCode.DownArrow, shift: true).AddBinding(KeyCode.S, shift: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.secondaryLeft", "World map: secondary cursor left", InputCategory.WorldMap)
+                .AddBinding(KeyCode.LeftArrow, shift: true).AddBinding(KeyCode.A, shift: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.secondaryRight", "World map: secondary cursor right", InputCategory.WorldMap)
+                .AddBinding(KeyCode.RightArrow, shift: true).AddBinding(KeyCode.D, shift: true).Repeating().Grouped("worldmap");
             InputManager.Register("worldmap.cursorInteract", "World map: act on cursor", InputCategory.WorldMap,
                 WrathAccess.Exploration.GlobalMapCursor.Interact).AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter).Grouped("worldmap");
             InputManager.Register("worldmap.cursorRecenter", "World map: cursor to party", InputCategory.WorldMap,

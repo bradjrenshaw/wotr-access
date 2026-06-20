@@ -42,6 +42,7 @@
   "overlay.volume": "Volume",
   "overlay.mode": "Movement mode",
   "overlay.speed": "Speed (feet/sec)",
+  "overlay.worldmap_speed": "World map speed (miles/sec)",
 
   "overlay.grid.cell_size": "Tile size (feet)",
   "overlay.grid.bearing": "Announce direction & distance",

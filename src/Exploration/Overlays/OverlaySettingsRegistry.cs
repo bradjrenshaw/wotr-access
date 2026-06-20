@@ -115,8 +115,8 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("announce_rooms") == null)
                 cursorCat.Add(new BoolSetting("announce_rooms", "Announce room changes", true,
                     "overlay.cursor.announce_rooms"));
-            BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "tiled", 15);
-            BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "none", 15);
+            BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "tiled", 15, 18);
+            BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "none", 15, 45);
 
             var volumes = ModSettingsRegistry.EnsureCategory("audio.volumes", "Audio/System volumes", "audio.volumes");
             foreach (var proto in Prototypes)
@@ -149,13 +149,17 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         private static CategorySetting BuildSlotSettings(string path, string labelPath, string locKey,
-            string defaultMode, int defaultSpeed)
+            string defaultMode, int defaultSpeed, int defaultWorldMapSpeed)
         {
             var cat = ModSettingsRegistry.EnsureCategory(path, labelPath, locKey);
             if (cat.GetByKey("mode") == null)
                 cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.mode"));
             if (cat.GetByKey("speed") == null)
                 cat.Add(new IntSetting("speed", "Speed (feet/sec)", defaultSpeed, 1, 60, 1, "overlay.speed"));
+            // The world-map free cursor's glide speed for this slot, in MILES/sec (the global map equates 1
+            // world unit with 1 mile — see GlobalMapMovementController.MilesTravelled — so units == miles).
+            if (cat.GetByKey("worldmap_speed") == null)
+                cat.Add(new IntSetting("worldmap_speed", "World map speed (miles/sec)", defaultWorldMapSpeed, 1, 100, 1, "overlay.worldmap_speed"));
             return cat;
         }
 

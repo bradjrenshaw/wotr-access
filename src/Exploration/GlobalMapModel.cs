@@ -39,6 +39,18 @@ namespace WrathAccess.Exploration
         public static BlueprintGlobalMapPoint CurrentLocation
             => Game.Instance?.GlobalMapController?.SelectedTraveler?.Location;
 
+        /// <summary>The view of the current location (for its edges / connected points), or null.</summary>
+        public static GlobalMapPointView CurrentLocationView
+        {
+            get
+            {
+                var bp = CurrentLocation;
+                if (bp == null || GlobalMapView.Instance == null) return null;
+                var st = GlobalMapView.Instance.State?.GetPointState(bp);
+                return st != null ? st.View : null;
+            }
+        }
+
         public static IEnumerable<GlobalMapPointView> Points
             => GlobalMapView.Instance != null ? GlobalMapView.Instance.Points : Enumerable.Empty<GlobalMapPointView>();
 

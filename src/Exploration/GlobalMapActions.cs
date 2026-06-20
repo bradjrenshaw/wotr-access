@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Kingmaker;
 using Kingmaker.Globalmap.View;
 
 namespace WrathAccess.Exploration
@@ -37,17 +38,28 @@ namespace WrathAccess.Exploration
             return string.Join(", ", parts);
         }
 
-        /// <summary>Travel to a location, or enter the area when standing on it — mirroring the two common
-        /// branches of the game's location panel. Announces the outcome or the reason it can't proceed.</summary>
+        /// <summary>Travel to a point, or enter the area when standing on it — mirroring the game's location
+        /// panel gating. Announces the outcome or the reason it can't proceed.</summary>
         public static void Go(GlobalMapPointView pv)
         {
             var view = GlobalMapView.Instance;
             if (view == null || pv == null) return;
             string name = Name(pv);
+            bool atHere = pv.Blueprint == GlobalMapModel.CurrentLocation;
 
-            if (pv.Blueprint == GlobalMapModel.CurrentLocation)
+            // Mirror the game's panel gating (GlobalMapEnterMessageView): CLOSED blocks ENTERING always, and
+            // blocks TRAVELLING only when the map sets RestrictTravelingToClosedLocations — otherwise you may
+            // approach a closed location, you just can't enter it. RESTRICTED blocks both.
+            if (pv.State.IsClosed && (atHere || view.Blueprint.RestrictTravelingToClosedLocations))
             {
-                if (pv.State.IsClosed) { Tts.Speak(Loc.T("worldmap.is_closed", new { name })); return; }
+                Tts.Speak(ClosedText(pv));
+                return;
+            }
+            var restriction = pv.Blueprint.Restriction;
+            if (restriction != null && restriction.IsRestricted()) { Tts.Speak(Loc.T("worldmap.restricted", new { name })); return; }
+
+            if (atHere)
+            {
                 view.EnterLocation();
                 Tts.Speak(Loc.T("worldmap.entering", new { name }));
                 return;
@@ -57,6 +69,14 @@ namespace WrathAccess.Exploration
             if (path == null) { Tts.Speak(Loc.T("worldmap.no_route", new { name })); return; }
             view.GoToLocationRevealed(pv);
             Tts.Speak(Loc.T("worldmap.traveling", new { name }));
+        }
+
+        // The game's closed-location message — a per-location custom override, else the shared "closed" line.
+        private static string ClosedText(GlobalMapPointView pv)
+        {
+            var bp = pv.Blueprint;
+            if (bp.UseCustomClosedText && !bp.CustomClosedText.IsEmpty()) return (string)bp.CustomClosedText;
+            return (string)Game.Instance.BlueprintRoot.LocalizedTexts.UserInterfacesText.GlobalMap.LocationIsClosed;
         }
     }
 }

@@ -34,6 +34,9 @@ namespace WrathAccess.Screens
             new[] { InputCategory.UI, InputCategory.WorldMap };
         public override IReadOnlyList<InputCategory> InputCategories => Cats;
 
+        // Letters are world-map hotkeys (b/m review, i interact), not type-ahead — same as the in-game screen.
+        public override bool AllowsTypeahead => false;
+
         private bool _built;
         public override void OnPush() { _built = false; GlobalMapScanner.Reset(); }
         public override void OnPop() { Clear(); _built = false; }

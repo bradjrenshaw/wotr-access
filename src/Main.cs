@@ -532,6 +532,20 @@ namespace WrathAccess
                 WrathAccess.Exploration.GlobalMapScanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("worldmap");
             InputManager.Register("worldmap.interact", "World map: travel to / enter point", InputCategory.WorldMap,
                 WrathAccess.Exploration.GlobalMapScanner.Interact).AddBinding(KeyCode.I).Grouped("worldmap");
+            // World-map review cursor (single-key cycles, like the in-area Comma/Period/N/M/B): b = all
+            // points nearest-first, m = the current location's connected points; Shift reverses.
+            InputManager.Register("worldmap.reviewAllNext", "World map: next point (review)", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.AllNext).AddBinding(KeyCode.B).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.reviewAllPrev", "World map: previous point (review)", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.AllPrev).AddBinding(KeyCode.B, shift: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.reviewConnNext", "World map: next connected point", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.ConnectedNext).AddBinding(KeyCode.M).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.reviewConnPrev", "World map: previous connected point", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.ConnectedPrev).AddBinding(KeyCode.M, shift: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.reviewReachNext", "World map: next reachable location", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.ReachableNext).AddBinding(KeyCode.N).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.reviewReachPrev", "World map: previous reachable location", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.ReachablePrev).AddBinding(KeyCode.N, shift: true).Repeating().Grouped("worldmap");
 
             // Area overlays: swappable spatial views. Arrows drive the active overlay's cursor (see the
             // explore.cursor* actions above).

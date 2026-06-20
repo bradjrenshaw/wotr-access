@@ -260,6 +260,9 @@ namespace WrathAccess.Screens
 
                 foreach (var cat in WrathAccess.Exploration.ScanTaxonomy.Categories)
                     BuildEntityNode(cat, entities);
+                // World-map entity types (separate taxonomy) share this tree — same sound dropdowns.
+                foreach (var cat in WrathAccess.Exploration.GlobalMapTaxonomy.Categories)
+                    BuildEntityNode(cat, entities);
                 tree.Add(entities);
 
                 var sonar = new TreeGroup(Loc("category.sonar", "Sonar"));

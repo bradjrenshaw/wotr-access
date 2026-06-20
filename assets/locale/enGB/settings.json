@@ -171,6 +171,9 @@
   "speech.config.list": "Config list",
 
   "category.audio": "Audio",
+  "taxonomy.worldmap": "World map",
+  "taxonomy.worldmap.locations": "Locations",
+  "taxonomy.worldmap.junctions": "Junctions",
   "audio.engine": "Sound playback",
   "audio.engine.wwise": "Game audio engine (3D)",
   "audio.engine.classic": "Classic (flat stereo panning)",
@@ -276,6 +279,7 @@
   "input.ui": "Menus and UI",
   "input.explore": "Exploration",
   "input.ingame": "In game",
+  "input.worldmap": "World map",
   "rebind.stolen": "{combo} was unbound from {other}",
   "bind.toggle_focus": "Toggle focus mode",
   "bind.speak_test": "Speak test",

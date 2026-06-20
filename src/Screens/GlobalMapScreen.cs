@@ -41,7 +41,7 @@ namespace WrathAccess.Screens
         public override bool AllowsTypeahead => false;
 
         private bool _built;
-        public override void OnPush() { _built = false; GlobalMapScanner.Reset(); GlobalMapCursor.Reset(); }
+        public override void OnPush() { _built = false; GlobalMapScanner.Reset(); GlobalMapCursor.Reset(); GlobalMapSonar.Reset(); }
         public override void OnPop() { Clear(); _built = false; }
 
         public override void OnUpdate()

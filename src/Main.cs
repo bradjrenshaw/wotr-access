@@ -180,6 +180,7 @@ namespace WrathAccess
             // wall tones, fog/object cues) read the fresh position.
             OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime);
             WrathAccess.Exploration.GlobalMapCursor.Tick(UnityEngine.Time.unscaledDeltaTime); // world-map free cursor (no-op off the map)
+            WrathAccess.Exploration.GlobalMapSonar.Tick(UnityEngine.Time.unscaledDeltaTime);  // world-map sonar sweep (no-op off the map)
             WrathAccess.Events.EventBusAdapter.Tick(); // reconcile this frame's buff churn into gain/loss events
             WrathAccess.Events.EventDispatcher.Tick(); // flush this frame's queued events (damage, buffs, room changes)
         }
@@ -300,6 +301,7 @@ namespace WrathAccess
                 (InputCategory.UI, "ui", "Menus and UI"),
                 (InputCategory.Exploration, "explore", "Exploration"),
                 (InputCategory.InGame, "ingame", "In game"),
+                (InputCategory.WorldMap, "worldmap", "World map"),
             };
             foreach (var (cat, key, label) in inputCats)
             {

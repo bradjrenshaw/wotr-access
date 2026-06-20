@@ -62,6 +62,16 @@ namespace WrathAccess.Exploration
                 }
             }
 
+            // World-map entity sounds — separate types (GlobalMapTaxonomy), same tree + dropdowns. Flat per
+            // type (no Inherit): one pick each for Locations / Junctions; junctions default Silent.
+            foreach (var cat in GlobalMapTaxonomy.Categories)
+            {
+                var catCat = new CategorySetting(cat.Key, cat.Label, localizationKey: cat.LocKey);
+                foreach (var child in cat.Children)
+                    catCat.Add(new ChoiceSetting(LeafKey(child.Key), child.Label, Choices(false, stems), Def(child, stems), child.LocKey));
+                root.Add(catCat);
+            }
+
             ModSettings.Root.Add(root);
         }
 

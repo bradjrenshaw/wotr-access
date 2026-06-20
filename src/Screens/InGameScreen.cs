@@ -5,6 +5,7 @@ using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized TB control
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UI.Common; // UIUtility.GetServiceWindowsLabel
 using Kingmaker.UI.MVVM._VM.ActionBar;
+using Kingmaker.UI.MVVM._VM.IngameMenu; // IngameMenuVM (the compass-corner menu bar)
 using Kingmaker.UI.MVVM._VM.ServiceWindows; // ServiceWindowsVM, ServiceWindowsType
 using Kingmaker.UI.UnitSettings; // MechanicActionBarSlotEmpty
 using Kingmaker.UnitLogic; // GetRider / IsSummoned extensions
@@ -124,23 +125,10 @@ namespace WrathAccess.Screens
             _turn = new ListContainer(Message.Localized("ui", "hud.turn").Resolve());
             Add(_turn);
 
-            // The game's IngameMenu cluster (the compass-corner buttons) as ONE Tab-stop list. Log is
-            // ours (the mod's log review); Rest is the game's bonfire button collapsed into one action
-            // (see RestAction: gates + camp placement at the cursor + the walk-to-camp interaction;
-            // refusals are the game's own warnings, spoken by WarningReader). More cluster functions
-            // (skip time, formation…) join here later.
-            var menu = new ListContainer(Loc.T("hud.menu"));
-            menu.Add(new ProxyActionButton(Loc.T("hud.log"), () => true, ModLogScreen.Open));
-            menu.Add(new ProxyActionButton(
-                () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText),
-                () => true,
-                RestAction.TryRest));
-            // The game's gear button: opens the pause/Escape menu (EscMenuScreen takes over).
-            menu.Add(new ProxyActionButton(Loc.T("hud.game_menu"), () => true,
-                () => Kingmaker.PubSubSystem.EventBus.RaiseEvent(
-                    delegate(Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); }),
-                actionVerb: "open"));
-            Add(menu);
+            // The game's IngameMenu cluster (the compass-corner bar) as ONE Tab-stop vertical list, in the
+            // game's button order, each driving the live IngameMenuVM method + the button-click sound. Out of
+            // combat (Turn panel empty/skipped) this is the tab stop right after the action bar.
+            Add(BuildMenuBar());
 
             // Service-window buttons (the game's bottom bar): one Tab-stop list after Log. Activating one
             // calls the game's own open path (HandleOpenWindowOfType, which creates the menu + toggles the
@@ -152,6 +140,13 @@ namespace WrathAccess.Screens
                 windows.Add(new ProxyActionButton(() => UIUtility.GetServiceWindowsLabel(t), () => true,
                     () => ServiceWindows()?.HandleOpenWindowOfType(t), actionVerb: "open"));
             }
+            // Our log review + the game menu (the gear) live here too, after the service windows (the deliberate
+            // split: window-like destinations here, combat/control actions in the menu bar above).
+            windows.Add(new ProxyActionButton(Loc.T("hud.log"), () => true, ModLogScreen.Open, actionVerb: "open"));
+            windows.Add(new ProxyActionButton(Loc.T("hud.game_menu"), () => true,
+                () => Kingmaker.PubSubSystem.EventBus.RaiseEvent(
+                    delegate(Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); }),
+                actionVerb: "open"));
             Add(windows);
 
             PopulateBar();
@@ -362,6 +357,53 @@ namespace WrathAccess.Screens
         {
             var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
             return rc?.InGameVM?.StaticPartVM?.ActionBarVM;
+        }
+
+        private static IngameMenuVM IngameMenu()
+        {
+            var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
+            return rc?.InGameVM?.StaticPartVM?.IngameMenuVM;
+        }
+
+        // The game's button-click sound (what each OwlcatButton plays on press) — fired alongside the VM
+        // method so our menu-bar activations match a real press.
+        private static void MenuClick() => Kingmaker.UI.UISoundController.Instance?.PlayButtonClickSound();
+
+        private static readonly System.Func<bool> AlwaysOn = () => true;
+
+        // The game-menu CONTROLS as one Tab-stop vertical list — a deliberate split from the game: the
+        // window-openers, Log, and game menu live in the Windows list instead, so this holds only controls.
+        // Order is the user's: pause, hold, stop, select all, formation, rest, skip time, turn-based, inspect,
+        // reset camera. Each drives the live IngameMenuVM method (+ the click sound); toggles append on/off.
+        private ListContainer BuildMenuBar()
+        {
+            var menu = new ListContainer(Loc.T("hud.menu"));
+
+            void Act(string key, System.Action call, System.Func<bool> enabled = null, string verb = "activate")
+                => menu.Add(new ProxyActionButton(() => Loc.T(key), enabled ?? AlwaysOn,
+                    () => { MenuClick(); call(); }, suppressActivateSound: true, actionVerb: verb));
+
+            void Toggle(string key, System.Func<bool> on, System.Action call, System.Func<bool> enabled = null)
+                => menu.Add(new ProxyActionButton(
+                    () => Loc.T(key) + ", " + Message.Localized("ui", on() ? "value.on" : "value.off").Resolve(),
+                    enabled ?? AlwaysOn, () => { MenuClick(); call(); }, suppressActivateSound: true, actionVerb: "toggle"));
+
+            // Pause toggles pause; it's hidden in turn-based combat (the game shows it only when
+            // !IsPauseButtonEnable, verified live) → grey it then.
+            Act("hudmenu.pause", () => IngameMenu()?.Pause(), () => !(IngameMenu()?.IsPauseButtonEnable.Value ?? false), "toggle");
+            Toggle("hudmenu.hold", () => IngameMenu()?.IsHoldEnabled.Value ?? false, () => IngameMenu()?.HandleHoldStateSwitched());
+            Toggle("hudmenu.stop", () => IngameMenu()?.IsStopEnabled.Value ?? false, () => IngameMenu()?.HandleStopStateSwitched());
+            Act("hudmenu.select_all", () => IngameMenu()?.SelectAll());
+            Act("hudmenu.formation", () => IngameMenu()?.OpenFormation(), verb: "open");
+            // Rest = our accessible one-action rest (RestAction), labelled with the game's own Rest text.
+            menu.Add(new ProxyActionButton(() => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText),
+                AlwaysOn, () => { MenuClick(); RestAction.TryRest(); }, suppressActivateSound: true));
+            Act("hudmenu.skip_time", () => IngameMenu()?.SkipTime());
+            Toggle("hudmenu.turn_based", () => IngameMenu()?.IsTurnBasedEnabled.Value ?? false, () => IngameMenu()?.SwitchTBM(),
+                () => !(IngameMenu()?.IsTurnBasedLocked.Value ?? false));
+            Toggle("hudmenu.inspect", () => IngameMenu()?.IsInspectActive.Value ?? false, () => IngameMenu()?.OnInspectToggle());
+            Act("hudmenu.reset_camera", () => Game.Instance.UI.GetCameraRig().SetCameraRotateDefault());
+            return menu;
         }
     }
 }

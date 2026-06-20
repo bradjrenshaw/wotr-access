@@ -3,6 +3,12 @@ using WrathAccess.Settings;
 
 namespace WrathAccess.Exploration.Overlays
 {
+    /// <summary>Which context(s) a system runs in: the in-area scene, the world (global) map, or both. The
+    /// overlay only ticks/announces systems matching the live context (see <see cref="OverlayManager.CurrentScope"/>),
+    /// so navmesh-bound in-area systems stay off the map while world-map systems stay off in areas; the Log
+    /// is Both (it just reads the game's log feed).</summary>
+    internal enum OverlayScope { InArea, WorldMap, Both }
+
     /// <summary>
     /// A pure provider attached to an <see cref="Overlay"/> — it queries the world relative to the cursor
     /// and exposes <see cref="OverlayAnnouncement"/>s and/or makes sound in <see cref="Tick"/>; it NEVER
@@ -19,6 +25,10 @@ namespace WrathAccess.Exploration.Overlays
     {
         public abstract string Name { get; }
         public abstract string Key { get; } // settings-path segment, e.g. "grid"
+
+        /// <summary>Which context this system runs in (default: the in-area scene). The overlay skips systems
+        /// whose scope doesn't match the live context, so an in-area system never ticks on the world map.</summary>
+        public virtual OverlayScope Scope => OverlayScope.InArea;
 
         /// <summary>The overlay's own category for this system: holds `enabled` (+ the hidden
         /// `customized` flag, + the `custom` override subtree when materialized).</summary>

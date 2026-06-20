@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Kingmaker.Globalmap.Blueprints; // GlobalMapPointType
+using Kingmaker.Globalmap.State; // GlobalMapArmyState
 using Kingmaker.Globalmap.View;
 using UnityEngine;
 
@@ -19,13 +20,16 @@ namespace WrathAccess.Exploration
         private enum Cat { Everything, Locations, Junctions }
         private static readonly Cat[] Cats = { Cat.Everything, Cat.Locations, Cat.Junctions };
 
-        private static GlobalMapPointView _selected; // THE review cursor — shared by every move below
-        private static int _catIndex;                // which category PageUp/Down browses
+        private static GlobalMapPointView _selected;   // THE review cursor when it's on a point
+        private static GlobalMapArmyState _selectedArmy; // ... or on an army (the . / , cycles); mutually exclusive
+        private static int _catIndex;                   // which category PageUp/Down browses
 
-        public static void Reset() { _selected = null; _catIndex = 0; }
+        public static void Reset() { _selected = null; _selectedArmy = null; _catIndex = 0; }
 
         /// <summary>The review cursor's world position, for the movement cursor's "jump to review" (/).</summary>
-        public static Vector3? SelectedPosition => _selected != null ? _selected.transform.position : (Vector3?)null;
+        public static Vector3? SelectedPosition
+            => _selectedArmy != null ? GlobalMapActions.ArmyPosition(_selectedArmy)
+             : _selected != null ? _selected.transform.position : (Vector3?)null;
 
         // ---- the shared cursor move: find _selected in `list`, step, set it, announce ----
         private static void Move(List<GlobalMapPointView> list, int dir, string emptyMsg)
@@ -34,6 +38,7 @@ namespace WrathAccess.Exploration
             int i = _selected != null ? list.IndexOf(_selected) : -1;
             i = i < 0 ? (dir > 0 ? 0 : list.Count - 1) : Mathf.Clamp(i + dir, 0, list.Count - 1);
             _selected = list[i];
+            _selectedArmy = null; // points + armies share the one review cursor
             Announce(i, list.Count);
         }
 
@@ -66,6 +71,7 @@ namespace WrathAccess.Exploration
             var list = CategoryList(Cats[_catIndex]);
             if (list.Count == 0) { Tts.Speak(Empty(Cats[_catIndex])); return; }
             _selected = list[0]; // land on the nearest in the new category
+            _selectedArmy = null;
             Announce(0, list.Count);
         }
 
@@ -77,9 +83,33 @@ namespace WrathAccess.Exploration
         public static void ReachableNext() => Move(ReachableLocations(), +1, Loc.T("worldmap.no_reachable"));
         public static void ReachablePrev() => Move(ReachableLocations(), -1, Loc.T("worldmap.no_reachable"));
 
+        // ---- army cycles (. = enemy, , = ally) — same review cursor, nearest-first ----
+        public static void EnemyNext() => ArmyMove(SortedArmies(GlobalMapModel.EnemyArmies), +1, Loc.T("worldmap.no_enemy_armies"));
+        public static void EnemyPrev() => ArmyMove(SortedArmies(GlobalMapModel.EnemyArmies), -1, Loc.T("worldmap.no_enemy_armies"));
+        public static void AllyNext() => ArmyMove(SortedArmies(GlobalMapModel.AllyArmies), +1, Loc.T("worldmap.no_ally_armies"));
+        public static void AllyPrev() => ArmyMove(SortedArmies(GlobalMapModel.AllyArmies), -1, Loc.T("worldmap.no_ally_armies"));
+
+        private static void ArmyMove(List<GlobalMapArmyState> list, int dir, string emptyMsg)
+        {
+            if (list.Count == 0) { Tts.Speak(emptyMsg); return; }
+            int i = _selectedArmy != null ? list.IndexOf(_selectedArmy) : -1;
+            i = i < 0 ? (dir > 0 ? 0 : list.Count - 1) : Mathf.Clamp(i + dir, 0, list.Count - 1);
+            _selectedArmy = list[i];
+            _selected = null; // armies + points share the one review cursor
+            Tts.Speak(GlobalMapActions.ArmyLabel(_selectedArmy) + ", " + Loc.T("nav.position", new { index = i + 1, count = list.Count }));
+        }
+
+        private static List<GlobalMapArmyState> SortedArmies(IEnumerable<GlobalMapArmyState> src)
+        {
+            var from = GlobalMapModel.TravelerPos;
+            return src.Where(a => GlobalMapActions.ArmyPosition(a).HasValue)
+                      .OrderBy(a => Geo.Distance(from, GlobalMapActions.ArmyPosition(a).Value)).ToList();
+        }
+
         // ---- interact (i): act on the review cursor ----
         public static void Interact()
         {
+            if (_selectedArmy != null) { Tts.Speak(GlobalMapActions.ArmyLabel(_selectedArmy)); return; } // armies: read, no enter
             if (_selected == null) { Tts.Speak(Loc.T("worldmap.scan_none")); return; }
             GlobalMapActions.Go(_selected);
         }
@@ -91,11 +121,12 @@ namespace WrathAccess.Exploration
             return src.OrderBy(p => Geo.Distance(from, p.transform.position)).ToList();
         }
 
-        // m: the revealed points the party's current location directly connects to (one hop).
+        // m: the current location itself plus the revealed points it directly connects to (one hop). Including
+        // where you are means the cycle always has an anchor (it lands on "you are here" first, being nearest).
         private static List<GlobalMapPointView> ConnectedPoints()
         {
             var cur = GlobalMapModel.CurrentLocationView;
-            return cur == null ? new List<GlobalMapPointView>() : Sorted(Neighbors(cur).Distinct());
+            return cur == null ? new List<GlobalMapPointView>() : Sorted(new[] { cur }.Concat(Neighbors(cur)).Distinct());
         }
 
         private static IEnumerable<GlobalMapPointView> Neighbors(GlobalMapPointView p)
@@ -109,7 +140,8 @@ namespace WrathAccess.Exploration
         }
 
         // n: every LOCATION reachable from the current node through the road network — a BFS over revealed,
-        // non-locked edges (traversing junctions), nearest-first. Excludes the node you're standing on.
+        // non-locked edges (traversing junctions), nearest-first. Includes the node you're standing on (it's
+        // "reachable" trivially, and lands first as the nearest), then every onward location.
         private static List<GlobalMapPointView> ReachableLocations()
         {
             var start = GlobalMapModel.CurrentLocationView;
@@ -117,7 +149,7 @@ namespace WrathAccess.Exploration
             var visited = new HashSet<GlobalMapPointView> { start };
             var queue = new Queue<GlobalMapPointView>();
             queue.Enqueue(start);
-            var result = new List<GlobalMapPointView>();
+            var result = new List<GlobalMapPointView> { start }; // include where you are
             while (queue.Count > 0)
             {
                 var p = queue.Dequeue();

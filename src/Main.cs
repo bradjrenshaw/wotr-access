@@ -178,9 +178,8 @@ namespace WrathAccess
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
             // wall tones, fog/object cues) read the fresh position.
-            OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime);
-            WrathAccess.Exploration.GlobalMapCursor.Tick(UnityEngine.Time.unscaledDeltaTime); // world-map free cursor (no-op off the map)
-            WrathAccess.Exploration.GlobalMapSonar.Tick(UnityEngine.Time.unscaledDeltaTime);  // world-map sonar sweep (no-op off the map)
+            OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime); // also drives the world-map sonar (a WorldMap overlay system)
+            WrathAccess.Exploration.GlobalMapCursor.Tick(UnityEngine.Time.unscaledDeltaTime); // world-map cursor; gated on the engaged overlay
             WrathAccess.Events.EventBusAdapter.Tick(); // reconcile this frame's buff churn into gain/loss events
             WrathAccess.Events.EventDispatcher.Tick(); // flush this frame's queued events (damage, buffs, room changes)
         }
@@ -549,6 +548,22 @@ namespace WrathAccess
                 WrathAccess.Exploration.GlobalMapScanner.ReachableNext).AddBinding(KeyCode.N).Repeating().Grouped("worldmap");
             InputManager.Register("worldmap.reviewReachPrev", "World map: previous reachable location", InputCategory.WorldMap,
                 WrathAccess.Exploration.GlobalMapScanner.ReachablePrev).AddBinding(KeyCode.N, shift: true).Repeating().Grouped("worldmap");
+
+            // Ctrl+O cycles overlays here too (the in-area overlay.cycle is in the Exploration category, which
+            // the world-map screen doesn't claim) — same OverlayManager, now engaged on the world map.
+            InputManager.Register("worldmap.cycleOverlay", "World map: cycle overlay", InputCategory.WorldMap,
+                OverlayManager.Cycle).AddBinding(KeyCode.O, ctrl: true).Grouped("worldmap");
+
+            // World-map army cycles (. = enemy/demon, , = ally/crusader); Shift reverses. Inert until the
+            // crusade is active (Act 2+) — no armies on the Act-1 map, so these just report "no ... armies".
+            InputManager.Register("worldmap.armyEnemyNext", "World map: next enemy army", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.EnemyNext).AddBinding(KeyCode.Period).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.armyEnemyPrev", "World map: previous enemy army", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.EnemyPrev).AddBinding(KeyCode.Period, shift: true).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.armyAllyNext", "World map: next ally army", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.AllyNext).AddBinding(KeyCode.Comma).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.armyAllyPrev", "World map: previous ally army", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapScanner.AllyPrev).AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("worldmap");
 
             // World-map MOVEMENT cursor (WASD/arrows; no press handlers — GlobalMapCursor polls the held
             // vector each frame). Enter acts on a point under it, C recenters, K reads it, / jumps to review.

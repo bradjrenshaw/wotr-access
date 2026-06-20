@@ -46,7 +46,11 @@ namespace WrathAccess.Exploration
         // worldmap.cursor* keys read as held only while the cursor (not the focused list) owns the arrows.
         public static void Tick(float dt)
         {
-            if (!GlobalMapModel.Active)
+            // Tied to the engaged overlay (Ctrl+O): the cursor runs only when an overlay is active on the
+            // world map and no location panel is open — same as the in-area cursor lives under an overlay.
+            // Otherwise pause (keep _pos), re-baselining the cue so it doesn't fire spuriously on resume.
+            if (!OverlayManager.Active || OverlayManager.CurrentScope != OverlayScope.WorldMap
+                || WrathAccess.Screens.GlobalMapScreen.PanelActive)
             {
                 _inside = null; _spoken = null; _baselined = false;
                 _primaryTiled.Holding = false; _secondaryTiled.Holding = false;
@@ -97,14 +101,19 @@ namespace WrathAccess.Exploration
             _pos = _pos.Value + new Vector3(dx, 0f, dz).normalized * (Speed(slot) * dt);
         }
 
+        // This cursor slot's settings on the ENGAGED overlay (per-overlay world-map mode/speed) — so cycling
+        // overlays drives the cursor, like the in-area cursor reads its overlay's slots.
+        private static CategorySetting SlotCat(string slot)
+            => OverlayManager.ActiveOverlay?.Cursor?.Slot(slot == "primary" ? MovementSlot.Primary : MovementSlot.Secondary);
+
         // This slot's world-map movement type (continuous / tiled / none), defaulting to continuous.
         private static string ModeOf(string slot)
-            => ModSettings.GetSetting<ChoiceSetting>("defaults.cursor." + slot + ".worldmap_mode")?.Current?.Id ?? "continuous";
+            => SlotCat(slot)?.Get<ChoiceSetting>("worldmap_mode")?.Current?.Id ?? "continuous";
 
         // The slot's world-map glide speed in miles/sec. The global map equates 1 world unit with 1 mile (see
         // GlobalMapMovementController), so this is also units/sec — no conversion needed when gliding _pos.
         private static float Speed(string slot)
-            => ModSettings.GetSetting<IntSetting>("defaults.cursor." + slot + ".worldmap_speed")?.Get() ?? 18;
+            => SlotCat(slot)?.Get<IntSetting>("worldmap_speed")?.Get() ?? 18;
 
         // Typematic tiled stepping (mirrors the in-area TileStep cadence): one step on first press, a pause
         // of the OS initial delay, then repeats while held. Diagonals stretch the interval by sqrt(2) so the
@@ -174,6 +183,9 @@ namespace WrathAccess.Exploration
 
         public static void Interact()
         {
+            // Mid-journey pause (the game's move-helper Continue): Enter resumes travel, like the game's own
+            // primary travel input. Otherwise act on the point under the cursor.
+            if (GlobalMapModel.TravelPaused) { GlobalMapActions.ResumeTravel(); return; }
             var p = NearestWithin(SnapRadius);
             if (p != null) GlobalMapActions.Go(p);
             else Tts.Speak(Loc.T("worldmap.cursor_empty"));

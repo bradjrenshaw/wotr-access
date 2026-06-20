@@ -31,6 +31,7 @@ namespace WrathAccess.Exploration.Overlays
             () => new ObjectCueSystem(),
             () => new PathInfoSystem(),
             () => new LogSystem(),
+            () => new GlobalMapSonarSystem(), // WorldMap-scoped: sweeps map points under the engaged overlay
         };
 
         // One prototype per system type (for Key/Name/schema; never bound or ticked).
@@ -78,7 +79,7 @@ namespace WrathAccess.Exploration.Overlays
         // The invisible Default overlay's out-of-box composition (which systems are on). Stored as
         // defaults.<system>.enabled, user-editable from the Sonar/Log/Exploration tabs.
         private static readonly HashSet<string> DefaultOn =
-            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "log" };
+            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "log", "worldmap_sonar" };
 
         private static readonly Dictionary<string, Overlay> _objects = new Dictionary<string, Overlay>();
 
@@ -400,6 +401,12 @@ namespace WrathAccess.Exploration.Overlays
                 cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.mode"));
             if (cat.GetByKey("speed") == null)
                 cat.Add(new IntSetting("speed", "Speed (feet/sec)", 15, 1, 60, 1, "overlay.speed"));
+            // World-map cursor for this slot (read by GlobalMapCursor off the active overlay) — same as the
+            // defaults' slots (BuildSlotSettings), so each overlay's world-map cursor is configured per-overlay.
+            if (cat.GetByKey("worldmap_mode") == null)
+                cat.Add(new ChoiceSetting("worldmap_mode", "World map movement type", ModeChoices, "continuous", "overlay.worldmap_mode"));
+            if (cat.GetByKey("worldmap_speed") == null)
+                cat.Add(new IntSetting("worldmap_speed", "World map speed (miles/sec)", key == "secondary" ? 45 : 18, 1, 100, 1, "overlay.worldmap_speed"));
             return cat;
         }
 

@@ -20,6 +20,10 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Log";
         public override string Key => "log";
 
+        // The log is context-free (it just drains the game's log feed), so it reads in areas AND on the
+        // world map — which is how travel/discovery lines get spoken once an overlay is engaged on the map.
+        public override OverlayScope Scope => OverlayScope.Both;
+
         // thread type name → (group, toggle key, label). The game's real per-type granularity: one entry
         // per log-thread class (see LogThreadService.Setup), grouped for browsing.
         private static readonly string[,] Map =

@@ -32,6 +32,10 @@ namespace WrathAccess.Exploration.Overlays
         // Changed event to ResolveModes).
         private CategorySetting _primarySlot, _secondarySlot;
 
+        /// <summary>The slot's settings category (mode/speed + the world-map mode/speed). Exposed so the
+        /// world-map cursor can read THIS overlay's slots when it's the engaged one.</summary>
+        public CategorySetting Slot(MovementSlot slot) => slot == MovementSlot.Primary ? _primarySlot : _secondarySlot;
+
         public void SetSlots(CategorySetting primary, CategorySetting secondary)
         {
             _primarySlot = primary;

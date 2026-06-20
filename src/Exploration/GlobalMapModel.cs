@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using Kingmaker;
+using Kingmaker.Armies; // ArmyFaction
 using Kingmaker.Globalmap.Blueprints;
+using Kingmaker.Globalmap.State; // GlobalMapArmyState
 using Kingmaker.Globalmap.View;
 using UnityEngine;
 
@@ -22,6 +24,17 @@ namespace WrathAccess.Exploration
                 var g = Game.Instance;
                 return g != null && g.RootUiContext != null && g.RootUiContext.IsGlobalMap
                     && GlobalMapView.Instance != null;
+            }
+        }
+
+        /// <summary>Travel is paused MID-JOURNEY — the game stopped the party (a discovery / event) and shows
+        /// its move-helper Continue button. Enter on the cursor resumes via <see cref="GlobalMapActions.ResumeTravel"/>.</summary>
+        public static bool TravelPaused
+        {
+            get
+            {
+                var c = Game.Instance != null ? Game.Instance.GlobalMapController : null;
+                return c != null && c.TravelsPaused && c.SelectedTraveler != null && c.SelectedTraveler.TravelData != null;
             }
         }
 
@@ -63,5 +76,25 @@ namespace WrathAccess.Exploration
         public static IEnumerable<GlobalMapPointView> Junctions
             => Points.Where(p => p != null && p.State != null && p.State.IsRevealed
                 && p.Blueprint != null && p.Blueprint.Type.IsWaypoint());
+
+        /// <summary>Revealed armies on the current map. Empty until the crusade is active (Act 2+) — on every
+        /// other map the game clears the army list, so this is naturally inert in Act 1.</summary>
+        public static IEnumerable<GlobalMapArmyState> Armies
+        {
+            get
+            {
+                var st = GlobalMapView.Instance != null ? GlobalMapView.Instance.State : null;
+                if (st == null || st.Armies == null) return Enumerable.Empty<GlobalMapArmyState>();
+                return st.Armies.Where(a => a != null && a.IsRevealed && a.Data != null);
+            }
+        }
+
+        /// <summary>Revealed enemy (demon) armies — the <c>.</c> cycle.</summary>
+        public static IEnumerable<GlobalMapArmyState> EnemyArmies
+            => Armies.Where(a => a.Data.Faction == ArmyFaction.Demons);
+
+        /// <summary>Revealed allied (crusader/player) armies — the <c>,</c> cycle.</summary>
+        public static IEnumerable<GlobalMapArmyState> AllyArmies
+            => Armies.Where(a => a.Data.Faction == ArmyFaction.Crusaders);
     }
 }

@@ -5,21 +5,24 @@ using Kingmaker.Globalmap.Blueprints; // GlobalMapPointType
 using Kingmaker.Globalmap.View;
 using UnityEngine;
 using WrathAccess.Audio;
-using WrathAccess.Exploration.Overlays; // OverlayAudio
 using WrathAccess.Settings;
 
-namespace WrathAccess.Exploration
+namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
-    /// The world-map sonar — a staggered sweep around the movement cursor, mirroring the in-area
-    /// <see cref="Overlays.SonarSystem"/> (ping nearby points one at a time, left→right, each positioned by
-    /// distance (volume) and lateral offset (pan); gap shrinks with the crowd; rest between sweeps). Isolated
-    /// from the overlay, but reuses the same shared sonar volume (<c>audio.volumes.sonar</c>) and sound files
-    /// (locations ping as "transition", junctions as "unknown"). Distances are in world units (the map's
-    /// scale); a real settings pass (and per-category sounds) comes later. Ticked from Main, no-op off the map.
+    /// The world-map sonar, now a WorldMap-scoped <see cref="OverlaySystem"/> driven by the engaged overlay
+    /// (Ctrl+O) — a staggered sweep around the world-map cursor, mirroring the in-area <see cref="SonarSystem"/>
+    /// (ping nearby points one at a time, left→right, each positioned by distance (volume) and lateral offset
+    /// (pan); gap shrinks with the crowd; rest between sweeps). Reuses the shared sonar volume
+    /// (<c>audio.volumes.sonar</c>) and the world-map scan sounds (Scanner tab). Only ticks on the world map
+    /// (scope), under an active overlay, and pauses while a location panel is open.
     /// </summary>
-    internal static class GlobalMapSonar
+    internal sealed class GlobalMapSonarSystem : OverlaySystem
     {
+        public override string Name => "World map sonar";
+        public override string Key => "worldmap_sonar";
+        public override OverlayScope Scope => OverlayScope.WorldMap;
+
         private const float RefDist = 12f;   // units: within this, near-full volume
         private const float MaxDist = 45f;   // units: beyond, dropped from the sweep
         private const float PanWidth = 10f;  // units: lateral-vs-bearing pan crossover
@@ -27,15 +30,19 @@ namespace WrathAccess.Exploration
         private const float SpreadSec = 0.75f;
         private const float GapMin = 0.10f, GapMax = 0.20f, Rest = 0.40f;
 
-        private static readonly List<GlobalMapPointView> _sweep = new List<GlobalMapPointView>();
-        private static int _index;
-        private static float _timer;
+        private readonly List<GlobalMapPointView> _sweep = new List<GlobalMapPointView>();
+        private int _index;
+        private float _timer;
 
-        public static void Reset() { _sweep.Clear(); _index = 0; _timer = 0f; }
+        private void Reset() { _sweep.Clear(); _index = 0; _timer = 0f; }
+        public override void OnExit(Overlay overlay) => Reset();
 
-        public static void Tick(float dt)
+        public override void Tick(float dt, Overlay overlay)
         {
-            if (!GlobalMapModel.Active || !FocusMode.Active || SonarVolume() <= 0f) { Reset(); return; }
+            // Run only under an engaged overlay; pause while a location panel tab stop is open (so it doesn't
+            // sweep while the player reads/acts on it), same as the cursor freeze.
+            if (!OverlayManager.Active || !Enabled || WrathAccess.Screens.GlobalMapScreen.PanelActive
+                || SonarVolume() <= 0f) { Reset(); return; }
 
             _timer -= dt;
             if (_timer > 0f) return;
@@ -53,7 +60,7 @@ namespace WrathAccess.Exploration
         // Points within the sense radius whose entity-type sound isn't Silent, ordered left→right so the pan
         // glides across the sweep. Junctions default to Silent (assignable in the Scanner tab's Entities tree,
         // like every other scan type), so by default only locations sweep — no opt-in flag needed.
-        private static void Snapshot()
+        private void Snapshot()
         {
             var c = GlobalMapCursor.Position;
             _sweep.Clear();
@@ -71,7 +78,7 @@ namespace WrathAccess.Exploration
         private static string NodeKey(GlobalMapPointView p)
             => p.Blueprint.Type == GlobalMapPointType.Location ? GlobalMapTaxonomy.Locations.Key : GlobalMapTaxonomy.Junctions.Key;
 
-        private static void FirePing(GlobalMapPointView p)
+        private void FirePing(GlobalMapPointView p)
         {
             var c = GlobalMapCursor.Position;
             var pos = p.transform.position;

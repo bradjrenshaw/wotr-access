@@ -120,7 +120,8 @@ namespace WrathAccess.Screens
             Register(new CharGenScreen()); // chargen / level-up (menu + in-game); layer 15, above contexts
             Register(new InGameScreen()); // exploration: unfocused (overlay owns arrows), Tab enters the HUD
             Register(new ModLogScreen()); // mod log review (channel tabs + history), opened from the HUD, layer 22
-            Register(new GlobalMapScreen()); // world map: browse locations + travel/enter (Inc 1); cursor/scanner next
+            Register(new GlobalMapScreen()); // world map: browse + cursor/scanner + the location panel as a tab stop
+            Register(new GlobalMapEncounterScreen()); // world-map travel popup (encounter/discovery), FlowSheet like dialogue; layer 15
             Register(new PredicateScreen("ctx.tacticalcombat", Loc.T("screen.tactical_combat"), 0, () => RC()?.IsTacticalCombat ?? false));
             Register(new DialogueScreen()); // in-game conversation (common DialogVM); layer 15, above contexts + service windows
             Register(new LootScreen()); // loot window (container/corpse); layer 15, above contexts + service windows

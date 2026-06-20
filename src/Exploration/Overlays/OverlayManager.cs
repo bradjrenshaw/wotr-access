@@ -24,12 +24,27 @@ namespace WrathAccess.Exploration.Overlays
             _active = -1;
         }
 
-        // We're "exploring" (overlay live, audio + cursor active) only when focus mode owns the keyboard,
-        // the plain in-game context is on top, AND we actually have control — so a cutscene/scripted event
-        // over the in-game view silences the overlay (no sonar/wall tones/cursor) like it does our keys.
-        private static bool InExploration =>
-            FocusMode.Active && WrathAccess.ControlState.HasControl
-            && ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.ingame";
+        // We're "exploring" (overlay live, audio + cursor active) only when focus mode owns the keyboard, the
+        // in-game context OR the world map is on top, AND we actually have control — so a cutscene/scripted
+        // event or a modal (the encounter/enter panel pops a different top screen) silences the overlay like
+        // it does our keys. The world map shares the framework: its systems run under whichever overlay is
+        // engaged, scoped to the world-map context (see Overlay's scope filter).
+        private static bool InExploration
+        {
+            get
+            {
+                if (!FocusMode.Active || !WrathAccess.ControlState.HasControl || ScreenManager.Current == null)
+                    return false;
+                var key = ScreenManager.Current.Key;
+                return key == "ctx.ingame" || key == "ctx.globalmap";
+            }
+        }
+
+        /// <summary>Which context the engaged overlay runs in right now — drives Overlay's per-system scope
+        /// filter (in-area systems on "ctx.ingame", world-map systems on "ctx.globalmap").</summary>
+        internal static OverlayScope CurrentScope =>
+            ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.globalmap"
+                ? OverlayScope.WorldMap : OverlayScope.InArea;
 
         public static bool Active => InExploration && _active >= 0;
 

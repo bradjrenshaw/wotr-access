@@ -42,14 +42,28 @@ namespace WrathAccess.Exploration.Overlays
 
         // ---- lifecycle ----
 
-        public void OnEnter() { Cursor.OnEnter(this); foreach (var s in _systems) s.OnEnter(this); }
-        public void OnExit() { foreach (var s in _systems) s.OnExit(this); Cursor.OnExit(this); }
+        // Only run the systems (and the in-area cursor) that belong to the live context — so navmesh-bound
+        // in-area systems stay off the world map and world-map systems stay off in areas. The in-area cursor
+        // is itself in-area-only; the world map drives its own cursor (GlobalMapCursor).
+        private static bool Applies(OverlayScope sys) => sys == OverlayScope.Both || sys == OverlayManager.CurrentScope;
+        private static bool InAreaNow => OverlayManager.CurrentScope == OverlayScope.InArea;
+
+        public void OnEnter()
+        {
+            if (InAreaNow) Cursor.OnEnter(this);
+            foreach (var s in _systems) if (Applies(s.Scope)) s.OnEnter(this);
+        }
+        public void OnExit()
+        {
+            foreach (var s in _systems) if (Applies(s.Scope)) s.OnExit(this);
+            if (InAreaNow) Cursor.OnExit(this);
+        }
 
         // Movement modes tick first (they update the cursor) so systems read the fresh position.
         public void Tick(float dt)
         {
-            Cursor.Tick(dt, this);
-            foreach (var s in _systems) s.Tick(dt, this);
+            if (InAreaNow) Cursor.Tick(dt, this);
+            foreach (var s in _systems) if (Applies(s.Scope)) s.Tick(dt, this);
         }
 
         // ---- input ----
@@ -85,8 +99,9 @@ namespace WrathAccess.Exploration.Overlays
             var ctx = new OverlayContext(this, Cursor.Position, Cursor.PlayerPosition, want);
             var spoken = new List<Message>();
             foreach (var s in _systems)
-                foreach (var a in s.Announce(ctx))
-                    if (a != null && a.Context == want && a.Text != null) spoken.Add(a.Text);
+                if (Applies(s.Scope))
+                    foreach (var a in s.Announce(ctx))
+                        if (a != null && a.Context == want && a.Text != null) spoken.Add(a.Text);
             if (spoken.Count > 0)
             {
                 var line = Message.Join("; ", spoken.ToArray()).Resolve();

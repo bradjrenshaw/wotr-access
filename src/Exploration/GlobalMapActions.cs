@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using Kingmaker;
+using Kingmaker.Armies; // ArmyFaction
+using Kingmaker.Globalmap.State; // GlobalMapArmyState
 using Kingmaker.Globalmap.View;
 using UnityEngine;
 
@@ -61,45 +63,70 @@ namespace WrathAccess.Exploration
             return string.IsNullOrEmpty(bearing) ? miles : bearing + ", " + miles;
         }
 
-        /// <summary>Travel to a point, or enter the area when standing on it — mirroring the game's location
-        /// panel gating. Announces the outcome or the reason it can't proceed.</summary>
+        /// <summary>Select a point — <b>100% the game's own click</b> (<see cref="GlobalMapPointView.HandleClick"/>),
+        /// which routes through the global-map input-state machine + the click debounce before selecting, so the
+        /// game's state stays consistent. (A hand-rolled <c>InteractWithLocation</c> skipped the state machine and
+        /// softlocked the map.) The game's location panel then surfaces accessibly as a tab stop on
+        /// <see cref="WrathAccess.Screens.GlobalMapScreen"/>, which announces the selection when it appears. The
+        /// view's own guards (revealed / travels-paused / not-in-cutscene) decide whether anything happens.</summary>
         public static void Go(GlobalMapPointView pv)
         {
-            var view = GlobalMapView.Instance;
-            if (view == null || pv == null) return;
-            string name = Name(pv);
-            bool atHere = pv.Blueprint == GlobalMapModel.CurrentLocation;
-
-            // Mirror the game's panel gating (GlobalMapEnterMessageView): CLOSED blocks ENTERING always, and
-            // blocks TRAVELLING only when the map sets RestrictTravelingToClosedLocations — otherwise you may
-            // approach a closed location, you just can't enter it. RESTRICTED blocks both.
-            if (pv.State.IsClosed && (atHere || view.Blueprint.RestrictTravelingToClosedLocations))
-            {
-                Tts.Speak(ClosedText(pv));
-                return;
-            }
-            var restriction = pv.Blueprint.Restriction;
-            if (restriction != null && restriction.IsRestricted()) { Tts.Speak(Loc.T("worldmap.restricted", new { name })); return; }
-
-            if (atHere)
-            {
-                view.EnterLocation();
-                Tts.Speak(Loc.T("worldmap.entering", new { name }));
-                return;
-            }
-
-            var path = view.CalculatePlayerPathToLocation(pv.Blueprint);
-            if (path == null) { Tts.Speak(Loc.T("worldmap.no_route", new { name })); return; }
-            view.GoToLocationRevealed(pv);
-            Tts.Speak(Loc.T("worldmap.traveling", new { name }));
+            if (pv != null) pv.HandleClick();
         }
 
-        // The game's closed-location message — a per-location custom override, else the shared "closed" line.
-        private static string ClosedText(GlobalMapPointView pv)
+        /// <summary>Resume travel paused mid-journey — the same <c>StartTravels</c> the game's move-helper
+        /// Continue button drives (verified live), with its button-click sound.</summary>
+        public static void ResumeTravel()
         {
-            var bp = pv.Blueprint;
-            if (bp.UseCustomClosedText && !bp.CustomClosedText.IsEmpty()) return (string)bp.CustomClosedText;
-            return (string)Game.Instance.BlueprintRoot.LocalizedTexts.UserInterfacesText.GlobalMap.LocationIsClosed;
+            Kingmaker.UI.UISoundController.Instance?.PlayButtonClickSound();
+            Game.Instance.GlobalMapController.StartTravels(fromClick: true);
+            Tts.Speak(Loc.T("worldmap.continuing"));
+        }
+
+        // ---- armies (the . enemy / , ally cycles) ----
+
+        /// <summary>An army's world position — its spawned pawn, else the node it sits on; null while it has
+        /// neither (shouldn't happen for a revealed army on the live map).</summary>
+        public static Vector3? ArmyPosition(GlobalMapArmyState army)
+        {
+            if (army == null) return null;
+            var view = army.View;
+            if (view != null) return view.Position;
+            var loc = army.Location;
+            if (loc != null && GlobalMapView.Instance != null)
+            {
+                var pv = GlobalMapView.Instance.GetPointView(loc);
+                if (pv != null) return pv.transform.position;
+            }
+            return null;
+        }
+
+        /// <summary>An army's spoken name (e.g. "Crusade Army III" / "Demon Army"), with a generic fallback.</summary>
+        public static string ArmyName(GlobalMapArmyState army)
+        {
+            var n = army != null && army.Data != null ? (string)army.Data.ArmyName : null;
+            return string.IsNullOrEmpty(n) ? Loc.T("worldmap.army_fallback") : n;
+        }
+
+        /// <summary>Name + side (ally/enemy) + bearing + miles from the party — for the army cycles.</summary>
+        public static string ArmyLabel(GlobalMapArmyState army)
+        {
+            var parts = new List<string>
+            {
+                ArmyName(army),
+                Loc.T(army.Data.Faction == ArmyFaction.Crusaders ? "worldmap.army_ally" : "worldmap.army_enemy"),
+            };
+            var pos = ArmyPosition(army);
+            if (pos.HasValue)
+            {
+                var from = GlobalMapModel.TravelerPos;
+                if (!Geo.IsHere(from, pos.Value))
+                {
+                    parts.Add(Geo.Bearing(from, pos.Value));
+                    parts.Add(Geo.MilesStr(Geo.Distance(from, pos.Value)));
+                }
+            }
+            return string.Join(", ", parts);
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Kingmaker;
 using Kingmaker.Globalmap.View;
+using UnityEngine;
 
 namespace WrathAccess.Exploration
 {
@@ -46,6 +47,18 @@ namespace WrathAccess.Exploration
             if (p.Blueprint == GlobalMapModel.CurrentLocation) parts.Add(Loc.T("worldmap.you_are_here"));
             else if (p.State.IsClosed) parts.Add(Loc.T("worldmap.closed"));
             return string.Join(", ", parts);
+        }
+
+        /// <summary>Compass bearing + miles distance from the party to an arbitrary point on the map — the
+        /// tiled cursor's readout when a step lands on an EMPTY cell (no point), so each step still places the
+        /// cursor for tracking (the tiled mode's purpose). Units == miles on the global map.</summary>
+        public static string PositionAt(Vector3 c)
+        {
+            var party = GlobalMapModel.TravelerPos;
+            if (Geo.IsHere(party, c)) return Loc.T("geo.here");
+            var bearing = Geo.Bearing(party, c);
+            var miles = Geo.MilesStr(Geo.Distance(party, c));
+            return string.IsNullOrEmpty(bearing) ? miles : bearing + ", " + miles;
         }
 
         /// <summary>Travel to a point, or enter the area when standing on it — mirroring the game's location

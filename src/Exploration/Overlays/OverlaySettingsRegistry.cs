@@ -70,9 +70,9 @@ namespace WrathAccess.Exploration.Overlays
 
         private static readonly Choice[] ModeChoices =
         {
-            new Choice("none", "None"),
-            new Choice("continuous", "Continuous"),
-            new Choice("tiled", "Tiled"),
+            new Choice("none", "None", "choice.mode.none"),
+            new Choice("continuous", "Continuous", "choice.mode.continuous"),
+            new Choice("tiled", "Tiled", "choice.mode.tiled"),
         };
 
         // The invisible Default overlay's out-of-box composition (which systems are on). Stored as
@@ -115,8 +115,17 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("announce_rooms") == null)
                 cursorCat.Add(new BoolSetting("announce_rooms", "Announce room changes", true,
                     "overlay.cursor.announce_rooms"));
-            BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "tiled", 15, 18);
-            BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "none", 15, 45);
+            BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "tiled", 15, "continuous", 18);
+            BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "none", 15, "continuous", 45);
+
+            // The world-map tiled cursor's tile size, in MILES (== world units on the global map). Lives on
+            // the in-area grid system's defaults — beside "Tile size (feet)" on the Exploration tab — but
+            // only here (NOT in GridSystem.RegisterSettings, like the `enabled` flag), so per-overlay custom
+            // grid copies don't get a dead duplicate: the global map has no overlays and always reads this.
+            var grid = ModSettingsRegistry.EnsureCategory("defaults.grid", "Defaults/Grid", "system.grid");
+            if (grid.GetByKey("worldmap_cell_size") == null)
+                grid.Add(new IntSetting("worldmap_cell_size", "World map tile size (miles)", 2, 1, 50, 1,
+                    "overlay.grid.worldmap_cell_size"));
 
             var volumes = ModSettingsRegistry.EnsureCategory("audio.volumes", "Audio/System volumes", "audio.volumes");
             foreach (var proto in Prototypes)
@@ -149,15 +158,20 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         private static CategorySetting BuildSlotSettings(string path, string labelPath, string locKey,
-            string defaultMode, int defaultSpeed, int defaultWorldMapSpeed)
+            string defaultMode, int defaultSpeed, string defaultWorldMapMode, int defaultWorldMapSpeed)
         {
             var cat = ModSettingsRegistry.EnsureCategory(path, labelPath, locKey);
             if (cat.GetByKey("mode") == null)
                 cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.mode"));
             if (cat.GetByKey("speed") == null)
                 cat.Add(new IntSetting("speed", "Speed (feet/sec)", defaultSpeed, 1, 60, 1, "overlay.speed"));
-            // The world-map free cursor's glide speed for this slot, in MILES/sec (the global map equates 1
-            // world unit with 1 mile — see GlobalMapMovementController.MilesTravelled — so units == miles).
+            // World-map cursor for this slot (a SEPARATE system from the in-area one above, but reusing this
+            // settings home): its movement type — continuous glide vs typematic tiled stepping (same
+            // none/continuous/tiled choices) — and its glide speed in MILES/sec. The global map equates 1
+            // world unit with 1 mile (GlobalMapMovementController.MilesTravelled), so units == miles. Read by
+            // GlobalMapCursor; tiled steps by the world-map tile size on defaults.grid.
+            if (cat.GetByKey("worldmap_mode") == null)
+                cat.Add(new ChoiceSetting("worldmap_mode", "World map movement type", ModeChoices, defaultWorldMapMode, "overlay.worldmap_mode"));
             if (cat.GetByKey("worldmap_speed") == null)
                 cat.Add(new IntSetting("worldmap_speed", "World map speed (miles/sec)", defaultWorldMapSpeed, 1, 100, 1, "overlay.worldmap_speed"));
             return cat;

@@ -37,6 +37,11 @@ namespace WrathAccess.Exploration
         public static float Feet(float metres) => metres / MetresPerFoot;
         public static string FeetStr(float metres) => Loc.T("geo.feet", new { feet = Mathf.RoundToInt(Feet(metres)) });
 
+        // The GLOBAL MAP measures distance in MILES, where 1 world unit == 1 mile (see
+        // GlobalMapMovementController.MilesTravelled), so its raw XZ distance is already the mileage — NO
+        // metres/feet conversion (unlike the in-area scene above). For world-map readouts only.
+        public static string MilesStr(float units) => Loc.T("geo.miles", new { miles = Mathf.RoundToInt(units) });
+
         private static readonly string[] Compass =
             { "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest" };
 

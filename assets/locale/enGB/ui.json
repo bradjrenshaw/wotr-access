@@ -133,6 +133,7 @@
   "path.beyond": "beyond remaining movement",
 
   "geo.feet": "{feet} ft",
+  "geo.miles": "{miles} miles",
   "geo.here": "here",
   "geo.above": "above",
   "geo.below": "below",

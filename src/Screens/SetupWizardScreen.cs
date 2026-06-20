@@ -185,18 +185,24 @@ namespace WrathAccess.Screens
             content.Add(list);
         }
 
-        // Continuous: both cursors glide — primary 15 ft/s, secondary 30 ft/s.
+        // Continuous: both cursors glide. In-area — primary 15 ft/s, secondary 30 ft/s. World map — both
+        // glide too, primary 8 mi/s, secondary 45 mi/s.
         private static void ApplyContinuous() => ModSettings.Batch(() =>
         {
             SetMode("primary", "continuous"); SetSpeed("primary", 15);
             SetMode("secondary", "continuous"); SetSpeed("secondary", 30);
+            SetWorldMapMode("primary", "continuous"); SetWorldMapSpeed("primary", 8);
+            SetWorldMapMode("secondary", "continuous"); SetWorldMapSpeed("secondary", 45);
         });
 
-        // Tiled: primary steps a grid (speed unused); secondary glides at 15 ft/s.
+        // Tiled: primary steps a grid (speed unused), secondary glides. In-area — secondary 15 ft/s. World
+        // map — primary steps a 2-mile grid, secondary glides at 8 mi/s.
         private static void ApplyTiled() => ModSettings.Batch(() =>
         {
             SetMode("primary", "tiled");
             SetMode("secondary", "continuous"); SetSpeed("secondary", 15);
+            SetWorldMapMode("primary", "tiled"); SetWorldMapTileSize(2);
+            SetWorldMapMode("secondary", "continuous"); SetWorldMapSpeed("secondary", 8);
         });
 
         // The Default overlay's cursor slots (defaults.cursor.<slot>, see OverlaySettingsRegistry): a mode
@@ -210,6 +216,18 @@ namespace WrathAccess.Screens
 
         private static void SetSpeed(string slot, int feet)
             => ModSettings.GetSetting<IntSetting>("defaults.cursor." + slot + ".speed")?.Set(feet);
+
+        // The same Default-overlay cursor slots also carry the SEPARATE world-map cursor settings (read live
+        // by GlobalMapCursor): movement type + glide speed in miles/sec; the tiled tile size lives on the
+        // grid system. Writes apply immediately and persist, just like the in-area pair above.
+        private static void SetWorldMapMode(string slot, string mode)
+            => ModSettings.GetSetting<ChoiceSetting>("defaults.cursor." + slot + ".worldmap_mode")?.Set(mode);
+
+        private static void SetWorldMapSpeed(string slot, int miles)
+            => ModSettings.GetSetting<IntSetting>("defaults.cursor." + slot + ".worldmap_speed")?.Set(miles);
+
+        private static void SetWorldMapTileSize(int miles)
+            => ModSettings.GetSetting<IntSetting>("defaults.grid.worldmap_cell_size")?.Set(miles);
 
         // ---- Step: event feedback (one mode choice → events + log + SAPI voices). "Events" not "combat":
         //      damage / healing / spellcasts etc. fire in AND out of combat. ----

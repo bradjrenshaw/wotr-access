@@ -21,7 +21,7 @@ namespace WrathAccess.Exploration
             return string.IsNullOrEmpty(n) ? Loc.T("worldmap.junction") : n;
         }
 
-        /// <summary>Name + compass bearing from the party + a state tag (here / closed).</summary>
+        /// <summary>Name + compass bearing from the party + a state tag (here / closed). For lists.</summary>
         public static string Label(GlobalMapPointView p)
         {
             var parts = new List<string> { Name(p) };
@@ -35,6 +35,16 @@ namespace WrathAccess.Exploration
                 if (!string.IsNullOrEmpty(bearing)) parts.Add(bearing);
                 if (p.State.IsClosed) parts.Add(Loc.T("worldmap.closed"));
             }
+            return string.Join(", ", parts);
+        }
+
+        /// <summary>Name + state (here / closed), WITHOUT bearing — for "what the cursor is on" readouts
+        /// (the analogue of in-area DescribeInPlace), where direction would be noise.</summary>
+        public static string InPlace(GlobalMapPointView p)
+        {
+            var parts = new List<string> { Name(p) };
+            if (p.Blueprint == GlobalMapModel.CurrentLocation) parts.Add(Loc.T("worldmap.you_are_here"));
+            else if (p.State.IsClosed) parts.Add(Loc.T("worldmap.closed"));
             return string.Join(", ", parts);
         }
 

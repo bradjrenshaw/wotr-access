@@ -24,6 +24,9 @@ namespace WrathAccess.Exploration
 
         public static void Reset() { _selected = null; _catIndex = 0; }
 
+        /// <summary>The review cursor's world position, for the movement cursor's "jump to review" (/).</summary>
+        public static Vector3? SelectedPosition => _selected != null ? _selected.transform.position : (Vector3?)null;
+
         // ---- the shared cursor move: find _selected in `list`, step, set it, announce ----
         private static void Move(List<GlobalMapPointView> list, int dir, string emptyMsg)
         {

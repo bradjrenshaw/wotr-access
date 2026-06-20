@@ -28,17 +28,20 @@ namespace WrathAccess.Screens
 
         public override bool IsActive() => GlobalMapModel.Active;
 
-        // UI (the location list's arrows) + the world-map scanner keys, both live at once: the scanner's
-        // PageUp/Down etc. are WorldMap-only, so they don't clash with the list's UI arrows/Tab/Enter.
-        private static readonly IReadOnlyList<InputCategory> Cats =
-            new[] { InputCategory.UI, InputCategory.WorldMap };
-        public override IReadOnlyList<InputCategory> InputCategories => Cats;
+        // Starts unfocused: arrows/WASD drive the movement cursor and Tab enters the location list — exactly
+        // like the in-game screen. Category order flips with focus so the arrows/Enter go to the cursor when
+        // unfocused and to the list when focused; the scanner/review/cursor letter+page keys are WorldMap-only
+        // either way (no clash with the list's UI arrows/Tab/Enter).
+        public override bool StartUnfocused => true;
+        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.WorldMap };
+        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.WorldMap, InputCategory.UI };
+        public override IReadOnlyList<InputCategory> InputCategories => Navigation.HasFocus ? Focused : Unfocused;
 
-        // Letters are world-map hotkeys (b/m review, i interact), not type-ahead — same as the in-game screen.
+        // Letters are world-map hotkeys (b/m/n review, i interact), not type-ahead — same as the in-game screen.
         public override bool AllowsTypeahead => false;
 
         private bool _built;
-        public override void OnPush() { _built = false; GlobalMapScanner.Reset(); }
+        public override void OnPush() { _built = false; GlobalMapScanner.Reset(); GlobalMapCursor.Reset(); }
         public override void OnPop() { Clear(); _built = false; }
 
         public override void OnUpdate()

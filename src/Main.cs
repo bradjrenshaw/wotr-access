@@ -179,6 +179,7 @@ namespace WrathAccess
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
             // wall tones, fog/object cues) read the fresh position.
             OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime);
+            WrathAccess.Exploration.GlobalMapCursor.Tick(UnityEngine.Time.unscaledDeltaTime); // world-map free cursor (no-op off the map)
             WrathAccess.Events.EventBusAdapter.Tick(); // reconcile this frame's buff churn into gain/loss events
             WrathAccess.Events.EventDispatcher.Tick(); // flush this frame's queued events (damage, buffs, room changes)
         }
@@ -546,6 +547,30 @@ namespace WrathAccess
                 WrathAccess.Exploration.GlobalMapScanner.ReachableNext).AddBinding(KeyCode.N).Repeating().Grouped("worldmap");
             InputManager.Register("worldmap.reviewReachPrev", "World map: previous reachable location", InputCategory.WorldMap,
                 WrathAccess.Exploration.GlobalMapScanner.ReachablePrev).AddBinding(KeyCode.N, shift: true).Repeating().Grouped("worldmap");
+
+            // World-map MOVEMENT cursor (WASD/arrows; no press handlers — GlobalMapCursor polls the held
+            // vector each frame). Enter acts on a point under it, C recenters, K reads it, / jumps to review.
+            InputManager.Register("worldmap.cursorUp", "World map: move cursor up", InputCategory.WorldMap)
+                .AddBinding(KeyCode.UpArrow).AddBinding(KeyCode.W).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.cursorDown", "World map: move cursor down", InputCategory.WorldMap)
+                .AddBinding(KeyCode.DownArrow).AddBinding(KeyCode.S).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.cursorLeft", "World map: move cursor left", InputCategory.WorldMap)
+                .AddBinding(KeyCode.LeftArrow).AddBinding(KeyCode.A).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.cursorRight", "World map: move cursor right", InputCategory.WorldMap)
+                .AddBinding(KeyCode.RightArrow).AddBinding(KeyCode.D).Repeating().Grouped("worldmap");
+            InputManager.Register("worldmap.cursorInteract", "World map: act on cursor", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapCursor.Interact).AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter).Grouped("worldmap");
+            InputManager.Register("worldmap.cursorRecenter", "World map: cursor to party", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapCursor.Recenter).AddBinding(KeyCode.C).Grouped("worldmap");
+            InputManager.Register("worldmap.cursorAnnounce", "World map: read cursor", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapCursor.Announce).AddBinding(KeyCode.K).Grouped("worldmap");
+            InputManager.Register("worldmap.cursorToReview", "World map: cursor to review point", InputCategory.WorldMap,
+                WrathAccess.Exploration.GlobalMapCursor.JumpToReview).AddBinding(KeyCode.Slash).Grouped("worldmap");
+            // Escape → game menu, as an input action so it works while the cursor (unfocused) owns the keys
+            // (the screen's GetActions Back only fires when focused) — mirrors the in-game screen.
+            InputManager.Register("worldmap.escape", "World map: open menu", InputCategory.WorldMap,
+                () => Kingmaker.PubSubSystem.EventBus.RaiseEvent(delegate (Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); }))
+                .AddBinding(KeyCode.Escape).Grouped("worldmap");
 
             // Area overlays: swappable spatial views. Arrows drive the active overlay's cursor (see the
             // explore.cursor* actions above).

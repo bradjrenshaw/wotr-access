@@ -102,20 +102,20 @@ namespace WrathAccess.Exploration.Overlays
             foreach (var item in WorldModel.Items)
             {
                 if (!item.IsVisible) continue;
-                var p = item.Position;
-                if (Mathf.Abs(p.y - centre.y) > LevelGap) continue;
-                if (!OverlapsTile(p, item.Footprint, centre)) continue;
+                if (Mathf.Abs(item.Position.y - centre.y) > LevelGap) continue;
+                if (!OverlapsTile(item, centre)) continue;
                 var name = string.IsNullOrEmpty(item.Name) ? Loc.T("scan.object_fallback") : item.Name;
                 if (!names.Contains(name)) names.Add(name);
             }
             return names;
         }
 
-        private bool OverlapsTile(Vector3 pos, float radius, Vector3 centre)
+        // The item's real footprint overlaps this tile when the closest point of its shape to the tile
+        // centre lands within the tile square — so a wall marks the cells along its length, not a circle.
+        private bool OverlapsTile(ScanItem item, Vector3 centre)
         {
-            float dx = Mathf.Max(Mathf.Abs(pos.x - centre.x) - Half, 0f);
-            float dz = Mathf.Max(Mathf.Abs(pos.z - centre.z) - Half, 0f);
-            return dx * dx + dz * dz <= radius * radius;
+            var np = item.NearestPoint(centre);
+            return Mathf.Abs(np.x - centre.x) <= Half && Mathf.Abs(np.z - centre.z) <= Half;
         }
     }
 }

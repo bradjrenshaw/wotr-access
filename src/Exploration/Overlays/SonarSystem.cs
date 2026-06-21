@@ -78,16 +78,22 @@ namespace WrathAccess.Exploration.Overlays
             var stem = Settings?.Get<WrathAccess.Settings.ChoiceSetting>("review_sound")?.ValueId;
             if (string.IsNullOrEmpty(stem) || stem == "silent") return;
 
-            var p = item.Position;
-            float dx = p.x - from.x, dz = p.z - from.z;
+            PlayAtNearest(stem, Path.Combine(OverlayAudio.Dir, stem + ".wav"), item, from);
+        }
+
+        // Position a one-shot at the NEAREST POINT of the item's actual shape (not its centre): the sound
+        // emanates from where the thing is closest to you — a circle from its near edge, a wall/line along its
+        // length. Volume by that distance, pan by its bearing; inside the shape → at the reference (max, centred).
+        private void PlayAtNearest(string stem, string path, ScanItem item, Vector3 from)
+        {
+            var np = item.NearestPoint(from);
+            float dx = np.x - from.x, dz = np.z - from.z;
             float dist = Mathf.Sqrt(dx * dx + dz * dz);
-            float fp = item.Footprint;
             float refDist = Int("ref_distance", 10) * Geo.MetresPerFoot;
             float panWidth = PanWidthFeet * Geo.MetresPerFoot;
-            float edge = Mathf.Max(0f, dist - fp);
-            float vol = Mathf.Clamp(refDist / (refDist + edge), MinVol, 1f) * EffectiveVolume;
-            float pan = dist > fp ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
-            AudioEngines.Active.PlayOneShot(stem, Path.Combine(OverlayAudio.Dir, stem + ".wav"), p, vol, pan);
+            float vol = Mathf.Clamp(refDist / (refDist + dist), MinVol, 1f) * EffectiveVolume;
+            float pan = dist > 1e-3f ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
+            AudioEngines.Active.PlayOneShot(stem, path, np, vol, pan);
         }
 
         public override void OnExit(Overlay overlay) => ResetSweep();
@@ -127,9 +133,9 @@ namespace WrathAccess.Exploration.Overlays
                 // CurrentlySeen: the sonar is a "what's around right now" lens, like the review
                 // cycles — a remembered door back under fog shouldn't keep pinging (user report).
                 if (!it.IsVisible || !it.CurrentlySeen || ScanSounds.Resolve(it.Primary) == null) continue;
-                float dx = it.Position.x - c.x, dz = it.Position.z - c.z;
-                float edge = Mathf.Max(0f, Mathf.Sqrt(dx * dx + dz * dz) - it.Footprint);
-                if (edge > maxDist) continue;
+                var np = it.NearestPoint(c); // distance to the nearest part of the actual shape
+                float dx = np.x - c.x, dz = np.z - c.z;
+                if (dx * dx + dz * dz > maxDist * maxDist) continue;
                 _sweep.Add(it);
             }
             _sweep.Sort((a, b) => (a.Position.x - c.x).CompareTo(b.Position.x - c.x));
@@ -141,21 +147,8 @@ namespace WrathAccess.Exploration.Overlays
             var snd = ScanSounds.Resolve(item.Primary); // live: the user's per-node pick
             if (snd == null) return;
 
-            var c = overlay.Cursor.Position;
-            var p = item.Position;
-            float dx = p.x - c.x, dz = p.z - c.z;
-            float dist = Mathf.Sqrt(dx * dx + dz * dz);
-            float fp = item.Footprint;
-            float refDist = Int("ref_distance", 10) * Geo.MetresPerFoot;
-            float panWidth = PanWidthFeet * Geo.MetresPerFoot;
-
-            // Volume: within the footprint → max; outside → from the nearest surface (closest-point).
-            float edge = Mathf.Max(0f, dist - fp);
-            float vol = Mathf.Clamp(refDist / (refDist + edge), MinVol, 1f) * EffectiveVolume;
-            // Pan: lateral offset up close, bearing farther out; centred when within the footprint.
-            float pan = dist > fp ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
-
-            AudioEngines.Active.PlayOneShot(snd, Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"), p, vol, pan);
+            // Positioned at the nearest point on the item's actual shape (a wall reads along its length).
+            PlayAtNearest(snd, Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"), item, overlay.Cursor.Position);
         }
 
         // gap = clamp(K/count, gap_min, gap_max): spacious for a few, compressing toward the floor as the

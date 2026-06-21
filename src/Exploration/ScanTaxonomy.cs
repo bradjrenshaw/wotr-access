@@ -45,6 +45,10 @@ namespace WrathAccess.Exploration
         public const string SearchPoints = "searchpoints";
         public const string Traps = "traps";
         public const string Mechanisms = "mechanisms";
+        public const string Hazards = "hazards";
+        public const string HazardsSpell = "hazards.spell";
+        public const string HazardsTerrain = "hazards.terrain";
+        public const string BuffZones = "buffzones";
         public const string Scenery = "scenery";
         public const string Poi = "poi";
 
@@ -127,6 +131,14 @@ namespace WrathAccess.Exploration
             Cat("searchpoints", "Search points", ScanClass.Object, "unknown");
             Cat("traps", "Traps", ScanClass.Object, "trap");
             Cat("mechanisms", "Mechanisms", ScanClass.Object, "mechanism");
+
+            // Live area effects (Game.Instance.State.AreaEffects): harmful zones (spell AoEs like stinking
+            // cloud, and placed terrain effects) vs beneficial buff zones. See ProxyAreaEffect for the split.
+            Cat("hazards", "Hazards", ScanClass.Object, "hazard-zone",
+                Sub("spell", "Spell effects", "hazard-zone"),
+                Sub("terrain", "Terrain", "hazard-zone"));
+            Cat("buffzones", "Buff zones", ScanClass.Object, "buff-zone");
+
             Cat("scenery", "Scenery", ScanClass.Object, Silent);
             Cat("poi", "Points of interest", ScanClass.Marker, Silent);
         }

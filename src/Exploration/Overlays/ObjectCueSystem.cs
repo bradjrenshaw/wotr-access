@@ -44,14 +44,12 @@ namespace WrathAccess.Exploration.Overlays
             foreach (var it in WorldModel.Items)
             {
                 if (!it.IsVisible) continue;
+                if (ScanSounds.Resolve(it.Primary) == null && !it.IsUnit) continue;
                 var p = it.Position;
-                float dx = p.x - c.x, dz = p.z - c.z;
-                float dist = Mathf.Sqrt(dx * dx + dz * dz);
-                float fp = it.Footprint;
-                if ((ScanSounds.Resolve(it.Primary) != null || it.IsUnit) && dist <= fp && dist < best && Mathf.Abs(p.y - c.y) <= LevelGap)
-                {
-                    best = dist; inside = it;
-                }
+                if (Mathf.Abs(p.y - c.y) > LevelGap) continue; // another level
+                if (!it.Contains(c)) continue;                 // cursor inside the actual footprint shape
+                float dx = p.x - c.x, dz = p.z - c.z, d = dx * dx + dz * dz; // nearest CENTRE wins ties
+                if (d < best) { best = d; inside = it; }
             }
 
             if (!_baselined) { _inside = inside; _spoken = inside; _baselined = true; return; }

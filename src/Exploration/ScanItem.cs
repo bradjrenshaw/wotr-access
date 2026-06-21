@@ -57,6 +57,23 @@ namespace WrathAccess.Exploration
         /// <summary>Distance from <paramref name="from"/> to the nearest part of the thing (not its centre).</summary>
         public float DistanceTo(Vector3 from) => Geo.Distance(from, Bounds.NearestPoint(from));
 
+        /// <summary>The closest point of the thing to <paramref name="from"/> (XZ), NON-ALLOCATING — for the
+        /// per-frame lenses (sonar, object cue, tile grid, cursor target), which run over every item each
+        /// frame and so must not build a <see cref="Bounds"/> object. Default: a circle of
+        /// <see cref="Footprint"/> about the centre (the centre when 0), the same geometry the spoken
+        /// <see cref="Bounds"/> uses. Shaped things (area effects) override this with their real footprint.
+        /// Inside the footprint → the reference point itself (distance 0), exactly like a circle.</summary>
+        public virtual Vector3 NearestPoint(Vector3 from) => ScanBounds.NearestOnCircleXZ(Position, Footprint, from);
+
+        /// <summary>Is <paramref name="point"/> inside this thing's footprint (XZ)? — "the cursor is on it",
+        /// using the real shape (a wall's rectangle, not a circle).</summary>
+        public bool Contains(Vector3 point)
+        {
+            var np = NearestPoint(point);
+            float dx = np.x - point.x, dz = np.z - point.z;
+            return dx * dx + dz * dz < 1e-4f;
+        }
+
         /// <summary>
         /// The PRIMARY <see cref="ScanTaxonomy"/> node — the single, state-aware role this thing sounds as
         /// right now (a dead lootable enemy is primary containers.corpse; an exit door flips doors→exits

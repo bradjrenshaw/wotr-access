@@ -22,6 +22,9 @@ namespace WrathAccess.Exploration
 
         public static ScanBounds Point(Vector3 p) => new PointBounds(p);
         public static ScanBounds Circle(Vector3 c, float radius) => new CircleBounds(c, radius);
+        /// <summary>A FILLED convex polygon (XZ) — e.g. a Wall area effect's rotated rectangle. Inside →
+        /// distance 0 (like a circle); outside → nearest point on the perimeter. Corners in order.</summary>
+        public static ScanBounds Rect(Vector3 center, IList<Vector3> corners) => new RectBounds(center, corners);
         /// <summary>A connected chain of ≥1 points; the closest point lies on its consecutive segments.</summary>
         public static ScanBounds Polyline(Vector3 center, IList<Vector3> points) => new PolylineBounds(center, points);
         /// <summary>DISJOINT segments as flat endpoint pairs [a0,b0,a1,b1,…] — e.g. a doorway's actual
@@ -41,6 +44,57 @@ namespace WrathAccess.Exploration
             return new Vector3(a.x + abx * t, Mathf.Lerp(a.y, b.y, t), a.z + abz * t);
         }
 
+        // --- non-allocating geometry, shared by these bounds (the per-announce spoken path) AND
+        // ScanItem.NearestPoint (the per-frame lenses), so a shape's "closest point" math has one source ---
+
+        /// <summary>Closest point on a circle of radius <paramref name="r"/> about <paramref name="center"/>
+        /// to <paramref name="from"/> (XZ); inside (or r≤0) → the reference point (distance 0).</summary>
+        public static Vector3 NearestOnCircleXZ(Vector3 center, float r, Vector3 from)
+        {
+            r = Mathf.Max(0f, r);
+            float dx = from.x - center.x, dz = from.z - center.z;
+            float d = Mathf.Sqrt(dx * dx + dz * dz);
+            if (d <= r || d < 1e-4f) return new Vector3(from.x, center.y, from.z);
+            float t = r / d;
+            return new Vector3(center.x + dx * t, center.y, center.z + dz * t);
+        }
+
+        /// <summary>Closest point of a FILLED convex quad (XZ) to <paramref name="from"/>: inside → the
+        /// reference point (distance 0); outside → the nearest perimeter edge. Corners in order.</summary>
+        public static Vector3 NearestInQuadXZ(Vector3 from, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            if (InConvexXZ(from, a, b, c, d)) return new Vector3(from.x, a.y, from.z);
+            Vector3 best = a; float bestD = float.MaxValue;
+            Consider(from, a, b, ref best, ref bestD);
+            Consider(from, b, c, ref best, ref bestD);
+            Consider(from, c, d, ref best, ref bestD);
+            Consider(from, d, a, ref best, ref bestD);
+            return best;
+        }
+
+        private static void Consider(Vector3 from, Vector3 a, Vector3 b, ref Vector3 best, ref float bestD)
+        {
+            var p = ClosestOnSegment(from, a, b);
+            float dx = from.x - p.x, dz = from.z - p.z;
+            float d = dx * dx + dz * dz;
+            if (d < bestD) { bestD = d; best = p; }
+        }
+
+        private static bool InConvexXZ(Vector3 p, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+        {
+            bool pos = false, neg = false;
+            Side(p, a, b, ref pos, ref neg); if (pos && neg) return false;
+            Side(p, b, c, ref pos, ref neg); if (pos && neg) return false;
+            Side(p, c, d, ref pos, ref neg); if (pos && neg) return false;
+            Side(p, d, a, ref pos, ref neg); return !(pos && neg);
+        }
+
+        private static void Side(Vector3 p, Vector3 a, Vector3 b, ref bool pos, ref bool neg)
+        {
+            float cross = (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
+            if (cross > 1e-5f) pos = true; else if (cross < -1e-5f) neg = true;
+        }
+
         private sealed class PointBounds : ScanBounds
         {
             private readonly Vector3 _p;
@@ -55,14 +109,26 @@ namespace WrathAccess.Exploration
             private readonly float _r;
             public CircleBounds(Vector3 c, float r) { _c = c; _r = Mathf.Max(0f, r); }
             public override Vector3 Center => _c;
-            public override Vector3 NearestPoint(Vector3 from)
+            public override Vector3 NearestPoint(Vector3 from) => NearestOnCircleXZ(_c, _r, from);
+        }
+
+        // A filled convex polygon on XZ (the Wall area effect's rotated rectangle). Inside → the reference
+        // point itself (distance 0, "you're in it"), matching how a circle reads; outside → nearest edge.
+        private sealed class RectBounds : ScanBounds
+        {
+            private readonly Vector3 _center;
+            private readonly Vector3[] _c; // ordered corners (XZ footprint)
+            public RectBounds(Vector3 center, IList<Vector3> corners)
             {
-                float dx = from.x - _c.x, dz = from.z - _c.z;
-                float d = Mathf.Sqrt(dx * dx + dz * dz);
-                if (d <= _r || d < 1e-4f) return new Vector3(from.x, _c.y, from.z); // inside the footprint → at it
-                float t = _r / d;
-                return new Vector3(_c.x + dx * t, _c.y, _c.z + dz * t);
+                _center = center;
+                _c = corners != null && corners.Count >= 3 ? new Vector3[corners.Count] : null;
+                for (int i = 0; _c != null && i < corners.Count; i++) _c[i] = corners[i];
             }
+            public override Vector3 Center => _center;
+            // Area-effect walls are always 4-corner rectangles → the shared non-allocating quad helper
+            // (one source with the per-frame path); a degenerate corner set falls back to the centre.
+            public override Vector3 NearestPoint(Vector3 from)
+                => _c != null && _c.Length == 4 ? NearestInQuadXZ(from, _c[0], _c[1], _c[2], _c[3]) : _center;
         }
 
         private sealed class PolylineBounds : ScanBounds

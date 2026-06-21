@@ -290,6 +290,8 @@
   "hudmenu.stop": "Stop",
   "hudmenu.hold": "Hold position",
   "hudmenu.turn_based": "Turn-based mode",
+  "areaeffect.hazard": "Hazard",
+  "areaeffect.buffzone": "Buff zone",
   "rest.making_camp": "Making camp",
   "rest.no_spot": "No room to make camp here",
   "screen.rest": "Camp",

@@ -44,6 +44,15 @@ namespace WrathAccess.Exploration
             _present.Clear();
             foreach (var u in state.Units) { if (!_items.ContainsKey(u)) Ensure(u, () => new ProxyUnit(u)); _present.Add(u); }
             foreach (var o in state.MapObjects) { if (!_items.ContainsKey(o)) Ensure(o, () => new ProxyMapObject(o)); _present.Add(o); }
+            // Area effects: only PLACED ground zones (spell AoEs, terrain hazards). Skip on-unit auras
+            // (Aura of Courage, etc.) — they follow a unit and there can be hundreds, so they're noise as
+            // "zones"; the unit carries them (inspect the unit). View.OnUnit is the live flag (from m_OnUnit).
+            foreach (var ae in state.AreaEffects)
+            {
+                if (ae.View != null && ae.View.OnUnit) continue;
+                if (!_items.ContainsKey(ae)) Ensure(ae, () => new ProxyAreaEffect(ae));
+                _present.Add(ae);
+            }
             foreach (var m in LocalMapModel.Markers)
             {
                 if (m == null) continue;

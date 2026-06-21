@@ -24,9 +24,9 @@ namespace WrathAccess.Exploration
                 if (!ScanTaxonomy.IsInteractive(it.Primary) && !it.IsUnit) continue; // units + interactables only
                 var p = it.Position;
                 if (Mathf.Abs(p.y - c.y) > LevelGap) continue;
-                float dx = p.x - c.x, dz = p.z - c.z, sqr = dx * dx + dz * dz;
-                float fp = it.Footprint;
-                if (sqr <= fp * fp && sqr < bestSqr) { bestSqr = sqr; best = it; }
+                if (!it.Contains(c)) continue;                        // cursor inside the actual footprint shape
+                float dx = p.x - c.x, dz = p.z - c.z, sqr = dx * dx + dz * dz; // nearest CENTRE wins ties
+                if (sqr < bestSqr) { bestSqr = sqr; best = it; }
             }
             return best;
         }

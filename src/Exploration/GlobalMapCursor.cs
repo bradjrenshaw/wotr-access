@@ -21,7 +21,7 @@ namespace WrathAccess.Exploration
     /// </summary>
     internal static class GlobalMapCursor
     {
-        private const float SnapRadius = 8f; // "on" / interact / cue radius around a point (world units)
+        private const float Padding = 0.4f; // a little extra reach past each point's footprint so it's easy to land on
 
         private static Vector3? _pos;
         private static GlobalMapPointView _inside; // the point the cursor is on (for the enter/leave cue)
@@ -64,7 +64,7 @@ namespace WrathAccess.Exploration
             MoveSlot("worldmap.cursor", "primary", dt, _primaryTiled, ref continuous, ref tiled);
             MoveSlot("worldmap.secondary", "secondary", dt, _secondaryTiled, ref continuous, ref tiled);
 
-            var inside = NearestWithin(SnapRadius);
+            var inside = NearestWithin();
 
             // Object cue: same wavs + shared volume as the in-area ObjectCueSystem. Fires on a change of the
             // point we're inside — enter when arriving on one (incl. a discrete tiled jump), leave to none.
@@ -135,7 +135,7 @@ namespace WrathAccess.Exploration
             var p = _pos.Value;
             _pos = new Vector3(Snap(p.x, cell) + dx * cell, 0f, Snap(p.z, cell) + dz * cell);
 
-            var on = NearestWithin(SnapRadius);
+            var on = NearestWithin();
             if (on != null) { Tts.Speak(GlobalMapActions.InPlace(on)); _spoken = on; }
             else { Tts.Speak(GlobalMapActions.PositionAt(Position)); _spoken = null; }
         }
@@ -166,7 +166,7 @@ namespace WrathAccess.Exploration
         // K: read what the cursor is on (manual readout).
         public static void Announce()
         {
-            var p = NearestWithin(SnapRadius);
+            var p = NearestWithin();
             if (p != null) Tts.Speak(GlobalMapActions.InPlace(p));
             else Tts.Speak(Loc.T("worldmap.cursor_empty"));
         }
@@ -175,7 +175,7 @@ namespace WrathAccess.Exploration
         // idle readout so the next Tick doesn't repeat it.
         private static void Settle()
         {
-            var p = NearestWithin(SnapRadius);
+            var p = NearestWithin();
             _inside = p; _spoken = p;
             if (p != null) Tts.Speak(GlobalMapActions.InPlace(p));
             else Tts.Speak(Loc.T("worldmap.cursor_empty"));
@@ -191,23 +191,43 @@ namespace WrathAccess.Exploration
             // Mid-journey pause (the game's move-helper Continue): Enter resumes travel, like the game's own
             // primary travel input. Otherwise act on the point under the cursor.
             if (GlobalMapModel.TravelPaused) { GlobalMapActions.ResumeTravel(); return; }
-            var p = NearestWithin(SnapRadius);
+            var p = NearestWithin();
             if (p != null) GlobalMapActions.Go(p);
             else Tts.Speak(Loc.T("worldmap.cursor_empty"));
         }
 
-        // The nearest point within `radius` of the cursor, or null.
-        private static GlobalMapPointView NearestWithin(float radius)
+        // The nearest point whose OWN footprint contains the cursor, or null. Each point uses its real
+        // clickable radius (below) rather than one fixed circle — a fixed 8-unit radius was far larger than a
+        // location's icon, so the cursor read "on" many overlapping points and exact selection was hard.
+        private static GlobalMapPointView NearestWithin()
         {
             GlobalMapPointView best = null;
-            float bd = radius;
+            float bd = float.MaxValue;
             var c = Position;
             foreach (var pt in GlobalMapModel.Locations.Concat(GlobalMapModel.Junctions))
             {
+                if (pt == null) continue;
                 float d = Geo.Distance(c, pt.transform.position);
-                if (d <= bd) { bd = d; best = pt; }
+                if (d <= PointRadius(pt) && d < bd) { bd = d; best = pt; }
             }
             return best;
+        }
+
+        // A point's real clickable radius: the SphereCollider the game gives it (GlobalMapPointView.OnEnable —
+        // a LOCATION's is its icon's half-width `renderer.bounds.extents.x`; a WAYPOINT's is 0.5), read live
+        // from the collider's world bounds (scale-adjusted) so it matches the game's actual click target,
+        // plus a small <see cref="Padding"/> so it's comfortable to land on. A modest fallback covers the rare
+        // frame before the collider is built.
+        private static float PointRadius(GlobalMapPointView pt)
+        {
+            var col = pt.GetComponent<Collider>();
+            if (col != null)
+            {
+                var e = col.bounds.extents;
+                float r = Mathf.Max(e.x, e.z);
+                if (r > 0.01f) return r + Padding;
+            }
+            return 1.5f;
         }
     }
 }

@@ -1,123 +1,80 @@
-using Kingmaker;
-using Kingmaker.Controllers.Clicks.Handlers; // ClickWithSelectedAbilityHandler
-using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UI.MVVM._VM.ActionBar; // ActionBarSlotVM
-using Kingmaker.UI.UnitSettings; // MechanicActionBarSlot subtypes
-using Kingmaker.UnitLogic.Abilities; // AbilityData
-using Kingmaker.UnitLogic.Abilities.Blueprints; // AbilityTargetAnchor
-using Kingmaker.UnitLogic.Commands; // UnitUseAbility
-using UnityEngine;
 
 namespace WrathAccess.Exploration
 {
     /// <summary>
-    /// Accessible ability targeting — reuses the game's own aim flow rather than a bespoke screen. Activating
-    /// a targeted ability puts the game into <c>PointerMode.Ability</c> via
-    /// <see cref="ClickWithSelectedAbilityHandler.SetAbility"/>; the live world cursor then lets the player
-    /// look around the battlefield, and the existing act-on-target inputs commit the cast while aiming:
-    /// <b>Enter</b> casts at the cursor (unit under it, else the point), <b>I</b> casts at the selected
-    /// scanner item, <b>Backspace</b>/<b>Escape</b> cancel. The commit goes through the handler's
-    /// <c>OnClick</c>, so all of the game's validation, target restrictions, refusal messaging, and the cast
-    /// command are reused.
+    /// Coordinator for accessible targeting. It holds the registered <see cref="ITargetingMode"/>s and owns
+    /// the shared input plumbing: while any mode is aiming (<see cref="Aiming"/>), the scanner's
+    /// act-on-target keys commit/cancel through whichever one is live (Enter at the cursor, I on the scanner
+    /// item, Backspace/Escape to cancel). Activation is type-specific (an action-bar slot vs the HUD Rest
+    /// button), so each kind gets its own entry point; everything after that is shared — which is exactly what
+    /// lets the rest camp reuse the same aim/commit/cancel flow as a spell.
     ///
-    /// Activation branches by ability kind: self/no-target casts immediately; a targeted spell/ability
-    /// enters aim; a targeted activatable (e.g. Saddle Up) flips on and aims its <c>SelectTargetAbility</c>
-    /// (which is what stops the activatable controller from reverting it); a plain toggle just flips.
+    /// To add a new targeting kind: implement <see cref="ITargetingMode"/>, add an instance to
+    /// <see cref="Modes"/>, and (if it needs a bespoke entry) add an activation method here.
     /// </summary>
     internal static class Targeting
     {
-        private static ClickWithSelectedAbilityHandler Handler => Game.Instance?.SelectedAbilityHandler;
+        private static readonly AbilityTargeting Ability = new AbilityTargeting();
+        private static readonly RestTargeting Rest = new RestTargeting();
 
-        /// <summary>True while an ability is aimed and waiting for a target (any caster — ours or the game's).</summary>
-        public static bool Aiming => Handler != null && Handler.SelectedAbility != null;
+        // Registry. Order is the resolution priority on the (rare, transient) chance two report active at once;
+        // ability first, since arming it replaces any other pointer mode anyway.
+        private static readonly ITargetingMode[] Modes = { Ability, Rest };
 
-        // ---- activation (from the action bar) ----
+        /// <summary>True while some mode is aiming, so the act-on-target keys should commit/cancel instead of
+        /// doing their normal job.</summary>
+        public static bool Aiming => Current != null;
 
-        public static void Activate(ActionBarSlotVM vm)
+        private static ITargetingMode Current
         {
-            var slot = vm?.MechanicActionBarSlot;
-            if (slot == null) return;
-
-            // Activatable toggle: just flip it. The game's ActivatableAbility.SetIsOn ENTERS AIM ITSELF for a
-            // targeted toggle (Saddle Up) — it calls SelectedAbilityHandler.SetAbility(SelectTargetAbility.Data)
-            // when IsWaitingForTarget. So we must NOT call SetAbility too: a second SetAbility with the same
-            // ability toggles aim straight back off (that was the "targeting → off" bug). A plain toggle just
-            // flips; the slot's on/off watcher announces the result (incl. "targeting").
-            if (slot is MechanicActionBarSlotActivableAbility)
+            get
             {
-                vm.OnMainClick();
-                return;
+                foreach (var m in Modes)
+                    if (m.Active) return m;
+                return null;
             }
-
-            var ability = AbilityOf(slot);
-            if (ability == null) { vm.OnMainClick(); return; } // items/unknown kinds: fall back for now
-
-            // Mirror MechanicActionBarSlotAbility.OnClick: a regular ability only aims/casts when it's actually
-            // castable now. Otherwise route through OnMainClick — which plays the can't-use sound and raises
-            // the game's reason (spoken by WarningReader) — instead of aiming/issuing a command the game won't
-            // run (a dead, piling-up queue, e.g. Charge with no valid charge).
-            if (!slot.IsPossibleActive()) { vm.OnMainClick(); return; }
-
-            if (ability.TargetAnchor == AbilityTargetAnchor.Owner) { CastOnSelf(ability); return; } // self/no target
-            Begin(ability, slot.GetTitle()); // targeted: enter aim; player picks via cursor (Enter) / scanner (I)
         }
 
-        private static AbilityData AbilityOf(MechanicActionBarSlot slot)
-        {
-            if (slot is MechanicActionBarSlotAbility a) return a.Ability;
-            if (slot is MechanicActionBarSlotSpell s) return s.Spell;
-            return null;
-        }
+        // ---- activation (type-specific entry points) ----
 
-        private static void Begin(AbilityData ability, string announceName)
-        {
-            Handler?.SetAbility(ability);
-            if (announceName != null) Tts.Speak(Loc.T("target.begin", new { name = announceName }), interrupt: true);
-        }
+        /// <summary>Activate an action-bar slot: self-cast / aim / toggle (see <see cref="AbilityTargeting"/>).</summary>
+        public static void Activate(ActionBarSlotVM vm) => Ability.Activate(vm);
 
-        private static void CastOnSelf(AbilityData ability)
-        {
-            var caster = ability?.Caster?.Unit;
-            if (caster == null) return;
-            caster.Commands.Run(UnitUseAbility.CreateCastCommand(ability, caster)); // game's factory (matches OnClick)
-        }
+        /// <summary>Activate the HUD Rest button: enter rest aim if the game allows resting here.
+        /// <paramref name="name"/> is the game's localized Rest label, announced as the prompt.</summary>
+        public static void BeginRest(string name) => Rest.Begin(name);
 
-        // ---- target selection (while aiming) ----
+        // ---- commit / cancel (while aiming) ----
 
-        public static void Cancel()
-        {
-            if (!Aiming) return;
-            Game.Instance?.ClickEventsController?.ClearPointerMode(); // → DropAbility()
-            Tts.Speak(Loc.T("target.cancelled"), interrupt: true);
-        }
-
-        /// <summary>Enter: cast at the world cursor — the unit under it if any, else the cursor point.</summary>
+        /// <summary>Enter: commit at the world cursor — the unit under it if any, else the cursor point.</summary>
         public static void CommitAtCursor()
         {
-            if (!Aiming) return;
+            var m = Current;
+            if (m == null) return;
             if (!Cursor.Has) { Tts.Speak(Loc.T("scan.no_cursor"), interrupt: true); return; }
-            Commit(CursorTarget.Inside()?.TargetUnit, Cursor.Position.Value);
+            m.CommitAt(CursorTarget.Inside()?.TargetUnit, Cursor.Position.Value);
         }
 
-        /// <summary>I: cast at the selected scanner item — its unit if entity-backed, else its point.</summary>
+        /// <summary>I: commit at the selected scanner item — its unit if entity-backed, else its point.</summary>
         public static void CommitOn(ScanItem item)
         {
-            if (!Aiming) return;
+            var m = Current;
+            if (m == null) return;
             if (item == null) { Tts.Speak(Loc.T("scan.no_item"), interrupt: true); return; }
-            Commit(item.TargetUnit, item.Position);
+            m.CommitAt(item.TargetUnit, item.Position);
         }
 
-        private static void Commit(UnitEntityData unit, Vector3 point)
+        /// <summary>Backspace/Escape: cancel the active aim.</summary>
+        public static void Cancel() => Current?.Cancel();
+
+        // ---- per-frame ----
+
+        /// <summary>Per-frame upkeep for every mode (e.g. the rest camp's deferred party interaction).</summary>
+        public static void Tick()
         {
-            var ability = Handler != null ? Handler.SelectedAbility : null;
-            if (ability == null) return;
-            var go = unit != null && unit.View != null ? unit.View.gameObject : null;
-            // Let the game validate + cast (OnClick: GetTarget, restrictions incl. mount delegation, the cast
-            // command, pointer-mode clear). On refusal it raises IWarningNotificationUIHandler with the exact
-            // reason, which WarningReader speaks — so we don't second-guess it. OnClick returns true only if
-            // it actually issued the cast.
-            if (Handler.OnClick(go, point, 0))
-                Tts.Speak(unit != null ? Loc.T("target.cast_on", new { name = unit.CharacterName }) : Loc.T("target.cast"), interrupt: true);
+            foreach (var m in Modes)
+                m.Tick();
         }
     }
 }

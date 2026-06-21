@@ -383,21 +383,25 @@ namespace WrathAccess.Screens
                 => menu.Add(new ProxyActionButton(() => Loc.T(key), enabled ?? AlwaysOn,
                     () => { MenuClick(); call(); }, suppressActivateSound: true, actionVerb: verb));
 
+            // Toggles are real checkboxes (ProxyBoolToggle): the on/off rides a ValueAnnouncement (a status,
+            // not baked into the label) and re-announces on press — like every other toggle in the mod. It
+            // plays its own toggle sound, so no MenuClick here.
             void Toggle(string key, System.Func<bool> on, System.Action call, System.Func<bool> enabled = null)
-                => menu.Add(new ProxyActionButton(
-                    () => Loc.T(key) + ", " + Message.Localized("ui", on() ? "value.on" : "value.off").Resolve(),
-                    enabled ?? AlwaysOn, () => { MenuClick(); call(); }, suppressActivateSound: true, actionVerb: "toggle"));
+                => menu.Add(new ProxyBoolToggle(Loc.T(key), on, call, enabled));
 
-            // Pause toggles pause; it's hidden in turn-based combat (the game shows it only when
+            // Pause is a toggle (paused / running); hidden in turn-based combat (the game shows it only when
             // !IsPauseButtonEnable, verified live) → grey it then.
-            Act("hudmenu.pause", () => IngameMenu()?.Pause(), () => !(IngameMenu()?.IsPauseButtonEnable.Value ?? false), "toggle");
+            Toggle("hudmenu.pause", () => Game.Instance.IsPaused, () => IngameMenu()?.Pause(),
+                () => !(IngameMenu()?.IsPauseButtonEnable.Value ?? false));
             Toggle("hudmenu.hold", () => IngameMenu()?.IsHoldEnabled.Value ?? false, () => IngameMenu()?.HandleHoldStateSwitched());
             Toggle("hudmenu.stop", () => IngameMenu()?.IsStopEnabled.Value ?? false, () => IngameMenu()?.HandleStopStateSwitched());
             Act("hudmenu.select_all", () => IngameMenu()?.SelectAll());
             Act("hudmenu.formation", () => IngameMenu()?.OpenFormation(), verb: "open");
-            // Rest = our accessible one-action rest (RestAction), labelled with the game's own Rest text.
-            menu.Add(new ProxyActionButton(() => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText),
-                AlwaysOn, () => { MenuClick(); RestAction.TryRest(); }, suppressActivateSound: true));
+            // Rest = a targeted action (like an action-bar slot): Enter arms the game's rest-marker mode, then
+            // the cursor aims + Enter places the camp. Labelled with the game's own Rest text.
+            System.Func<string> restName = () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText);
+            menu.Add(new ProxyActionButton(restName,
+                AlwaysOn, () => { MenuClick(); WrathAccess.Exploration.Targeting.BeginRest(restName()); }, suppressActivateSound: true));
             Act("hudmenu.skip_time", () => IngameMenu()?.SkipTime());
             Toggle("hudmenu.turn_based", () => IngameMenu()?.IsTurnBasedEnabled.Value ?? false, () => IngameMenu()?.SwitchTBM(),
                 () => !(IngameMenu()?.IsTurnBasedLocked.Value ?? false));

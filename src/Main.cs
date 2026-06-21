@@ -173,7 +173,7 @@ namespace WrathAccess
             WrathAccess.Exploration.CombatMode.TickTurn(); // announce whose turn it is in turn-based combat
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
             WrathAccess.Exploration.RoomMap.Tick(); // (re)build the room segmentation on area-part change
-            WrathAccess.Exploration.RestAction.Tick(); // finish a pending rest: interact with the freshly spawned camp
+            WrathAccess.Exploration.Targeting.Tick(); // per-frame upkeep for targeting modes (e.g. finish a pending rest)
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,

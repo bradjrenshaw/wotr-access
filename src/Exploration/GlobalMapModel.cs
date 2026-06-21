@@ -27,13 +27,24 @@ namespace WrathAccess.Exploration
             }
         }
 
-        /// <summary>Travel is paused MID-JOURNEY — the game stopped the party (a discovery / event) and shows
-        /// its move-helper Continue button. Enter on the cursor resumes via <see cref="GlobalMapActions.ResumeTravel"/>.</summary>
+        /// <summary>The world map is in its PURE interactive mode — the global map is the CURRENT game mode,
+        /// not sitting under a rest / dialog / book-event / battle overlay. (Those keep GlobalMap in the mode
+        /// stack — <c>IsGlobalMap</c> stays true — but aren't the current mode.) The movement cursor and the
+        /// travel-Continue must only act here: under an overlay the overlay owns input, and "resuming travel"
+        /// just restarts the journey that re-fires the event → the infinite loop.</summary>
+        public static bool Interactive
+            => Game.Instance != null && Game.Instance.CurrentMode == Kingmaker.GameModes.GameModeType.GlobalMap;
+
+        /// <summary>Travel is paused MID-JOURNEY awaiting a Continue — the game stopped the party (a discovery
+        /// / event) and the next move resumes it. Enter on the cursor resumes via
+        /// <see cref="GlobalMapActions.ResumeTravel"/>. Gated on <see cref="Interactive"/>: travel is also
+        /// "paused" during a rest / book event, but the answer there is the overlay, not Continue.</summary>
         public static bool TravelPaused
         {
             get
             {
-                var c = Game.Instance != null ? Game.Instance.GlobalMapController : null;
+                if (!Interactive) return false;
+                var c = Game.Instance.GlobalMapController;
                 return c != null && c.TravelsPaused && c.SelectedTraveler != null && c.SelectedTraveler.TravelData != null;
             }
         }

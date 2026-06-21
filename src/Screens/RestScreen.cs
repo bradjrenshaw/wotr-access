@@ -45,7 +45,12 @@ namespace WrathAccess.Screens
         private static RestVM Vm()
         {
             var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
-            return rc?.InGameVM?.StaticPartVM?.RestContextVM?.RestVM?.Value;
+            if (rc == null) return null;
+            // In-area rest goes through RestContextVM; the WORLD-MAP fatigue rest (travel → fatigue popup →
+            // accept → RestController.Start) lives on GlobalMapVM.RestVM instead. Same RestVM type, so the
+            // same accordion screen drives it — we just have to look in both places.
+            return rc.InGameVM?.StaticPartVM?.RestContextVM?.RestVM?.Value
+                ?? rc.GlobalMapVM?.RestVM?.Value;
         }
 
         public override bool IsActive()

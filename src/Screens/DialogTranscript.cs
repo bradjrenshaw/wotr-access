@@ -1,5 +1,7 @@
 using System.Collections.Generic;
-using Kingmaker.UI.MVVM._VM.Dialog.Dialog; // AnswerVM
+using Kingmaker;                            // Game
+using Kingmaker.UI.MVVM._VM.Dialog;         // DialogContextVM
+using Kingmaker.UI.MVVM._VM.Dialog.Dialog;  // AnswerVM
 using WrathAccess.UI;
 using WrathAccess.UI.Proxies;              // DialogAnswerButton
 
@@ -15,6 +17,17 @@ namespace WrathAccess.Screens
     /// </summary>
     internal static class DialogTranscript
     {
+        /// <summary>The active dialog context — the SAME <see cref="DialogContextVM"/> (holding DialogVM /
+        /// BookEventVM / InterchapterVM) whether the conversation runs in an area (on <c>InGameVM</c>) or on
+        /// the world map (on <c>GlobalMapVM</c>, which carries its own context). The dialogue + book-event
+        /// screens read from whichever is live, so they work in both places with no other change.</summary>
+        public static DialogContextVM Context()
+        {
+            var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
+            if (rc == null) return null;
+            return rc.InGameVM?.StaticPartVM?.DialogContextVM ?? rc.GlobalMapVM?.DialogContextVM;
+        }
+
         public static FlowSheet Build(IList<string> lines, UIElement trailingRow,
             IEnumerable<AnswerVM> answers, out UIElement focusRow)
         {

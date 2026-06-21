@@ -50,7 +50,7 @@ namespace WrathAccess.Exploration
             // world map and no location panel is open — same as the in-area cursor lives under an overlay.
             // Otherwise pause (keep _pos), re-baselining the cue so it doesn't fire spuriously on resume.
             if (!OverlayManager.Active || OverlayManager.CurrentScope != OverlayScope.WorldMap
-                || WrathAccess.Screens.GlobalMapScreen.PanelActive)
+                || WrathAccess.Screens.GlobalMapScreen.PanelActive || !GlobalMapModel.Interactive)
             {
                 _inside = null; _spoken = null; _baselined = false;
                 _primaryTiled.Holding = false; _secondaryTiled.Holding = false;
@@ -183,6 +183,11 @@ namespace WrathAccess.Exploration
 
         public static void Interact()
         {
+            // Only act in the pure global-map mode. Under a rest / dialog / book-event / battle overlay the
+            // overlay owns input — acting here (Go → HandleClick) restarts the journey that re-fires the
+            // event, the infinite loop. (Travel "pauses" under those overlays too, so we can't rely on
+            // TravelPaused alone.)
+            if (!GlobalMapModel.Interactive) return;
             // Mid-journey pause (the game's move-helper Continue): Enter resumes travel, like the game's own
             // primary travel input. Otherwise act on the point under the cursor.
             if (GlobalMapModel.TravelPaused) { GlobalMapActions.ResumeTravel(); return; }

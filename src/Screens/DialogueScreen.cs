@@ -55,10 +55,8 @@ namespace WrathAccess.Screens
         private TextElement _cueRow;
 
         private static DialogVM Vm()
-        {
-            var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
-            return rc?.InGameVM?.StaticPartVM?.DialogContextVM?.DialogVM?.Value;
-        }
+            // In-area OR world-map context (the global map carries its own DialogContextVM) — see DialogTranscript.Context.
+            => DialogTranscript.Context()?.DialogVM?.Value;
 
         // True while this cue's delivery is gated behind a cutscene (its voiceover/text appear only when
         // Dialog mode resumes). If the field can't be read, treat as not-scheduled (announce on Dialog mode).

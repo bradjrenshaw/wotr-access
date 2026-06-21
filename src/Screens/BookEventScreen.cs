@@ -34,8 +34,9 @@ namespace WrathAccess.Screens
 
         private static BookEventVM Vm()
         {
-            var ctx = Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.DialogContextVM;
-            // Interchapter/epilogue is a BookEventVM subclass in its own slot; treat it the same.
+            // In-area OR world-map context (the global map carries its own DialogContextVM) — see
+            // DialogTranscript.Context. Interchapter/epilogue is a BookEventVM subclass in its own slot.
+            var ctx = DialogTranscript.Context();
             return ctx?.BookEventVM?.Value ?? ctx?.InterchapterVM?.Value;
         }
 

@@ -280,6 +280,10 @@ namespace WrathAccess.Exploration
             }
         }
 
+        /// <summary>The review cursor's current target (the reviewed scan item), for consumers outside the
+        /// scanner — e.g. the review-unit <see cref="WrathAccess.Buffers.Buffer"/>. Null when nothing's selected.</summary>
+        internal static ScanItem Reviewed => Selected;
+
         private static void StepCategory(int dir)
         {
             _selectionOverride = null;

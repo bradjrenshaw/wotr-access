@@ -522,6 +522,20 @@ namespace WrathAccess
             InputManager.Register("scan.debugRooms", "Read room map stats (debug)", InputCategory.Exploration,
                 WrathAccess.Exploration.RoomMap.DebugSpeak).AddBinding(KeyCode.F8).Grouped("scanner");
 
+            // Buffers (review channels — see WrathAccess.Buffers): Alt+Left/Right cycle between buffers,
+            // Alt+Up/Down move through the current buffer's lines. Alt+arrows are otherwise unused; live in
+            // the Exploration category (in a game, exploring or HUD-focused). v1 = the selected-unit and
+            // review-unit buffers (name, HP, AC, then all buffs/debuffs).
+            InputManager.Register("buffer.bufferPrev", "Buffer: previous buffer", InputCategory.Exploration,
+                WrathAccess.Buffers.BufferControls.PrevBuffer).AddBinding(KeyCode.LeftArrow, alt: true).Repeating().Grouped("buffers");
+            InputManager.Register("buffer.bufferNext", "Buffer: next buffer", InputCategory.Exploration,
+                WrathAccess.Buffers.BufferControls.NextBuffer).AddBinding(KeyCode.RightArrow, alt: true).Repeating().Grouped("buffers");
+            InputManager.Register("buffer.itemPrev", "Buffer: previous line", InputCategory.Exploration,
+                WrathAccess.Buffers.BufferControls.PrevItem).AddBinding(KeyCode.UpArrow, alt: true).Repeating().Grouped("buffers");
+            InputManager.Register("buffer.itemNext", "Buffer: next line", InputCategory.Exploration,
+                WrathAccess.Buffers.BufferControls.NextItem).AddBinding(KeyCode.DownArrow, alt: true).Repeating().Grouped("buffers");
+            WrathAccess.Buffers.BufferManager.Instance.RegisterDefaults();
+
             // World-map scanner (InputCategory.WorldMap — isolated from the in-area scanner): a categorised,
             // nearest-first browse of the map's revealed points. Same physical keys as the in-area scanner,
             // but they only fire on the world-map screen, routed to the separate world-map systems.

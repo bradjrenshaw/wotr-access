@@ -142,9 +142,9 @@ namespace WrathAccess.Exploration.Overlays
                 audio.Add(new ChoiceSetting("engine", "Sound playback",
                     new System.Collections.Generic.List<Choice>
                     {
-                        new Choice("wwise", "Game audio engine (3D, occlusion-capable)", "audio.engine.wwise"),
                         new Choice("classic", "Classic (flat stereo panning)", "audio.engine.classic"),
-                    }, "wwise", "audio.engine"));
+                        new Choice("wwise", "Game audio engine (3D, occlusion-capable)", "audio.engine.wwise"),
+                    }, "classic", "audio.engine"));
             if (audio.GetByKey("listener") == null)
                 audio.Add(new ChoiceSetting("listener", "Game audio heard from",
                     new System.Collections.Generic.List<Choice>

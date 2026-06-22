@@ -347,12 +347,13 @@ namespace WrathAccess
             audio.Add(new WrathAccess.Settings.IntSetting("master_volume", "Master volume", 100, 0, 100, 5, "audio.master_volume"));
             WrathAccess.Settings.ModSettings.Root.Add(audio);
 
-            // Internal wizard state (hidden): the ids of the two speech configs the setup wizard created for
-            // positional events (a distinct enemy voice + ally voice), so a re-run reuses/re-tunes them
-            // instead of piling up duplicates.
+            // Internal wizard state (hidden): the ids of the three speech configs the setup wizard created for
+            // positional events (a distinct enemy voice + ally voice + sourceless/unitless voice), so a re-run
+            // reuses/re-tunes them instead of piling up duplicates.
             var wizard = new WrathAccess.Settings.CategorySetting("wizard", "Wizard", localizationKey: "category.wizard");
             wizard.Add(new WrathAccess.Settings.StringSetting("enemy_config", "Enemy event speech config", "", "wizard.enemy_config") { Hidden = true });
             wizard.Add(new WrathAccess.Settings.StringSetting("ally_config", "Ally event speech config", "", "wizard.ally_config") { Hidden = true });
+            wizard.Add(new WrathAccess.Settings.StringSetting("unitless_config", "Sourceless event speech config", "", "wizard.unitless_config") { Hidden = true });
             // First-run flag: set when the user dismisses the wizard; gates the launch auto-open below.
             wizard.Add(new WrathAccess.Settings.BoolSetting("completed", "Setup wizard shown", false, "wizard.completed") { Hidden = true });
             WrathAccess.Settings.ModSettings.Root.Add(wizard);

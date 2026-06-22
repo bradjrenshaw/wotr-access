@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Kingmaker.UI; // UISoundType
+using WrathAccess.Exploration; // ScanSounds, ScanTaxonomy (sonar include toggles)
 using WrathAccess.Settings;
 using WrathAccess.Speech;
 using WrathAccess.UI;
@@ -24,9 +25,10 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class SetupWizardScreen : WizardScreen
     {
-        private enum Step { Backend, HandlerSettings, Navigation, EventFeedback, EnemyVoice, AllyVoice }
+        private enum Step { Backend, HandlerSettings, Navigation, WallTones, Sonar, EventFeedback, EnemyVoice, AllyVoice, UnitlessVoice }
 
         private static bool s_open;
+        private static bool s_sonarInit;  // apply the sonar phase's recommended defaults once per wizard open
         private static Step s_step;
         private static object s_phase = new object();      // identity changes per navigation → shell rebuilds
         private static readonly object Session = new object(); // stable while open → IsActive + no spurious rebuild
@@ -36,7 +38,7 @@ namespace WrathAccess.Screens
         public override int Layer => 36;       // above the mod menu (35); a modal over the main menu
         public override bool Exclusive => true; // owns the keyboard while open
 
-        public static void Open() { s_open = true; s_step = Step.Backend; s_phase = new object(); }
+        public static void Open() { s_open = true; s_sonarInit = false; s_step = Step.Backend; s_phase = new object(); }
         private static void Close()
         {
             s_open = false;
@@ -57,9 +59,12 @@ namespace WrathAccess.Screens
                 case Step.Backend: return Loc.T("wizard.speech.backend_title");
                 case Step.HandlerSettings: return Loc.T("wizard.speech.settings_title", new { name = SelectedHandlerLabel() });
                 case Step.Navigation: return Loc.T("wizard.nav.title");
+                case Step.WallTones: return Loc.T("wizard.walltones.title");
+                case Step.Sonar: return Loc.T("wizard.sonar.title");
                 case Step.EventFeedback: return Loc.T("wizard.events.title");
                 case Step.EnemyVoice: return Loc.T("wizard.events.enemy_voice_title");
                 case Step.AllyVoice: return Loc.T("wizard.events.ally_voice_title");
+                case Step.UnitlessVoice: return Loc.T("wizard.events.unitless_voice_title");
                 default: return "";
             }
         }
@@ -114,9 +119,12 @@ namespace WrathAccess.Screens
                 case Step.Backend: BuildBackendStep(content); break;
                 case Step.HandlerSettings: BuildHandlerSettingsStep(content); break;
                 case Step.Navigation: BuildNavigationStep(content); break;
+                case Step.WallTones: BuildWallTonesStep(content); break;
+                case Step.Sonar: BuildSonarStep(content); break;
                 case Step.EventFeedback: BuildEventFeedbackStep(content); break;
                 case Step.EnemyVoice: BuildEnemyVoiceStep(content); break;
                 case Step.AllyVoice: BuildAllyVoiceStep(content); break;
+                case Step.UnitlessVoice: BuildUnitlessVoiceStep(content); break;
             }
         }
 
@@ -229,12 +237,83 @@ namespace WrathAccess.Screens
         private static void SetWorldMapTileSize(int miles)
             => ModSettings.GetSetting<IntSetting>("defaults.grid.worldmap_cell_size")?.Set(miles);
 
+        // ---- Step: wall tones (a simplified subset of the Exploration wall-tones settings) ----
+
+        // The real Default-overlay wall-tone settings, just the two that matter for a first pass: the enabled
+        // toggle and the range (the "distance" out to which a wall is sounded). Bound live (same controls and
+        // labels as the Exploration tab) — no preset, so the user simply turns it on and picks a distance.
+        private static void BuildWallTonesStep(Container content)
+        {
+            content.Add(new TextElement(() => Loc.T("wizard.walltones.help")));
+            var settings = new List<Setting>();
+            var enabled = ModSettings.GetSetting<BoolSetting>("defaults.walltones.enabled");
+            var range = ModSettings.GetSetting<IntSetting>("defaults.walltones.range");
+            if (enabled != null) settings.Add(enabled);
+            if (range != null) settings.Add(range);
+            if (settings.Count > 0) content.Add(SettingsTree(settings));
+        }
+
+        // ---- Step: sonar (enable + which unit factions / the world map are swept) ----
+
+        // The sonar's per-faction "include" is really its taxonomy node's sound (non-silent = swept), so each
+        // include toggle flips the node between its default faction sound and Silent. Enabled / world-map are
+        // the plain overlay-enable flags. We apply the recommended starting set ONCE on first entry (allies and
+        // the world map off — they're the noisy ones; see the help text), then bind live so the user can tune.
+        private static void BuildSonarStep(Container content)
+        {
+            if (!s_sonarInit) { ApplySonarDefaults(); s_sonarInit = true; }
+            content.Add(new TextElement(() => Loc.T("wizard.sonar.help")));
+            var list = new ListContainer();
+            list.Add(SonarFlagToggle("wizard.sonar.enabled", "defaults.sonar.enabled"));
+            list.Add(SonarIncludeToggle("wizard.sonar.enemy", ScanTaxonomy.UnitsEnemies));
+            list.Add(SonarIncludeToggle("wizard.sonar.neutral", ScanTaxonomy.UnitsNeutrals));
+            list.Add(SonarIncludeToggle("wizard.sonar.ally", ScanTaxonomy.UnitsParty));
+            list.Add(SonarFlagToggle("wizard.sonar.worldmap", "defaults.worldmap_sonar.enabled"));
+            content.Add(list);
+        }
+
+        // The wizard's recommended sonar baseline: sonar on, enemies + neutrals swept, allies and world-map
+        // locations off (those flood the densest scenes / the whole map).
+        private static void ApplySonarDefaults() => ModSettings.Batch(() =>
+        {
+            ModSettings.GetSetting<BoolSetting>("defaults.sonar.enabled")?.Set(true);
+            SetSonarInclude(ScanTaxonomy.UnitsEnemies, true);
+            SetSonarInclude(ScanTaxonomy.UnitsNeutrals, true);
+            SetSonarInclude(ScanTaxonomy.UnitsParty, false);
+            ModSettings.GetSetting<BoolSetting>("defaults.worldmap_sonar.enabled")?.Set(false);
+        });
+
+        // A plain overlay-enable toggle (sonar on/off, world-map sweep on/off).
+        private static ProxyBoolToggle SonarFlagToggle(string labelKey, string settingPath)
+        {
+            var s = ModSettings.GetSetting<BoolSetting>(settingPath);
+            return new ProxyBoolToggle(Loc.T(labelKey), () => s?.Get() ?? false, () => s?.Set(!(s?.Get() ?? false)));
+        }
+
+        // A faction-include toggle: included == the taxonomy node sounds (resolves to a non-silent stem).
+        private static ProxyBoolToggle SonarIncludeToggle(string labelKey, string nodeKey)
+            => new ProxyBoolToggle(Loc.T(labelKey),
+                () => ScanSounds.Resolve(nodeKey) != null,
+                () => SetSonarInclude(nodeKey, ScanSounds.Resolve(nodeKey) == null));
+
+        // Turn a unit-faction node's sonar sound on (its default faction stem) or off (Silent).
+        private static void SetSonarInclude(string nodeKey, bool on)
+        {
+            var setting = ScanSounds.SoundSetting(nodeKey);
+            if (setting == null) return;
+            setting.Set(on ? (ScanTaxonomy.Get(nodeKey)?.DefaultSound ?? ScanTaxonomy.Silent) : ScanTaxonomy.Silent);
+        }
+
         // ---- Step: event feedback (one mode choice → events + log + SAPI voices). "Events" not "combat":
         //      damage / healing / spellcasts etc. fire in AND out of combat. ----
 
-        private const string EnemySlot = "wizard.enemy_config"; // persisted ids of the wizard's two SAPI configs
+        private const string EnemySlot = "wizard.enemy_config"; // persisted ids of the wizard's three SAPI configs
         private const string AllySlot = "wizard.ally_config";
-        private static readonly string[] SourceBuckets = { "party", "enemy", "neutral" };
+        private const string UnitlessSlot = "wizard.unitless_config";
+        // Every event source bucket the wizard drives. "unitless" = sourceless events (time passing, party-wide
+        // notices); without it those fall through to the default voice. The positional preset gives it its own
+        // voice (below); screen-reader / log modes set all four the same way via this list.
+        private static readonly string[] SourceBuckets = { "party", "enemy", "neutral", "unitless" };
 
         private static void BuildEventFeedbackStep(Container content)
         {
@@ -251,14 +330,18 @@ namespace WrathAccess.Screens
 
         // Positional: events spoken spatially, with DISTINCT enemy vs ally voices for clarity; the duplicate
         // Combat + Magic game-log groups go off (the events cover them, incl. the spellcast events to come).
-        // Neutrals share the ally voice (everything that isn't an enemy reads in the "ally" voice).
+        // Neutrals share the ally voice (everything that isn't an enemy reads in the "ally" voice). Sourceless
+        // (unitless) events get their own voice too — they have no map position, so they read NON-positionally
+        // (the dispatcher never speaks a sourceless event spatially regardless), distinct from the unit voices.
         private static void ApplyPositional() => ModSettings.Batch(() =>
         {
             var enemy = EnsureConfig(EnemySlot, "wizard.events.enemy_config_name");
             var ally = EnsureConfig(AllySlot, "wizard.events.ally_config_name");
+            var unitless = EnsureConfig(UnitlessSlot, "wizard.events.unitless_config_name");
             SetEventSource("enemy", enabled: true, config: enemy, positional: true);
             SetEventSource("party", enabled: true, config: ally, positional: true);
             SetEventSource("neutral", enabled: true, config: ally, positional: true);
+            SetEventSource("unitless", enabled: true, config: unitless, positional: false);
             SetLogGroup("combat", false);
             SetLogGroup("magic", false);
         });
@@ -332,6 +415,9 @@ namespace WrathAccess.Screens
         private static void BuildAllyVoiceStep(Container content)
             => BuildVoiceStep(content, AllySlot, "wizard.events.ally_voice_help");
 
+        private static void BuildUnitlessVoiceStep(Container content)
+            => BuildVoiceStep(content, UnitlessSlot, "wizard.events.unitless_voice_help");
+
         private static void BuildVoiceStep(Container content, string slotPath, string helpKey)
         {
             content.Add(new TextElement(() => Loc.T(helpKey)));
@@ -361,8 +447,11 @@ namespace WrathAccess.Screens
             var steps = new List<Step> { Step.Backend };
             if (HasHandlerSettings()) steps.Add(Step.HandlerSettings);
             steps.Add(Step.Navigation);
+            steps.Add(Step.WallTones);
+            steps.Add(Step.Sonar);
             steps.Add(Step.EventFeedback);
-            if (CurrentMode() == "positional") { steps.Add(Step.EnemyVoice); steps.Add(Step.AllyVoice); } // tune the two SAPI voices
+            // tune the three SAPI voices — enemy, ally, and the sourceless (unitless) voice
+            if (CurrentMode() == "positional") { steps.Add(Step.EnemyVoice); steps.Add(Step.AllyVoice); steps.Add(Step.UnitlessVoice); }
             return steps.ToArray();
         }
 

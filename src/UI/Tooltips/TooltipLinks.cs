@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Kingmaker.UI.Common;                          // UIUtility.GetKeysFromLink
 using Kingmaker.UI.MVVM._VM.Tooltip.Templates;      // TooltipTemplateGlossary
+using Kingmaker.UI.MVVM._VM.Tooltip.Utils;          // TooltipHelper.GetLinkTooltipTemplate (the game's link dispatcher)
 using Owlcat.Runtime.UI.Tooltips;
 
 namespace WrathAccess.UI.Tooltips
@@ -64,14 +65,18 @@ namespace WrathAccess.UI.Tooltips
                         open = () => custom(cid, ck);
                     }
 
-                    // 2) Otherwise the standard glossary/encyclopedia probe (cheap, static data): keep only
-                    //    links that actually resolve — unresolvable ones (unhandled skill-checks) are dropped.
+                    // 2) Otherwise the GAME's own link dispatcher (TooltipHelper.GetLinkTooltipTemplate),
+                    //    which picks the RIGHT template per entity type — TooltipTemplateFeature for a feat,
+                    //    TooltipTemplateAbility for a spell/ability, TooltipTemplateItem for an item, unit
+                    //    inspect, race, kingdom project — and only falls back to the bare glossary for true
+                    //    UI/encyclopedia links. Hardcoding TooltipTemplateGlossary here used to show "no
+                    //    tooltip information" for a feat link like Extend Spell, whose real content lives on
+                    //    the feature blueprint, not a glossary Description. Resolved live on each follow.
                     if (open == null)
                     {
-                        var probe = new TooltipTemplateGlossary(keys);
-                        if (probe.GlossaryEntry == null && probe.Blueprint == null) continue;
-                        var ck = keys;
-                        open = () => new TooltipTemplateGlossary(ck);
+                        if (!HasContent(LinkTemplate(id))) continue;
+                        var cid = id;
+                        open = () => LinkTemplate(cid);
                     }
 
                     var visible = TextUtil.StripRichText(m.Groups["txt"].Value);
@@ -81,6 +86,26 @@ namespace WrathAccess.UI.Tooltips
             }
             catch (Exception e) { Main.Log?.Error("TooltipLinks.Extract: " + e.Message); }
             return targets;
+        }
+
+        // The game's own link→template dispatch (handles the raw ID's key split internally): feature /
+        // ability / item / unit / race / kingdom-project links each get their proper rich template, with
+        // the bare glossary/encyclopedia only as the fallback. Swallows failures to a dropped link.
+        private static TooltipBaseTemplate LinkTemplate(string id)
+        {
+            try { return TooltipHelper.GetLinkTooltipTemplate(id); }
+            catch (Exception e) { Main.Log?.Error("TooltipLinks.LinkTemplate: " + e.Message); return null; }
+        }
+
+        // A link is followable when it resolves to real content. Any non-glossary template (feature, ability,
+        // item, …) is content by construction. A glossary template counts only when it actually found a
+        // glossary entry or a blueprint page — an empty fallback (a UnitFact miss or an unhandled skill-check
+        // that fell through to the bare glossary) is dropped, exactly as the old probe did.
+        private static bool HasContent(TooltipBaseTemplate t)
+        {
+            if (t == null) return false;
+            if (t is TooltipTemplateGlossary g) return g.GlossaryEntry != null || g.Blueprint != null;
+            return true;
         }
 
         // The game's own ID → keys split (prefix/multi-key handling); fall back to the raw ID.

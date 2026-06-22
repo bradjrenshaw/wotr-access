@@ -20,20 +20,25 @@ namespace WrathAccess.UI.Proxies
         private readonly bool _suppressSound;
         private readonly string _actionVerb;
         private readonly Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> _linkResolver;
+        private readonly Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> _tooltip;
 
         public ProxyActionButton(string label, Func<bool> enabled, Action activate,
             Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate",
-            Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> linkResolver = null)
-            : this(() => label, enabled, activate, canFocus, suppressActivateSound, actionVerb, linkResolver) { }
+            Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> linkResolver = null,
+            Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> tooltip = null)
+            : this(() => label, enabled, activate, canFocus, suppressActivateSound, actionVerb, linkResolver, tooltip) { }
 
         // Live label — for buttons whose text changes (e.g. a wizard's Next → "Start"). canFocus skips
         // structural entries (e.g. a context-menu separator); suppressActivateSound is for buttons whose
         // activation plays the game's own sound (e.g. a dialogue answer plays NextDialogLine). actionVerb
         // is a "ui" table key under "action." (e.g. "activate", "choose"). linkResolver handles any
-        // non-glossary inline links in the label (e.g. a dialogue answer's skill-check DC link).
+        // non-glossary inline links in the label (e.g. a dialogue answer's skill-check DC link). tooltip is
+        // a FACTORY resolved live on each drill-in (per the tooltips-live-not-cached rule) — for buttons that
+        // carry one (e.g. a vendor action's glossary hint), like every other interactive control.
         public ProxyActionButton(Func<string> label, Func<bool> enabled, Action activate,
             Func<bool> canFocus = null, bool suppressActivateSound = false, string actionVerb = "activate",
-            Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> linkResolver = null)
+            Func<string, string[], Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> linkResolver = null,
+            Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> tooltip = null)
         {
             _label = label;
             _enabled = enabled;
@@ -42,7 +47,11 @@ namespace WrathAccess.UI.Proxies
             _suppressSound = suppressActivateSound;
             _actionVerb = actionVerb;
             _linkResolver = linkResolver;
+            _tooltip = tooltip;
         }
+
+        public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate GetTooltipTemplate()
+            => _tooltip != null ? _tooltip() : null;
 
         public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate ResolveLink(string id, string[] keys)
             => _linkResolver != null ? _linkResolver(id, keys) : null;

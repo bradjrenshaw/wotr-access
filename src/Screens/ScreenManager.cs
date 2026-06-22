@@ -125,6 +125,7 @@ namespace WrathAccess.Screens
             Register(new PredicateScreen("ctx.tacticalcombat", Loc.T("screen.tactical_combat"), 0, () => RC()?.IsTacticalCombat ?? false));
             Register(new DialogueScreen()); // in-game conversation (common DialogVM); layer 15, above contexts + service windows
             Register(new LootScreen()); // loot window (container/corpse); layer 15, above contexts + service windows
+            Register(new VendorScreen()); // vendor/trade window (VendorVM); layer 15, four trade tables + actions
             Register(new RestScreen()); // camping window (management/in-process/results); layer 15, same family
             Register(new GroupChangerScreen()); // party selection on area exit (Group manager); layer 16, hard modal
             Register(new EscMenuScreen()); // the in-game pause/Escape menu (EscMenuVM buttons); layer 24

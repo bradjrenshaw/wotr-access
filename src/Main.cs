@@ -5,6 +5,8 @@ using HarmonyLib;
 using Kingmaker;
 using Kingmaker.GameModes; // GameModeType
 using Kingmaker.Modding; // OwlcatModification (the game's native mod system)
+using Kingmaker.PubSubSystem; // EventBus, INewServiceWindowUIHandler (service-window hotkeys)
+using Kingmaker.UI.MVVM._VM.ServiceWindows; // ServiceWindowsType
 using UnityEngine;
 using WrathAccess.Audio;
 using WrathAccess.Exploration.Overlays;
@@ -267,6 +269,11 @@ namespace WrathAccess
             catch (Exception e) { Log.Error("[quicksave] " + e); Tts.Speak(Loc.T("save.failed")); }
         }
 
+        // Open (toggle) a service window the game's own way: the EventBus reaches whichever ServiceWindowsVM
+        // is live — the in-area one (InGameVM) or the world-map one (GlobalMapVM) — so one call works in both.
+        private static void OpenWindow(ServiceWindowsType type)
+            => EventBus.RaiseEvent(delegate(INewServiceWindowUIHandler h) { h.HandleOpenWindowOfType(type); });
+
         // Flip the game's real-time-with-pause <-> turn-based combat mode. We only flip the EnableTurnBasedMode
         // setting — the game's GameSettingsController hooks its OnValueChanged and applies every state change
         // (combat mode switch, etc.), so we mirror the game's own toggle exactly rather than driving state.
@@ -301,6 +308,7 @@ namespace WrathAccess
                 (InputCategory.Exploration, "explore", "Exploration"),
                 (InputCategory.InGame, "ingame", "In game"),
                 (InputCategory.WorldMap, "worldmap", "World map"),
+                (InputCategory.Windows, "windows", "Service windows"),
             };
             foreach (var (cat, key, label) in inputCats)
             {
@@ -535,6 +543,19 @@ namespace WrathAccess
             InputManager.Register("buffer.itemNext", "Buffer: next line", InputCategory.Exploration,
                 WrathAccess.Buffers.BufferControls.NextItem).AddBinding(KeyCode.DownArrow, alt: true).Repeating().Grouped("buffers");
             WrathAccess.Buffers.BufferManager.Instance.RegisterDefaults();
+
+            // Service-window hotkeys (InputCategory.Windows): open character sheet / inventory / spellbook /
+            // journal directly. Live in an area (while we have control) AND on the world map, via the game's
+            // own EventBus open path, which routes to whichever ServiceWindowsVM is active (in-area or
+            // global-map) and toggles the window. Ctrl chords, to avoid the game's plain-letter hotkeys.
+            InputManager.Register("window.character", "Open character sheet", InputCategory.Windows,
+                () => OpenWindow(ServiceWindowsType.CharacterInfo)).AddBinding(KeyCode.C, ctrl: true);
+            InputManager.Register("window.inventory", "Open inventory", InputCategory.Windows,
+                () => OpenWindow(ServiceWindowsType.Inventory)).AddBinding(KeyCode.I, ctrl: true);
+            InputManager.Register("window.spellbook", "Open spellbook", InputCategory.Windows,
+                () => OpenWindow(ServiceWindowsType.Spellbook)).AddBinding(KeyCode.B, ctrl: true);
+            InputManager.Register("window.journal", "Open journal", InputCategory.Windows,
+                () => OpenWindow(ServiceWindowsType.Journal)).AddBinding(KeyCode.J, ctrl: true);
 
             // World-map scanner (InputCategory.WorldMap — isolated from the in-area scanner): a categorised,
             // nearest-first browse of the map's revealed points. Same physical keys as the in-area scanner,

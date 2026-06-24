@@ -28,5 +28,11 @@ namespace WrathAccess.Input
         /// <see cref="Exploration"/> so the world-map systems are fully isolated from the in-area ones — the
         /// same physical keys (PageUp/Down, …) route to whichever screen is up. Declared by the world-map screen.</summary>
         WorldMap,
+        /// <summary>The mod's service-window hotkeys (open character sheet / inventory / spellbook / journal).
+        /// Declared by the in-game screen ONLY while it has control, and by the world-map screen — so the same
+        /// chords open the windows both in an area and on the world map, yet stay dead during a cutscene /
+        /// dialogue / loading. A category of its own so they ride neither <see cref="Exploration"/> (in-area
+        /// only) nor <see cref="UI"/> (every menu and modal).</summary>
+        Windows,
     }
 }

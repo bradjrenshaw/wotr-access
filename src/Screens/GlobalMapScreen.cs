@@ -34,9 +34,21 @@ namespace WrathAccess.Screens
         // Starts unfocused: arrows/WASD drive the movement cursor and Tab enters the lists — like the in-game
         // screen. Category order flips with focus; the scanner/review/cursor letter+page keys are WorldMap-only.
         public override bool StartUnfocused => true;
-        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.WorldMap };
-        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.WorldMap, InputCategory.UI };
-        public override IReadOnlyList<InputCategory> InputCategories => Navigation.HasFocus ? Focused : Unfocused;
+        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.WorldMap, InputCategory.Windows };
+        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.WorldMap, InputCategory.UI, InputCategory.Windows };
+        // Without control (a world-map book event / dialogue), drop Windows so the service-window hotkeys go
+        // dead there too, exactly as they do in an area (see InGameScreen). WorldMap/UI stay for browsing.
+        private static readonly IReadOnlyList<InputCategory> FocusedNoControl = new[] { InputCategory.UI, InputCategory.WorldMap };
+        private static readonly IReadOnlyList<InputCategory> UnfocusedNoControl = new[] { InputCategory.WorldMap, InputCategory.UI };
+        public override IReadOnlyList<InputCategory> InputCategories
+        {
+            get
+            {
+                bool ctrl = ControlState.HasControl;
+                return Navigation.HasFocus ? (ctrl ? Focused : FocusedNoControl)
+                                           : (ctrl ? Unfocused : UnfocusedNoControl);
+            }
+        }
 
         public override bool AllowsTypeahead => false; // letters are world-map hotkeys (b/m/n, i), not type-ahead
 

@@ -49,9 +49,9 @@ namespace WrathAccess.Screens
         // and UI (ui.back): Focused → UI first (Escape backs out, arrows nav the HUD); Unfocused → InGame
         // before UI so Escape opens the menu, Exploration first so arrows move the cursor.
         private static readonly WrathAccess.Input.InputCategory[] FocusedCats =
-            { WrathAccess.Input.InputCategory.UI, WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.Exploration };
+            { WrathAccess.Input.InputCategory.UI, WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.Exploration, WrathAccess.Input.InputCategory.Windows };
         private static readonly WrathAccess.Input.InputCategory[] UnfocusedCats =
-            { WrathAccess.Input.InputCategory.Exploration, WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.UI };
+            { WrathAccess.Input.InputCategory.Exploration, WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.UI, WrathAccess.Input.InputCategory.Windows };
         // While we DON'T have control (cutscene, dialogue/storybook, loading, full-screen menus —
         // ControlState.HasControl), drop Exploration so movement/scanner/party go dead, but KEEP InGame
         // (Escape still opens the pause menu) and UI (the HUD stays reachable). Overlay audio idles in

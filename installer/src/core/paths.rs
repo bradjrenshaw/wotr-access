@@ -2,6 +2,11 @@ use std::path::PathBuf;
 
 pub const GITHUB_RELEASES_URL: &str =
     "https://api.github.com/repos/bradjrenshaw/wotr-access/releases";
+/// The repo's auto-generated source archive of the main branch. The alpha "install latest from GitHub"
+/// path downloads this (no release needed) and installs from the repo layout, exactly the files the
+/// git-pull + deploy.ps1 flow uses. GitHub redirects this to codeload; the HTTP client follows it.
+pub const GITHUB_REPO_ZIP_URL: &str =
+    "https://github.com/bradjrenshaw/wotr-access/archive/refs/heads/main.zip";
 pub const GAME_DIR_NAME: &str = "Pathfinder Second Adventure";
 pub const GAME_EXE: &str = "Wrath.exe";
 pub const MOD_NAME: &str = "WrathAccess";

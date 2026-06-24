@@ -1,6 +1,7 @@
 use std::io::{self, Write};
 use std::path::PathBuf;
 
+use crate::core::paths::GITHUB_REPO_ZIP_URL;
 use crate::core::{detect, github, install, uninstall};
 
 pub fn run() {
@@ -21,19 +22,21 @@ pub fn run() {
 
     loop {
         println!("Options:");
-        println!("  1. Install / Update from GitHub");
-        println!("  2. Install from local zip file");
-        println!("  3. Uninstall");
-        println!("  4. Exit");
+        println!("  1. Install / Update from GitHub (release)");
+        println!("  2. Install latest alpha from GitHub (no release needed)");
+        println!("  3. Install from local zip file");
+        println!("  4. Uninstall");
+        println!("  5. Exit");
         println!();
 
-        let choice = prompt("Choose an option (1-4): ");
+        let choice = prompt("Choose an option (1-5): ");
         println!();
         match choice.as_str() {
             "1" => install_from_github(&game_path),
-            "2" => install_from_file(&game_path),
-            "3" => do_uninstall(&game_path),
-            "4" => return,
+            "2" => install_alpha(&game_path),
+            "3" => install_from_file(&game_path),
+            "4" => do_uninstall(&game_path),
+            "5" => return,
             _ => println!("Invalid option."),
         }
         println!();
@@ -119,6 +122,14 @@ fn install_from_github(game_path: &PathBuf) {
     println!("Downloading {}...", info.tag_name);
     match install::download_and_install(&asset.browser_download_url, game_path, |_| {}) {
         Ok(_) => println!("Successfully installed {}.", info.tag_name),
+        Err(e) => println!("Error: {}", e),
+    }
+}
+
+fn install_alpha(game_path: &PathBuf) {
+    println!("Downloading the latest alpha straight from GitHub (no release needed)...");
+    match install::download_and_install_repo(GITHUB_REPO_ZIP_URL, game_path, |_| {}) {
+        Ok(_) => println!("Successfully installed the latest alpha."),
         Err(e) => println!("Error: {}", e),
     }
 }

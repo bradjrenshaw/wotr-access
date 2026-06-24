@@ -4,6 +4,7 @@ use std::rc::Rc;
 
 use wxdragon::prelude::*;
 
+use crate::core::paths::GITHUB_REPO_ZIP_URL;
 use crate::core::{detect, github, install, uninstall};
 
 struct State {
@@ -44,12 +45,14 @@ pub fn run() {
         // Buttons
         let btn_sizer = BoxSizer::builder(Orientation::Horizontal).build();
         let install_btn = Button::builder(&panel).with_label("Install").build();
+        let install_alpha_btn = Button::builder(&panel).with_label("Install alpha").build();
         let install_file_btn = Button::builder(&panel)
             .with_label("Install from file...")
             .build();
         let uninstall_btn = Button::builder(&panel).with_label("Uninstall").build();
         btn_sizer.add_stretch_spacer(1);
         btn_sizer.add(&install_btn, 0, SizerFlag::All, 4);
+        btn_sizer.add(&install_alpha_btn, 0, SizerFlag::All, 4);
         btn_sizer.add(&install_file_btn, 0, SizerFlag::All, 4);
         btn_sizer.add(&uninstall_btn, 0, SizerFlag::All, 4);
 
@@ -60,6 +63,7 @@ pub fn run() {
         panel.set_sizer(main_sizer, true);
 
         install_btn.enable(false);
+        install_alpha_btn.enable(false);
         install_file_btn.enable(false);
         uninstall_btn.enable(false);
 
@@ -90,7 +94,7 @@ pub fn run() {
                 log_append(&log, "Online install unavailable; \"Install from file\" still works.");
             }
         }
-        update_state(&status, &install_btn, &install_file_btn, &uninstall_btn,
+        update_state(&status, &install_btn, &install_alpha_btn, &install_file_btn, &uninstall_btn,
                      &PathBuf::from(path_input.get_value()), &state, &log);
 
         // Browse
@@ -99,6 +103,7 @@ pub fn run() {
             let path_input_c = path_input.clone();
             let status_c = status.clone();
             let install_btn_c = install_btn.clone();
+            let install_alpha_btn_c = install_alpha_btn.clone();
             let install_file_btn_c = install_file_btn.clone();
             let uninstall_btn_c = uninstall_btn.clone();
             let log_c = log.clone();
@@ -119,7 +124,7 @@ pub fn run() {
                         } else {
                             log_append(&log_c, "That folder doesn't contain Wrath.exe.");
                         }
-                        update_state(&status_c, &install_btn_c, &install_file_btn_c,
+                        update_state(&status_c, &install_btn_c, &install_alpha_btn_c, &install_file_btn_c,
                                      &uninstall_btn_c, &path, &state_c, &log_c);
                     }
                 }
@@ -132,6 +137,7 @@ pub fn run() {
             let path_input_c = path_input.clone();
             let status_c = status.clone();
             let install_btn_c = install_btn.clone();
+            let install_alpha_btn_c = install_alpha_btn.clone();
             let install_file_btn_c = install_file_btn.clone();
             let uninstall_btn_c = uninstall_btn.clone();
             let browse_btn_c = browse_btn.clone();
@@ -205,7 +211,49 @@ pub fn run() {
 
                 browse_btn_c.enable(true);
                 finish(&frame_c, result.map(|_| version), "installed", &log_c);
-                update_state(&status_c, &install_btn_c, &install_file_btn_c,
+                update_state(&status_c, &install_btn_c, &install_alpha_btn_c, &install_file_btn_c,
+                             &uninstall_btn_c, &game_path, &state_c, &log_c);
+            });
+        }
+
+        // Install the latest alpha straight from the repo (no release, no git needed).
+        {
+            let frame_c = frame.clone();
+            let path_input_c = path_input.clone();
+            let status_c = status.clone();
+            let install_btn_c = install_btn.clone();
+            let install_alpha_btn_c = install_alpha_btn.clone();
+            let install_file_btn_c = install_file_btn.clone();
+            let uninstall_btn_c = uninstall_btn.clone();
+            let browse_btn_c = browse_btn.clone();
+            let log_c = log.clone();
+            let state_c = state.clone();
+            install_alpha_btn.on_click(move |_| {
+                let game_path = PathBuf::from(path_input_c.get_value());
+                let confirm = MessageDialog::builder(
+                    &frame_c,
+                    "Install the latest Wrath Access alpha, downloaded directly from GitHub? This is always the newest build.",
+                    "Install alpha",
+                )
+                .with_style(MessageDialogStyle::YesNo | MessageDialogStyle::IconQuestion)
+                .build();
+                if confirm.show_modal() != ID_YES {
+                    return;
+                }
+
+                install_btn_c.enable(false);
+                install_alpha_btn_c.enable(false);
+                install_file_btn_c.enable(false);
+                uninstall_btn_c.enable(false);
+                browse_btn_c.enable(false);
+                log_append(&log_c, "Downloading the latest alpha from GitHub...");
+                status_c.set_label("Downloading...");
+
+                let result = install::download_and_install_repo(GITHUB_REPO_ZIP_URL, &game_path, |_pct| {});
+
+                browse_btn_c.enable(true);
+                finish(&frame_c, result.map(|_| "latest alpha".to_string()), "installed", &log_c);
+                update_state(&status_c, &install_btn_c, &install_alpha_btn_c, &install_file_btn_c,
                              &uninstall_btn_c, &game_path, &state_c, &log_c);
             });
         }
@@ -216,6 +264,7 @@ pub fn run() {
             let path_input_c = path_input.clone();
             let status_c = status.clone();
             let install_btn_c = install_btn.clone();
+            let install_alpha_btn_c = install_alpha_btn.clone();
             let install_file_btn_c = install_file_btn.clone();
             let uninstall_btn_c = uninstall_btn.clone();
             let log_c = log.clone();
@@ -234,7 +283,7 @@ pub fn run() {
 
                 let result = install::install_from_file(&PathBuf::from(&zip_path), &game_path);
                 finish(&frame_c, result.map(|_| "from file".to_string()), "installed", &log_c);
-                update_state(&status_c, &install_btn_c, &install_file_btn_c,
+                update_state(&status_c, &install_btn_c, &install_alpha_btn_c, &install_file_btn_c,
                              &uninstall_btn_c, &game_path, &state_c, &log_c);
             });
         }
@@ -245,6 +294,7 @@ pub fn run() {
             let path_input_c = path_input.clone();
             let status_c = status.clone();
             let install_btn_c = install_btn.clone();
+            let install_alpha_btn_c = install_alpha_btn.clone();
             let install_file_btn_c = install_file_btn.clone();
             let uninstall_btn_c = uninstall_btn.clone();
             let log_c = log.clone();
@@ -264,7 +314,7 @@ pub fn run() {
 
                 let result = uninstall::uninstall_mod(&game_path).map(|_| "removed".to_string());
                 finish(&frame_c, result, "uninstalled", &log_c);
-                update_state(&status_c, &install_btn_c, &install_file_btn_c,
+                update_state(&status_c, &install_btn_c, &install_alpha_btn_c, &install_file_btn_c,
                              &uninstall_btn_c, &game_path, &state_c, &log_c);
             });
         }
@@ -301,6 +351,7 @@ fn finish(parent: &impl WxWidget, result: Result<String, String>, verb: &str, lo
 fn update_state(
     status: &StaticText,
     install_btn: &Button,
+    install_alpha_btn: &Button,
     install_file_btn: &Button,
     uninstall_btn: &Button,
     game_path: &std::path::Path,
@@ -311,6 +362,7 @@ fn update_state(
     let installed = detect::is_mod_installed();
     let installed_version = detect::installed_version();
 
+    install_alpha_btn.enable(valid); // the alpha build downloads straight from the repo; no release needed
     install_file_btn.enable(valid);
     uninstall_btn.enable(installed && valid);
 

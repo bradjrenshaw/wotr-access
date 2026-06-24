@@ -62,6 +62,12 @@ under `Assemblies\` + `assets\`), and the native speech dll (`prism.dll`) next t
 compiles without deploying). Then restart the game. The mod must be enabled once
 in `OwlcatModificationManagerSettings.json` (already done on this machine).
 
+**Alpha distribution = git pull + `deploy.ps1`** (pure copy, no SDK for testers; see
+`deploy.ps1` / `scripts/stage.ps1`). The committed Release payload lives in
+`deploy/Assemblies/`. A **pre-commit hook** (`.githooks/pre-commit`) re-runs `stage.ps1`
+and adds the refreshed dll whenever C# source is staged, so the payload never goes stale.
+Enable it once per clone: `git config core.hooksPath .githooks` (bypass with `--no-verify`).
+
 ## Logs
 Our lines go through `Main.Log` (our `ModLogger`) → Unity's debug log with a
 `[WrathAccess]` prefix → **Player.log**

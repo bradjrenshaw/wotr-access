@@ -8,6 +8,8 @@ the world around you, and review "buffers" for inspecting characters in detail.
 > **Status: alpha (0.0.1).** A great deal works, but expect rough edges and gaps. Please report
 > bugs (see below) - that's what the alpha is for.
 
+> **New to the mod?** Read the [getting started walkthrough](getting-started.md) for a guided tour.
+
 ## What works
 
 - **Speech** through your screen reader (NVDA, JAWS, etc.) via Prism, with a Windows SAPI fallback.
@@ -32,37 +34,42 @@ The mod follows the game's language setting; English is included.
 
 - Pathfinder: Wrath of the Righteous on **Windows** (Steam).
 - A **screen reader** (NVDA, JAWS, ...) or Windows SAPI voices.
-- **Git**, to install and pull updates.
+- Optionally **Git** - only if you want the pull-and-deploy install path below; the installer doesn't
+  need it.
 - That's it - this uses the game's **native mod system**, so there is **no Unity Mod Manager** to
   install.
 
 ## Install and update
 
-The mod is distributed through this Git repo so you can pull frequently during the alpha.
+There are two ways to install - use whichever suits you. **Close the game first** either way, and the
+setup wizard runs automatically on the first launch. Your Wrath Access settings are stored separately,
+so updating never resets them.
 
-1. Clone the repo (or download it) somewhere convenient:
+### Without Git (installer)
+
+1. Download the installer:
+   **[WrathAccessInstaller.exe](https://github.com/bradjrenshaw/wotr-access/releases/latest/download/WrathAccessInstaller.exe)**
+2. Run it. Check the game directory is right (it auto-detects your Steam install; use Browse if not),
+   then choose **Install alpha** - it downloads the latest build straight from GitHub.
+3. Start the game.
+
+To **update**, just run the installer again and choose **Install alpha** - you only download the
+installer itself once. It's a small accessible app, with a `--cli` keyboard/console mode if you prefer.
+
+### With Git
+
+1. Clone the repo:
    ```
    git clone https://github.com/bradjrenshaw/wotr-access
    ```
-2. **Close the game.**
-3. In PowerShell, from the repo folder, run:
-   ```
-   .\deploy.ps1
-   ```
-4. Start the game. The setup wizard runs automatically the first time.
+2. In PowerShell, from the repo folder, run `.\deploy.ps1`.
+3. Start the game. To **update** later: `git pull`, then `.\deploy.ps1` again.
 
-To **update** later, just pull and redeploy (with the game closed):
-```
-git pull
-.\deploy.ps1
-```
-
-`deploy.ps1` finds your install automatically (Steam libraries). If it can't, pass the game folder
+`deploy.ps1` finds your install automatically (Steam libraries); if it can't, pass the folder
 explicitly:
 ```
 .\deploy.ps1 -GameDir "D:\SteamLibrary\steamapps\common\Pathfinder Second Adventure"
 ```
-Your Wrath Access settings are kept separately, so updating never resets them.
 
 ## Keys
 

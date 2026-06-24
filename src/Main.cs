@@ -544,6 +544,25 @@ namespace WrathAccess
                 WrathAccess.Buffers.BufferControls.NextItem).AddBinding(KeyCode.DownArrow, alt: true).Repeating().Grouped("buffers");
             WrathAccess.Buffers.BufferManager.Instance.RegisterDefaults();
 
+            // Camera (low-vision aid): pan / rotate / follow, replicating the game's own camera controls.
+            // Alt+WASD pan, Alt+Q/E rotate, Alt+F follow the selected character. Exploration category, so they
+            // are live in an area while we have control and dead in cutscene / dialogue / menus / world map -
+            // exactly where the game itself lets the camera move. Pan/rotate repeat while held.
+            InputManager.Register("camera.panUp", "Camera: pan up", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.PanUp).AddBinding(KeyCode.W, alt: true).Repeating().Grouped("camera");
+            InputManager.Register("camera.panDown", "Camera: pan down", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.PanDown).AddBinding(KeyCode.S, alt: true).Repeating().Grouped("camera");
+            InputManager.Register("camera.panLeft", "Camera: pan left", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.PanLeft).AddBinding(KeyCode.A, alt: true).Repeating().Grouped("camera");
+            InputManager.Register("camera.panRight", "Camera: pan right", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.PanRight).AddBinding(KeyCode.D, alt: true).Repeating().Grouped("camera");
+            InputManager.Register("camera.rotateLeft", "Camera: rotate left", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.RotateLeft).AddBinding(KeyCode.Q, alt: true).Repeating().Grouped("camera");
+            InputManager.Register("camera.rotateRight", "Camera: rotate right", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.RotateRight).AddBinding(KeyCode.E, alt: true).Repeating().Grouped("camera");
+            InputManager.Register("camera.follow", "Camera: follow selected character", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.Follow).AddBinding(KeyCode.F, alt: true).Grouped("camera");
+
             // Service-window hotkeys (InputCategory.Windows): open character sheet / inventory / spellbook /
             // journal directly. Live in an area (while we have control) AND on the world map, via the game's
             // own EventBus open path, which routes to whichever ServiceWindowsVM is active (in-area or

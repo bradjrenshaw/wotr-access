@@ -154,6 +154,7 @@ namespace WrathAccess.Screens
             Register(new ModMenuScreen()); // mod menu launcher (Ctrl+M): Settings, Setup wizard, Discord, Patreon; layer 35
             Register(new ModSettingsScreen()); // the tabbed settings browser, opened from the launcher; layer 37
             Register(new SetupWizardScreen()); // first-run setup wizard (speech engine + its settings), layer 36
+            Register(new GammaScreen()); // first-launch brightness/gamma calibration (boot-time, before main menu), layer 40
             // ModKeyCaptureScreen + ModTextEntryScreen are no longer registered — both are CHILD screens
             // pushed on the current screen via their static Open(...) (key capture / text entry overlays).
             // TooltipScreen is no longer registered — each tooltip page is a CHILD screen pushed on the

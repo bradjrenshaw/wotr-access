@@ -70,11 +70,24 @@ namespace WrathAccess.Exploration
 
         // ---- per-frame ----
 
-        /// <summary>Per-frame upkeep for every mode (e.g. the rest camp's deferred party interaction).</summary>
+        private static bool _wasAiming;
+
+        /// <summary>Per-frame upkeep for every mode (e.g. the rest camp's deferred party interaction), plus:
+        /// the moment aiming begins, hand the keyboard from the HUD back to exploration so the player can aim
+        /// immediately — the scanner/cursor own the keys only while the HUD is unfocused. Saves manually
+        /// Tabbing out of the action bar after using an ability or Rest. Only the in-game HUD (a StartUnfocused
+        /// screen) is blurred; if focus is elsewhere it's left alone.</summary>
         public static void Tick()
         {
             foreach (var m in Modes)
                 m.Tick();
+
+            bool aiming = Aiming;
+            if (aiming && !_wasAiming
+                && WrathAccess.UI.Navigation.HasFocus
+                && (WrathAccess.Screens.ScreenManager.Current?.StartUnfocused ?? false))
+                WrathAccess.UI.Navigation.Blur();
+            _wasAiming = aiming;
         }
     }
 }

@@ -33,5 +33,8 @@ namespace WrathAccess.UI
         public static void EnsureFocus() => Active?.EnsureFocus();
 
         public static void Focus(UIElement element, bool announce = true) => Active?.Focus(element, announce);
+
+        /// <summary>Return to the unfocused (exploration) state — see <see cref="Navigator.Blur"/>.</summary>
+        public static void Blur() => Active?.Blur();
     }
 }

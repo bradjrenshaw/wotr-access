@@ -39,6 +39,16 @@ namespace WrathAccess.UI
             if (screen != null) BuildInitialFocus();
         }
 
+        /// <summary>Drop focus back to the screen's unfocused state — the same place Tab-off-the-end lands.
+        /// Silent. On a <see cref="Screen.StartUnfocused"/> screen the keyboard returns to exploration and
+        /// stays there (EnsureFocus won't re-seat it); on other screens EnsureFocus re-focuses next frame, so
+        /// callers should only blur exploration-capable screens.</summary>
+        public void Blur()
+        {
+            Path.Clear();
+            Screen?.SetFocusedChild(null);
+        }
+
         protected abstract void BuildInitialFocus();
 
         /// <summary>

@@ -39,7 +39,8 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !Enabled) { _tone.Silence(); _has = false; _pitch = 0f; _silence = 999f; return; }
+            // Silent without control (cutscene): same as the other spatial-audio overlays.
+            if (!OverlayManager.Active || !Enabled || !WrathAccess.ControlState.HasControl) { _tone.Silence(); _has = false; _pitch = 0f; _silence = 999f; return; }
 
             var p = overlay.Cursor.Position;
             if (!_has) { _prev = p; _has = true; _silence = 999f; _tone.Silence(); return; }

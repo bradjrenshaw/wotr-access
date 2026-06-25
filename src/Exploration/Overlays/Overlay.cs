@@ -62,7 +62,10 @@ namespace WrathAccess.Exploration.Overlays
         // Movement modes tick first (they update the cursor) so systems read the fresh position.
         public void Tick(float dt)
         {
-            if (InAreaNow) Cursor.Tick(dt, this);
+            // Cursor MOVEMENT is the one thing gated on having control — so it can't drift during a cutscene.
+            // The sensing systems keep ticking regardless (each decides what, if anything, to suppress); the
+            // overlay's master gate (OverlayManager.InExploration) is context-only, not control.
+            if (InAreaNow && WrathAccess.ControlState.HasControl) Cursor.Tick(dt, this);
             foreach (var s in _systems) if (Applies(s.Scope)) s.Tick(dt, this);
         }
 

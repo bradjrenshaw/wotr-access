@@ -41,7 +41,8 @@ namespace WrathAccess.Exploration.Overlays
         {
             // Run only under an engaged overlay; pause while a location panel tab stop is open (so it doesn't
             // sweep while the player reads/acts on it), same as the cursor freeze.
-            if (!OverlayManager.Active || !Enabled || WrathAccess.Screens.GlobalMapScreen.PanelActive
+            if (!OverlayManager.Active || !Enabled || !WrathAccess.ControlState.HasControl
+                || WrathAccess.Screens.GlobalMapScreen.PanelActive
                 || SonarVolume() <= 0f) { Reset(); return; }
 
             _timer -= dt;

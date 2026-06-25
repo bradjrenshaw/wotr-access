@@ -17,11 +17,14 @@ namespace WrathAccess.Exploration.Overlays
         private static int _active = -1; // -1 = overlays off
 
         /// <summary>Install the overlays built from settings (see <see cref="OverlaySettingsRegistry"/>).
-        /// Resets selection to off.</summary>
+        /// Selects the Default overlay (index 0, always first) so spatial audio is engaged by default — users
+        /// shouldn't have to press Ctrl+O first; cycling can still reach "off". OnEnter is balanced by Cycle's
+        /// OnExit (a no-op for the cursor modes), and is a light no-op at boot when no area is loaded; the
+        /// overlay does nothing until <see cref="Active"/> (in exploration) anyway, so engaging it early is safe.</summary>
         public static void SetOverlays(List<Overlay> overlays)
         {
             _overlays = overlays ?? new List<Overlay>();
-            _active = -1;
+            _active = _overlays.Count > 0 ? 0 : -1; // 0 = the Default overlay; -1 only if there are none
         }
 
         // We're "exploring" (overlay live, audio + cursor active) only when focus mode owns the keyboard, the
@@ -33,8 +36,15 @@ namespace WrathAccess.Exploration.Overlays
         {
             get
             {
-                if (!FocusMode.Active || !WrathAccess.ControlState.HasControl || ScreenManager.Current == null)
+                if (!FocusMode.Active || ScreenManager.Current == null)
                     return false;
+                // Context-only, NOT control: the overlay is engaged whenever the in-area / world-map context
+                // is on top with focus mode, so the sensing systems keep running through in-area scripted
+                // sequences (e.g. the new game's opening, where players reported the overlay failing to
+                // auto-enable). Dialogue, menus, rest and the pause screen each push their OWN top screen, so
+                // the key check below already excludes them. Control is a SEPARATE, finer signal each
+                // component consults: cursor movement is gated on it in Overlay.Tick (so it can't drift during
+                // a cutscene), while the audio systems decide for themselves (today: they keep playing).
                 var key = ScreenManager.Current.Key;
                 return key == "ctx.ingame" || key == "ctx.globalmap";
             }

@@ -15,11 +15,15 @@ namespace WrathAccess.UI.Announcements
     public sealed class RoleAnnouncement : Announcement
     {
         private readonly string _role;
-        public RoleAnnouncement(string role) { _role = role; }
+        private readonly object _args;
+        public RoleAnnouncement(string role, object args = null) { _role = role; _args = args; }
         public override string Key => "role";
         // The role word is the key ("ui" table, "role.<word>"): proxies keep passing "button"/"combo box"/…
         // unchanged, and the English file supplies the fallback so untranslated languages still read English.
-        public override Message Render(AnnouncementContext ctx) => Message.Localized("ui", "role." + _role);
+        // Optional args feed a templated role string (e.g. "role.heading_level" = "heading level {level}").
+        public override Message Render(AnnouncementContext ctx) => _args == null
+            ? Message.Localized("ui", "role." + _role)
+            : Message.Localized("ui", "role." + _role, _args);
     }
 
     /// <summary>

@@ -14,6 +14,7 @@
   "role.group": "group",
   "role.table": "table",
   "role.heading": "heading",
+  "role.heading_level": "heading level {level}",
   "role.key binding": "key binding",
   "role.expanded": "expanded",
   "role.collapsed": "collapsed",

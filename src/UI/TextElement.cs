@@ -18,6 +18,7 @@ namespace WrathAccess.UI
     {
         private readonly Func<string> _text;
         private readonly string _role;
+        private readonly object _roleArgs; // optional template args for a parameterized role (e.g. heading level)
         private readonly Func<TooltipBaseTemplate> _tooltip;
 
         /// <summary>For subclasses that produce their text by overriding <see cref="GetText"/>.</summary>
@@ -25,13 +26,14 @@ namespace WrathAccess.UI
 
         // The tooltip is a FACTORY, resolved live on each drill-in — never a cached instance — so a
         // cell whose value changes (a skill rank, an ability score) always drills into current data.
-        public TextElement(string text, string role = null, Func<TooltipBaseTemplate> tooltip = null)
-            : this(() => text, role, tooltip) { }
+        public TextElement(string text, string role = null, Func<TooltipBaseTemplate> tooltip = null, object roleArgs = null)
+            : this(() => text, role, tooltip, roleArgs) { }
 
-        public TextElement(Func<string> text, string role = null, Func<TooltipBaseTemplate> tooltip = null)
+        public TextElement(Func<string> text, string role = null, Func<TooltipBaseTemplate> tooltip = null, object roleArgs = null)
         {
             _text = text;
             _role = role;
+            _roleArgs = roleArgs;
             _tooltip = tooltip;
         }
 
@@ -48,7 +50,7 @@ namespace WrathAccess.UI
         {
             var t = GetText();
             if (!string.IsNullOrWhiteSpace(t)) yield return new LabelAnnouncement(Message.Raw(t));
-            if (!string.IsNullOrEmpty(_role)) yield return new RoleAnnouncement(_role);
+            if (!string.IsNullOrEmpty(_role)) yield return new RoleAnnouncement(_role, _roleArgs);
         }
 
         // A nested tooltip (e.g. a feature's full description) — built fresh on each drill-in.

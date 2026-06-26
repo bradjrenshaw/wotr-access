@@ -8,12 +8,12 @@ namespace WrathAccess.UI.Tooltips
     /// <summary>
     /// Renders a game <see cref="TooltipBaseTemplate"/> into a <see cref="FlowSheet"/> — the DOCUMENT
     /// model. A template is a linear brick stream (effectively an HTML page: headings, paragraphs,
-    /// label/value rows, tables, inline links), so we lay it out flat instead of forcing a tree:
-    ///  • a <see cref="TooltipBrickTitleVM"/> starts a new titled section — a <see cref="ListRegion"/>
-    ///    whose label is the heading (announced on entry, jumpable with Ctrl+Up/Down). A heading no
-    ///    longer "contains" the bricks after it; it just ends where the next heading begins, matching
-    ///    the visual layout;
-    ///  • every other brick contributes its renderer's elements as rows in the current section;
+    /// label/value rows, tables, inline links), so we lay it out flat in ONE region:
+    ///  • a <see cref="TooltipBrickTitleVM"/> becomes an inline HEADING ELEMENT — a text row read as
+    ///    "&lt;title&gt;, heading level N" (N from its H1–H6 <see cref="TooltipTitleType"/>). It does NOT
+    ///    start a group: heading-driven sectioning grouped bricks illogically (e.g. a spell's description
+    ///    landing inside its "Descriptors" section), so headings are now just markers in the flat stream;
+    ///  • every other brick contributes its renderer's elements as rows;
     ///  • plain (link-free) multi-line text — a class's skill list packed into one brick — splits into
     ///    one row per line so each reads on its own.
     /// Drill-in rides each row element's own <see cref="UIElement.GetTooltipTemplate"/>: Space FOLLOWS
@@ -34,7 +34,7 @@ namespace WrathAccess.UI.Tooltips
             if (template == null) return sheet;
             Prepare(template, type);
 
-            var current = sheet.List(null); // lead section: header bricks before the first title
+            var current = sheet.List(null); // ONE flat region holds the whole document (headings inline)
             int rows = 0;
 
             foreach (var brick in Bricks(template, type))
@@ -44,7 +44,10 @@ namespace WrathAccess.UI.Tooltips
 
                 if (vm is TooltipBrickTitleVM title)
                 {
-                    if (!string.IsNullOrWhiteSpace(title.Title)) current = sheet.List(title.Title);
+                    // Inline heading element (NOT a new section): "<title>, heading level N", N from H1–H6.
+                    if (!string.IsNullOrWhiteSpace(title.Title))
+                        rows += AddRows(current, new TextElement(title.Title, "heading_level", null,
+                            new { level = (int)title.Type + 1 }));
                     continue;
                 }
 

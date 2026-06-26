@@ -78,7 +78,7 @@ namespace WrathAccess.Screens
 
             // Live description of the currently-selected campaign (updates as you pick).
             content.Add(new TextElement(
-                () => story.Description != null ? story.Description.Value : "", "description"));
+                () => story.Description != null ? story.Description.Value : ""));
 
             // Hardcore/permadeath mode toggle (code name "Last Azlanti"; the localized label
             // reads "Sink or Swim Mode"). Only enabled for dungeon campaigns (Midnight Isles),

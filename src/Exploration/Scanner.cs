@@ -288,8 +288,7 @@ namespace WrathAccess.Exploration
         {
             _selectionOverride = null;
             Rebuild();
-            int n = CatCount;
-            if (_entered) _catIndex = ((_catIndex + dir) % n + n) % n;
+            if (_entered) _catIndex = NextCategoryIndex(_catIndex, dir);
             _entered = true;
             _subIndex = 0;   // land on the category's "All"
             _itemIndex = 0;
@@ -301,12 +300,42 @@ namespace WrathAccess.Exploration
             _selectionOverride = null;
             Rebuild();
             if (OnEverything) { _entered = true; Speak(Loc.T("scan.no_subcategories")); return; }
-            int n = CurrentSubs.Count;
-            if (_entered) _subIndex = ((_subIndex + dir) % n + n) % n;
+            if (_entered) _subIndex = NextSubcategoryIndex(_subIndex, dir);
             _entered = true;
             _itemIndex = 0;
             AnnounceList(SubcategoryLabel);
         }
+
+        // Ctrl+PageUp/Down lands only on the synthetic "Everything" (index 0 — always included, even when
+        // empty) or a category that currently has items; empty categories are skipped. Index 0 always
+        // qualifies, so the scan terminates (worst case: back to Everything).
+        private static int NextCategoryIndex(int from, int dir)
+        {
+            int n = CatCount, i = from;
+            for (int step = 0; step < n; step++)
+            {
+                i = ((i + dir) % n + n) % n;
+                if (i == 0 || ListCount(ScanTaxonomy.Categories[i - 1].Key) > 0) return i;
+            }
+            return from;
+        }
+
+        // Shift+PageUp/Down lands only on the category's "All" (subIndex 0 — always included) or a
+        // subcategory that currently has items; empty subcategories are skipped.
+        private static int NextSubcategoryIndex(int from, int dir)
+        {
+            var subs = CurrentSubs;
+            int n = subs.Count, i = from;
+            for (int step = 0; step < n; step++)
+            {
+                i = ((i + dir) % n + n) % n;
+                if (i == 0 || ListCount(subs[i].Key) > 0) return i;
+            }
+            return from;
+        }
+
+        private static int ListCount(string nodeKey)
+            => _byNode.TryGetValue(nodeKey, out var l) ? l.Count : 0;
 
         private static void StepItem(int dir)
         {

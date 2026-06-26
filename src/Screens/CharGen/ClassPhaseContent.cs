@@ -146,6 +146,7 @@ namespace WrathAccess.Screens
             if (archetypes.Count == 0) return; // class has no archetypes → no list
 
             var list = new ListContainer(Loc.T("chargen.archetypes"));
+            list.Add(new ProxyNoArchetypeItem(Phase)); // "No archetype" (base class) — selected when none is chosen
             foreach (var a in archetypes) list.Add(new ProxyClassItem(a));
             _archetypePanel.Add(list);
         }

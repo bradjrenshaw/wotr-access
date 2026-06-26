@@ -19,6 +19,7 @@
   "role.collapsed": "collapsed",
 
   "state.disabled": "disabled",
+  "state.prerequisites_not_met": "prerequisites not met",
   "state.enabled": "enabled",
   "state.selected": "selected",
 
@@ -571,6 +572,7 @@
   "chargen.skill_points": "Skill points remaining: {points}, max rank {rank}",
   "chargen.alignments": "Alignments",
   "chargen.archetypes": "Archetypes",
+  "chargen.no_archetype": "No archetype",
   "chargen.martial_stats": "Martial stats",
   "chargen.caster_stats": "Caster stats",
   "chargen.races": "Races",

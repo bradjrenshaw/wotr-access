@@ -18,6 +18,10 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Grid";
         public override string Key => "grid";
 
+        // A readout (announces the cursor's cell on demand) — it has no continuous playback, so "when
+        // moving" doesn't apply; Off/Continuous only.
+        public override System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
+
         public float CellSize => Int("cell_size", 5) * Geo.MetresPerFoot; // world metres per tile
         private float Half => CellSize * 0.5f;
         private const float LevelGap = 3f; // |Δy| treated as a different level

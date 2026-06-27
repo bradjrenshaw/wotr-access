@@ -24,6 +24,9 @@ namespace WrathAccess.Exploration.Overlays
         // world map — which is how travel/discovery lines get spoken once an overlay is engaged on the map.
         public override OverlayScope Scope => OverlayScope.Both;
 
+        // Cursor-independent (it drains the game's log feed) — "when moving" has no meaning here.
+        public override System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
+
         // thread type name → (group, toggle key, label). The game's real per-type granularity: one entry
         // per log-thread class (see LogThreadService.Setup), grouped for browsing.
         private static readonly string[,] Map =
@@ -129,7 +132,7 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !Enabled) { LogFeed.Clear(); return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay)) { LogFeed.Clear(); return; }
             while (LogFeed.TryDequeue(out string thread, out string text))
                 if (ShouldSpeak(thread))
                     Tts.Speak(text, interrupt: false); // passive content — queue behind, never cut off nav

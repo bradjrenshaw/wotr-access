@@ -663,6 +663,16 @@ namespace WrathAccess
             // explore.cursor* actions above).
             InputManager.Register("overlay.cycle", "Cycle area overlay", InputCategory.Exploration,
                 OverlayManager.Cycle).AddBinding(KeyCode.O, ctrl: true).Grouped("overlays");
+            // Per-system play mode: Ctrl+F1/F2 cycle wall-tones / sonar through Off / When moving / Continuous
+            // on the engaged overlay; Shift+F1/F2 force the system on while held (polled in OverlayManager.Tick).
+            InputManager.Register("overlay.cycleWalltones", "Wall tones: cycle mode", InputCategory.Exploration,
+                () => OverlayManager.CycleMode("walltones")).AddBinding(KeyCode.F1, ctrl: true).Grouped("overlays");
+            InputManager.Register("overlay.cycleSonar", "Sonar: cycle mode", InputCategory.Exploration,
+                () => OverlayManager.CycleMode("sonar")).AddBinding(KeyCode.F2, ctrl: true).Grouped("overlays");
+            InputManager.Register("overlay.holdWalltones", "Wall tones: play while held", InputCategory.Exploration,
+                () => { }).AddBinding(KeyCode.F1, shift: true).Grouped("overlays"); // polled via InputManager.Held
+            InputManager.Register("overlay.holdSonar", "Sonar: play while held", InputCategory.Exploration,
+                () => { }).AddBinding(KeyCode.F2, shift: true).Grouped("overlays"); // polled via InputManager.Held
             InputManager.Register("overlay.recenter", "Overlay: recenter on player", InputCategory.Exploration,
                 OverlayManager.Recenter).AddBinding(KeyCode.C).Grouped("overlays");
             InputManager.Register("overlay.announce", "Overlay: announce cursor", InputCategory.Exploration,

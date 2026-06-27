@@ -107,7 +107,7 @@ namespace WrathAccess.Exploration.Overlays
                 {
                     // The Default overlay's composition lives here too (it has no subtree of its own).
                     // NOT part of RegisterSettings, so per-overlay custom copies don't duplicate it.
-                    cat.Add(new BoolSetting("enabled", "Enabled", DefaultOn.Contains(proto.Key), "overlay.enabled"));
+                    cat.Add(ModeSetting(proto));
                     proto.RegisterSettings(cat);
                 }
             }
@@ -190,6 +190,7 @@ namespace WrathAccess.Exploration.Overlays
             ModSettings.Reindex();
             ModSettings.ReapplyUnknown();    // applies the saved custom.* values over the seeds
             MigrateLegacyTunables();         // pre-redesign per-overlay tunables -> shared defaults/volumes
+            MigrateEnabledToMode();          // pre-mode-refactor `enabled` bool -> `mode` choice
             Publish();
             ModSettings.Save();              // normalize the file (applied keys now persisted as known)
         }
@@ -274,7 +275,7 @@ namespace WrathAccess.Exploration.Overlays
                 {
                     if (!path.StartsWith(prefix)) continue;
                     var rest = path.Substring(prefix.Length);
-                    if (rest == "enabled" || rest == "customized" || rest.StartsWith("custom.")) continue;
+                    if (rest == "mode" || rest == "enabled" || rest == "customized" || rest.StartsWith("custom.")) continue;
                     string target = rest == "volume"
                         ? "audio.volumes." + proto.Key
                         : "defaults." + proto.Key + "." + rest;
@@ -292,6 +293,35 @@ namespace WrathAccess.Exploration.Overlays
                     ModSettings.RemoveUnknownWhere(p =>
                         p.StartsWith(prefix) && !p.EndsWith(".enabled") && !p.Contains(".custom"));
                 }
+        }
+
+        // Build the per-system "mode" choice (replaces the old per-overlay "enabled" bool): the system's
+        // SupportedModes as choices, defaulting to Continuous for the on-by-default set, else Off.
+        private static ChoiceSetting ModeSetting(OverlaySystem sys)
+        {
+            var choices = sys.SupportedModes.Select(OverlayModes.Choice).ToList();
+            var def = DefaultOn.Contains(sys.Key) ? OverlayMode.Continuous : OverlayMode.Off;
+            if (!sys.SupportedModes.Contains(def)) def = sys.SupportedModes.Count > 0 ? sys.SupportedModes[0] : OverlayMode.Off;
+            return new ChoiceSetting("mode", "Mode", choices, OverlayModes.Id(def), "overlay.mode");
+        }
+
+        // Pre-mode-refactor composition flag: map each saved `<sys>.enabled` bool to the new `<sys>.mode`
+        // choice (true => Continuous, false => Off), then drop the orphaned key — keeps existing testers'
+        // on/off setup across the upgrade.
+        private static void MigrateEnabledToMode()
+        {
+            foreach (var path in ModSettings.UnknownPaths())
+            {
+                if (!path.EndsWith(".enabled")) continue;
+                if (!path.StartsWith("overlays.") && !path.StartsWith("defaults.")) continue;
+                var modePath = path.Substring(0, path.Length - ".enabled".Length) + ".mode";
+                var mode = ModSettings.GetSetting<ChoiceSetting>(modePath);
+                if (mode == null || !ModSettings.TryGetUnknown(path, out var tok)) continue;
+                bool on; try { on = tok.ToObject<bool>(); } catch { on = true; }
+                mode.Set(OverlayModes.Id(on ? OverlayMode.Continuous : OverlayMode.Off));
+            }
+            ModSettings.RemoveUnknownWhere(p =>
+                p.EndsWith(".enabled") && (p.StartsWith("overlays.") || p.StartsWith("defaults.")));
         }
 
         // ---- runtime add / remove ----
@@ -373,12 +403,15 @@ namespace WrathAccess.Exploration.Overlays
                 var sys = make();
                 var sCat = ModSettingsRegistry.EnsureCategory("overlays." + id + "." + sys.Key,
                     "Overlays/" + nameSetting.Get() + "/" + sys.Name);
-                // Composition only: enabled + the customized flag. Tunables live in the shared
+                // Composition only: mode + the customized flag. Tunables live in the shared
                 // defaults, or in a custom subtree materialized by Customize().
-                if (sCat.GetByKey("enabled") == null) // new overlays start as a copy of the Default
-                    sCat.Add(new BoolSetting("enabled", "Enabled",
-                        DefaultsFor(sys.Key)?.Get<BoolSetting>("enabled")?.Get() ?? DefaultOn.Contains(sys.Key),
-                        "overlay.enabled"));
+                if (sCat.GetByKey("mode") == null) // new overlays start as a copy of the Default's mode
+                {
+                    var modeSetting = ModeSetting(sys);
+                    var defMode = DefaultsFor(sys.Key)?.Get<ChoiceSetting>("mode")?.Current?.Id;
+                    if (defMode != null) modeSetting.Set(defMode);
+                    sCat.Add(modeSetting);
+                }
                 if (sCat.GetByKey("customized") == null)
                     sCat.Add(new BoolSetting("customized", "Customized", false) { Hidden = true });
                 sys.Bind(sCat, DefaultsFor(sys.Key));

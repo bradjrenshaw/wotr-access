@@ -64,6 +64,20 @@ namespace WrathAccess.Exploration.Overlays
             return null;
         }
 
+        /// <summary>Whether the player is holding this cursor's movement keys for any ACTIVE slot — "trying
+        /// to move" even when blocked (against a wall). Goes through the input-action held state
+        /// (CursorKeys → InputManager.Held), so it respects bindings + category liveness. Drives the
+        /// WhenMoving mode alongside actual position change.</summary>
+        public bool MovementKeysHeld()
+        {
+            foreach (var m in _modes)
+            {
+                CursorKeys.HeldVector(m.Slot, out int dx, out int dz);
+                if (dx != 0 || dz != 0) return true;
+            }
+            return false;
+        }
+
         public void Recenter() => Position = PlayerPosition;
 
         public void Tick(float dt, Overlay overlay) { foreach (var m in _modes) m.Tick(dt, overlay); }

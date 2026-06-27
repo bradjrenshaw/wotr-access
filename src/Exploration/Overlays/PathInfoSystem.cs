@@ -16,6 +16,9 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Path info";
         public override string Key => "path";
 
+        // Fires when the cursor STOPS after moving, so "when moving" would suppress it — Off/Continuous only.
+        public override System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
+
         private Vector3 _last;
         private bool _has;     // _last is valid
         private bool _armed;   // cursor moved since the last announce
@@ -30,7 +33,7 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !Enabled || !CombatMode.InTurnBased) { _has = false; _armed = false; return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !CombatMode.InTurnBased) { _has = false; _armed = false; return; }
             if (WrathAccess.UI.Navigation.HasFocus) return; // HUD owns the arrows — freeze, don't fire
 
             var p = overlay.Cursor.Position;

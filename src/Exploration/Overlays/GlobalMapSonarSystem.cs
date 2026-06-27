@@ -34,14 +34,21 @@ namespace WrathAccess.Exploration.Overlays
         private int _index;
         private float _timer;
 
+        // The world-map cursor's movement (this system reads GlobalMapCursor, not the overlay's in-area
+        // cursor) — drives the WhenMoving mode.
+        private readonly MotionTracker _motion = new MotionTracker();
+        protected override bool MovingNow(Overlay overlay) => _motion.MovingRecently;
+
         private void Reset() { _sweep.Clear(); _index = 0; _timer = 0f; }
         public override void OnExit(Overlay overlay) => Reset();
 
         public override void Tick(float dt, Overlay overlay)
         {
+            _motion.Update(GlobalMapCursor.Position, dt); // refresh WhenMoving before the play gate reads it
+
             // Run only under an engaged overlay; pause while a location panel tab stop is open (so it doesn't
             // sweep while the player reads/acts on it), same as the cursor freeze.
-            if (!OverlayManager.Active || !Enabled || !WrathAccess.ControlState.HasControl
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl
                 || WrathAccess.Screens.GlobalMapScreen.PanelActive
                 || SonarVolume() <= 0f) { Reset(); return; }
 

@@ -9,6 +9,25 @@ namespace WrathAccess.Exploration.Overlays
     /// is Both (it just reads the game's log feed).</summary>
     internal enum OverlayScope { InArea, WorldMap, Both }
 
+    /// <summary>How a system decides to play: never (Off), only while the cursor is moving (WhenMoving),
+    /// or always (Continuous) — the shared vocabulary for every system's "mode" dropdown + cycle order.</summary>
+    internal enum OverlayMode { Off, WhenMoving, Continuous }
+
+    /// <summary>Mode &lt;-&gt; persisted id (the ChoiceSetting value) + choice helpers.</summary>
+    internal static class OverlayModes
+    {
+        public static readonly System.Collections.Generic.IReadOnlyList<OverlayMode> All =
+            new[] { OverlayMode.Off, OverlayMode.WhenMoving, OverlayMode.Continuous };
+        public static readonly System.Collections.Generic.IReadOnlyList<OverlayMode> OffContinuous =
+            new[] { OverlayMode.Off, OverlayMode.Continuous };
+
+        public static string Id(OverlayMode m) =>
+            m == OverlayMode.Off ? "off" : m == OverlayMode.WhenMoving ? "when_moving" : "continuous";
+        public static OverlayMode Parse(string id) =>
+            id == "when_moving" ? OverlayMode.WhenMoving : id == "continuous" ? OverlayMode.Continuous : OverlayMode.Off;
+        public static Choice Choice(OverlayMode m) => new Choice(Id(m), Id(m), "overlay.mode." + Id(m));
+    }
+
     /// <summary>
     /// A pure provider attached to an <see cref="Overlay"/> — it queries the world relative to the cursor
     /// and exposes <see cref="OverlayAnnouncement"/>s and/or makes sound in <see cref="Tick"/>; it NEVER
@@ -52,8 +71,46 @@ namespace WrathAccess.Exploration.Overlays
         /// audio <c>volume</c> are added for you — see the registry / <see cref="AudioSystem"/>).</summary>
         public virtual void RegisterSettings(CategorySetting cat) { }
 
-        /// <summary>Per-overlay always (composition is the overlay's identity — never inherited).</summary>
-        public bool Enabled => OverlayCat?.Get<BoolSetting>("enabled")?.Get() ?? true;
+        /// <summary>The play modes this system offers — its "mode" dropdown + cycle order. Default: all
+        /// three; systems whose behaviour can't distinguish "when moving" (event/readout systems) override
+        /// to a subset.</summary>
+        public virtual System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.All;
+
+        /// <summary>The current per-overlay play mode (replaces the old `enabled` bool). Per-overlay always
+        /// (composition is the overlay's identity — never inherited).</summary>
+        public OverlayMode Mode
+        {
+            get
+            {
+                var c = OverlayCat?.Get<ChoiceSetting>("mode");
+                return c?.Current != null ? OverlayModes.Parse(c.Current.Id) : OverlayMode.Off;
+            }
+        }
+
+        /// <summary>Transient "force on while a hotkey is held" (Shift+F1/F2) — set by the input layer each
+        /// frame, never persisted. Plays as if Continuous.</summary>
+        public bool ForceHeld { get; set; }
+
+        /// <summary>Active at all — for readout/announce systems with no movement-timed playback.</summary>
+        public bool Enabled => Mode != OverlayMode.Off || ForceHeld;
+
+        /// <summary>The audio play gate (replaces the old <see cref="Enabled"/> in the sound systems'
+        /// Tick): Continuous always; WhenMoving only while the relevant cursor moved recently; Off never —
+        /// a held hotkey forces it on regardless.</summary>
+        public bool ShouldPlay(Overlay overlay)
+        {
+            if (ForceHeld) return true;
+            switch (Mode)
+            {
+                case OverlayMode.Continuous: return true;
+                case OverlayMode.WhenMoving: return MovingNow(overlay);
+                default: return false;
+            }
+        }
+
+        /// <summary>Whether this system's relevant cursor is moving (for WhenMoving). Default: the overlay's
+        /// in-area cursor; world-map systems override to their own cursor.</summary>
+        protected virtual bool MovingNow(Overlay overlay) => overlay != null && overlay.CursorMovingRecently;
 
         protected bool Bool(string key, bool fallback) => Settings?.Get<BoolSetting>(key)?.Get() ?? fallback;
         protected int Int(string key, int fallback) => Settings?.Get<IntSetting>(key)?.Get() ?? fallback;

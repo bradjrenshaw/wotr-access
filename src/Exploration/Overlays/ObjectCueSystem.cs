@@ -20,6 +20,10 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Object cue";
         public override string Key => "object";
 
+        // Enter/exit cue is move-driven but the idle-hover announce fires when STOPPED, so "when moving"
+        // would suppress half its job — Off/Continuous only.
+        public override System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
+
         private ScanItem _inside;   // the object the cursor is currently inside (nearest), or null
         private ScanItem _spoken;   // what the idle hover announce last spoke (null = armed to announce)
         private bool _baselined;    // false until the first active tick (don't fire on entry)
@@ -36,7 +40,7 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !Enabled) { _inside = null; _spoken = null; _baselined = false; return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay)) { _inside = null; _spoken = null; _baselined = false; return; }
 
             var c = overlay.Cursor.Position;
             ScanItem inside = null;

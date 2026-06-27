@@ -14,6 +14,10 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Spatial";
         public override string Key => "spatial";
 
+        // A readout (announces the cursor's point on demand) — no continuous playback, so "when moving"
+        // doesn't apply; Off/Continuous only.
+        public override System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
+
         public override void RegisterSettings(CategorySetting cat)
         {
             cat.Add(new BoolSetting("raw", "Announce raw coordinates", false, "overlay.spatial.raw"));

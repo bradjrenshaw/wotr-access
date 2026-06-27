@@ -362,9 +362,8 @@ namespace WrathAccess.Screens
         private void FillSystemNode(Container node, string id, string key, CategorySetting sysCat)
         {
             node.Clear();
-            var enabled = sysCat.Get<BoolSetting>("enabled");
-            if (enabled != null)
-                node.Add(new ProxyBoolToggle(enabled.Label, enabled.Get, () => enabled.Set(!enabled.Get())));
+            var mode = sysCat.Get<ChoiceSetting>("mode"); // the play-mode dropdown (Off / When moving / Continuous)
+            if (mode != null) BuildSettingNode(node, mode);
 
             if (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key))
             {

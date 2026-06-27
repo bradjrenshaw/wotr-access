@@ -102,7 +102,7 @@ namespace WrathAccess.Exploration.Overlays
         {
             // Silent without control (cutscene): the overlay stays engaged, but the sonar shouldn't sweep
             // over a scripted scene. ResetSweep so it starts fresh when control returns.
-            if (!OverlayManager.Active || !Enabled || !WrathAccess.ControlState.HasControl) { ResetSweep(); return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { ResetSweep(); return; }
 
             _timer -= dt;
             if (_timer > 0f) return;

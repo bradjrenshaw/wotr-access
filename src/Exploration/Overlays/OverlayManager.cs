@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using WrathAccess.Input;   // InputManager.Held (mode hold keys)
 using WrathAccess.Screens;
+using WrathAccess.Settings; // ChoiceSetting (mode cycle)
 using WrathAccess.UI; // NavDirection
 
 namespace WrathAccess.Exploration.Overlays
@@ -78,8 +80,42 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         // Ticks the selected overlay every frame (whether or not we're exploring); its systems/modes
-        // self-gate on Active so they mute/idle when a menu's up or focus is off.
-        public static void Tick(float dt) => Current?.Tick(dt);
+        // self-gate on Active so they mute/idle when a menu's up or focus is off. First mirror the
+        // hold-to-force-on keys (Shift+F1/F2) onto the engaged overlay's systems — InputManager.Held is
+        // category-aware, so it's only true while exploring owns those keys, and false (released) otherwise.
+        public static void Tick(float dt)
+        {
+            SetForceHeld("walltones", InputManager.Held("overlay.holdWalltones"));
+            SetForceHeld("sonar", InputManager.Held("overlay.holdSonar"));
+            Current?.Tick(dt);
+        }
+
+        // Hold-to-force-on (Shift+F1/F2): the system plays as if Continuous while its key is held,
+        // whatever its saved mode. Set every frame on the engaged overlay's system.
+        private static void SetForceHeld(string key, bool held)
+        {
+            var sys = Current?.GetSystem(key);
+            if (sys != null) sys.ForceHeld = held;
+        }
+
+        /// <summary>Cycle a system's play mode on the engaged overlay (Ctrl+F1/F2): Off → When moving →
+        /// Continuous → Off (through its supported subset), persisted, announcing the new mode.</summary>
+        public static void CycleMode(string key)
+        {
+            if (!InExploration) return;
+            var sys = Current?.GetSystem(key);
+            var setting = sys?.OverlayCat?.Get<ChoiceSetting>("mode");
+            if (sys == null || setting == null) return;
+
+            var modes = sys.SupportedModes;
+            var cur = OverlayModes.Parse(setting.Current?.Id);
+            int i = 0;
+            for (; i < modes.Count; i++) if (modes[i] == cur) break;
+            setting.Set(OverlayModes.Id(modes[(i + 1) % modes.Count]));
+
+            var sysName = WrathAccess.Localization.LocalizationManager.GetOrDefault("settings", "system." + key, sys.Name);
+            Tts.Speak(Loc.T("overlay.mode_set", new { system = sysName, mode = setting.Current?.Label ?? "" }), interrupt: true);
+        }
 
         public static void Recenter() { if (Active) Current.Recenter(); }
         public static void AnnounceCurrent() { if (Active) Current.AnnounceCurrent(); }

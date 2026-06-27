@@ -40,6 +40,14 @@ namespace WrathAccess.Exploration.Overlays
         public T Get<T>() where T : OverlaySystem
             => _byType.TryGetValue(typeof(T), out var s) ? (T)s : null;
 
+        /// <summary>This overlay's system with the given settings key (e.g. "sonar"), or null — for the
+        /// mode-cycle / hold hotkeys that act on a system by key on the engaged overlay.</summary>
+        public OverlaySystem GetSystem(string key)
+        {
+            foreach (var s in _systems) if (s.Key == key) return s;
+            return null;
+        }
+
         // ---- lifecycle ----
 
         // Only run the systems (and the in-area cursor) that belong to the live context — so navmesh-bound
@@ -59,6 +67,11 @@ namespace WrathAccess.Exploration.Overlays
             if (InAreaNow) Cursor.OnExit(this);
         }
 
+        // "Is the in-area cursor moving (recently)?" — drives the systems' WhenMoving mode. Refreshed each
+        // tick from the fresh cursor position; world-map systems track their own cursor instead.
+        private readonly MotionTracker _cursorMotion = new MotionTracker();
+        public bool CursorMovingRecently => _cursorMotion.MovingRecently;
+
         // Movement modes tick first (they update the cursor) so systems read the fresh position.
         public void Tick(float dt)
         {
@@ -66,6 +79,10 @@ namespace WrathAccess.Exploration.Overlays
             // The sensing systems keep ticking regardless (each decides what, if anything, to suppress); the
             // overlay's master gate (OverlayManager.InExploration) is context-only, not control.
             if (InAreaNow && WrathAccess.ControlState.HasControl) Cursor.Tick(dt, this);
+            // Refresh the moving signal from the (now fresh) cursor before systems read ShouldPlay. Holding
+            // the movement keys counts as moving even when blocked (against a wall), via the input-action
+            // held state; a real position change covers walking while the cursor is untethered.
+            if (InAreaNow) _cursorMotion.Update(Cursor.Position, dt, Cursor.MovementKeysHeld()); else _cursorMotion.Reset();
             foreach (var s in _systems) if (Applies(s.Scope)) s.Tick(dt, this);
         }
 

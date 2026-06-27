@@ -14,6 +14,9 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Fog cue";
         public override string Key => "fog";
 
+        // A crossing event — "when moving" can't differ from "continuous" (you only cross by moving).
+        public override System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
+
         private bool? _wasFogged; // null = no baseline yet (don't fire on the first sample)
 
         public override void OnExit(Overlay overlay) => _wasFogged = null;
@@ -21,7 +24,7 @@ namespace WrathAccess.Exploration.Overlays
         public override void Tick(float dt, Overlay overlay)
         {
             // Silent without control (cutscene): same as the other spatial-audio overlays.
-            if (!OverlayManager.Active || !Enabled || !WrathAccess.ControlState.HasControl) { _wasFogged = null; return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { _wasFogged = null; return; }
 
             var c = overlay.Cursor.Position;
             bool fogged = FogOfWarController.IsInFogOfWar(c);

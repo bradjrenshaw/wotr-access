@@ -52,7 +52,7 @@ namespace WrathAccess.Exploration.Overlays
         {
             // Silent without control (cutscene): the overlay stays engaged, but wall tones shouldn't play
             // over a scripted scene. Mute (don't dispose) so they resume seamlessly when control returns.
-            if (!OverlayManager.Active || !Enabled || !WrathAccess.ControlState.HasControl) { Mute(); return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { Mute(); return; }
 
             // (Re)build the voices on first use, when the user picks a different tone set, or when the audio
             // engine is swapped live (Audio.Engine returns a different cached instance).

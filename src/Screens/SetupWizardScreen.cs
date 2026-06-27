@@ -246,9 +246,9 @@ namespace WrathAccess.Screens
         {
             content.Add(new TextElement(() => Loc.T("wizard.walltones.help")));
             var settings = new List<Setting>();
-            var enabled = ModSettings.GetSetting<BoolSetting>("defaults.walltones.enabled");
+            var mode = ModSettings.GetSetting<ChoiceSetting>("defaults.walltones.mode");
             var range = ModSettings.GetSetting<IntSetting>("defaults.walltones.range");
-            if (enabled != null) settings.Add(enabled);
+            if (mode != null) settings.Add(mode);
             if (range != null) settings.Add(range);
             if (settings.Count > 0) content.Add(SettingsTree(settings));
         }
@@ -264,11 +264,11 @@ namespace WrathAccess.Screens
             if (!s_sonarInit) { ApplySonarDefaults(); s_sonarInit = true; }
             content.Add(new TextElement(() => Loc.T("wizard.sonar.help")));
             var list = new ListContainer();
-            list.Add(SonarFlagToggle("wizard.sonar.enabled", "defaults.sonar.enabled"));
+            list.Add(SonarFlagToggle("wizard.sonar.enabled", "defaults.sonar.mode"));
             list.Add(SonarIncludeToggle("wizard.sonar.enemy", ScanTaxonomy.UnitsEnemies));
             list.Add(SonarIncludeToggle("wizard.sonar.neutral", ScanTaxonomy.UnitsNeutrals));
             list.Add(SonarIncludeToggle("wizard.sonar.ally", ScanTaxonomy.UnitsParty));
-            list.Add(SonarFlagToggle("wizard.sonar.worldmap", "defaults.worldmap_sonar.enabled"));
+            list.Add(SonarFlagToggle("wizard.sonar.worldmap", "defaults.worldmap_sonar.mode"));
             content.Add(list);
         }
 
@@ -276,18 +276,21 @@ namespace WrathAccess.Screens
         // locations off (those flood the densest scenes / the whole map).
         private static void ApplySonarDefaults() => ModSettings.Batch(() =>
         {
-            ModSettings.GetSetting<BoolSetting>("defaults.sonar.enabled")?.Set(true);
+            ModSettings.GetSetting<ChoiceSetting>("defaults.sonar.mode")?.Set("continuous");
             SetSonarInclude(ScanTaxonomy.UnitsEnemies, true);
             SetSonarInclude(ScanTaxonomy.UnitsNeutrals, true);
             SetSonarInclude(ScanTaxonomy.UnitsParty, false);
-            ModSettings.GetSetting<BoolSetting>("defaults.worldmap_sonar.enabled")?.Set(false);
+            ModSettings.GetSetting<ChoiceSetting>("defaults.worldmap_sonar.mode")?.Set("off");
         });
 
-        // A plain overlay-enable toggle (sonar on/off, world-map sweep on/off).
-        private static ProxyBoolToggle SonarFlagToggle(string labelKey, string settingPath)
+        // A simplified on/off over the system's play mode (on => Continuous, off => Off); the full
+        // Off / When moving / Continuous choice lives on the Exploration/Sonar tabs.
+        private static ProxyBoolToggle SonarFlagToggle(string labelKey, string modePath)
         {
-            var s = ModSettings.GetSetting<BoolSetting>(settingPath);
-            return new ProxyBoolToggle(Loc.T(labelKey), () => s?.Get() ?? false, () => s?.Set(!(s?.Get() ?? false)));
+            var s = ModSettings.GetSetting<ChoiceSetting>(modePath);
+            return new ProxyBoolToggle(Loc.T(labelKey),
+                () => s != null && s.ValueId != "off",
+                () => s?.Set(s.ValueId == "off" ? "continuous" : "off"));
         }
 
         // A faction-include toggle: included == the taxonomy node sounds (resolves to a non-silent stem).

@@ -462,7 +462,7 @@ namespace WrathAccess
             // Y: "where am I" — the location's name (current section when it has one), indoors, and the
             // leader's compass region within the section's map bounds.
             InputManager.Register("explore.whereAmI", "Where am I", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.Y);
+                WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.X);
             // InGame (not Exploration): this must keep working when we DON'T have control — opening the
             // pause menu mid-cutscene/dialogue is a base in-game key, so it isn't gated off with movement.
             InputManager.Register("explore.cancelTargeting", "Cancel targeting / game menu", InputCategory.InGame,
@@ -519,6 +519,12 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.AnnounceParty).AddBinding(KeyCode.K, shift: true).Grouped("scanner");
             InputManager.Register("scan.interact", "Scanner: interact with item", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.InteractSelected).AddBinding(KeyCode.I).Grouped("scanner");
+            // Inspect: open the game's unit Inspect window (only if the unit actually has one). Y inspects the
+            // review-cursor unit; ' inspects the unit the movement cursor is over. (Where am I moved to X.)
+            InputManager.Register("inspect.review", "Inspect review-cursor unit", InputCategory.Exploration,
+                WrathAccess.Exploration.Inspect.Review).AddBinding(KeyCode.Y).Grouped("scanner");
+            InputManager.Register("inspect.cursor", "Inspect unit under cursor", InputCategory.Exploration,
+                WrathAccess.Exploration.Inspect.AtCursor).AddBinding(KeyCode.Quote).Grouped("scanner");
             InputManager.Register("scan.moveToCursor", "Scanner: move to cursor", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.MoveToCursor).AddBinding(KeyCode.Backspace).Grouped("scanner");
             InputManager.Register("scan.debugShowAll", "Scanner: toggle show all (debug)", InputCategory.Exploration,

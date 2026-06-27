@@ -355,6 +355,8 @@
   "screen.journal": "Journal",
   "screen.encyclopedia": "Encyclopedia",
   "screen.info": "Information",
+  "screen.inspect": "Inspect",
+  "inspect.none": "Nothing to inspect",
   "screen.loot": "Loot",
   "screen.dialog": "Dialog",
   "screen.gamma": "Brightness setup",

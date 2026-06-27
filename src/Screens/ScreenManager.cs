@@ -152,6 +152,7 @@ namespace WrathAccess.Screens
             Register(new TutorialScreen()); // modal tutorial popup (movement/camera etc.), layer 28
             Register(new MessageModalScreen()); // generic confirm/message modal, layer 30
             Register(new InfoWindowScreen()); // game Info window (item Details / glossary info), layer 30
+            Register(new InspectScreen()); // game unit Inspect window (bestiary readout), layer 30
             Register(new ModMenuScreen()); // mod menu launcher (Ctrl+M): Settings, Setup wizard, Discord, Patreon; layer 35
             Register(new ModSettingsScreen()); // the tabbed settings browser, opened from the launcher; layer 37
             Register(new SetupWizardScreen()); // first-run setup wizard (speech engine + its settings), layer 36

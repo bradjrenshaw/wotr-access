@@ -131,8 +131,8 @@ namespace WrathAccess.Exploration.Overlays
             var volumes = ModSettingsRegistry.EnsureCategory("audio.volumes", "Audio/System volumes", "audio.volumes");
             foreach (var proto in Prototypes)
                 if (proto is AudioSystem && volumes.GetByKey(proto.Key) == null)
-                    volumes.Add(new IntSetting(proto.Key, proto.Name + " volume", 100, 0, 100, 5,
-                        "audio.volumes." + proto.Key));
+                    volumes.Add(new IntSetting(proto.Key, proto.Name + " volume", 40, 0, 100, 5,
+                        "audio.volumes." + proto.Key)); // 40% default — the mod sounds were too loud at 100% (master stays 100%)
 
             // The audio listener anchor (the "virtual head" — see ListenerAnchor): where the game's
             // 3D audio is heard from. Default = the same reference the sonification pans from, so

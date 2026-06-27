@@ -16,6 +16,7 @@ namespace WrathAccess.UI
         private readonly TypeAheadSearch _search = new TypeAheadSearch();
         private readonly List<UIElement> _searchItems = new List<UIElement>();
         private UIElement _searchFocus; // where the search last landed (staleness check)
+        private WrathAccess.Screens.Screen _lastTypeaheadScreen; // screen typeahead last ran for; a change = a new screen took focus
 
         public TraditionalNavigator()
         {
@@ -574,6 +575,18 @@ namespace WrathAccess.UI
             if (Screen == null || Screen.CapturesRawInput || !Screen.AllowsTypeahead
                 || !FocusMode.Active || Current == null)
             {
+                if (_search.IsSearchActive || _search.HasBuffer) ClearSearch(announce: false);
+                _lastTypeaheadScreen = Screen;
+                return;
+            }
+
+            // A different screen just took focus (e.g. opened by the very key the user pressed — a letter
+            // like Y for inspect). Unity's inputString still holds that key and the new screen auto-focuses
+            // an element, so without this it would type the opening key into a fresh search. Swallow this
+            // frame's typed input on the changeover.
+            if (!ReferenceEquals(Screen, _lastTypeaheadScreen))
+            {
+                _lastTypeaheadScreen = Screen;
                 if (_search.IsSearchActive || _search.HasBuffer) ClearSearch(announce: false);
                 return;
             }

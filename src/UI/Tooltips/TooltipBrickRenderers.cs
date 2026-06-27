@@ -265,7 +265,7 @@ namespace WrathAccess.UI.Tooltips
         {
             var stats = vm?.AbilityScoresBlock?.AbilityScores;
             if (stats == null) yield break;
-            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
         }
 
         public override IEnumerable<UIElement> GetFlatElements(TooltipBrickAbilityScoresBlockVM vm)
@@ -279,7 +279,7 @@ namespace WrathAccess.UI.Tooltips
         {
             var stats = vm?.Skills?.Skills;
             if (stats == null) yield break;
-            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
         }
 
         public override IEnumerable<UIElement> GetFlatElements(TooltipBrickSkillsVM vm)
@@ -350,7 +350,8 @@ namespace WrathAccess.UI.Tooltips
         public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSpaceVM vm) => None;
     }
     // ---- The unit-inspect stat blocks (creature pages / Inspect): each wraps the same CharInfo
-    // VMs the character sheet renders — one "Name: Value" line per stat. ----
+    // VMs the character sheet renders — one "Name: Value" line per stat, with the stat's modifier-
+    // breakdown / glossary tooltip (CharInfoStatVM.Tooltip) drilled in on Space, same as the char sheet. ----
 
     public sealed class AbilityScoresBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityScoresVM>
     {
@@ -358,7 +359,7 @@ namespace WrathAccess.UI.Tooltips
         {
             var stats = vm?.AbilityScoresBlock?.AbilityScores;
             if (stats == null) yield break;
-            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
         }
 
         public override IEnumerable<UIElement> GetFlatElements(TooltipBrickAbilityScoresVM vm)
@@ -373,7 +374,7 @@ namespace WrathAccess.UI.Tooltips
             var ac = vm?.ArmorClass;
             if (ac == null) yield break;
             foreach (var s in new[] { ac.AC, ac.FlatFooted, ac.Touch })
-            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
         }
     }
 
@@ -384,7 +385,7 @@ namespace WrathAccess.UI.Tooltips
             var st = vm?.SavingThrowVM;
             if (st == null) yield break;
             foreach (var s in new[] { st.Fortitude, st.Reflex, st.Will })
-            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
         }
     }
 
@@ -394,7 +395,7 @@ namespace WrathAccess.UI.Tooltips
         {
             if (vm == null) yield break;
             foreach (var s in new[] { vm.Size, vm.Speed, vm.Initiative })
-            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line); }
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
         }
     }
 

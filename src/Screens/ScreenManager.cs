@@ -128,6 +128,7 @@ namespace WrathAccess.Screens
             Register(new VendorScreen()); // vendor/trade window (VendorVM); layer 15, four trade tables + actions
             Register(new RestScreen()); // camping window (management/in-process/results); layer 15, same family
             Register(new GroupChangerScreen()); // party selection on area exit (Group manager); layer 16, hard modal
+            Register(new GameOverScreen()); // death/game-over screen (party wipe etc.); layer 18, below save/load
             Register(new EscMenuScreen()); // the in-game pause/Escape menu (EscMenuVM buttons); layer 24
             Register(new BookEventScreen()); // book event (storybook passage + choices); layer 15
             Register(new PredicateScreen("ctx.kingdom", Loc.T("screen.kingdom"), 0, () => RC()?.IsKingdom ?? false));

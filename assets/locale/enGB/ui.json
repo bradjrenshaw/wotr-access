@@ -278,6 +278,8 @@
   "nav.no_tooltip": "No tooltip",
   "nav.no_details": "No details",
   "tooltip.empty": "No tooltip information.",
+  "tooltip.archetype_added": "added",
+  "tooltip.archetype_removed": "removed",
   "event.damage": "{name} takes {amount} damage",
   "event.heal": "{name} heals {amount}",
   "event.buff_gained": "{name} gained {buff}",

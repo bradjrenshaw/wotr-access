@@ -132,7 +132,16 @@ namespace WrathAccess.UI.Tooltips
     // the registry keys on exact type, so it needs its own renderer (it won't reuse FeatureBrick's).
     public sealed class ArchetypeFeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickArchetypeFeatureVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArchetypeFeatureVM vm) => One(vm?.Name, () => vm?.Tooltip);
+        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArchetypeFeatureVM vm)
+        {
+            if (vm == null || string.IsNullOrWhiteSpace(vm.Name)) return None;
+            // Restore the archetype's Added/Removed marker the flow path was dropping (the GetNodes tree
+            // path below still had it) — e.g. "Bombs (removed)" — so archetype changes read in the tooltip.
+            string text = vm.Name;
+            if (vm.DifType == ClassArchetypeDifType.Added) text += " (" + Loc.T("tooltip.archetype_added") + ")";
+            else if (vm.DifType == ClassArchetypeDifType.Removed) text += " (" + Loc.T("tooltip.archetype_removed") + ")";
+            return One(text, () => vm.Tooltip);
+        }
 
         public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
         {

@@ -468,10 +468,14 @@ namespace WrathAccess.Screens
 
         private void ResetAllSettings()
         {
+            // The first-launch flag is internal bookkeeping, not a user setting — preserve it so resetting
+            // doesn't re-trigger the setup wizard on the next main menu.
+            bool wizardShown = ModSettings.GetSetting<BoolSetting>("wizard.completed")?.Get() ?? false;
             ModSettings.Batch(() =>
             {
                 RemoveAllOverlays();
                 foreach (var s in ModSettings.Root.Children) s.ResetToDefault();
+                ModSettings.GetSetting<BoolSetting>("wizard.completed")?.Set(wizardShown);
             });
             RebuildContent();
             Tts.Speak(Message.Localized("settings", "reset.all_done").Resolve());

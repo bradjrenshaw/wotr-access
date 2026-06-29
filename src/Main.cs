@@ -493,6 +493,11 @@ namespace WrathAccess
                 WrathAccess.Exploration.PartySelection.ToggleHold).AddBinding(KeyCode.H).Grouped("party");
             InputManager.Register("party.stop", "Stop", InputCategory.Exploration,
                 WrathAccess.Exploration.PartySelection.Stop).AddBinding(KeyCode.G).Grouped("party");
+            // Stealth (Ctrl+S) / AI control (Ctrl+D): the action-bar sneak + AI toggles, on the selection.
+            InputManager.Register("party.stealth", "Toggle stealth", InputCategory.Exploration,
+                WrathAccess.Exploration.PartySelection.ToggleStealth).AddBinding(KeyCode.S, ctrl: true).Grouped("party");
+            InputManager.Register("party.ai", "Toggle AI control", InputCategory.Exploration,
+                WrathAccess.Exploration.PartySelection.ToggleAi).AddBinding(KeyCode.D, ctrl: true).Grouped("party");
 
             // Ctrl+T: toggle the game's combat mode (real-time-with-pause <-> turn-based). Ctrl+T is free
             // in normal play (the game's Ctrl+T "LocalTeleport" is a cheat-only binding).

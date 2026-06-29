@@ -64,11 +64,11 @@ namespace WrathAccess.Screens
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
 
         public override void OnPush() { BuildShell(); _sig = null; _turnSig = null; _lastRestoreLabel = null; }
-        public override void OnPop() { Clear(); _bar = null; _turn = null; _holdToggle = null; _stopToggle = null; }
+        public override void OnPop() { Clear(); _bar = null; _turn = null; _holdToggle = null; _stopToggle = null; _stealthToggle = null; _aiToggle = null; }
 
         private FlowSheet _bar;        // the action-bar FlowSheet (a stable child; only its regions rebuild)
         private ListContainer _turn;   // turn-based Turn panel (a stable child; empty out of combat)
-        private ProxyBoolToggle _holdToggle, _stopToggle; // self-announcing; ticked every frame (see OnUpdate)
+        private ProxyBoolToggle _holdToggle, _stopToggle, _stealthToggle, _aiToggle; // self-announcing; ticked every frame (see OnUpdate)
         private string _sig;          // last action-bar content signature
         private string _turnSig;      // last Turn-panel membership signature
         private string _lastRestoreLabel; // dedupe the restore announce across a multi-frame settle
@@ -87,6 +87,8 @@ namespace WrathAccess.Screens
             // frame, so they poll IsHold()/IsStop() and announce the real settled result themselves.
             _holdToggle?.OnUpdate();
             _stopToggle?.OnUpdate();
+            _stealthToggle?.OnUpdate();
+            _aiToggle?.OnUpdate();
         }
 
         // Build the stable HUD shell once: the action-bar FlowSheet (populated separately), then the Log
@@ -390,6 +392,19 @@ namespace WrathAccess.Screens
                 () => IngameMenu()?.HandleStopStateSwitched(),
                 announceChange: on => on ? Loc.T("party.stopped") : null, announceContext: sel);
             menu.Add(_stopToggle);
+            // Stealth + AI: the action-bar ControlCharactersVM toggles (sneak / AI control), grouped here with
+            // the other selection-command toggles. Same self-announce + selection-fingerprint pattern; the
+            // hotkeys (Ctrl+S / Ctrl+D) route through the same ControlCharactersVM handlers.
+            _stealthToggle = new ProxyBoolToggle(Loc.T("hudmenu.stealth"),
+                WrathAccess.Exploration.PartySelection.IsStealthOn,
+                () => ActionBar()?.ControlCharactersVM?.OnStealthClick(),
+                announceChange: on => Loc.T(on ? "party.stealth_on" : "party.stealth_off"), announceContext: sel);
+            menu.Add(_stealthToggle);
+            _aiToggle = new ProxyBoolToggle(Loc.T("hudmenu.ai"),
+                WrathAccess.Exploration.PartySelection.IsAiOn,
+                () => ActionBar()?.ControlCharactersVM?.OnAiClick(),
+                announceChange: on => Loc.T(on ? "party.ai_on" : "party.ai_off"), announceContext: sel);
+            menu.Add(_aiToggle);
             Act("hudmenu.select_all", () => IngameMenu()?.SelectAll());
             Act("hudmenu.formation", () => IngameMenu()?.OpenFormation(), verb: "open");
             // Rest = a targeted action (like an action-bar slot): Enter arms the game's rest-marker mode, then

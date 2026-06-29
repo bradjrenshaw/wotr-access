@@ -58,6 +58,49 @@ namespace WrathAccess.Exploration
             sm.SwitchStop();
         }
 
+        // Stealth (Ctrl+S) / AI control (Ctrl+D) — the two ControlCharactersVM toggles the game draws in the
+        // action-bar cluster (the sneak + AI buttons). Same selection-command shape as Hold/Stop: the hotkey
+        // just invokes the game's own click handler (OnStealthClick / OnAiClick, which carry the stealth tick
+        // / AI-flag logic), and the HUD toggle elements own the announcement by polling IsStealthOn/IsAiOn.
+        public static void ToggleStealth()
+        {
+            if (!Active) return;
+            if (!HasControllableSelection()) { Tts.Speak(Loc.T("party.none_selected"), interrupt: true); return; }
+            ControlChars()?.OnStealthClick();
+        }
+
+        public static void ToggleAi()
+        {
+            if (!Active) return;
+            if (!HasControllableSelection()) { Tts.Speak(Loc.T("party.none_selected"), interrupt: true); return; }
+            ControlChars()?.OnAiClick();
+        }
+
+        // Live state for the HUD toggles (read the units directly, not the VM's once-per-frame reactive).
+        // Stealth mirrors the game's "any selected unit is sneaking"; AI mirrors "every selected unit is
+        // AI-controlled" — exactly what ControlCharactersVM.IsInStealthState / IsInAiState report.
+        public static bool IsStealthOn()
+        {
+            var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
+            if (units == null) return false;
+            foreach (var u in units)
+                if (u != null && !u.IsDisposed && u.Descriptor.State.IsInStealth) return true;
+            return false;
+        }
+
+        public static bool IsAiOn()
+        {
+            var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
+            if (units == null) return false;
+            bool any = false;
+            foreach (var u in units)
+                if (u != null && !u.IsDisposed) { any = true; if (!u.IsAIEnabled) return false; }
+            return any;
+        }
+
+        private static Kingmaker.UI.MVVM._VM.ActionBar.ControlCharactersVM ControlChars()
+            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ActionBarVM?.ControlCharactersVM;
+
         // A cheap, allocation-free fingerprint of the current selection: its size and the single-selected
         // unit's identity, which together capture every real selection change (whole-party ↔ single, and
         // single ↔ different single). The HUD Hold/Stop toggles use it to tell a genuine toggle apart from

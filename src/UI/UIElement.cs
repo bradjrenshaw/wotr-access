@@ -53,6 +53,21 @@ namespace WrathAccess.UI
         /// e.g. clearing a key binding should re-announce the now-empty value.</summary>
         public virtual bool ReannounceOnContext => false;
 
+        /// <summary>
+        /// Per-frame hook for the FOCUSED element: observe this element's own live state and announce when it
+        /// CHANGES under the cursor — the right way to report a change whose timing or success we don't control
+        /// (an async toggle settle/revert, a control becoming enabled). We already diff on focus MOVES; this
+        /// extends that to diff state in place while focus sits still. Ticked only for the focused element, so
+        /// it never chatters. Pair with <see cref="OnFocusEnter"/> to baseline silently on each new focus (the
+        /// focus announcement already spoke the initial state). Default no-op.
+        /// </summary>
+        public virtual void OnUpdate() { }
+
+        /// <summary>Called once when this element becomes the focused element (before its first
+        /// <see cref="OnUpdate"/>). Watchers reset their baseline here so the upcoming state is taken as the
+        /// starting point, not announced as a change. Default no-op.</summary>
+        public virtual void OnFocusEnter() { }
+
         /// <summary>The game UI sound to play when this element is activated (its sound normally
         /// lived in the view's click handler, which we bypass). Default is a generic button click;
         /// controls override for their real sound (e.g. toggles → SettingsSwitchToggle), or return

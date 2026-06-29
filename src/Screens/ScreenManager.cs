@@ -49,6 +49,9 @@ namespace WrathAccess.Screens
             // OnUpdate), make sure something is focused. No-op when focus already exists or the screen is
             // intentionally unfocused (exploration).
             WrathAccess.UI.Navigation.EnsureFocus();
+            // After focus has settled, let the focused element observe its own live state and announce any
+            // in-place change (async toggle settle, enabled/disabled flip) — the per-element OnUpdate hook.
+            WrathAccess.UI.Navigation.TickFocused();
         }
 
         /// <summary>Active screens, ordered bottom (low layer) → top (high layer).</summary>

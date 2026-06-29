@@ -74,7 +74,11 @@ namespace WrathAccess.Screens
 
         public virtual void OnUnfocus() { }
         public virtual void OnPop() { }
-        public virtual void OnUpdate() { }
+        // Per-frame update for the ACTIVE (top) screen, dispatched by ScreenManager. Overrides the UIElement
+        // hook (a Screen is a UIElement): same concept — the screen tree's per-frame work — at screen scope.
+        // (The focused element's own OnUpdate is dispatched separately by Navigation.TickFocused; a screen is
+        // never the focused element, so the two never collide.)
+        public override void OnUpdate() { }
 
         // ---- child screen tree (mod-driven sub-screens within a screen) ----
         // A screen can host a single ActiveChild (which can host its own child, forming a chain) — e.g. a

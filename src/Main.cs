@@ -487,6 +487,12 @@ namespace WrathAccess
                     InputCategory.Exploration, () => WrathAccess.Exploration.PartySelection.SelectMember(idx))
                     .AddBinding(KeyCode.Alpha1 + i, ctrl: true).Grouped("party");
             }
+            // Hold position (H) / Stop (G): the game's own party commands (the in-game menu's Hold/Stop
+            // buttons), toggled across the current selection. Both keys are free in our exploration set.
+            InputManager.Register("party.hold", "Hold position", InputCategory.Exploration,
+                WrathAccess.Exploration.PartySelection.ToggleHold).AddBinding(KeyCode.H).Grouped("party");
+            InputManager.Register("party.stop", "Stop", InputCategory.Exploration,
+                WrathAccess.Exploration.PartySelection.Stop).AddBinding(KeyCode.G).Grouped("party");
 
             // Ctrl+T: toggle the game's combat mode (real-time-with-pause <-> turn-based). Ctrl+T is free
             // in normal play (the game's Ctrl+T "LocalTeleport" is a cheat-only binding).

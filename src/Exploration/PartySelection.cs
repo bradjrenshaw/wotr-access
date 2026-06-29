@@ -32,6 +32,56 @@ namespace WrathAccess.Exploration
         public static void SelectWholeParty() { if (Active && !TurnBasedBlocks()) DoSelectAll(); }
         public static void SelectMember(int index) { if (Active && !TurnBasedBlocks()) DoSelectMember(index); }
 
+        // Hold position (H) / Stop (G) — the party commands the game exposes as the in-game menu's Hold/Stop
+        // buttons (SelectionManager.SwitchHold / SwitchStop, toggling the state across the current selection).
+        // These hotkeys only ISSUE the command; the announcement is owned by the HUD Hold/Stop toggle elements,
+        // which poll IsHold()/IsStop() each frame and speak the ACTUAL settled result (see InGameScreen). That
+        // keeps one announcement path whether the change came from a hotkey, the HUD button, or the game, and
+        // it reports what really happened — never a predicted state that the command might not have reached.
+        // Gated like selection (focus-mode exploration), which keeps them out of turn-based combat where they
+        // aren't the controls you use.
+        public static void ToggleHold()
+        {
+            if (!Active) return;
+            var sm = Game.Instance?.UI?.SelectionManager;
+            if (sm == null) return;
+            if (!HasControllableSelection()) { Tts.Speak(Loc.T("party.none_selected"), interrupt: true); return; }
+            sm.SwitchHold();
+        }
+
+        public static void Stop()
+        {
+            if (!Active) return;
+            var sm = Game.Instance?.UI?.SelectionManager;
+            if (sm == null) return;
+            if (!HasControllableSelection()) { Tts.Speak(Loc.T("party.none_selected"), interrupt: true); return; }
+            sm.SwitchStop();
+        }
+
+        // A cheap, allocation-free fingerprint of the current selection: its size and the single-selected
+        // unit's identity, which together capture every real selection change (whole-party ↔ single, and
+        // single ↔ different single). The HUD Hold/Stop toggles use it to tell a genuine toggle apart from
+        // IsHold()/IsStop() flipping merely because the selection changed (they're "all selected …"), so a
+        // character swap rebaselines them silently instead of chattering "Hold released".
+        public static int SelectionFingerprint()
+        {
+            var sc = Game.Instance?.SelectionCharacter;
+            if (sc == null) return 0;
+            int count = sc.SelectedUnits?.Count ?? 0;
+            var single = sc.SingleSelectedUnit;
+            return count * 397 ^ (single != null ? single.GetHashCode() : 0);
+        }
+
+        // SwitchHold/SwitchStop quietly no-op on an empty selection. Guard so we report "No one selected".
+        private static bool HasControllableSelection()
+        {
+            var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
+            if (units == null) return false;
+            foreach (var u in units)
+                if (u != null && u.IsDirectlyControllable) return true;
+            return false;
+        }
+
         // In turn-based combat the acting unit is fixed by initiative and the game keeps it selected, so
         // switching party members (or selecting all) doesn't apply — you act with one unit per turn. Stand
         // down and announce whose turn it is instead of fighting the game's selection.

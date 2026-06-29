@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using Kingmaker.UI.MVVM._VM.ActionBar;
 using Kingmaker.UI.UnitSettings; // MechanicActionBarSlot + subtypes
 using Owlcat.Runtime.UI.Tooltips;
+using WrathAccess.Localization; // LocalizationManager (live state-change announcements)
 using WrathAccess.UI.Announcements;
 
 namespace WrathAccess.UI.Proxies
@@ -54,6 +55,34 @@ namespace WrathAccess.UI.Proxies
         /// "enabled" state the game doesn't show (e.g. a charge that's only usable in combat reads disabled
         /// out of combat, just as the game greys it).</summary>
         public bool Enabled { get { var s = Slot; return s != null && s.IsPossibleActive(); } }
+
+        // Live-state watch (via the focused-element OnUpdate hook): while THIS slot is focused, announce when
+        // its toggle state (on/off/targeting — incl. the game's async settle/revert, e.g. Saddle Up) or its
+        // enabled gate (e.g. Charge becoming usable once mounted) changes under you. OnFocusEnter baselines
+        // silently so the initial state — already spoken by the focus announcement — isn't re-read as a change.
+        private bool _baselined;
+        private string _lastToggle;
+        private bool _lastEnabled;
+
+        public override void OnFocusEnter() { _baselined = false; }
+
+        public override void OnUpdate()
+        {
+            string toggle = ToggleStateKey;
+            bool enabled = Enabled;
+            if (!_baselined) { _baselined = true; _lastToggle = toggle; _lastEnabled = enabled; return; }
+            if (toggle != _lastToggle)
+            {
+                _lastToggle = toggle;
+                if (toggle != null) Tts.Speak(LocalizationManager.GetOrDefault("ui", toggle, toggle), interrupt: false);
+            }
+            if (enabled != _lastEnabled)
+            {
+                _lastEnabled = enabled;
+                Tts.Speak(LocalizationManager.GetOrDefault("ui", enabled ? "state.enabled" : "state.disabled",
+                    enabled ? "enabled" : "disabled"), interrupt: false);
+            }
+        }
 
         public override TooltipBaseTemplate GetTooltipTemplate() => Slot?.GetTooltipTemplate();
 

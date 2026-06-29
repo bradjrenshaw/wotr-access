@@ -64,49 +64,29 @@ namespace WrathAccess.Screens
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
 
         public override void OnPush() { BuildShell(); _sig = null; _turnSig = null; _lastRestoreLabel = null; }
-        public override void OnPop() { Clear(); _bar = null; _turn = null; }
+        public override void OnPop() { Clear(); _bar = null; _turn = null; _holdToggle = null; _stopToggle = null; }
 
         private FlowSheet _bar;        // the action-bar FlowSheet (a stable child; only its regions rebuild)
         private ListContainer _turn;   // turn-based Turn panel (a stable child; empty out of combat)
+        private ProxyBoolToggle _holdToggle, _stopToggle; // self-announcing; ticked every frame (see OnUpdate)
         private string _sig;          // last action-bar content signature
         private string _turnSig;      // last Turn-panel membership signature
         private string _lastRestoreLabel; // dedupe the restore announce across a multi-frame settle
-        private UIElement _watchedSlot;
-        private string _watchedToggle;
-        private bool _watchedEnabled;
 
         public override void OnUpdate()
         {
-            WatchSlot();
+            // The focused action-bar slot watches its own live state via ProxyActionBarSlot.OnUpdate (the
+            // generic focused-element hook, ticked by Navigation.TickFocused) — no screen-level watch needed.
             if (_bar == null) BuildShell();
             var sig = Sig();
             if (sig != _sig) { _sig = sig; RefreshBar(); }
             else _lastRestoreLabel = null; // settled: the next change announces its landing
             RefreshTurn();
-        }
-
-        // While an action-bar slot is focused, announce when its live state changes under you — the toggle
-        // on/off/targeting (incl. the game's async settle/revert, e.g. Saddle Up), and the enabled/disabled
-        // gate (e.g. Charge becoming usable once mounted). Baseline (silent) on each new focus; the focus
-        // announcement already spoke the initial state. Only the focused slot is watched, so it never chatters.
-        private void WatchSlot()
-        {
-            var slot = Navigation.Active?.Current as ProxyActionBarSlot;
-            if (slot == null) { _watchedSlot = null; return; }
-            string toggle = slot.ToggleStateKey;
-            bool enabled = slot.Enabled;
-            if (!ReferenceEquals(slot, _watchedSlot)) { _watchedSlot = slot; _watchedToggle = toggle; _watchedEnabled = enabled; return; }
-            if (toggle != _watchedToggle)
-            {
-                _watchedToggle = toggle;
-                if (toggle != null) Tts.Speak(LocalizationManager.GetOrDefault("ui", toggle, toggle), interrupt: false);
-            }
-            if (enabled != _watchedEnabled)
-            {
-                _watchedEnabled = enabled;
-                Tts.Speak(LocalizationManager.GetOrDefault("ui", enabled ? "state.enabled" : "state.disabled",
-                    enabled ? "enabled" : "disabled"), interrupt: false);
-            }
+            // Hold/Stop are global party commands, so their HUD toggles must reflect the game state whether or
+            // not the HUD is focused (the H/G hotkeys fire from unfocused exploration). Tick them here, every
+            // frame, so they poll IsHold()/IsStop() and announce the real settled result themselves.
+            _holdToggle?.OnUpdate();
+            _stopToggle?.OnUpdate();
         }
 
         // Build the stable HUD shell once: the action-bar FlowSheet (populated separately), then the Log
@@ -393,8 +373,23 @@ namespace WrathAccess.Screens
             // !IsPauseButtonEnable, verified live) → grey it then.
             Toggle("hudmenu.pause", () => Game.Instance.IsPaused, () => IngameMenu()?.Pause(),
                 () => !(IngameMenu()?.IsPauseButtonEnable.Value ?? false));
-            Toggle("hudmenu.hold", () => IngameMenu()?.IsHoldEnabled.Value ?? false, () => IngameMenu()?.HandleHoldStateSwitched());
-            Toggle("hudmenu.stop", () => IngameMenu()?.IsStopEnabled.Value ?? false, () => IngameMenu()?.HandleStopStateSwitched());
+            // Hold / Stop reflect the game's own selection state, read LIVE from the source (IsHold/IsStop =
+            // "all selected units …") rather than the IngameMenuVM reactive (which can lag a frame). They
+            // self-announce on change (so the H/G hotkeys and the buttons share one announcement path), keyed
+            // off the selection fingerprint so a character swap rebaselines silently instead of chattering.
+            // Hold reads on/off; Stop only announces when it BECOMES stopped (StopState auto-clears the instant
+            // a unit takes a manual order, so "un-stopped" is just noise).
+            System.Func<int> sel = WrathAccess.Exploration.PartySelection.SelectionFingerprint;
+            _holdToggle = new ProxyBoolToggle(Loc.T("hudmenu.hold"),
+                () => Game.Instance?.UI?.SelectionManager?.IsHold() ?? false,
+                () => IngameMenu()?.HandleHoldStateSwitched(),
+                announceChange: on => Loc.T(on ? "party.hold_on" : "party.hold_off"), announceContext: sel);
+            menu.Add(_holdToggle);
+            _stopToggle = new ProxyBoolToggle(Loc.T("hudmenu.stop"),
+                () => Game.Instance?.UI?.SelectionManager?.IsStop() ?? false,
+                () => IngameMenu()?.HandleStopStateSwitched(),
+                announceChange: on => on ? Loc.T("party.stopped") : null, announceContext: sel);
+            menu.Add(_stopToggle);
             Act("hudmenu.select_all", () => IngameMenu()?.SelectAll());
             Act("hudmenu.formation", () => IngameMenu()?.OpenFormation(), verb: "open");
             // Rest = a targeted action (like an action-bar slot): Enter arms the game's rest-marker mode, then

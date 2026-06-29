@@ -363,6 +363,7 @@
   "gameover.load": "Load game",
   "gameover.main_menu": "Main menu",
   "screen.inspect": "Inspect",
+  "screen.lockpick": "Lockpick",
   "inspect.none": "Nothing to inspect",
   "screen.loot": "Loot",
   "screen.dialog": "Dialog",

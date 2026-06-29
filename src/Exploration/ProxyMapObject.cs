@@ -6,7 +6,9 @@ using Kingmaker.Blueprints.Root;              // BlueprintRoot
 using Kingmaker.Controllers.Clicks.Handlers;  // ClickMapObjectHandler, ClickGroundHandler
 using Kingmaker.EntitySystem.Entities; // MapObjectEntityData
 using Kingmaker.GameModes;             // GameModeType
+using Kingmaker.PubSubSystem;          // EventBus, ILockpickUIHandler
 using Kingmaker.UI.MapObjectOvertip;   // AreaTransitionController
+using Kingmaker.UI.MVVM._VM.Lockpick;  // LockpickVM (lock tool-choice window)
 using Kingmaker.UI.Selection;          // SelectionManagerPC
 using Kingmaker.UnitLogic.Commands;    // AreaTransitionGroupCommand
 using Kingmaker.View;                  // EntityViewBase, ObstacleAnalyzer
@@ -254,6 +256,15 @@ namespace WrathAccess.Exploration
 
             var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
             if (units == null || units.Count == 0) return false;
+
+            // Locked objects: route through the game's lock check so its tool-choice window (skill / +5 /
+            // +10 / destroy) opens — the branch ClickMapObjectHandler.OnClick runs ABOVE Interact, which our
+            // direct call (kept for the forced-overtip behaviour) skipped. LockpickScreen makes it accessible.
+            if (LockpickVM.NeedLockpick(view))
+            {
+                EventBus.RaiseEvent<ILockpickUIHandler>(h => h.HandleLockpickRequest(view, false));
+                return true;
+            }
             return ClickMapObjectHandler.Interact(view.gameObject, units, forceOvertipInteractions: true);
         }
 

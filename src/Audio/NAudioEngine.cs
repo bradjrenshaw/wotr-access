@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using NAudio.Dsp;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using UnityEngine;
@@ -101,6 +102,27 @@ namespace WrathAccess.Audio
             catch (Exception e) { Main.Log?.Error("[naudio] one-shot " + file + " — " + e); }
         }
 
+        /// <summary>Positional one-shot with the full spatial model — constant-power pan + interaural
+        /// time difference + the front/back lowpass (see <see cref="Spatializer"/>). <paramref name="dxEast"/>
+        /// / <paramref name="dzNorth"/> are the source offset from the listener (the cursor), in metres;
+        /// the caller still owns the distance→volume curve. Returns the live voice handle: a tracked source
+        /// (<see cref="SpatialSources"/>) re-sets its placement each frame so it follows the moving cursor;
+        /// fire-and-forget callers (a cue anchored to a fixed reference) just ignore the return.</summary>
+        public ISpatialVoice PlaySpatial(string file, float volume, float dxEast, float dzNorth, float panWidth)
+        {
+            try
+            {
+                EnsureStarted();
+                var buf = Get(file);
+                if (buf == null || buf.Length == 0) return null;
+                var voice = new PositionalEmitter(buf, Rate);
+                voice.SetPlacement(Spatializer.Cue(dxEast, dzNorth, panWidth), volume);
+                _mixer.AddMixerInput(voice);
+                return voice;
+            }
+            catch (Exception e) { Main.Log?.Error("[naudio] spatial " + file + " — " + e); return null; }
+        }
+
         private float[] Get(string path)
         {
             if (_cache.TryGetValue(path, out var cached)) return cached;
@@ -153,6 +175,116 @@ namespace WrathAccess.Audio
                     buffer[offset + i] = _buf[_pos + i] * (((_pos + i) & 1) == 0 ? _gainL : _gainR);
                 _pos += n;
                 return n;
+            }
+        }
+
+        // A spatialised, LIVE one-shot. The cached buffer is treated as MONO (left lane — our cues are mono,
+        // duplicated to stereo on decode), low-passed for the front/back cue, then split L/R with a constant-
+        // power pan and a fractional ITD delay on the FAR channel (a tiny ring of recent FILTERED samples).
+        // Crucially the placement is re-settable while it plays: SetPlacement (main thread) writes target
+        // gains/ITD/cutoff and Read (audio thread) ramps the current values toward them across each block, so
+        // a source tracks the moving cursor without clicks. Goes silent past the buffer end, draining the
+        // delay tail, then returns 0 so the mixer auto-removes it.
+        private sealed class PositionalEmitter : ISampleProvider, ISpatialVoice
+        {
+            private const int RingSize = 64;          // >= max ITD (~29 frames) + margin; power of two
+            private const int RingMask = RingSize - 1;
+            private const int TailFrames = RingSize;  // drain the delay line after the source ends
+            private const float OpenHz = 20000f;      // "no filter" cutoff (effectively transparent)
+            private const float Q = 0.707f;
+
+            private readonly float[] _buf;            // interleaved stereo; left lane sampled as mono
+            private readonly int _srcFrames;
+            private readonly int _rate;
+            private readonly float[] _ring = new float[RingSize];
+            private readonly BiQuadFilter _lp;        // always present; cutoff ramped (OpenHz ≈ bypass)
+
+            // Targets — written by SetPlacement (main thread), read by Read (audio thread).
+            private volatile float _tGainL, _tGainR, _tItd, _tCutoff, _tWet;
+            // Current smoothed values — audio thread only.
+            private float _cGainL, _cGainR, _cItd, _cCutoff, _cWet;
+            private bool _primed;
+            private int _frame;
+            private volatile bool _finished;
+
+            public PositionalEmitter(float[] buf, int rate)
+            {
+                _buf = buf;
+                _srcFrames = buf.Length / 2;
+                _rate = rate;
+                _tCutoff = _cCutoff = OpenHz;
+                _lp = BiQuadFilter.LowPassFilter(rate, OpenHz, Q);
+                WaveFormat = WaveFormat.CreateIeeeFloatWaveFormat(rate, 2);
+            }
+
+            public WaveFormat WaveFormat { get; }
+            public bool Finished => _finished;
+
+            public void SetPlacement(SpatialCue cue, float volume)
+            {
+                float t = (cue.Pan + 1f) * 0.5f * (float)(Math.PI / 2.0);
+                _tGainL = volume * (float)Math.Cos(t);
+                _tGainR = volume * (float)Math.Sin(t);
+                _tItd = cue.ItdSamples;
+                _tCutoff = Mathf.Clamp(cue.LowpassHz, 20f, _rate * 0.49f);
+                _tWet = cue.WetMix < 0f ? 0f : (cue.WetMix > 1f ? 1f : cue.WetMix);
+            }
+
+            public int Read(float[] buffer, int offset, int count)
+            {
+                int frames = count / 2;
+                if (frames == 0) return 0;
+
+                float tGainL = _tGainL, tGainR = _tGainR, tItd = _tItd, tCutoff = _tCutoff, tWet = _tWet;
+                if (!_primed)
+                {
+                    _cGainL = tGainL; _cGainR = tGainR; _cItd = tItd; _cCutoff = tCutoff; _cWet = tWet;
+                    _lp.SetLowPassFilter(_rate, Mathf.Clamp(_cCutoff, 20f, _rate * 0.49f), Q);
+                    _primed = true;
+                }
+
+                // Cutoff lerps once per block (retuning per sample is too costly; filter state is preserved).
+                if (Mathf.Abs(tCutoff - _cCutoff) > 1f)
+                {
+                    _cCutoff += (tCutoff - _cCutoff) * 0.5f;
+                    _lp.SetLowPassFilter(_rate, Mathf.Clamp(_cCutoff, 20f, _rate * 0.49f), Q);
+                }
+
+                // Gains + ITD + wet-mix ramp linearly to target across the block — click-free moving source.
+                float dGainL = (tGainL - _cGainL) / frames;
+                float dGainR = (tGainR - _cGainR) / frames;
+                float dItd = (tItd - _cItd) / frames;
+                float dWet = (tWet - _cWet) / frames;
+
+                int produced = 0;
+                for (int f = 0; f < frames; f++)
+                {
+                    if (_frame >= _srcFrames + TailFrames) break;
+                    _cGainL += dGainL; _cGainR += dGainR; _cItd += dItd; _cWet += dWet;
+
+                    // Blend the dry source with its low-passed copy by the rear wet-mix. Dry ahead/at the side
+                    // (wet ≈ 0); behind, the filtered copy fades in — keeping bright cues audible (see WetMix).
+                    float dry = _frame < _srcFrames ? _buf[_frame * 2] : 0f;
+                    float wet = _lp.Transform(dry);
+                    float m = dry + _cWet * (wet - dry);
+                    _ring[_frame & RingMask] = m;
+
+                    float itdMag = _cItd < 0f ? -_cItd : _cItd;
+                    int itdInt = (int)itdMag; if (itdInt > RingSize - 2) itdInt = RingSize - 2;
+                    float frac = itdMag - (int)itdMag;
+                    int d0 = _frame - itdInt, d1 = d0 - 1;
+                    float s0 = d0 >= 0 ? _ring[d0 & RingMask] : 0f;
+                    float s1 = d1 >= 0 ? _ring[d1 & RingMask] : 0f;
+                    float far = s0 + (s1 - s0) * frac;
+                    float near = m;
+
+                    bool delayLeft = _cItd >= 0f; // +ve = source east = right ear leads, left ear lags
+                    buffer[offset + produced++] = (delayLeft ? far : near) * _cGainL;
+                    buffer[offset + produced++] = (delayLeft ? near : far) * _cGainR;
+                    _frame++;
+                }
+                if (_frame >= _srcFrames + TailFrames) _finished = true;
+                return produced;
             }
         }
 

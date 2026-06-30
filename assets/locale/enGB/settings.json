@@ -184,6 +184,8 @@
   "audio.engine": "Sound playback",
   "audio.engine.wwise": "Game audio engine (3D)",
   "audio.engine.classic": "Classic (flat stereo panning)",
+  "audio.itd": "Sharpen left/right (time-delay panning)",
+  "audio.front_back_filter": "Muffle sounds behind you (front/back cue)",
   "audio.listener": "Game audio heard from",
   "audio.listener.cursor": "Cursor (falls back to party)",
   "audio.listener.party": "Party leader",

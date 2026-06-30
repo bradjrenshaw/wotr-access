@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
@@ -78,23 +79,22 @@ namespace WrathAccess.Exploration.Overlays
             var stem = Settings?.Get<WrathAccess.Settings.ChoiceSetting>("review_sound")?.ValueId;
             if (string.IsNullOrEmpty(stem) || stem == "silent") return;
 
-            PlayAtNearest(stem, Path.Combine(OverlayAudio.Dir, stem + ".wav"), item, from);
-        }
-
-        // Position a one-shot at the NEAREST POINT of the item's actual shape (not its centre): the sound
-        // emanates from where the thing is closest to you — a circle from its near edge, a wall/line along its
-        // length. Volume by that distance, pan by its bearing; inside the shape → at the reference (max, centred).
-        private void PlayAtNearest(string stem, string path, ScanItem item, Vector3 from)
-        {
+            // Anchored to the reference you reviewed from (the review cursor), so it does NOT chase the
+            // movement cursor — a deliberate "this thing, relative to where you looked" cue. One-shot.
             var np = item.NearestPoint(from);
             float dx = np.x - from.x, dz = np.z - from.z;
-            float dist = Mathf.Sqrt(dx * dx + dz * dz);
-            float refDist = Int("ref_distance", 10) * Geo.MetresPerFoot;
-            float panWidth = PanWidthFeet * Geo.MetresPerFoot;
-            float vol = Mathf.Clamp(refDist / (refDist + dist), MinVol, 1f) * EffectiveVolume;
-            float pan = dist > 1e-3f ? Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
-            AudioEngines.Active.PlayOneShot(stem, path, np, vol, pan);
+            AudioEngines.NAudio.PlaySpatial(Path.Combine(OverlayAudio.Dir, stem + ".wav"),
+                VolumeFor(Mathf.Sqrt(dx * dx + dz * dz)), dx, dz, PanWidthM);
         }
+
+        // The sweep's distance→volume curve (reads the live ref-distance + system volume settings).
+        private float VolumeFor(float dist)
+        {
+            float refDist = Int("ref_distance", 10) * Geo.MetresPerFoot;
+            return Mathf.Clamp(refDist / (refDist + dist), MinVol, 1f) * EffectiveVolume;
+        }
+
+        private static float PanWidthM => PanWidthFeet * Geo.MetresPerFoot;
 
         public override void OnExit(Overlay overlay) => ResetSweep();
 
@@ -154,8 +154,15 @@ namespace WrathAccess.Exploration.Overlays
             var snd = ScanSounds.Resolve(item.Primary); // live: the user's per-node pick
             if (snd == null) return;
 
-            // Positioned at the nearest point on the item's actual shape (a wall reads along its length).
-            PlayAtNearest(snd, Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"), item, overlay.Cursor.Position);
+            // A LIVE source: heard from the moving cursor, positioned at the nearest point on the item's
+            // actual shape (recomputed as you move, so a wall reads along its length). SpatialSources re-pans
+            // and re-attenuates it every frame until the ping finishes — it no longer freezes at fire time.
+            WrathAccess.Audio.SpatialSources.Play(
+                Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"),
+                () => overlay.Cursor.Position,
+                c => item.NearestPoint(c),
+                VolumeFor,
+                PanWidthM);
         }
 
         // gap = clamp(K/count, gap_min, gap_max): spacious for a few, compressing toward the floor as the

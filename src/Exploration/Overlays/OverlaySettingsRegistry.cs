@@ -145,6 +145,11 @@ namespace WrathAccess.Exploration.Overlays
                         new Choice("classic", "Classic (flat stereo panning)", "audio.engine.classic"),
                         new Choice("wwise", "Game audio engine (3D, occlusion-capable)", "audio.engine.wwise"),
                     }, "classic", "audio.engine"));
+            // Classic-engine spatial cues (see Spatializer), each toggleable so they can be A/B'd by ear.
+            if (audio.GetByKey("itd") == null)
+                audio.Add(new BoolSetting("itd", "Sharpen left/right (time-delay panning)", true, "audio.itd"));
+            if (audio.GetByKey("front_back_filter") == null)
+                audio.Add(new BoolSetting("front_back_filter", "Muffle sounds behind you (front/back cue)", true, "audio.front_back_filter"));
             if (audio.GetByKey("listener") == null)
                 audio.Add(new ChoiceSetting("listener", "Game audio heard from",
                     new System.Collections.Generic.List<Choice>

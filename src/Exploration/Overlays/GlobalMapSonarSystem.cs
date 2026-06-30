@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -88,15 +89,16 @@ namespace WrathAccess.Exploration.Overlays
 
         private void FirePing(GlobalMapPointView p)
         {
-            var c = GlobalMapCursor.Position;
-            var pos = p.transform.position;
-            float dx = pos.x - c.x, dz = pos.z - c.z;
-            float dist = Mathf.Sqrt(dx * dx + dz * dz);
             string stem = ScanSounds.Resolve(NodeKey(p)); // the user's per-type pick (Scanner tab)
             if (stem == null) return; // went Silent since the snapshot
-            float vol = Mathf.Clamp(RefDist / (RefDist + dist), MinVol, 1f) * SonarVolume();
-            float pan = Mathf.Clamp(dx / Mathf.Max(dist, PanWidth), -1f, 1f);
-            AudioEngines.NAudio.PlayOneShot(stem, Path.Combine(OverlayAudio.Dir, "interactables", stem + ".wav"), pos, vol, pan);
+            var pos = p.transform.position; // fixed map point; the cursor is the moving listener
+            // A LIVE source: re-panned/re-attenuated each frame as the world-map cursor moves, until it ends.
+            SpatialSources.Play(
+                Path.Combine(OverlayAudio.Dir, "interactables", stem + ".wav"),
+                () => GlobalMapCursor.Position,
+                _ => pos,
+                dist => Mathf.Clamp(RefDist / (RefDist + dist), MinVol, 1f) * SonarVolume(),
+                PanWidth);
         }
 
         private static float SonarVolume()

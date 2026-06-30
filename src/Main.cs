@@ -182,6 +182,7 @@ namespace WrathAccess
             // wall tones, fog/object cues) read the fresh position.
             OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime); // also drives the world-map sonar (a WorldMap overlay system)
             WrathAccess.Exploration.GlobalMapCursor.Tick(UnityEngine.Time.unscaledDeltaTime); // world-map cursor; gated on the engaged overlay
+            WrathAccess.Audio.SpatialSources.Tick(); // re-spatialise live one-shots against the cursors just moved above
             WrathAccess.Events.EventBusAdapter.Tick(); // reconcile this frame's buff churn into gain/loss events
             WrathAccess.Events.EventDispatcher.Tick(); // flush this frame's queued events (damage, buffs, room changes)
         }

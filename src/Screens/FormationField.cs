@@ -154,8 +154,8 @@ namespace WrathAccess.Screens
             float refDist = 10f * Geo.MetresPerFoot, panWidth = 10f * Geo.MetresPerFoot;
             float vol = Mathf.Clamp(refDist / (refDist + dist), 0.1f, 1f)
                 * ((ModSettings.GetSetting<IntSetting>("audio.volumes.object")?.Get() ?? 100) / 100f) * OverlayAudio.Master;
-            float pan = dist > 1e-3f ? Mathf.Clamp(off.x / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
-            AudioEngines.NAudio.PlayOneShot(null, Path.Combine(OverlayAudio.Dir, file), Vector3.zero, vol, pan);
+            // off.x = east, off.y = north — the spatializer pans/ITDs by east and front/back-filters by north.
+            AudioEngines.NAudio.PlaySpatial(Path.Combine(OverlayAudio.Dir, file), vol, off.x, off.y, panWidth);
         }
 
         /// <summary>Ctrl+1..6: grab the Nth party member straight away (start dragging) — so Ctrl+1, then move

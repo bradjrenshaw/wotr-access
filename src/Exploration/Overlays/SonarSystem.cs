@@ -132,12 +132,17 @@ namespace WrathAccess.Exploration.Overlays
             _sweep.Clear();
             foreach (var it in WorldModel.Items)
             {
-                // CurrentlySeen: the sonar is a "what's around right now" lens, like the review
-                // cycles — a remembered door back under fog shouldn't keep pinging (user report).
-                if (!it.IsVisible || !it.CurrentlySeen || ScanSounds.Resolve(it.Primary) == null) continue;
+                if (ScanSounds.Resolve(it.Primary) == null) continue; // no sound configured for this thing
                 var np = it.NearestPoint(c); // distance to the nearest part of the actual shape
                 float dx = np.x - c.x, dz = np.z - c.z;
                 if (dx * dx + dz * dz > maxDist * maxDist) continue;
+                // Known + (a party member sees it now, OR a remembered thing under fog with a clear line of
+                // sight from the cursor). Anything currently in sight always pings — in combat it'd be jarring
+                // for an enemy your party plainly sees to go silent because a table sits between it and the
+                // cursor — while a remembered thing behind a wall isn't pinged straight through it. Shared with
+                // the review cycles via ScanItem.DetectableFrom so the two stay consistent. (Sweep is
+                // distance-capped, so this only runs on nearby candidates.)
+                if (!it.DetectableFrom(c)) continue;
                 _sweep.Add(it);
             }
             _sweep.Sort((a, b) => (a.Position.x - c.x).CompareTo(b.Position.x - c.x));
@@ -145,7 +150,7 @@ namespace WrathAccess.Exploration.Overlays
 
         private void FirePing(ScanItem item, Overlay overlay)
         {
-            if (!item.IsVisible || !item.CurrentlySeen) return; // went away since the snapshot
+            if (!item.IsVisible) return; // went away since the snapshot
             var snd = ScanSounds.Resolve(item.Primary); // live: the user's per-node pick
             if (snd == null) return;
 

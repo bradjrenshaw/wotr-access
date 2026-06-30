@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
+using Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar; // LineOfSightGeometry
 using UnityEngine;
 
 namespace WrathAccess.Exploration
@@ -36,6 +37,26 @@ namespace WrathAccess.Exploration
                 try { return !Kingmaker.Controllers.FogOfWarController.IsInFogOfWar(Position); }
                 catch { return true; } // areas without a fog system → no extra filter
             }
+        }
+
+        // Metres of slack on the fog line-of-sight ray, so a thing isn't blocked by its own wall geometry
+        // (e.g. a door set into its frame). Tunable; shared by the sonar and the review cycles.
+        internal const float LosFudge = 0.6f;
+
+        /// <summary>
+        /// Whether this item should register on the sonar / review cycles from the given cursor. It must be
+        /// KNOWN (<see cref="IsVisible"/> — revealed objects persist, fogged units drop), and either
+        /// currently in a party member's sight (<see cref="CurrentlySeen"/>) OR — for a remembered thing
+        /// under fog — have a clear line of sight from the cursor. The fog case uses the game's own LoS
+        /// geometry, so we don't surface something straight through a wall you'd have to walk around to reach.
+        /// (Room exits bypass this entirely — that geometry is known and we keep it always-reachable.)
+        /// </summary>
+        public bool DetectableFrom(Vector3 cursor)
+        {
+            if (!IsVisible) return false;
+            if (CurrentlySeen) return true;
+            var los = LineOfSightGeometry.Instance;
+            return los == null || !los.HasObstacle(cursor, NearestPoint(cursor), LosFudge);
         }
 
         /// <summary>The unit this item represents, for ability targeting (null = target its point instead).</summary>

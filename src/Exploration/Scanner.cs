@@ -482,12 +482,13 @@ namespace WrathAccess.Exploration
             _selectionOverride = null;
             Rebuild();
             var refPos = ScanFrom;
-            // The review cycles are tactical — "what can we see RIGHT NOW" — so things currently
-            // back under fog of war are skipped (user spec: a chest remembered 300m away on another
-            // level shouldn't be in the Comma/Period rounds). The SCANNER keeps area-wide knowledge.
+            // Same rule as the sonar (ScanItem.DetectableFrom): cycle anything a party member can see right
+            // now, plus remembered things under fog that have a clear line of sight from the cursor — so a
+            // chest behind a wall isn't offered until you'd actually have a straight path to it. (Room exits,
+            // V, are a separate cycle and stay always-reachable — that geometry is known.)
             var candidates = new List<ScanItem>();
             foreach (var it in WorldModel.Items)
-                if ((_debugAll || (it.IsVisible && it.CurrentlySeen)) && InGroup(it, group)) candidates.Add(it);
+                if ((_debugAll || it.DetectableFrom(refPos)) && InGroup(it, group)) candidates.Add(it);
             if (candidates.Count == 0)
             {
                 Speak(Loc.T("scan.category_empty", new { label = ReviewGroupLabel(group) }));

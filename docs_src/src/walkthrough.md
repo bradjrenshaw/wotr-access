@@ -61,8 +61,8 @@ You can have up to 6 party members. That limit counts only specific characters; 
 companions don't count toward it (which makes animal companions very strong).
 
 Command everyone at once with **Ctrl+A**, or a specific member with **Ctrl+1**–**Ctrl+6**. Moving the
-whole party keeps them in a formation. The formation screen isn't accessible yet, but moving
-individual characters around seems to edit the custom formation anyway.
+whole party keeps them in a formation, which you can rearrange in the accessible formation window
+(the HUD menu's Formation button).
 
 Select the whole party and move the cursor up to the next fog of war. This hallway curves west and
 northwest. Keep approaching and you'll eventually hear a new sonar sound for a revealed container (if

@@ -22,7 +22,7 @@ After the dialogue Seela will join your party and Anevia will follow as a neutra
 
 You can have up to 6 party members. Note that this limit of 6 only includes specific characters; any summons, animal companions, etc don't count towards this limit. Yes this makes animal companions very powerful.
 
-You can either command all party members at once (ctrl a) or you can select a specific party member via the ctrl 1 through ctrl 6 shortcuts. When commanding party members at once, the movement command will move all of them, but they will try to stay in a formation. The formation screen is not yet accessible, but moving individual characters around seems to modify the custom formation anyway.
+You can either command all party members at once (ctrl a) or you can select a specific party member via the ctrl 1 through ctrl 6 shortcuts. When commanding party members at once, the movement command will move all of them, but they will try to stay in a formation. You can rearrange that formation in the accessible formation window (the Formation button in the in-game menu).
 
 Select your whole party and navigate the cursor up to the next fog of war. This hallway curves to the west and northwest. Keep approaching the fog of war and eventually you will hear a new sonar sound for a revealed container if you have it enabled. Seela will comment on it as well.
 

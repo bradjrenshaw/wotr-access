@@ -64,6 +64,25 @@ namespace WrathAccess.Exploration
             return true;
         }
 
+        /// <summary>
+        /// Turn-based: compute (and populate, so the issued command walks it) the approach to within
+        /// <paramref name="reach"/> of <paramref name="targetPos"/>, reporting the path's walk length and the
+        /// current unit's remaining MOVE-action range — both metres. Returns false when there's no movement
+        /// path to walk (already within reach, or unreachable); callers treat that as "no move needed / can't
+        /// move", and only act on the returned lengths when it's true.
+        /// </summary>
+        public static bool TryApproach(Vector3 targetPos, float reach, out float walkMeters, out float moveActionMeters)
+        {
+            walkMeters = moveActionMeters = 0f;
+            var cu = CurrentUnit;
+            if (cu == null) return false;
+            var pts = ComputePath(targetPos, reach);
+            moveActionMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false);
+            if (pts == null || pts.Count == 0) return false; // already in reach, or no route at all
+            for (int i = 1; i < pts.Count; i++) walkMeters += Vector3.Distance(pts[i - 1], pts[i]);
+            return true;
+        }
+
         private static System.Collections.Generic.List<Vector3> ComputePath(Vector3 point, float approachRadius)
         {
             if (!InTurnBased) return null;

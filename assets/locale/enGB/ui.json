@@ -121,6 +121,7 @@
   "combat.turn_ended": "{name}'s turn ended",
   "combat.not_turn_based": "Not in turn-based combat",
   "combat.no_active_turn": "No active turn",
+  "combat.too_far_to_attack": "Too far to attack this turn",
   "combat.status_actions": "{name}, standard action {standard}, move action {move}, swift action {swift}",
   "combat.available": "available",
   "combat.used": "used",

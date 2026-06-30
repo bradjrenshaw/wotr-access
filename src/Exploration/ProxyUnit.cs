@@ -82,18 +82,24 @@ namespace WrathAccess.Exploration
         {
             var view = _unit.View;
             if (view == null) return false;
-            // Turn-based: if this is an attackable enemy, pre-compute the approach path using the attack's
-            // reach as the radius — so the path lands on a reachable melee space (not the enemy's own tile)
-            // and the attack's approach has a route to walk. Without it the approach has no path (the game's
-            // mouse-driven prediction never produced one) and the unit doesn't move. UnitAttack itself walks
-            // as far as the budget allows and strikes only if it reaches range.
+            // Turn-based: pre-compute the approach path to the attack's reach (so the command has a route to
+            // walk — without it the game's mouse-driven prediction never ran and the unit wouldn't move).
+            // But REFUSE the attack if reaching attack range would take more than the MOVE action: the game
+            // would otherwise spend the standard action as a second move and never strike — a far enemy that
+            // needs move+standard just to reach gets run into for nothing. The player can still close
+            // deliberately with move-to-cursor (Backspace), which is free to spend both actions on movement.
             if (CombatMode.InTurnBased)
             {
                 var attacker = CombatMode.CurrentUnit;
                 if (attacker != null && attacker.View != null && attacker.CanAttack(_unit))
                 {
                     float reach = UnitAttack.GetApproachRadius(attacker.GetFirstWeapon(), attacker, _unit);
-                    CombatMode.PathEndpointToward(_unit.Position, reach); // populates the approach path
+                    if (CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange)
+                        && walk > moveRange)
+                    {
+                        Tts.Speak(Loc.T("combat.too_far_to_attack"));
+                        return true; // handled (no command issued); the unit stays put rather than burning both actions
+                    }
                 }
             }
             return new ClickUnitHandler().OnClick(view.gameObject, view.transform.position, 0);

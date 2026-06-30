@@ -1,9 +1,11 @@
+using System.Collections.Generic; // List
 using Kingmaker; // Game
 using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized TB texts)
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.PubSubSystem; // EventBus, IMessageModalUIHandler
 using Kingmaker.TurnBasedMode; // PathVisualizer, ActionsState
 using Kingmaker.UI; // MessageModalBase
+using Kingmaker.UnitLogic.Commands; // UnitUseAbility / UnitAttack / UnitMoveTo (live action)
 using TurnBased.Controllers; // CombatController, TurnController
 using UnityEngine; // Vector3
 
@@ -158,10 +160,49 @@ namespace WrathAccess.Exploration
             if (!FocusMode.Active) return;
             var screen = WrathAccess.Screens.ScreenManager.Current;
             if (screen == null || screen.Key != "ctx.ingame") return;
-            if (!InTurnBased) { Tts.Speak(Message.Localized("ui", "combat.not_turn_based").Resolve(), interrupt: true); return; }
+            // Real-time-with-pause: report what the selected character(s) are doing (turn-based instead
+            // gives the acting unit's action economy below).
+            if (!InTurnBased) { Tts.Speak(SelectedActionsLine(), interrupt: true); return; }
             var line = StatusLine();
             if (line == null) { Tts.Speak(Message.Localized("ui", "combat.no_active_turn").Resolve(), interrupt: true); return; }
             Tts.Speak(line, interrupt: true);
+        }
+
+        // "{name}, {action}" for each selected, controllable character (idle when they've nothing queued),
+        // joined for the whole selection — so one press reads what everyone you've selected is up to.
+        private static string SelectedActionsLine()
+        {
+            var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
+            var parts = new List<string>();
+            if (units != null)
+                foreach (var u in units)
+                    if (u != null && u.IsDirectlyControllable)
+                        parts.Add(Loc.T("combat.unit_action",
+                            new { name = u.CharacterName, action = DescribeAction(u) ?? Loc.T("combat.idle") }));
+            return parts.Count > 0 ? string.Join(". ", parts) : Loc.T("party.none_selected");
+        }
+
+        /// <summary>What the unit is doing right now, from its live commands — "casting X" / "using X" /
+        /// "attacking Y" / "moving" — or null when idle. The same model the game's cast overtip reads;
+        /// shared by the scanner's action announcement and the RTWP status key.</summary>
+        public static string DescribeAction(UnitEntityData unit)
+        {
+            var cmds = unit?.Commands;
+            if (cmds == null) return null;
+            var ability = cmds.UnitUseAbility;
+            if (ability != null && ability.Ability != null && ability.Ability.Blueprint != null)
+            {
+                var bp = ability.Ability.Blueprint;
+                return Loc.T(bp.IsSpell ? "unit.action_casting" : "unit.action_using", new { name = bp.Name });
+            }
+            if (cmds.Standard is UnitAttack atk)
+                return atk.TargetUnit != null
+                    ? Loc.T("unit.action_attacking_target", new { name = atk.TargetUnit.CharacterName })
+                    : Loc.T("unit.action_attacking");
+            foreach (var c in cmds.Raw)
+                if (c is UnitMoveTo || c is UnitMoveAlongPath || c is UnitMoveContiniously)
+                    return Loc.T("unit.action_moving");
+            return null;
         }
 
         /// <summary>The acting unit's action economy + movement budgets as one spoken line (null when no

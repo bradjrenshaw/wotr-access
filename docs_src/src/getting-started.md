@@ -100,9 +100,15 @@ toggles stealth, and **Ctrl+D** toggles AI control for the selection.
 ## Combat
 
 Turn-based combat is supported. When it begins you'll hear whose turn it is, and you act with the
-current character. Press **R** at any time for a status readout: whose turn it is and how many
-actions and how much movement remain. **Ctrl+T** switches the whole game between turn-based and
+current character. **R** gives a status readout: in turn-based, the acting character's remaining
+actions and movement; in real-time-with-pause, what your selected character(s) are currently doing
+(casting, attacking, moving, or idle). **Ctrl+T** switches the whole game between turn-based and
 real-time-with-pause, and **Space** toggles pause while exploring.
+
+You can also check any unit without selecting it: when you land on a unit in the scanner, its line
+includes what it's doing right now — e.g. "Bob, casting Fireball, HP 23 of 23." That action readout
+is its own announcement type, so you can toggle it (and tune it per faction) under **Scan
+announcements → Action** in settings.
 
 ## Targeting abilities and spells
 

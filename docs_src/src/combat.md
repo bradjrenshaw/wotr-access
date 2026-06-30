@@ -77,6 +77,10 @@ order to acts on the game's AI, which is usually fine for routine attacks. **Pau
 want control** — at the start of a fight, when a new enemy appears, or any time things change — and
 lean on the game's auto-pause settings to stop the action at key moments for you.
 
+Press **R** to hear what your selected character(s) are currently doing — casting, attacking, moving,
+or idle (it reads all of them when several are selected). And the scanner's per-unit line shows the
+same for *any* unit you land on, so you can check an enemy's action without selecting it.
+
 ### Commanding in turn-based
 
 Combat proceeds one character at a time in initiative order, and on your character's turn your orders

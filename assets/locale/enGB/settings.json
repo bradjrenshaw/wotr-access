@@ -197,6 +197,7 @@
   "scanner.sound": "Sound",
   "proxyann.name": "Name",
   "proxyann.type": "Type",
+  "proxyann.action": "Action",
   "proxyann.hp": "Health",
   "proxyann.condition": "Condition",
   "proxyann.object_state": "Object state",

@@ -56,10 +56,12 @@ namespace WrathAccess.Exploration
         protected override string AnnounceNode => _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
             : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : ScanTaxonomy.UnitsNeutrals;
 
-        // name, type (faction), then either a terminal condition (dead/unconscious) OR hp (+ in-combat).
+        // name, type (faction), current action (casting/attacking/moving), then either a terminal
+        // condition (dead/unconscious) OR hp (+ in-combat). The action part self-skips when idle.
         protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
         {
             foreach (var p in NameAndType(_unit.CharacterName, FactionWord())) yield return p;
+            yield return new Announce.ActionPart(CombatMode.DescribeAction(_unit));
 
             var state = _unit.State;
             if (state.IsDead) yield return new Announce.ConditionPart("unit.dead");

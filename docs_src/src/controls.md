@@ -62,7 +62,7 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 | Key | Action |
 | --- | --- |
 | Ctrl+T | Toggle turn-based / real-time-with-pause |
-| R | Combat status: whose turn, actions and movement remaining |
+| R | Status: in turn-based, the acting unit's actions/movement remaining; in real-time, what your selected character(s) are doing |
 
 ## Exploration — scanner & review cursor
 

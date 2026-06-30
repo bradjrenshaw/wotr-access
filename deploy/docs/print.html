@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-86b51d45.js";
+            window.path_to_searchindex_js = "searchindex-51fc4d75.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-6d5d962f.js"></script>
@@ -336,9 +336,14 @@ party moves into formation. <strong>H</strong> toggles hold position, <strong>G<
 toggles stealth, and <strong>Ctrl+D</strong> toggles AI control for the selection.</p>
 <h2 id="combat"><a class="header" href="#combat">Combat</a></h2>
 <p>Turn-based combat is supported. When it begins you’ll hear whose turn it is, and you act with the
-current character. Press <strong>R</strong> at any time for a status readout: whose turn it is and how many
-actions and how much movement remain. <strong>Ctrl+T</strong> switches the whole game between turn-based and
+current character. <strong>R</strong> gives a status readout: in turn-based, the acting character’s remaining
+actions and movement; in real-time-with-pause, what your selected character(s) are currently doing
+(casting, attacking, moving, or idle). <strong>Ctrl+T</strong> switches the whole game between turn-based and
 real-time-with-pause, and <strong>Space</strong> toggles pause while exploring.</p>
+<p>You can also check any unit without selecting it: when you land on a unit in the scanner, its line
+includes what it’s doing right now — e.g. “Bob, casting Fireball, HP 23 of 23.” That action readout
+is its own announcement type, so you can toggle it (and tune it per faction) under <strong>Scan
+announcements → Action</strong> in settings.</p>
 <h2 id="targeting-abilities-and-spells"><a class="header" href="#targeting-abilities-and-spells">Targeting abilities and spells</a></h2>
 <p>To use an ability or spell, Tab to the action bar and choose it; the game then enters targeting
 mode. Aim with either cursor: move the movement cursor onto a target and press <strong>Enter</strong>, or put the
@@ -752,6 +757,9 @@ same for the next character, and unpause to watch it all resolve. Anyone you did
 order to acts on the game’s AI, which is usually fine for routine attacks. <strong>Pause again whenever you
 want control</strong> — at the start of a fight, when a new enemy appears, or any time things change — and
 lean on the game’s auto-pause settings to stop the action at key moments for you.</p>
+<p>Press <strong>R</strong> to hear what your selected character(s) are currently doing — casting, attacking, moving,
+or idle (it reads all of them when several are selected). And the scanner’s per-unit line shows the
+same for <em>any</em> unit you land on, so you can check an enemy’s action without selecting it.</p>
 <h3 id="commanding-in-turn-based"><a class="header" href="#commanding-in-turn-based">Commanding in turn-based</a></h3>
 <p>Combat proceeds one character at a time in initiative order, and on your character’s turn your orders
 <strong>happen immediately</strong> — there’s nothing to queue. Spend the turn within the action economy: a move
@@ -911,7 +919,7 @@ keyboard from the game).</p>
 </thead>
 <tbody>
 <tr><td>Ctrl+T</td><td>Toggle turn-based / real-time-with-pause</td></tr>
-<tr><td>R</td><td>Combat status: whose turn, actions and movement remaining</td></tr>
+<tr><td>R</td><td>Status: in turn-based, the acting unit’s actions/movement remaining; in real-time, what your selected character(s) are doing</td></tr>
 </tbody>
 </table>
 </div>
@@ -1040,9 +1048,10 @@ in-game UI.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="settings"><a class="header" href="#settings">Settings</a></h1>
 <p>Press <strong>Ctrl+M</strong> anywhere to open the <strong>mod menu</strong>. It holds the mod’s own settings, lets you re-run
-the <strong>setup wizard</strong>, and links to the Discord and Patreon. Settings are organised into tabs; you
-navigate them with the usual arrows, Tab, and Enter, and every category has a <strong>Reset to defaults</strong>
-that affects only that category.</p>
+the <strong>setup wizard</strong>, opens <strong>Help</strong> (which has <strong>Read documentation</strong> — opening this book in your
+browser), and links to the Discord and Patreon. Settings are organised into tabs; you navigate them
+with the usual arrows, Tab, and Enter, and every category has a <strong>Reset to defaults</strong> that affects
+only that category.</p>
 <h2 id="the-setup-wizard"><a class="header" href="#the-setup-wizard">The setup wizard</a></h2>
 <p>The first launch runs a setup wizard automatically, and you can re-run it from the mod menu at any
 time. It walks you through the most important choices as a series of steps with a roadmap header you

@@ -1,9 +1,10 @@
 # Settings
 
 Press **Ctrl+M** anywhere to open the **mod menu**. It holds the mod's own settings, lets you re-run
-the **setup wizard**, and links to the Discord and Patreon. Settings are organised into tabs; you
-navigate them with the usual arrows, Tab, and Enter, and every category has a **Reset to defaults**
-that affects only that category.
+the **setup wizard**, opens **Help** (which has **Read documentation** — opening this book in your
+browser), and links to the Discord and Patreon. Settings are organised into tabs; you navigate them
+with the usual arrows, Tab, and Enter, and every category has a **Reset to defaults** that affects
+only that category.
 
 ## The setup wizard
 

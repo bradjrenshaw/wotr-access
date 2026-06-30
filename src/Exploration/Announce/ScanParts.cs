@@ -31,6 +31,17 @@ namespace WrathAccess.Exploration.Announce
             => Message.Localized("ui", "unit.hp", new { hp = _hp, max = _max });
     }
 
+    /// <summary>A unit's current action ("Casting Fireball", "Attacking", "Moving") — composed and
+    /// localized by the proxy from its live command; empty when idle, so it self-skips.</summary>
+    internal sealed class ActionPart : ScanAnnouncement
+    {
+        private readonly string _text;
+        public ActionPart(string text) { _text = text; }
+        public override string Key => "action";
+        public override Message Render(ScanAnnounceContext ctx)
+            => string.IsNullOrEmpty(_text) ? Message.Empty : Message.Raw(_text);
+    }
+
     /// <summary>A unit's condition: dead / unconscious / in combat (the proxy picks the key).</summary>
     internal sealed class ConditionPart : ScanAnnouncement
     {

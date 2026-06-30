@@ -25,10 +25,20 @@ namespace WrathAccess.Screens
         public override string ScreenName => Loc.T("screen.formation");
         public override int Layer => 16;
         public override bool Exclusive => true;
+        public override bool AllowsTypeahead => false; // WASD drive the editor field; no name-search needed
+
+        // While the WASD editor field is focused, claim the Formation category so WASD move the cursor; on the
+        // other tab stops only UI is live (so WASD stay free). Mirrors the in-game screen's focus-driven flip.
+        private static readonly WrathAccess.Input.InputCategory[] FieldCats =
+            { WrathAccess.Input.InputCategory.Formation, WrathAccess.Input.InputCategory.UI };
+        private static readonly WrathAccess.Input.InputCategory[] BaseCats =
+            { WrathAccess.Input.InputCategory.UI };
+        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories
+            => Navigation.Current is FormationField ? FieldCats : BaseCats;
 
         public override bool IsActive() => Vm() != null;
 
-        private static FormationVM Vm()
+        internal static FormationVM Vm()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.FormationVM?.Value;
 
         private FormationVM _built;
@@ -74,7 +84,9 @@ namespace WrathAccess.Screens
             }
             Add(formations);
 
-            // [The WASD editing field tab stop is added here in the next increment.]
+            // The WASD editing field (move the cursor, pick up / drop members). Editing applies to a Custom
+            // formation; on Auto it reads the layout but reports it can't be edited.
+            Add(new FormationField());
 
             // Footer. Restore + Hold the line act on the Custom formation only (the game greys them on Auto);
             // their labels are the game's own localized strings.

@@ -34,5 +34,9 @@ namespace WrathAccess.Input
         /// dialogue / loading. A category of its own so they ride neither <see cref="Exploration"/> (in-area
         /// only) nor <see cref="UI"/> (every menu and modal).</summary>
         Windows,
+        /// <summary>The formation window's WASD cursor (move/place party members). Declared by the formation
+        /// screen ONLY while its editing field is focused, so WASD drive the field cursor there and stay free
+        /// for navigation/typeahead on the screen's other tab stops.</summary>
+        Formation,
     }
 }

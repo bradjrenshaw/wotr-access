@@ -499,6 +499,22 @@ namespace WrathAccess
             InputManager.Register("party.ai", "Toggle AI control", InputCategory.Exploration,
                 WrathAccess.Exploration.PartySelection.ToggleAi).AddBinding(KeyCode.D, ctrl: true).Grouped("party");
 
+            // Formation editor cursor (WASD), live only while the formation window's field is focused (the
+            // FormationScreen claims the Formation category then). W/S = forward/back (north/south), A/D =
+            // left/right (west/east). Routed to the focused FormationField.
+            InputManager.Register("formation.cursorUp", "Formation: move cursor forward", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(0, 1))
+                .AddBinding(KeyCode.W).Repeating().Grouped("formation");
+            InputManager.Register("formation.cursorDown", "Formation: move cursor back", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(0, -1))
+                .AddBinding(KeyCode.S).Repeating().Grouped("formation");
+            InputManager.Register("formation.cursorLeft", "Formation: move cursor left", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(-1, 0))
+                .AddBinding(KeyCode.A).Repeating().Grouped("formation");
+            InputManager.Register("formation.cursorRight", "Formation: move cursor right", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(1, 0))
+                .AddBinding(KeyCode.D).Repeating().Grouped("formation");
+
             // Ctrl+T: toggle the game's combat mode (real-time-with-pause <-> turn-based). Ctrl+T is free
             // in normal play (the game's Ctrl+T "LocalTeleport" is a cheat-only binding).
             InputManager.Register("combat.toggleMode", "Toggle turn-based / real-time", InputCategory.Exploration,

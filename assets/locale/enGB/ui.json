@@ -370,6 +370,8 @@
   "screen.setup_wizard": "Setup",
   "screen.mod_menu": "Mod menu",
   "screen.help": "Help",
+  "screen.formation": "Formation",
+  "formation.list": "Formations",
   "screen.settings": "Settings",
   "screen.inventory": "Inventory",
   "screen.spellbook": "Spellbook",

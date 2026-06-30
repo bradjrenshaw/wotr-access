@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Owlcat.Runtime.UI.Tooltips; // TooltipBaseTemplate (optional glossary tooltip)
 using WrathAccess.UI.Announcements;
 
 namespace WrathAccess.UI.Proxies
@@ -23,10 +24,12 @@ namespace WrathAccess.UI.Proxies
         private readonly bool _hideWhenDisabled;
         private readonly Func<bool, string> _announceChange; // self-announce mode (poll + speak on change) if set
         private readonly Func<int> _announceContext;         // optional: rebaseline silently when this changes
+        private readonly Func<TooltipBaseTemplate> _tooltip; // optional tooltip (Space), resolved live
 
         public ProxyBoolToggle(string label, Func<bool> isChecked, Action onToggle,
             Func<bool> isEnabled = null, bool hideWhenDisabled = false,
-            Func<bool, string> announceChange = null, Func<int> announceContext = null)
+            Func<bool, string> announceChange = null, Func<int> announceContext = null,
+            Func<TooltipBaseTemplate> tooltip = null)
         {
             _label = label;
             _isChecked = isChecked;
@@ -35,7 +38,10 @@ namespace WrathAccess.UI.Proxies
             _hideWhenDisabled = hideWhenDisabled;
             _announceChange = announceChange;
             _announceContext = announceContext;
+            _tooltip = tooltip;
         }
+
+        public override TooltipBaseTemplate GetTooltipTemplate() => _tooltip != null ? _tooltip() : null;
 
         private bool Enabled => _isEnabled == null || _isEnabled();
 

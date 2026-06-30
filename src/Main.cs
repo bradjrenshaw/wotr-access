@@ -514,6 +514,32 @@ namespace WrathAccess
             InputManager.Register("formation.cursorRight", "Formation: move cursor right", InputCategory.Formation,
                 () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(1, 0))
                 .AddBinding(KeyCode.D).Repeating().Grouped("formation");
+            // Continuous free glide (Shift+WASD): no-op handlers, polled via InputManager.Held in
+            // FormationField.OnUpdate (like the overlay "play while held" keys) — glides + cues + reads on release.
+            InputManager.Register("formation.glideUp", "Formation: glide cursor forward", InputCategory.Formation,
+                () => { }).AddBinding(KeyCode.W, shift: true).Grouped("formation");
+            InputManager.Register("formation.glideDown", "Formation: glide cursor back", InputCategory.Formation,
+                () => { }).AddBinding(KeyCode.S, shift: true).Grouped("formation");
+            InputManager.Register("formation.glideLeft", "Formation: glide cursor left", InputCategory.Formation,
+                () => { }).AddBinding(KeyCode.A, shift: true).Grouped("formation");
+            InputManager.Register("formation.glideRight", "Formation: glide cursor right", InputCategory.Formation,
+                () => { }).AddBinding(KeyCode.D, shift: true).Grouped("formation");
+            // Comma / Shift+Comma: jump the cursor to the next / previous member.
+            InputManager.Register("formation.cycleNext", "Formation: next member", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.CycleMember(1))
+                .AddBinding(KeyCode.Comma).Repeating().Grouped("formation");
+            InputManager.Register("formation.cyclePrev", "Formation: previous member", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.CycleMember(-1))
+                .AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("formation");
+            // Ctrl+1..6: grab that party member straight away (then move + Enter to place).
+            for (int i = 0; i < 6; i++)
+            {
+                int idx = i; // capture per-iteration for the closure
+                InputManager.Register("formation.pickMember" + (i + 1), "Formation: pick up member " + (i + 1),
+                    InputCategory.Formation,
+                    () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.PickMember(idx))
+                    .AddBinding(KeyCode.Alpha1 + i, ctrl: true).Grouped("formation");
+            }
 
             // Ctrl+T: toggle the game's combat mode (real-time-with-pause <-> turn-based). Ctrl+T is free
             // in normal play (the game's Ctrl+T "LocalTeleport" is a cheat-only binding).

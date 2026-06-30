@@ -383,6 +383,7 @@
   "formation.picked_up": "picked up {name}",
   "formation.placed": "{name} placed",
   "formation.nothing_here": "nothing here",
+  "formation.no_members": "No party members",
   "formation.not_editable": "This formation arranges itself and can't be edited",
   "screen.settings": "Settings",
   "screen.inventory": "Inventory",

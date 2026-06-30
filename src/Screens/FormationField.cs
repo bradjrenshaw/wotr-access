@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO; // Path (cue wav)
 using Kingmaker; // Game (party members for Ctrl+1..6)
+using Kingmaker.EntitySystem.Entities; // UnitEntityData (party + pet ring)
 using Kingmaker.UI.MVVM._VM.Formation; // FormationCharacterVM
 using UnityEngine; // Vector2, Mathf, Time
 using WrathAccess.Audio; // AudioEngines (enter/exit cue)
@@ -35,7 +36,7 @@ namespace WrathAccess.Screens
         private FormationCharacterVM _held; // the picked-up member, or null
         private FormationCharacterVM _cueInside; // member the glide cursor is currently over (for enter/exit cue)
         private bool _wasGliding;           // last frame's glide state (to fire read-on-release)
-        private int _cycleIndex = -1;       // last member reached by the Comma cycle (-1 = not yet)
+        private FormationCharacterVM _reviewed; // member last reached by the Comma cycle (Slash jumps here)
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()
         {
@@ -115,9 +116,9 @@ namespace WrathAccess.Screens
             }
         }
 
-        /// <summary>Comma / Shift+Comma: jump the cursor to the next/previous member in the formation
-        /// (cursor-relative when already on one), reading where it lands. Works on Auto too (to hear the
-        /// layout); on Custom these are the ones you can then pick up.</summary>
+        /// <summary>Comma / Shift+Comma: REVIEW the next/previous member — reads its name + position (relative
+        /// to the formation's origin) and plays a positional cue at its location, WITHOUT moving the editing
+        /// cursor (Slash jumps the cursor there). Works on Auto too (to hear the layout) and Custom.</summary>
         public void CycleMember(int dir)
         {
             var vm = FormationScreen.Vm();
@@ -125,36 +126,90 @@ namespace WrathAccess.Screens
             var members = new List<FormationCharacterVM>();
             foreach (var c in vm.Characters)
                 if (c != null && c.Unit != null && c.IsVisible.Value) members.Add(c);
-            if (members.Count == 0) { Tts.Speak(Loc.T("formation.no_members"), interrupt: true); return; }
+            if (members.Count == 0) { Tts.Speak(Loc.T("formation.no_members"), interrupt: true); _reviewed = null; return; }
 
-            var cur = MemberAt(_cursor);
-            int idx;
-            if (cur != null && members.Contains(cur)) idx = Wrap(members.IndexOf(cur) + dir, members.Count);
-            else if (_cycleIndex >= 0 && _cycleIndex < members.Count) idx = Wrap(_cycleIndex + dir, members.Count);
-            else idx = dir > 0 ? 0 : members.Count - 1; // first cycle → first (next) / last (prev)
-            _cycleIndex = idx;
-            _cursor = members[idx].GetOffset();
+            int idx = (_reviewed != null && members.Contains(_reviewed))
+                ? Wrap(members.IndexOf(_reviewed) + dir, members.Count)
+                : (dir > 0 ? 0 : members.Count - 1); // first / restart → first (next) or last (prev)
+            _reviewed = members[idx];
+            var off = _reviewed.GetOffset();
+            PlayAt(off, "review.wav"); // positional cue at the member's location (relative to origin)
+            Tts.Speak(_reviewed.Unit.CharacterName + ", " + PositionStr(off), interrupt: true);
+        }
+
+        /// <summary>Slash: move the editing cursor onto the member last reviewed with Comma (mirrors the
+        /// exploration "plant the cursor on the review target").</summary>
+        public void JumpToReviewed()
+        {
+            if (_reviewed == null) { Tts.Speak(Loc.T("formation.no_review"), interrupt: true); return; }
+            _cursor = _reviewed.GetOffset();
             Tts.Speak(CellReadout(), interrupt: true);
         }
 
-        /// <summary>Ctrl+1..6: grab the Nth party member straight away (start dragging) and move the cursor
-        /// to them — so Ctrl+1 then Enter places member 1. Custom formations only.</summary>
+        // A positional cue at a layout offset (relative to origin): stereo-panned by east/west, quieter with
+        // distance — the formation field's own placement, so it always goes through NAudio (no world emitter).
+        private static void PlayAt(Vector2 off, string file)
+        {
+            float dist = off.magnitude;
+            float refDist = 10f * Geo.MetresPerFoot, panWidth = 10f * Geo.MetresPerFoot;
+            float vol = Mathf.Clamp(refDist / (refDist + dist), 0.1f, 1f)
+                * ((ModSettings.GetSetting<IntSetting>("audio.volumes.object")?.Get() ?? 100) / 100f) * OverlayAudio.Master;
+            float pan = dist > 1e-3f ? Mathf.Clamp(off.x / Mathf.Max(dist, panWidth), -1f, 1f) : 0f;
+            AudioEngines.NAudio.PlayOneShot(null, Path.Combine(OverlayAudio.Dir, file), Vector3.zero, vol, pan);
+        }
+
+        /// <summary>Ctrl+1..6: grab the Nth party member straight away (start dragging) — so Ctrl+1, then move
+        /// the cursor, then Enter places member 1. Pressing the same number again cycles through that member's
+        /// owned units (pets / mount), like exploration's select-character ring. Does NOT move the cursor
+        /// (only WASD/Slash do). Custom only.</summary>
         public void PickMember(int index)
         {
             var vm = FormationScreen.Vm();
             if (vm == null) return;
             if (!vm.IsCustomFormation) { Tts.Speak(Loc.T("formation.not_editable"), interrupt: true); return; }
-            var party = Game.Instance?.Player?.PartyCharacters;
-            var unit = (party != null && index >= 0 && index < party.Count) ? party[index].Value : null;
-            var c = unit != null ? vm.Characters.Find(x => x != null && x.Unit == unit) : null;
-            if (c == null || !c.IsInteractable.Value)
+
+            // The member's ring (member, then its draggable pets/mount), mapped to their formation slots.
+            var ring = new List<FormationCharacterVM>();
+            foreach (var unit in PartyRingUnits(index))
             {
-                Tts.Speak(Loc.T("party.no_member", new { index = index + 1 }), interrupt: true);
-                return;
+                var c = vm.Characters.Find(x => x != null && x.Unit == unit);
+                if (c != null && c.IsInteractable.Value) ring.Add(c);
             }
-            _held = c;
-            _cursor = c.GetOffset(); // move the cursor onto them so the next step/place is relative to here
-            Tts.Speak(Loc.T("formation.picked_up", new { name = c.Unit.CharacterName }), interrupt: true);
+            if (ring.Count == 0) { Tts.Speak(Loc.T("party.no_member", new { index = index + 1 }), interrupt: true); return; }
+
+            // Re-pressing the same number advances within the ring; a different one (or nothing held) starts
+            // at the member.
+            int pos = _held != null ? ring.IndexOf(_held) : -1;
+            _held = ring[pos >= 0 ? (pos + 1) % ring.Count : 0];
+            Tts.Speak(Loc.T("formation.picked_up", new { name = _held.Unit.CharacterName }), interrupt: true);
+        }
+
+        // The party member at this slot, then each owned, in-game, controllable unit it owns (pets/mount) —
+        // mirrors PartySelection's select-character ring so Ctrl+N cycles the same way here.
+        private static List<UnitEntityData> PartyRingUnits(int index)
+        {
+            var ring = new List<UnitEntityData>();
+            var party = Game.Instance?.Player?.PartyCharacters;
+            if (party == null || index < 0 || index >= party.Count) return ring;
+            var member = party[index].Value;
+            if (member == null || member.View == null) return ring;
+            ring.Add(member);
+            var pets = member.Pets;
+            if (pets != null)
+                foreach (var pet in pets)
+                {
+                    var e = pet.Entity;
+                    if (e != null && e != member && e.IsInGame && e.IsDirectlyControllable && e.View != null && !ring.Contains(e))
+                        ring.Add(e);
+                }
+            return ring;
+        }
+
+        /// <summary>C: jump the cursor to the formation's origin (0, 0).</summary>
+        public void CenterCursor()
+        {
+            _cursor = Vector2.zero;
+            Tts.Speak(CellReadout(), interrupt: true);
         }
 
         private static int Wrap(int i, int n) => ((i % n) + n) % n;
@@ -187,7 +242,7 @@ namespace WrathAccess.Screens
         // The offset as "X feet east/west, Y feet north/south" (or "center" near the origin).
         private static string PositionStr(Vector2 off)
         {
-            const float eps = GridStep / 2f;
+            const float eps = 0.001f; // collapse only a truly-zero axis (and the exact centre) — never a real value
             if (Mathf.Abs(off.x) < eps && Mathf.Abs(off.y) < eps) return Loc.T("formation.center");
             var parts = new List<string>(2);
             if (Mathf.Abs(off.x) >= eps)

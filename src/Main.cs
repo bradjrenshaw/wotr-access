@@ -531,6 +531,14 @@ namespace WrathAccess
             InputManager.Register("formation.cyclePrev", "Formation: previous member", InputCategory.Formation,
                 () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.CycleMember(-1))
                 .AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("formation");
+            // Slash: move the cursor onto the reviewed member (like exploration's plant-cursor-on-review).
+            InputManager.Register("formation.cursorToReview", "Formation: cursor to reviewed member", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.JumpToReviewed())
+                .AddBinding(KeyCode.Slash).Grouped("formation");
+            // C: jump the cursor to the formation centre (0, 0).
+            InputManager.Register("formation.center", "Formation: cursor to centre", InputCategory.Formation,
+                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.CenterCursor())
+                .AddBinding(KeyCode.C).Grouped("formation");
             // Ctrl+1..6: grab that party member straight away (then move + Enter to place).
             for (int i = 0; i < 6; i++)
             {

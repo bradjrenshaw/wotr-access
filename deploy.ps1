@@ -102,6 +102,15 @@ Copy-Item (Join-Path $root 'OwlcatModificationSettings.json') $modDir
 Copy-Item (Join-Path $root 'deploy\Assemblies\*.dll') "$modDir\Assemblies"
 Copy-Item (Join-Path $root 'assets') $modDir -Recurse
 
+# Bundled documentation (Help > Read documentation opens <ModDir>\docs\index.html). Present once
+# build_docs.ps1 has staged it into deploy\docs; if absent, the in-game button falls back to the
+# hosted site.
+$docs = Join-Path $root 'deploy\docs'
+if (Test-Path $docs) {
+    New-Item -ItemType Directory -Force -Path "$modDir\docs" | Out-Null
+    Copy-Item "$docs\*" "$modDir\docs" -Recurse -Force
+}
+
 Write-Host "Copying prism.dll next to Wrath.exe..."
 Copy-Item (Join-Path $root 'vendor\prism.dll') $game
 

@@ -43,6 +43,13 @@ def stage_payload():
         raise SystemExit("NAudio.dll not found in the NuGet cache — run a build first.")
     shutil.copy2(sorted(naudio)[-1], asm)
     shutil.copytree(os.path.join(REPO, "assets"), os.path.join(mod, "assets"))
+    # Bundled documentation (built into deploy/docs by build_docs.ps1) ships inside the mod folder,
+    # so Help > Read documentation opens it offline. Warn rather than fail if it hasn't been built.
+    docs = os.path.join(REPO, "deploy", "docs")
+    if os.path.isdir(docs):
+        shutil.copytree(docs, os.path.join(mod, "docs"))
+    else:
+        print("WARNING: deploy/docs not found — run build_docs.ps1 to bundle the docs.")
     shutil.copy2(os.path.join(REPO, "vendor", "prism.dll"), game)
 
 

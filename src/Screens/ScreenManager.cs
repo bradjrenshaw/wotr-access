@@ -158,7 +158,8 @@ namespace WrathAccess.Screens
             Register(new InfoWindowScreen()); // game Info window (item Details / glossary info), layer 30
             Register(new InspectScreen()); // game unit Inspect window (bestiary readout), layer 30
             Register(new LockpickScreen()); // lock/disable-device tool-choice window (skill/+5/+10/destroy), layer 30
-            Register(new ModMenuScreen()); // mod menu launcher (Ctrl+M): Settings, Setup wizard, Discord, Patreon; layer 35
+            Register(new ModMenuScreen()); // mod menu launcher (Ctrl+M): Settings, Help, Setup wizard, Discord, Patreon; layer 35
+            Register(new HelpScreen()); // Help submenu (Read documentation); opens from the launcher, layer 38
             Register(new ModSettingsScreen()); // the tabbed settings browser, opened from the launcher; layer 37
             Register(new SetupWizardScreen()); // first-run setup wizard (speech engine + its settings), layer 36
             Register(new GammaScreen()); // first-launch brightness/gamma calibration (boot-time, before main menu), layer 40

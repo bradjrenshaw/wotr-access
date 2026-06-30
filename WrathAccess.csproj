@@ -92,6 +92,12 @@
       <ModAsset Include="$(MSBuildProjectDirectory)\assets\**\*.*" />
     </ItemGroup>
     <Copy SourceFiles="@(ModAsset)" DestinationFiles="@(ModAsset->'$(ModDeployDir)\assets\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <!-- Bundled documentation (deploy/docs, built by build_docs.ps1) at the mod root, so Help > Read
+         documentation can open it locally. Absent until build_docs.ps1 has run; then it deploys too. -->
+    <ItemGroup>
+      <ModDoc Include="$(MSBuildProjectDirectory)\deploy\docs\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ModDoc)" DestinationFiles="@(ModDoc->'$(ModDeployDir)\docs\%(RecursiveDir)%(Filename)%(Extension)')" />
     <!-- Native speech lib must sit next to Wrath.exe so P/Invoke can resolve it. Prism talks to
          screen readers directly (no client dlls). The old Tolk natives are retired. -->
     <Copy SourceFiles="$(VendorDir)\prism.dll" DestinationFolder="$(GameDir)" />

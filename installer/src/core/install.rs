@@ -156,8 +156,9 @@ pub fn install_zip(data: &[u8], game_path: &Path) -> Result<(), String> {
 /// Install from the repo's own source archive (github .../archive/refs/heads/main.zip). Entries sit
 /// under a single top folder like `wotr-access-main/`; we strip it and map the repo layout onto the
 /// installed mod — manifest + settings to the mod root, `deploy/Assemblies/*` to `Assemblies/`,
-/// `assets/*` to `assets/`, and `vendor/prism.dll` next to Wrath.exe — ignoring everything else
-/// (src, installer, docs, the dev-only Mono.CSharp.dll). Mirrors what deploy.ps1 does from a clone.
+/// `deploy/docs/*` to `docs/` (the bundled documentation), `assets/*` to `assets/`, and
+/// `vendor/prism.dll` next to Wrath.exe — ignoring everything else (src, installer, docs_src, the
+/// dev-only Mono.CSharp.dll). Mirrors what deploy.ps1 does from a clone.
 pub fn install_repo_zip(data: &[u8], game_path: &Path) -> Result<(), String> {
     if !game_path.join(GAME_EXE).exists() {
         return Err(format!(
@@ -198,6 +199,8 @@ pub fn install_repo_zip(data: &[u8], game_path: &Path) -> Result<(), String> {
             mod_dir.join(repo_rel)
         } else if let Ok(stripped) = repo_rel.strip_prefix("deploy/Assemblies") {
             mod_dir.join("Assemblies").join(stripped)
+        } else if let Ok(stripped) = repo_rel.strip_prefix("deploy/docs") {
+            mod_dir.join("docs").join(stripped)
         } else if let Ok(stripped) = repo_rel.strip_prefix("assets") {
             mod_dir.join("assets").join(stripped)
         } else if repo_rel == Path::new("vendor/prism.dll") {

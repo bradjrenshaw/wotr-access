@@ -59,11 +59,15 @@ namespace WrathAccess.Speech
             try
             {
                 var probe = ComDispatch.Create("SAPI.SpVoice");
-                if (probe == null) return false;
+                if (probe == null) { Main.Log?.Log("[speech] SAPI: SpVoice COM object could not be created (SAPI not available?)."); return false; }
                 probe.Dispose();
                 return true;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                Main.Log?.Log("[speech] SAPI: Detect failed: " + ex.GetType().Name + " " + ex.Message);
+                return false;
+            }
         }
 
         public bool Load()

@@ -112,6 +112,9 @@ namespace WrathAccess.Speech
         public static void Initialize()
         {
             _initialized = true;
+            var prismBackend = Default?.Tree?.Get<CategorySetting>("prism")?.Get<ChoiceSetting>("backend")?.Current?.Id;
+            Main.Log?.Log("[speech] default handler setting = " + (Default?.HandlerKey ?? "?")
+                + ", prism backend = " + (prismBackend ?? "?"));
             ResolveHandler(Default?.HandlerKey ?? "auto");
         }
 
@@ -174,12 +177,11 @@ namespace WrathAccess.Speech
             if (_loaded.Contains(handler)) return true;
             try
             {
-                if (handler.Detect() && handler.Load())
-                {
-                    _loaded.Add(handler);
-                    Main.Log?.Log("[speech] handler loaded: " + handler.Key);
-                    return true;
-                }
+                if (!handler.Detect()) { Main.Log?.Log("[speech] " + handler.Key + ": not detected (unavailable on this machine)."); return false; }
+                if (!handler.Load()) { Main.Log?.Log("[speech] " + handler.Key + ": detected but failed to load."); return false; }
+                _loaded.Add(handler);
+                Main.Log?.Log("[speech] handler loaded: " + handler.Key);
+                return true;
             }
             catch (Exception ex) { Main.Log?.Error("[speech] Handler " + handler.Key + " failed: " + ex.Message); }
             return false;
@@ -191,6 +193,44 @@ namespace WrathAccess.Speech
             var handler = ResolveHandler(key);
             if (handler != null)
                 Default.Output(Message.Localized("ui", "speech.handler_changed", new { handler = handler.Label }).Resolve());
+        }
+
+        /// <summary>Panic recovery (bound to a global hotkey): force the default speech config back to Prism on
+        /// the best available backend, re-loading it fresh so a stuck handler or backend can't keep us silent.
+        /// If Prism genuinely can't load, resolution falls through to the first working handler — so this always
+        /// restores whatever voice IS available. Safe to call any time (no-op before speech is ready).</summary>
+        public static void ResetToPrism()
+        {
+            if (!Ready) return;
+            var handlerSetting = Default.Tree?.Get<ChoiceSetting>("handler");
+            bool willAnnounceViaChange = handlerSetting != null && handlerSetting.ValueId != "prism";
+
+            // Clear any broken backend selection back to auto (best available).
+            Default.Tree?.Get<CategorySetting>("prism")?.Get<ChoiceSetting>("backend")?.Set(PrismAuto);
+            // Drop the loaded Prism handler so it re-Detects/Loads cleanly (rebuilding its backend from scratch).
+            ReloadHandlerFresh("prism");
+
+            handlerSetting?.Set("prism"); // persist; fires OnDefaultHandlerChanged (which resolves + announces) IF it changed
+            if (!willAnnounceViaChange)
+            {
+                // Already set to Prism, so the change event won't fire — resolve + announce ourselves.
+                var h = ResolveHandler("prism");
+                Default.Output(Message.Localized("ui", "speech.reset_prism", new { handler = h?.Label ?? "none" }).Resolve(), interrupt: true);
+            }
+            Main.Log?.Log("[speech] reset-to-prism requested.");
+        }
+
+        private const string PrismAuto = "auto"; // PrismHandler's auto-backend id
+
+        // Force a handler to reload on next resolve: drop it from the loaded set and unload it.
+        private static void ReloadHandlerFresh(string key)
+        {
+            foreach (var h in Handlers)
+                if (h.Key == key)
+                {
+                    _loaded.Remove(h);
+                    try { h.Unload(); } catch { }
+                }
         }
     }
 }

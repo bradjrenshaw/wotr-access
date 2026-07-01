@@ -306,6 +306,7 @@
   "bind.speak_test": "Speak test",
   "bind.game.quickSave": "Quick save",
   "bind.mod.menu": "Open mod menu",
+  "bind.speech.resetPrism": "Reset speech to Prism",
   "bind.ui.up": "Navigate up",
   "bind.ui.down": "Navigate down",
   "bind.ui.left": "Navigate left",
@@ -410,6 +411,5 @@
   "sound.control_gained": "Control gained",
   "sound.control_lost": "Control lost",
 
-  "overlay.cursor.announce_rooms": "Announce room changes",
-  "bind.scan.debugRooms": "Read room map stats (debug)"
+  "overlay.cursor.announce_rooms": "Announce room changes"
 }

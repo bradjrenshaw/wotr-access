@@ -408,6 +408,12 @@ namespace WrathAccess
             InputManager.Register("mod.menu", "Open mod menu", InputCategory.Global,
                 () => WrathAccess.Screens.ModMenuScreen.Toggle()).AddBinding(KeyCode.M, ctrl: true);
 
+            // Panic recovery: force speech back to Prism (best backend) from ANYWHERE, so a blind player who
+            // switched to a broken engine/backend and went silent can always get a voice back without needing
+            // to navigate a menu they can't hear.
+            InputManager.Register("speech.resetPrism", "Reset speech to Prism", InputCategory.Global,
+                () => WrathAccess.Speech.SpeechManager.ResetToPrism()).AddBinding(KeyCode.F8);
+
             // ---- UI: screen/menu navigation (dispatched into the active navigator) ----
             InputManager.Register("ui.up", "Navigate up", InputCategory.UI).AddBinding(KeyCode.UpArrow).Repeating();
             InputManager.Register("ui.down", "Navigate down", InputCategory.UI).AddBinding(KeyCode.DownArrow).Repeating();
@@ -596,8 +602,6 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.DumpObjectNames).AddBinding(KeyCode.F10).Grouped("scanner");
             InputManager.Register("scan.debugAreaParts", "Read area parts (debug)", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.DebugDumpAreaParts).AddBinding(KeyCode.F9).Grouped("scanner");
-            InputManager.Register("scan.debugRooms", "Read room map stats (debug)", InputCategory.Exploration,
-                WrathAccess.Exploration.RoomMap.DebugSpeak).AddBinding(KeyCode.F8).Grouped("scanner");
 
             // Buffers (review channels — see WrathAccess.Buffers): Alt+Left/Right cycle between buffers,
             // Alt+Up/Down move through the current buffer's lines. Alt+arrows are otherwise unused; live in

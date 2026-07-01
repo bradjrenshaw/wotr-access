@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
+using System.IO.Compression;
 using Unity.Collections;
 using UnityEngine;
 using FogArea = Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar.FogOfWarArea;
@@ -93,6 +96,85 @@ namespace WrathAccess.Exploration
             int x = Mathf.Clamp((int)(u * N), 0, N - 1);
             int y = Mathf.Clamp((int)(v * N), 0, N - 1);
             return g[y * N + x];
+        }
+
+        // ---- save persistence (Phase 2) ----
+        // The per-area grids serialize to one Deflate'd blob that the save-hook stores as a named entry inside
+        // the .zks (see FogPersistencePatch): [version][areaCount] then per area [sceneKey][gridN][bitpacked
+        // grid]. Contiguous explored regions bit-pack + deflate to a few hundred bytes/area.
+
+        private const byte Version = 1;
+
+        /// <summary>Encode every accumulated area grid, or null when there's nothing to persist.</summary>
+        public static byte[] Serialize()
+        {
+            if (_grids.Count == 0) return null;
+            try
+            {
+                using (var ms = new MemoryStream())
+                {
+                    using (var ds = new DeflateStream(ms, CompressionMode.Compress, leaveOpen: true))
+                    using (var w = new BinaryWriter(ds))
+                    {
+                        w.Write(Version);
+                        w.Write(_grids.Count);
+                        foreach (var kv in _grids)
+                        {
+                            w.Write(kv.Key);
+                            w.Write((ushort)N);
+                            var g = kv.Value;
+                            var packed = new byte[(g.Length + 7) / 8];
+                            for (int i = 0; i < g.Length; i++)
+                                if (g[i]) packed[i >> 3] |= (byte)(1 << (i & 7));
+                            w.Write(packed.Length);
+                            w.Write(packed);
+                        }
+                    }
+                    return ms.ToArray();
+                }
+            }
+            catch (Exception e) { Main.Log?.Error("[fog] serialize: " + e); return null; }
+        }
+
+        /// <summary>Replace all in-memory grids with the saved blob (clears first; a null/empty blob just clears).
+        /// Resets the active binding so the next tick re-binds to the restored grid for the current area.</summary>
+        public static void Restore(byte[] blob)
+        {
+            Clear();
+            if (blob == null || blob.Length == 0) return;
+            try
+            {
+                using (var ms = new MemoryStream(blob))
+                using (var ds = new DeflateStream(ms, CompressionMode.Decompress))
+                using (var r = new BinaryReader(ds))
+                {
+                    if (r.ReadByte() != Version) return;
+                    int count = r.ReadInt32();
+                    for (int a = 0; a < count; a++)
+                    {
+                        string key = r.ReadString();
+                        int gn = r.ReadUInt16();
+                        int packedLen = r.ReadInt32();
+                        var packed = r.ReadBytes(packedLen);
+                        if (gn != N) continue; // different resolution (future version) — drop this area
+                        var g = new bool[N * N];
+                        int cells = Math.Min(g.Length, packedLen * 8);
+                        for (int i = 0; i < cells; i++)
+                            if ((packed[i >> 3] & (1 << (i & 7))) != 0) g[i] = true;
+                        _grids[key] = g;
+                    }
+                }
+            }
+            catch (Exception e) { Main.Log?.Error("[fog] restore: " + e); Clear(); }
+        }
+
+        /// <summary>Drop all accumulated explored data (new game, or before restoring another save).</summary>
+        public static void Clear()
+        {
+            _grids.Clear();
+            _grid = null;
+            _key = null;
+            _ready = false;
         }
     }
 }

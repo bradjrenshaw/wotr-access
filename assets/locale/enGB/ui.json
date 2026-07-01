@@ -663,6 +663,7 @@
   "exit.to_room": "Exit to {room}",
 
   "where.indoors": "indoors",
+  "where.unexplored": "unexplored",
   "where.region": "{region} of the map",
   "where.center": "center",
   "where.unknown": "Unknown location",

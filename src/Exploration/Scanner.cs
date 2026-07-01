@@ -696,6 +696,7 @@ namespace WrathAccess.Exploration
             if (part != null && part.IsIndoor) parts.Add(Loc.T("where.indoors"));
             var room = RoomMap.RoomAt(pos);
             if (room != null) parts.Add(RoomMap.Describe(room));
+            if (!FogExplored.IsExplored(pos)) parts.Add(Loc.T("where.unexplored"));
             var bounds = part?.Bounds;
             if (bounds != null)
             {

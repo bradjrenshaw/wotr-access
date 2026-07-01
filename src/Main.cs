@@ -174,6 +174,7 @@ namespace WrathAccess
             TickControl(); // chime when a cutscene/scripted event takes or returns control of the party
             WrathAccess.Exploration.CombatMode.TickTurn(); // announce whose turn it is in turn-based combat
             WrathAccess.Exploration.WorldModel.Tick(); // refresh the area entity registry before consumers read it
+            WrathAccess.Exploration.FogExplored.Tick(UnityEngine.Time.unscaledDeltaTime); // accumulate ever-seen terrain
             WrathAccess.Exploration.RoomMap.Tick(); // (re)build the room segmentation on area-part change
             WrathAccess.Exploration.Targeting.Tick(); // per-frame upkeep for targeting modes (e.g. finish a pending rest)
             // Unscaled delta: the cursor is a real-time UI element — it must keep moving while the game is

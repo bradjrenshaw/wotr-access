@@ -36,6 +36,8 @@ namespace WrathAccess.Exploration
             // Curated environmental details (scene-art things with no runtime data layer) reload on
             // area change and flow through the same registry, keyed by their entry objects.
             AreaDetails.Refresh(Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null);
+            // Mod-authored environmental descriptions (room ambiance + per-asset), loaded per area the same way.
+            EnvDescriptions.Refresh(Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null);
 
             // Poll live every frame, but only build a proxy (and its capturing factory closure) for a
             // GENUINELY NEW entity — the ContainsKey guard keeps the common "already tracked" path

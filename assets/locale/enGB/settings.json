@@ -397,6 +397,7 @@
   "reset.all_done": "All settings reset to defaults",
 
   "bind.explore.whereAmI": "Where am I",
+  "bind.explore.describe": "Describe surroundings",
   "bind.scan.debugAreaParts": "Read area parts (debug)",
 
   "overlay.sonar.review_sound": "Review cursor sound",

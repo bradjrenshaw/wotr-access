@@ -107,6 +107,11 @@ namespace WrathAccess.Exploration
         /// interactables for the object enter/exit cue while leaving plain scenery out.</summary>
         public virtual bool IsUnit => false;
 
+        /// <summary>Normalized source-asset key (the map object's prefab/GameObject name) for looking up a
+        /// mod-authored visual description, deduped across every instance of that asset. Null for units and
+        /// anything without a stable source object — see <see cref="EnvDescriptions"/>.</summary>
+        public virtual string AssetKey => null;
+
         /// <summary>The stable <see cref="ScanTaxonomy"/> node this thing ANNOUNCES as — the key for its
         /// per-entity-type announcement overrides (which inherit node → category → global). Distinct from
         /// the state-aware sound <see cref="Primary"/>: default is Primary, but units override to their

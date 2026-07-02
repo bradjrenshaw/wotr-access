@@ -37,6 +37,9 @@ namespace WrathAccess.Exploration
         // undiscovered ones don't leak. (This is why we don't use the base current-visibility filter.)
         public override bool IsVisible => _obj.IsInGame && _obj.IsRevealed && _obj.IsPerceptionCheckPassed;
 
+        // The source prefab/GameObject name, normalized to a stable dedupe key for mod-authored descriptions.
+        public override string AssetKey => EnvDescriptions.NormalizeAssetKey(_obj.View?.name);
+
         // Footprint = half the object's larger horizontal extent (an enclosing radius for our planar
         // cursor). Sourced from the COLLIDERS, not renderers: MapObjectView sets AutoUpdateRenderers=false,
         // so the view never caches its renderers and GetMaxBounds() returns a zero-size box — but the

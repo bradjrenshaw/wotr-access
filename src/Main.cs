@@ -470,7 +470,11 @@ namespace WrathAccess
             // Y: "where am I" — the location's name (current section when it has one), indoors, and the
             // leader's compass region within the section's map bounds.
             InputManager.Register("explore.whereAmI", "Where am I", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.X);
+                WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.Z);
+            // X: describe the focused scanner object (its asset description) or the current room — our OWN
+            // authored description, distinct from the game's examine text.
+            InputManager.Register("explore.describe", "Describe surroundings", InputCategory.Exploration,
+                WrathAccess.Exploration.Scanner.Describe).AddBinding(KeyCode.X);
             // InGame (not Exploration): this must keep working when we DON'T have control — opening the
             // pause menu mid-cutscene/dialogue is a base in-game key, so it isn't gated off with movement.
             InputManager.Register("explore.cancelTargeting", "Cancel targeting / game menu", InputCategory.InGame,

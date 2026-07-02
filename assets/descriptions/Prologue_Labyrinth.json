@@ -1,0 +1,7 @@
+{
+  "rooms": [
+    { "x": 78.53, "y": 39.78, "z": 103.76, "key": "shieldmaze_hall" },
+    { "x": 89.51, "y": 40.03, "z": 88.53, "key": "shieldmaze_dormitory" },
+    { "x": 73.58, "y": 40.02, "z": 87.65, "key": "shieldmaze_storeroom" }
+  ]
+}

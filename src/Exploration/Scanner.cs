@@ -105,6 +105,11 @@ namespace WrathAccess.Exploration
         public static void CursorToSelected() { if (Active) CommitCursor(); }
         public static void AnnounceCursor() { if (Active) SpeakCursor(); }
         public static void AnnounceWhereAmI() { if (Active) SpeakWhereAmI(); }
+
+        /// <summary>Describe (X): speak the mod-authored description of the focused scanner object (its asset
+        /// description) or, failing that, the room the cursor is standing in. Distinct from the game's own
+        /// examine text — this is always "extra description from the mod".</summary>
+        public static void Describe() { if (Active) Speak(EnvDescriptions.Describe(Reviewed, ScanFrom)); }
         public static void AnnounceParty() { if (Active) SpeakParty(); }
         // While aiming an ability, the act-on-target inputs commit the cast instead of their normal job:
         // I → cast on the selected scanner item, Enter → cast at the cursor, Backspace → cancel aim.

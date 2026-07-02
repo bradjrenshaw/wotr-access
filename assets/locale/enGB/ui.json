@@ -665,6 +665,13 @@
 
   "where.indoors": "indoors",
   "where.unexplored": "unexplored",
+  "desc.none": "Nothing described here.",
+  "desc.shieldmaze_hall.title": "The Hall of Cruel Comforts",
+  "desc.shieldmaze_hall.body": "A broad, high-ceilinged hall floored in ornate mosaic, bands of diamond tile ringing great circular medallions. It is warmly lit by iron candle-ring chandeliers, tall candelabra, and wall torches spilling gold light over deep red carpets. Pale banners bearing a red sigil line the walls, some streaked with old blood. It is furnished for indulgence: a great hexagonal table crowded with the leavings of a feast and jewel-bright glassware, a harp and a music stand, framed paintings on the far wall, fine rugs and stray urns. But the comfort is a mask. At its heart the floor is dark with bloodstains, and cushioned benches are drawn up around them like seats for an audience. Whoever kept this place took their pleasure in watching others suffer, entertained by wine and music while blood dried on the tiles.",
+  "desc.shieldmaze_dormitory.title": "The Sleeping Quarters",
+  "desc.shieldmaze_dormitory.body": "A dim, barracks-like room lined with a row of simple wooden beds and pale bedding, a nightstand and a chair among them. Banners with the same red sigil hang on the walls. At the far end a raised dais holds a small shrine lit an eerie green, braziers of green flame flanking a statue, their glow washing cold over the stone. A place where the faithful slept close to whatever it was they served.",
+  "desc.shieldmaze_storeroom.title": "The Storeroom",
+  "desc.shieldmaze_storeroom.body": "A cramped, neglected storage room, cobwebs strung across its corners. Barrels stand stacked against wooden shelves and bookcases crowded with odds and ends, jugs and cups, a chest and a casket among luxury goods set aside and forgotten. A red-sigil banner hangs above the checkered stone floor. Little light reaches here; it smells of dust and disuse.",
   "where.region": "{region} of the map",
   "where.center": "center",
   "where.unknown": "Unknown location",

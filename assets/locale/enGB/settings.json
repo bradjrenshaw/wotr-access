@@ -186,6 +186,7 @@
   "audio.engine.classic": "Classic (flat stereo panning)",
   "audio.itd": "Sharpen left/right (time-delay panning)",
   "audio.front_back_filter": "Muffle sounds behind you (front/back cue)",
+  "audio.head_shadow": "Ear shadowing (more natural left/right)",
   "audio.listener": "Game audio heard from",
   "audio.listener.cursor": "Cursor (falls back to party)",
   "audio.listener.party": "Party leader",

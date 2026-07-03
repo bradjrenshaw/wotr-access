@@ -1,18 +1,19 @@
 using System.Collections.Generic;
-using System.Text;
 using Kingmaker;
 using Kingmaker.UI.MVVM._VM.ServiceWindows; // ServiceWindowsType, ServiceWindowsVM
-using Kingmaker.UI.MVVM._VM.ServiceWindows.Journal; // JournalVM
+using Kingmaker.UI.MVVM._VM.ServiceWindows.Journal; // JournalVM, JournalQuestVM
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The journal service window (<see cref="JournalVM"/>): the grouped quest list on top (each quest reads
-    /// its state; Enter selects it) and the selected quest's detail below — title, description, objectives
-    /// (with their state) and addendums, plus completion text for finished quests. Content refills when the
-    /// selection or any quest/objective state changes, restoring the cursor by grid position. Escape closes.
+    /// The journal service window (<see cref="JournalVM"/>), graph-native: the grouped quest list on top
+    /// (one region per quest group — Ctrl+arrows jump groups; each quest a radio reading its state and
+    /// "updated" attention flag; Enter selects) and the selected quest's detail below — title, description,
+    /// objectives (with their state) and addendums, plus completion text for finished quests. Everything
+    /// renders live; detail keys carry the selected quest, so selecting re-keys the detail only (quest-list
+    /// focus stays put — the old signature/capture/restore machinery is deleted). Escape closes.
     /// </summary>
     public sealed class JournalScreen : Screen
     {
@@ -21,24 +22,6 @@ namespace WrathAccess.Screens
         public override int Layer => 10;
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Journal;
-
-        private Container _content;
-        private bool _built;
-        private string _sig;
-        private string _lastRestoreLabel;
-
-        public override void OnPush() { _built = false; _sig = null; _lastRestoreLabel = null; }
-        public override void OnPop() { Clear(); _content = null; _built = false; }
-
-        public override void OnUpdate()
-        {
-            var jv = Jv();
-            if (jv == null) return;
-            if (!_built) BuildShell();
-            var sig = Sig(jv);
-            if (sig != _sig) { _sig = sig; RefillContent(jv); }
-            else _lastRestoreLabel = null;
-        }
 
         public override IEnumerable<ElementAction> GetActions()
         {
@@ -52,124 +35,126 @@ namespace WrathAccess.Screens
         private static ServiceWindowsVM ServiceWindows()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
-        // Refreshes on selection change and on any quest / objective state change.
-        private static string Sig(JournalVM jv)
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            var sb = new StringBuilder();
-            sb.Append(jv.SelectedQuest?.Value?.Blueprint?.name).Append('|');
+            var jv = Jv();
+            if (jv == null) return;
+            string k = "journal:" + jv.GetHashCode() + ":";
+
+            BuildQuestList(b, jv, k);
+            BuildDetail(b, jv, k);
+        }
+
+        // The grouped quest list: one stop; a region + context level per quest group (Ctrl+arrows jump
+        // between groups, entering one announces its title). Quests key by VM.
+        private static void BuildQuestList(GraphBuilder b, JournalVM jv, string k)
+        {
+            b.BeginStop("quests").PushContext(Loc.T("journal.quests"), "list", positions: false);
             var groups = jv.Navigation?.NavigationGroups;
-            if (groups != null)
-                foreach (var g in groups)
-                {
-                    if (g?.Quests == null) continue;
-                    foreach (var q in g.Quests)
-                        if (q != null) sb.Append(q.Title).Append(q.IsCompleted ? 'C' : q.IsFailed ? 'F' : 'A').Append(q.IsAttention ? '!' : '.').Append(',');
-                }
-            sb.Append('|');
-            var det = jv.Quest?.Value;
-            if (det?.Objectives != null)
-                foreach (var o in det.Objectives) if (o != null) sb.Append(o.IsCompleted ? 'C' : o.IsFailed ? 'F' : 'A');
-            return sb.ToString();
-        }
-
-        private void BuildShell()
-        {
-            _built = true;
-            Clear();
-            _content = new Panel();
-            Add(_content);
-            Navigation.Attach(this);
-        }
-
-        private void RefillContent(JournalVM jv)
-        {
-            if (_content == null) return;
-            var cap = CaptureFocus();
-            _content.Clear();
-            BuildQuestList(jv);
-            BuildDetail(jv);
-            RestoreFocus(cap);
-        }
-
-        // The grouped quest list: a region per quest group, each quest a selectable entry.
-        private void BuildQuestList(JournalVM jv)
-        {
-            var groups = jv.Navigation?.NavigationGroups;
-            var sheet = new FlowSheet(Loc.T("journal.quests"));
             bool any = false;
+            int gi = 0;
             if (groups != null)
                 foreach (var g in groups)
                 {
-                    if (g?.Quests == null || g.Quests.Count == 0) continue;
-                    var r = sheet.List(g.Title);
-                    foreach (var q in g.Quests) if (q != null) { r.Item(new ProxyJournalQuest(q)); any = true; }
+                    if (g?.Quests == null || g.Quests.Count == 0) { gi++; continue; }
+                    b.SetRegion(k + "group:" + gi);
+                    b.PushContext(g.Title);
+                    int qi = 0;
+                    foreach (var q in g.Quests)
+                    {
+                        if (q == null) { qi++; continue; }
+                        b.AddItem(ControlId.Referenced(q, k + "q:" + gi + ":" + qi), QuestNode(q));
+                        any = true;
+                        qi++;
+                    }
+                    b.PopContext();
+                    gi++;
                 }
-            if (!any) sheet.List(null).Item(new TextElement(() => Loc.T("journal.no_quests")));
-            sheet.Reflow();
-            _content.Add(sheet);
+            if (!any)
+                b.AddItem(ControlId.Structural(k + "noquests"), GraphNodes.Text(() => Loc.T("journal.no_quests")));
+            b.PopContext();
         }
 
-        // The selected quest's detail: title + description (+ completion text), then its objectives and their
-        // addendums, each with its state.
-        private void BuildDetail(JournalVM jv)
+        // One quest: a radio reading "selected" for the shown quest plus its state (active / completed /
+        // failed, and "updated" when it needs attention); Enter selects it (the game's SelectQuest).
+        private static NodeVtable QuestNode(JournalQuestVM q)
+        {
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.RadioButton,
+                Announcements = new List<NodeAnnouncement>
+                {
+                    GraphNodes.LabelPart(() => q.Title),
+                    GraphNodes.SelectedPart(() => q.IsSelected.Value),
+                    new NodeAnnouncement(() => QuestState(q), live: true, kind: AnnouncementKinds.Value),
+                },
+                SearchText = () => q.Title,
+                StateText = () => q.IsSelected.Value ? Loc.T("state.selected") : null,
+                OnActivate = () => q.SelectQuest(),
+            };
+        }
+
+        private static string QuestState(JournalQuestVM q)
+        {
+            var s = StateWord(q.IsCompleted, q.IsFailed);
+            if (q.IsAttention) s += ", " + Loc.T("journal.updated");
+            return s;
+        }
+
+        // The selected quest's detail: title + description (+ completion text), then its objectives and
+        // their addendums, each with its state. Keys carry the quest, so a selection re-keys the detail.
+        private static void BuildDetail(GraphBuilder b, JournalVM jv, string k)
         {
             var q = jv.Quest?.Value;
-            if (q == null) { _content.Add(new TextElement(() => Loc.T("journal.select_quest"))); return; }
+            b.BeginStop("detail");
+            if (q == null)
+            {
+                b.AddItem(ControlId.Structural(k + "noselect"), GraphNodes.Text(() => Loc.T("journal.select_quest")));
+                return;
+            }
+            string dk = k + "d:" + (jv.SelectedQuest?.Value?.Blueprint?.name ?? q.Title) + ":";
 
-            var sheet = new FlowSheet(Loc.T("journal.quest"));
-            var head = sheet.List(null);
-            head.Item(new TextElement(q.Title, "heading"));
-            if (!string.IsNullOrWhiteSpace(q.Description)) head.Item(new TextElement(q.Description));
-            if (q.IsCompleted && !string.IsNullOrWhiteSpace(q.CompletionText)) head.Item(new TextElement(q.CompletionText));
+            b.PushContext(Loc.T("journal.quest"), role: null, positions: false);
+            b.AddItem(ControlId.Structural(dk + "title"), GraphNodes.Text(() => q.Title));
+            if (!string.IsNullOrWhiteSpace(q.Description))
+                b.AddItem(ControlId.Structural(dk + "desc"), GraphNodes.Text(() => q.Description));
+            if (q.IsCompleted && !string.IsNullOrWhiteSpace(q.CompletionText))
+                b.AddItem(ControlId.Structural(dk + "completion"), GraphNodes.Text(() => q.CompletionText));
 
             if (q.Objectives != null && q.Objectives.Count > 0)
             {
-                var obj = sheet.List(Loc.T("journal.objectives"));
+                b.SetRegion(dk + "objectives");
+                b.PushContext(Loc.T("journal.objectives"));
+                int oi = 0;
                 foreach (var o in q.Objectives)
                 {
-                    if (o == null) continue;
-                    var text = string.IsNullOrWhiteSpace(o.Description) ? o.Title : o.Description;
-                    obj.Item(new TextElement(text + " (" + StateWord(o.IsCompleted, o.IsFailed) + ")"));
+                    if (o == null) { oi++; continue; }
+                    var ob = o;
+                    b.AddItem(ControlId.Structural(dk + "obj:" + oi), GraphNodes.Text(
+                        () => (string.IsNullOrWhiteSpace(ob.Description) ? ob.Title : ob.Description)
+                            + " (" + StateWord(ob.IsCompleted, ob.IsFailed) + ")"));
                     if (o.Addendums != null)
+                    {
+                        int ai = 0;
                         foreach (var a in o.Addendums)
-                            if (a != null) obj.Item(new TextElement("  " + a.Description + " (" + StateWord(a.IsCompleted, a.IsFailed) + ")"));
+                        {
+                            if (a == null) { ai++; continue; }
+                            var ad = a;
+                            b.AddItem(ControlId.Structural(dk + "obj:" + oi + ":add:" + ai), GraphNodes.Text(
+                                () => ad.Description + " (" + StateWord(ad.IsCompleted, ad.IsFailed) + ")"));
+                            ai++;
+                        }
+                    }
+                    oi++;
                 }
+                b.PopContext();
             }
-
-            sheet.Reflow();
-            _content.Add(sheet);
+            b.PopContext();
         }
 
         private static string StateWord(bool completed, bool failed)
-            => Message.Localized("ui", completed ? "journal.completed" : failed ? "journal.failed" : "journal.active").Resolve();
-
-        // (contentChildIndex, row, col) of the focused cell, or child = -1 when focus is outside the content.
-        private (int child, int row, int col) CaptureFocus()
-        {
-            var cur = Navigation.Active?.Current;
-            if (cur != null)
-                for (int i = 0; i < _content.Children.Count; i++)
-                    if (_content.Children[i] is FlowSheet fs && fs.TryCoords(cur, out int r, out int c))
-                        return (i, r, c);
-            return (-1, 0, 0);
-        }
-
-        private void RestoreFocus((int child, int row, int col) cap)
-        {
-            if (cap.child < 0) return;
-            UIElement cell = null;
-            if (cap.child < _content.Children.Count && _content.Children[cap.child] is FlowSheet fs && fs.RowCount > 0)
-            {
-                int r = System.Math.Min(cap.row, fs.RowCount - 1);
-                int c = fs.Visitable(r, cap.col) ? cap.col : fs.LeftmostVisitable(r);
-                if (c >= 0) cell = fs.CellAt(r, c);
-            }
-            cell = cell ?? _content.FirstFocusable();
-            if (cell == null) return;
-            var label = cell.GetLabelText();
-            bool announce = label != _lastRestoreLabel;
-            _lastRestoreLabel = label;
-            Navigation.Focus(cell, announce);
-        }
+            => Loc.T(completed ? "journal.completed" : failed ? "journal.failed" : "journal.active");
     }
 }

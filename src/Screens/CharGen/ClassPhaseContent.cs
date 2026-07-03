@@ -132,6 +132,11 @@ namespace WrathAccess.Screens
                 else EmitShort(b, dk);
             }
             b.PopContext();
+
+            // The progression grid + auto-levelup, in Mechanic mode only — their OWN Tab-stops after
+            // the details (the grid is a big table; burying it at the bottom of the details vertical
+            // makes it undiscoverable by Tab).
+            if (cls != null && detailed) EmitProgression(b, dk);
         }
 
         // The current detail mode, READ from the game's own class-detail view (its m_ViewMode reactive —
@@ -226,10 +231,16 @@ namespace WrathAccess.Screens
                 b.PopContext();
             }
 
+        }
+
+        // The progression grid and the auto-levelup button — own Tab-stops (Mechanic mode only).
+        private void EmitProgression(GraphBuilder b, string dk)
+        {
             // Progression grid: levels = columns, feature lines = rows (banded by class / Shared). The
             // chargen class-Mechanic UnitProgressionView prefab uniquely leaves m_FeatProgressionView
             // unwired, suppressing the Feats band here — mirror that (feats/race show up on the
             // feature-selector phases via the global edge-window, not on the class screen).
+            b.BeginStop("progression");
             ProgressionGrid.Emit(b, dk + "prog:", Phase.ProgressionVM, Phase.SelectedClassVM.Value?.Class,
                 new ProgressionGrid.Options { IncludeFeats = false });
 
@@ -238,7 +249,7 @@ namespace WrathAccess.Screens
             var al = Phase.AutoLevelupButtonVM;
             if (al != null && al.ButtonIsActiveProperty.Value)
             {
-                b.AddItem(ControlId.Structural(dk + "autolevel"), GraphNodes.Button(
+                b.BeginStop("autolevel").AddItem(ControlId.Structural(dk + "autolevel"), GraphNodes.Button(
                     () => al.AutoLevelupIsAccessible.Value
                         ? (string)UIStrings.Instance.CharGen.LoadDefaultClassButton
                         : (string)UIStrings.Instance.CharGen.NoDefaultBuildForArchetype,

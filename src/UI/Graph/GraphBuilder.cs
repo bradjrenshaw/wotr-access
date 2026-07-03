@@ -57,6 +57,10 @@ namespace WrathAccess.UI.Graph
         // rows-then-raw (which shoved FlowSheet stops behind later buttons).
         private readonly List<GraphNode> _declared = new List<GraphNode>();
 
+        // The menu row each menu-mode node belongs to (null for raw nodes) — for stitching the
+        // vertical gap where a stop mixes menu rows with raw content (a sheet below filter controls).
+        private readonly Dictionary<GraphNode, Row> _rowOf = new Dictionary<GraphNode, Row>();
+
         // Shared.
         private readonly HashSet<ControlId> _ids = new HashSet<ControlId>();
         private ControlId _start;
@@ -158,6 +162,7 @@ namespace WrathAccess.UI.Graph
                 var row = new Row { StopKey = _stopKey };
                 row.Items.Add(header);
                 _rows.Add(row);
+                _rowOf[header] = row;
             }
             _parents.Add(new ParentFrame
             {
@@ -207,12 +212,14 @@ namespace WrathAccess.UI.Graph
             if (_currentRow != null)
             {
                 _currentRow.Items.Add(node);
+                _rowOf[node] = _currentRow;
             }
             else
             {
                 var row = new Row { StopKey = _stopKey };
                 row.Items.Add(node);
                 _rows.Add(row);
+                _rowOf[node] = row;
             }
             return this;
         }
@@ -277,12 +284,72 @@ namespace WrathAccess.UI.Graph
             foreach (var e in _rawEdges)
                 if (render.Nodes.ContainsKey(e.From) && render.Nodes.ContainsKey(e.To))
                     render.Nodes[e.From].Transitions[e.Dir] = new Transition(e.To, e.Label);
+            StitchModeBoundaries();
 
             render.StartKey = _start != null && render.Nodes.ContainsKey(_start)
                 ? _start
                 : render.Order[0].Id;
             StampPositions();
             return render;
+        }
+
+        // Where a stop mixes MENU rows with RAW content (search/sort/filter controls above a sheet),
+        // the two wiring systems don't see each other: menu auto-wiring connects only menu rows, and
+        // the raw content's explicit edges stop at its own borders — leaving a vertical gap arrows
+        // can't cross. Stitch it: at each menu→raw boundary (declaration order, same stop), the menu
+        // row's cells gain Down edges into the first raw node still missing an Up edge, and that node
+        // gains the Up back; at raw→menu boundaries the reverse. Only MISSING edges are filled — the
+        // raw content's own wiring is never overridden.
+        private void StitchModeBoundaries()
+        {
+            var byStop = new Dictionary<object, List<GraphNode>>();
+            var stops = new List<object>();
+            foreach (var n in _declared)
+            {
+                if (!byStop.TryGetValue(n.StopKey, out var list))
+                {
+                    list = new List<GraphNode>();
+                    byStop.Add(n.StopKey, list);
+                    stops.Add(n.StopKey);
+                }
+                list.Add(n);
+            }
+
+            foreach (var stop in stops)
+            {
+                var nodes = byStop[stop];
+                for (int i = 1; i < nodes.Count; i++)
+                {
+                    var prev = nodes[i - 1];
+                    var cur = nodes[i];
+                    bool prevMenu = _rowOf.ContainsKey(prev);
+                    bool curMenu = _rowOf.ContainsKey(cur);
+                    if (prevMenu == curMenu) continue; // same mode — its own wiring covers it
+
+                    if (prevMenu) // menu row above raw content: row cells ↓ first raw node without an Up
+                    {
+                        if (cur.Transitions.ContainsKey(GraphDir.Up)) continue;
+                        var row = _rowOf[prev];
+                        foreach (var cell in row.Items)
+                            if (!cell.Transitions.ContainsKey(GraphDir.Down))
+                                cell.Transitions[GraphDir.Down] = new Transition(cur.Id);
+                        cur.Transitions[GraphDir.Up] = new Transition(row.Items[0].Id);
+                    }
+                    else // raw content above a menu row: last raw node without a Down ↕ the row
+                    {
+                        var row = _rowOf[cur];
+                        // The raw side's bottom = the latest raw node (walking back) missing a Down.
+                        GraphNode bottom = null;
+                        for (int j = i - 1; j >= 0 && !_rowOf.ContainsKey(nodes[j]); j--)
+                            if (!nodes[j].Transitions.ContainsKey(GraphDir.Down)) { bottom = nodes[j]; break; }
+                        if (bottom == null) continue;
+                        bottom.Transitions[GraphDir.Down] = new Transition(row.Items[0].Id);
+                        foreach (var cell in row.Items)
+                            if (!cell.Transitions.ContainsKey(GraphDir.Up))
+                                cell.Transitions[GraphDir.Up] = new Transition(bottom.Id);
+                    }
+                }
+            }
         }
 
         // Auto-stamp "n of m" positions the way the old containers did: a multi-item row's members are

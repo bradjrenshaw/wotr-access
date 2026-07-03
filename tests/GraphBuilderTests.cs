@@ -205,6 +205,28 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
+        public void MixedStopStitchesMenuToRawVertically()
+        {
+            // A stop with menu controls above raw sheet content (the inventory stash: search/sort/
+            // filters over the item table) must be arrow-traversable across the mode boundary.
+            var render = new GraphBuilder()
+                .AddItem(Id("search"), Vt("Search"))
+                .StartRow().AddItem(Id("f1"), Vt("F1")).AddItem(Id("f2"), Vt("F2")).EndRow()
+                .AddNode(Id("r0"), Vt("Row0"))
+                .AddNode(Id("r1"), Vt("Row1"))
+                .Connect(Id("r0"), GraphDir.Down, Id("r1"))
+                .Connect(Id("r1"), GraphDir.Up, Id("r0"))
+                .Build();
+
+            // Filter cells drop into the sheet's first row; the sheet's top links back up.
+            Assert.Equal(Id("r0"), render.Nodes[Id("f1")].Transitions[GraphDir.Down].Destination);
+            Assert.Equal(Id("r0"), render.Nodes[Id("f2")].Transitions[GraphDir.Down].Destination);
+            Assert.Equal(Id("f1"), render.Nodes[Id("r0")].Transitions[GraphDir.Up].Destination);
+            // The sheet's own wiring is untouched.
+            Assert.Equal(Id("r1"), render.Nodes[Id("r0")].Transitions[GraphDir.Down].Destination);
+        }
+
+        [Fact]
         public void RawModeWiresExplicitEdges()
         {
             var render = new GraphBuilder()

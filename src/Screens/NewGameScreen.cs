@@ -79,15 +79,16 @@ namespace WrathAccess.Screens
                 i++;
             }
 
-            // Live description of the currently-selected campaign (updates as you pick).
-            b.AddItem(ControlId.Structural(k + "desc"), GraphNodes.Text(
+            // Live description of the currently-selected campaign (its own Tab-stop after the list,
+            // matching the old layout; updates as you pick).
+            b.BeginStop("ng_desc").AddItem(ControlId.Structural(k + "desc"), GraphNodes.Text(
                 () => story.Description != null ? story.Description.Value : ""));
 
             // Hardcore/permadeath mode toggle (code name "Last Azlanti"; the localized label reads
             // "Sink or Swim Mode"). Only enabled for dungeon campaigns (Midnight Isles) and hidden by
             // the game otherwise — immediate mode: emitted only while enabled.
             if (story.LastAzlantiEnabled.Value)
-                b.AddItem(ControlId.Structural(k + "azlanti"), GraphNodes.Toggle(
+                b.BeginStop("ng_azlanti").AddItem(ControlId.Structural(k + "azlanti"), GraphNodes.Toggle(
                     () => (string)UIStrings.Instance.NewGameWin.LastAzlantiMode,
                     () => story.LastAzlantiIsOn.Value,
                     () => story.SwitchLastAzlanti()));

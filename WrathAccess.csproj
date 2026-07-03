@@ -11,6 +11,13 @@
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
+  <!-- The test project (tests/) compiles the BCL-only sources it covers by direct link; keep it out
+       of the mod build (it references xunit, and tests never ship). -->
+  <ItemGroup>
+    <Compile Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
+
   <!-- Paths. Override GameDir on the command line if your install differs:
        dotnet build -p:GameDir="D:\...\Pathfinder Second Adventure" -->
   <PropertyGroup>

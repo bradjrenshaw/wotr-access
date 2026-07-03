@@ -68,12 +68,7 @@ namespace WrathAccess.Screens
             return System.Nullable.GetUnderlyingType(arg) ?? arg;
         }
 
-        private bool _detailed; // view state: false = Short mode (the chargen default), true = Mechanic
-
-        public ClassPhaseContent(CharGenClassPhaseVM phase) : base(phase)
-        {
-            SyncGameViewMode(); // align the on-screen view with our default on entry
-        }
+        public ClassPhaseContent(CharGenClassPhaseVM phase) : base(phase) { }
 
         public override void Build(GraphBuilder b, string k)
         {
@@ -119,37 +114,50 @@ namespace WrathAccess.Screens
                 b.PopContext();
             }
 
-            // Mode switch — mirrors the game's "Detailed description" button.
+            // Mode switch — mirrors the game's "Detailed description" button. Reads the GAME view's
+            // live mode (reflected below) and flips it via the game's own SwitchMode — no shadow state.
+            bool detailed = IsDetailed();
             b.BeginStop("mode").AddItem(ControlId.Structural(k + "mode"), GraphNodes.Toggle(
                 () => (string)UIStrings.Instance.CharGen.DetailedDescription,
-                () => _detailed,
-                () => { _detailed = !_detailed; SyncGameViewMode(); }));
+                IsDetailed,
+                ToggleDetailed));
 
             // The details, keyed per class + archetype + mode so any change re-keys them.
             string dk = k + "detail:" + (cls?.GetHashCode() ?? 0) + ":"
-                + (Phase.SelectedArchetypeVM.Value?.GetHashCode() ?? 0) + ":" + (_detailed ? "M" : "S") + ":";
+                + (Phase.SelectedArchetypeVM.Value?.GetHashCode() ?? 0) + ":" + (detailed ? "M" : "S") + ":";
             b.BeginStop("details").PushContext(Loc.T("chargen.details"), role: null, positions: false);
             if (cls != null)
             {
-                if (_detailed) EmitMechanic(b, dk);
+                if (detailed) EmitMechanic(b, dk);
                 else EmitShort(b, dk);
             }
             b.PopContext();
         }
 
-        // Flip the game's own detail view (Short/Mechanic) to match our toggle so the rendered screen
-        // tracks what we read. View state, so we set it on the live view; left alone in Level-up mode.
-        private void SyncGameViewMode()
+        // The current detail mode, READ from the game's own class-detail view (its m_ViewMode reactive —
+        // the source of truth, not a shadow). False (Short) when the view isn't present or is bound to
+        // Level-up (which has no Short/Mechanic split).
+        private bool IsDetailed()
         {
-            if (ViewModeField == null || SwitchModeMethod == null || ViewModeEnum == null) return;
+            if (ViewModeField == null || ViewModeEnum == null) return false;
+            var view = ActiveClassDetailView();
+            if (view == null) return false;
+            var rp = ViewModeField.GetValue(view);
+            var cur = rp?.GetType().GetProperty("Value")?.GetValue(rp);
+            return cur != null && cur.Equals(System.Enum.Parse(ViewModeEnum, "MechanicDescription"));
+        }
+
+        // Flip the game's own Short↔Mechanic view mode (the same SwitchMode its button calls); a no-op
+        // when the view isn't present or is in Level-up mode. Next render's IsDetailed() reflects it.
+        private void ToggleDetailed()
+        {
+            if (SwitchModeMethod == null || ViewModeEnum == null) return;
             var view = ActiveClassDetailView();
             if (view == null) return;
             var rp = ViewModeField.GetValue(view);
             var cur = rp?.GetType().GetProperty("Value")?.GetValue(rp);
-            if (cur == null) return;                                            // view not bound yet
-            if (cur.Equals(System.Enum.Parse(ViewModeEnum, "Levelup"))) return; // no switch in level-up
-            var target = System.Enum.Parse(ViewModeEnum, _detailed ? "MechanicDescription" : "ShortDescription");
-            if (!cur.Equals(target)) SwitchModeMethod.Invoke(view, null);       // toggles Short↔Mechanic to match
+            if (cur != null && cur.Equals(System.Enum.Parse(ViewModeEnum, "Levelup"))) return; // no switch in level-up
+            SwitchModeMethod.Invoke(view, null);
         }
 
         // Short mode mirrors the game's InfoSectionView: render the exact template it feeds there

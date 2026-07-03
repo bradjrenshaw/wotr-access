@@ -40,6 +40,9 @@ namespace WrathAccess.Screens
 
         protected override void BuildContent(GraphBuilder b, string k)
         {
+            // Stateless per render (immediate mode): the phase content holds NO view state of its own —
+            // it reflects the game's live state each frame (e.g. Class reads the game view's Short/
+            // Mechanic mode), so recreating it every render is correct and cheap.
             var content = CharGenPhaseContentFactory.Create(Vm()?.CurrentPhaseVM.Value);
             if (content != null)
                 content.Build(b, k);

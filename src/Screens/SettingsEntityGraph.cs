@@ -19,9 +19,9 @@ namespace WrathAccess.Screens
     internal static class SettingsEntityGraph
     {
         /// <summary>Emit the entities into the builder under <paramref name="keyPrefix"/>-scoped ids.
-        /// <paramref name="flat"/>: headers read as plain section labels instead of collapsible groups —
-        /// for short single-section pages (New Game difficulty) where a tree is just an extra hop; the
-        /// full Settings screen keeps groups so whole sections can be skipped.</summary>
+        /// <paramref name="flat"/>: headers are SKIPPED and the options read as a plain vertical list —
+        /// for short single-section pages (New Game difficulty) whose screen/phase already carries the
+        /// label; the full Settings screen keeps groups so whole sections can be skipped.</summary>
         public static void Emit(GraphBuilder b, IEnumerable<VirtualListElementVMBase> entities, string keyPrefix,
             bool flat = false)
         {
@@ -34,9 +34,7 @@ namespace WrathAccess.Screens
                 {
                     if (open) b.EndGroup();
                     string title = header.Tittle; // (sic — the VM's field)
-                    if (flat)
-                        b.AddItem(ControlId.Structural(keyPrefix + "sec:" + title), GraphNodes.Text(() => title));
-                    else
+                    if (!flat) // flat: the page already carries the label — no header node at all
                     {
                         b.BeginGroup(ControlId.Structural(keyPrefix + "sec:" + title), GraphNodes.Group(() => title));
                         open = true;

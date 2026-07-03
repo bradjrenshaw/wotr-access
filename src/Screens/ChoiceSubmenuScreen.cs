@@ -33,7 +33,12 @@ namespace WrathAccess.Screens
 
         /// <summary>Open the submenu as a child of the current screen.</summary>
         public static void Open(string title, List<string> options, int current, Action<int> onSelect)
-            => ScreenManager.Current?.PushChild(new ChoiceSubmenuScreen(title, options, current, onSelect));
+        {
+            // Opening IS the activation — the click every caller (dropdowns, sorters, link pickers)
+            // used to get from the old proxy base's default activation sound. One chokepoint here.
+            UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
+            ScreenManager.Current?.PushChild(new ChoiceSubmenuScreen(title, options, current, onSelect));
+        }
 
         public override string Key => "overlay.choicesubmenu";
         public override string ScreenName => _title;

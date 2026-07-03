@@ -40,6 +40,10 @@ namespace WrathAccess.Screens
         public override string Key => "ctx.dialogue";
         public override int Layer => 15; // over the in-game context + service windows
 
+        // Popping here usually means HIDDEN (cutscene gap, pause menu over the window), not closed —
+        // keep the nav state so resuming restores the transcript position (OnPop re-points at the cue).
+        public override bool KeepStateOnPop => true;
+
         private static readonly FieldInfo CutsceneScheduledField = AccessTools.Field(typeof(DialogVM), "m_CutsceneScheduled");
 
         private DialogVM _subscribedVm;   // the conversation our notification subscription belongs to

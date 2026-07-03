@@ -27,6 +27,9 @@ namespace WrathAccess.Screens
 
         public override string Key => "overlay.modlog";
         public override string ScreenName => L("log.title", "Log");
+
+        // Resuming your reading position across open/close is the point of a log review screen.
+        public override bool KeepStateOnPop => true;
         public override int Layer => 22; // above exploration / dialogue / loot / saveload; below settings (25)
         public override bool IsActive() => s_open;
 

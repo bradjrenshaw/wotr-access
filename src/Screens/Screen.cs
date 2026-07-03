@@ -35,6 +35,12 @@ namespace WrathAccess.Screens
         /// return with an empty builder) while the screen's content doesn't exist yet.</summary>
         public virtual void Build(WrathAccess.UI.Graph.GraphBuilder b) { }
 
+        /// <summary>Keep this screen's per-screen nav state (focus, stop memory, tree expansion) when it
+        /// POPS off the stack. Default false: closing a window resets it — reopening starts fresh. Override
+        /// true where popping isn't really closing (dialogue hides during cutscene gaps / under the pause
+        /// menu) or where resuming your place is the point (the log).</summary>
+        public virtual bool KeepStateOnPop => false;
+
         /// <summary>Graph-native screens: the Tab-stop initial focus lands on when the screen first
         /// gains a cursor (a wizard opening on its page content rather than the roadmap, which stays
         /// first in Tab order). Null = the graph's start node. Declarative — unlike a FocusStop request,

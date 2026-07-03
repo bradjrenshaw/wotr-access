@@ -50,8 +50,7 @@ namespace WrathAccess.UI
         /// <summary>Return to the unfocused (exploration) state — see <see cref="Navigator.Blur"/>.</summary>
         public static void Blur() => Active?.Blur();
 
-        /// <summary>Notify that a CHILD page was removed (its per-screen nav state is dropped;
-        /// stack screens keep theirs across pop/re-push).</summary>
+        /// <summary>Notify that a screen closed (its per-screen nav state is dropped).</summary>
         public static void ScreenClosed(Screens.Screen screen) => Active?.ScreenClosed(screen);
 
         /// <summary>Move focus to a graph node by id (graph-native screens).</summary>

@@ -30,6 +30,9 @@ namespace WrathAccess.Screens
         public override string ScreenName => Loc.T("screen.book_event");
         public override int Layer => 15; // over the in-game context + service windows, like dialogue
 
+        // Same hide-not-close pop semantics as dialogue.
+        public override bool KeepStateOnPop => true;
+
         private BlueprintBookPage _focusedPage; // page whose first line focus was pointed at
         private BlueprintBookPage _spokenPage;  // page we've read aloud
 

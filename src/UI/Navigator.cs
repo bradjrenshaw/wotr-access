@@ -58,6 +58,10 @@ namespace WrathAccess.UI
         /// content that appears mid-build (e.g. focusing a node just added by an action).</summary>
         public virtual void FocusNode(Graph.ControlId id, bool announce = true) { }
 
+        /// <summary>Move focus to the FIRST node of a Tab-stop (a wizard landing on the new page's
+        /// content after Next; a screen seating a section whose node keys vary per state).</summary>
+        public virtual void FocusStop(object stopKey) { }
+
         // ---- shared focus-restore rules ----
 
         /// <summary>The child to land on when first focusing a container: the remembered focus, else —

@@ -64,6 +64,7 @@ namespace WrathAccess.UI
                 _lastSpokenKey = null;
                 _lastSpokenNode = null;
                 _pendingFocus = null;
+                _pendingStop = null;
                 _liveKey = null;
             }
             _graph = screen != null ? new KeyGraph(() => BuildRender(screen), _state) : null;
@@ -79,6 +80,16 @@ namespace WrathAccess.UI
             if (id == null) return;
             _pendingFocus = id;
             _pendingAnnounce = announce;
+        }
+
+        // A pending land-on-stop request (applied by EnsureFocus once the stop has nodes, like
+        // _pendingFocus): resolves to the stop's FIRST node at apply time, so it works when the
+        // caller can't know the node keys (a wizard page whose content varies per step).
+        private object _pendingStop;
+
+        public override void FocusStop(object stopKey)
+        {
+            _pendingStop = stopKey;
         }
 
         // Graph-native screens declare fresh from live game state on every render (immediate mode);
@@ -139,6 +150,12 @@ namespace WrathAccess.UI
                         if (!_pendingAnnounce) { _lastSpokenKey = _pendingFocus; _lastSpokenNode = _graph.CurrentNode; }
                     }
                     _pendingFocus = null;
+                }
+                if (_pendingStop != null)
+                {
+                    foreach (var n in _graph.Current.Order)
+                        if (Equals(n.StopKey, _pendingStop)) { _graph.Focus(n.Id); break; }
+                    _pendingStop = null; // announce rides the normal differ below
                 }
             }
 
@@ -426,7 +443,7 @@ namespace WrathAccess.UI
             if (idx < 0)
             {
                 // Unfocused (exploration): Tab enters at the first/last stop.
-                return FocusStop(stops[step >= 0 ? 0 : stops.Count - 1]);
+                return LandOnStop(stops[step >= 0 ? 0 : stops.Count - 1]);
             }
 
             int ni = idx + step;
@@ -443,12 +460,12 @@ namespace WrathAccess.UI
                 else
                     return true; // at the end; consume, no wrap
             }
-            return FocusStop(stops[ni]);
+            return LandOnStop(stops[ni]);
         }
 
-        // Land on a stop: its remembered/selected element descended to the innermost — the same restore
-        // the old Tab used (the retained containers carry the memory).
-        private bool FocusStop(object stopKey)
+        // Land on a stop (Tab cycling): its remembered/selected element descended to the innermost — the
+        // same restore the old Tab used (the retained containers carry the memory).
+        private bool LandOnStop(object stopKey)
         {
             if (stopKey is Container c)
             {

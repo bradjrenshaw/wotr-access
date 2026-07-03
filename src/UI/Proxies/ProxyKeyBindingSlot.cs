@@ -10,8 +10,7 @@ namespace WrathAccess.UI.Proxies
     /// One binding slot of a key-binding row (index 0 = primary, 1 = secondary). Value is the
     /// bound key. Primary action rebinds it (opens the capture dialog); secondary clears it.
     /// </summary>
-    // Canonical "key binding": ProxyModBinding (the mod's own rebindable bindings) shares this
-    // settings category + announcement order — both are a label + current-combo value + Rebind/Clear row.
+    // Canonical "key binding" (the mod's own binding rows now live in ModSettingNodes.ModBinding).
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement),
         typeof(ValueAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]
     [ElementSettingsKey("key_binding")]

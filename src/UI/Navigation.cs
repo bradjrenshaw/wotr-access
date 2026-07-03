@@ -55,5 +55,8 @@ namespace WrathAccess.UI
 
         /// <summary>Move focus to a graph node by id (graph-native screens).</summary>
         public static void FocusNode(UI.Graph.ControlId id, bool announce = true) => Active?.FocusNode(id, announce);
+
+        /// <summary>Move focus to the first node of a Tab-stop (graph-native screens).</summary>
+        public static void FocusStop(object stopKey) => Active?.FocusStop(stopKey);
     }
 }

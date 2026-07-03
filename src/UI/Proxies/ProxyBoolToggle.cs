@@ -10,7 +10,7 @@ namespace WrathAccess.UI.Proxies
     /// tied to SettingsEntityBoolVM). Reads its value live and activates via a supplied toggle
     /// action — e.g. the Story phase's "Last Azlanti" mode (StoryVM.SwitchLastAzlanti).
     /// </summary>
-    // Canonical "toggle" (the game's term for a checkbox): ProxyToggle / ProxyOverrideToggle share this
+    // Canonical "toggle" (the game's term for a checkbox): ProxyToggle / the override-toggle node factory share this
     // settings category + announcement order (the union across all three — Tooltip comes from ProxyToggle).
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(EnabledAnnouncement), typeof(TooltipAnnouncement), typeof(PositionAnnouncement))]

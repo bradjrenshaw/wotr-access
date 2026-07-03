@@ -1,44 +1,42 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Kingmaker.UI; // UISoundType
 using WrathAccess.Exploration; // ScanSounds, ScanTaxonomy (sonar include toggles)
 using WrathAccess.Settings;
 using WrathAccess.Speech;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
     /// First-run setup wizard (and re-runnable later): walks a new player through the few high-impact,
     /// preference-driven choices in plain language, reusing the REAL settings controls so the menu stays
-    /// the single source of truth. Built on the shared <see cref="WizardScreen"/> shell (Back/Next, focus
-    /// re-homing, page-turn on advance). Mod-pushed like the Ctrl+M menu (static open flag); the phase set
-    /// is dynamic — step 2 (the chosen engine's own settings) drops out for a paramless engine.
-    ///
-    /// Step 1: pick the speech engine — selecting one writes it (like normal) and plays a sample so you
-    /// hear it working. Step 2: that engine's settings tree, for a clear starting configuration.
-    ///
-    /// Opened via <see cref="Open"/> (a temporary binding for now; first-launch auto-run + a menu entry
-    /// to follow).
+    /// the single source of truth. Graph-native (no longer on the <see cref="WizardScreen"/> shell, which
+    /// remains for the game-VM wizards): a roadmap stop (one jump-target per active phase, each with a
+    /// LIVE one-line summary of its current choice), the current step's content under the step title as
+    /// context (content keys carry the step, so a page turn re-keys the page), and Back/Next stops.
+    /// Advancing plays the page-turn and lands focus on the new page's content (<c>FocusStop</c>). The
+    /// phase set is dynamic — the engine-settings step drops out for a paramless engine, the voice steps
+    /// appear only in positional mode. Mod-pushed (static open flag); Escape closes.
     /// </summary>
-    public sealed class SetupWizardScreen : WizardScreen
+    public sealed class SetupWizardScreen : Screen
     {
+        public SetupWizardScreen() { Wrap = true; }
+
         private enum Step { Backend, HandlerSettings, Navigation, WallTones, Sonar, EventFeedback, EnemyVoice, AllyVoice, UnitlessVoice }
 
         private static bool s_open;
         private static bool s_sonarInit;  // apply the sonar phase's recommended defaults once per wizard open
         private static Step s_step;
-        private static object s_phase = new object();      // identity changes per navigation → shell rebuilds
-        private static readonly object Session = new object(); // stable while open → IsActive + no spurious rebuild
 
         public override string Key => "ctx.setupwizard";
         public override string ScreenName => Loc.T("screen.setup_wizard");
         public override int Layer => 36;       // above the mod menu (35); a modal over the main menu
         public override bool Exclusive => true; // owns the keyboard while open
+        public override bool IsActive() => s_open;
 
-        public static void Open() { s_open = true; s_sonarInit = false; s_step = Step.Backend; s_phase = new object(); }
+        public static void Open() { s_open = true; s_sonarInit = false; s_step = Step.Backend; }
         private static void Close()
         {
             s_open = false;
@@ -47,10 +45,8 @@ namespace WrathAccess.Screens
             ModSettings.GetSetting<BoolSetting>("wizard.completed")?.Set(true);
         }
 
-        protected override object WizardVm() => s_open ? Session : null;
-        protected override object CurrentPhase() => s_phase;
-
-        protected override string PhaseLabel() => TitleFor(s_step);
+        // Open landing goes to the page content, not the roadmap (the roadmap is first in tab order).
+        public override void OnPush() { Navigation.FocusStop("content"); }
 
         private static string TitleFor(Step step)
         {
@@ -69,17 +65,52 @@ namespace WrathAccess.Screens
             }
         }
 
-        // The roadmap header: one jump-target per active phase (like chargen's), each with a LIVE one-line
-        // summary of its current choice so you can see what to revisit and jump straight back to it.
-        protected override void BuildHeader(Container root)
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            var list = new ListContainer(Loc.T("wizard.steps"));
+            if (!s_open) return;
+
+            // The roadmap: one jump-target per active phase, with a live summary of its current choice —
+            // the "see what to revisit and jump straight back" path. Keys are the step names (stable), so
+            // roadmap focus survives page turns; jumping moves focus to the content anyway.
+            b.BeginStop("steps").PushContext(Loc.T("wizard.steps"), "list");
             foreach (var step in ActiveSteps())
             {
                 var s = step; // capture for the live closures
-                list.Add(new ProxyTab(() => RoadmapLabel(s), () => s_step == s, () => JumpTo(s)));
+                b.AddItem(ControlId.Structural("wiz:step:" + s),
+                    GraphNodes.Tab(() => RoadmapLabel(s), () => s_step == s, () => JumpTo(s)));
             }
-            root.Add(list);
+            b.PopContext();
+
+            // The current page, under the step title as context; keys carry the step so a page turn
+            // re-keys the whole page (GoTo/JumpTo land focus here via FocusStop).
+            string k = "wiz:" + s_step + ":";
+            b.BeginStop("content").PushContext(TitleFor(s_step));
+            BuildContent(b, k);
+            b.PopContext();
+
+            // Footer: Back then Next/Finish (labels live).
+            b.BeginStop("back").AddItem(ControlId.Structural("wiz:back"),
+                GraphNodes.Button(() => Loc.T("wizard.back"), () => GoTo(-1)));
+            b.BeginStop("next").AddItem(ControlId.Structural("wiz:next"),
+                GraphNodes.Button(() => IsLastStep() ? Loc.T("wizard.finish") : Loc.T("wizard.next"), () => GoTo(+1)));
+        }
+
+        private void BuildContent(GraphBuilder b, string k)
+        {
+            switch (s_step)
+            {
+                case Step.Backend: BuildBackendStep(b, k); break;
+                case Step.HandlerSettings: BuildHandlerSettingsStep(b, k); break;
+                case Step.Navigation: BuildNavigationStep(b, k); break;
+                case Step.WallTones: BuildWallTonesStep(b, k); break;
+                case Step.Sonar: BuildSonarStep(b, k); break;
+                case Step.EventFeedback: BuildEventFeedbackStep(b, k); break;
+                case Step.EnemyVoice: BuildVoiceStep(b, k, EnemySlot, "wizard.events.enemy_voice_help"); break;
+                case Step.AllyVoice: BuildVoiceStep(b, k, AllySlot, "wizard.events.ally_voice_help"); break;
+                case Step.UnitlessVoice: BuildVoiceStep(b, k, UnitlessSlot, "wizard.events.unitless_voice_help"); break;
+            }
         }
 
         private static string RoadmapLabel(Step step)
@@ -103,48 +134,23 @@ namespace WrathAccess.Screens
             }
         }
 
-        // Jump straight to a phase from the roadmap — any active phase, forward or back (the wizard's phases
-        // are independent settings, no gating); this is the "go back and adjust later" path.
-        private static void JumpTo(Step step)
-        {
-            if (s_step == step) return;
-            s_step = step;
-            s_phase = new object();
-        }
-
-        protected override void BuildContent(Container content)
-        {
-            switch (s_step)
-            {
-                case Step.Backend: BuildBackendStep(content); break;
-                case Step.HandlerSettings: BuildHandlerSettingsStep(content); break;
-                case Step.Navigation: BuildNavigationStep(content); break;
-                case Step.WallTones: BuildWallTonesStep(content); break;
-                case Step.Sonar: BuildSonarStep(content); break;
-                case Step.EventFeedback: BuildEventFeedbackStep(content); break;
-                case Step.EnemyVoice: BuildEnemyVoiceStep(content); break;
-                case Step.AllyVoice: BuildAllyVoiceStep(content); break;
-                case Step.UnitlessVoice: BuildUnitlessVoiceStep(content); break;
-            }
-        }
-
         // ---- Step 1: choose the speech engine (select + sample) ----
 
-        private static void BuildBackendStep(Container content)
+        private static void BuildBackendStep(GraphBuilder b, string k)
         {
-            content.Add(new TextElement(() => Loc.T("wizard.speech.backend_help")));
-
-            var list = new ListContainer();
+            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.speech.backend_help")));
+            int i = 0;
             foreach (var h in SpeechManager.Handlers)
             {
                 if (!CanUse(h)) continue; // only engines that actually load on this machine
                 var handler = h;          // capture for the live closures
-                list.Add(new ProxyRadioOption(
-                    () => handler.Label,
-                    () => HandlerChoice()?.ValueId == handler.Key,
-                    () => SelectBackend(handler.Key)));
+                b.AddItem(ControlId.Structural(k + "engine:" + h.Key),
+                    GraphNodes.ChoiceOption(
+                        () => handler.Label,
+                        () => HandlerChoice()?.ValueId == handler.Key,
+                        () => SelectBackend(handler.Key)));
+                i++;
             }
-            content.Add(list);
         }
 
         private static void SelectBackend(string key)
@@ -159,38 +165,26 @@ namespace WrathAccess.Screens
 
         // ---- Step 2: that engine's own settings (the real controls) ----
 
-        private static void BuildHandlerSettingsStep(Container content)
+        private static void BuildHandlerSettingsStep(GraphBuilder b, string k)
         {
             var sub = SelectedHandlerParams();
             if (sub == null || sub.Children.Count == 0)
             {
-                content.Add(new TextElement(() => Loc.T("wizard.step_unavailable")));
+                b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.step_unavailable")));
                 return;
             }
-            content.Add(SettingsTree(sub.Children));
-        }
-
-        // Build settings the way the menu does: into an UNLABELED structural TreeGroup root, so the controls
-        // are ONE Tab-stop navigated by up/down arrows (not a Tab per control).
-        private static TreeGroup SettingsTree(IEnumerable<Setting> settings)
-        {
-            var tree = new TreeGroup();
-            foreach (var s in settings) ModSettingsScreen.BuildSettingNode(tree, s);
-            return tree;
+            foreach (var s in sub.Children) ModSettingNodes.Emit(b, s, k);
         }
 
         // ---- Step 3: exploration movement (one choice → several cursor settings) ----
 
-        private static void BuildNavigationStep(Container content)
+        private static void BuildNavigationStep(GraphBuilder b, string k)
         {
-            content.Add(new TextElement(() => Loc.T("wizard.nav.help")));
-
-            var list = new ListContainer();
-            list.Add(new ProxyRadioOption(() => Loc.T("wizard.nav.continuous"),
-                () => PrimaryMode() == "continuous", ApplyContinuous));
-            list.Add(new ProxyRadioOption(() => Loc.T("wizard.nav.tiled"),
-                () => PrimaryMode() == "tiled", ApplyTiled));
-            content.Add(list);
+            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.nav.help")));
+            b.AddItem(ControlId.Structural(k + "continuous"), GraphNodes.ChoiceOption(
+                () => Loc.T("wizard.nav.continuous"), () => PrimaryMode() == "continuous", ApplyContinuous));
+            b.AddItem(ControlId.Structural(k + "tiled"), GraphNodes.ChoiceOption(
+                () => Loc.T("wizard.nav.tiled"), () => PrimaryMode() == "tiled", ApplyTiled));
         }
 
         // Continuous: both cursors glide. In-area — primary 15 ft/s, secondary 30 ft/s. World map — both
@@ -239,18 +233,16 @@ namespace WrathAccess.Screens
 
         // ---- Step: wall tones (a simplified subset of the Exploration wall-tones settings) ----
 
-        // The real Default-overlay wall-tone settings, just the two that matter for a first pass: the enabled
-        // toggle and the range (the "distance" out to which a wall is sounded). Bound live (same controls and
+        // The real Default-overlay wall-tone settings, just the two that matter for a first pass: the mode
+        // and the range (the "distance" out to which a wall is sounded). Bound live (same controls and
         // labels as the Exploration tab) — no preset, so the user simply turns it on and picks a distance.
-        private static void BuildWallTonesStep(Container content)
+        private static void BuildWallTonesStep(GraphBuilder b, string k)
         {
-            content.Add(new TextElement(() => Loc.T("wizard.walltones.help")));
-            var settings = new List<Setting>();
+            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.walltones.help")));
             var mode = ModSettings.GetSetting<ChoiceSetting>("defaults.walltones.mode");
             var range = ModSettings.GetSetting<IntSetting>("defaults.walltones.range");
-            if (mode != null) settings.Add(mode);
-            if (range != null) settings.Add(range);
-            if (settings.Count > 0) content.Add(SettingsTree(settings));
+            if (mode != null) ModSettingNodes.Emit(b, mode, k);
+            if (range != null) ModSettingNodes.Emit(b, range, k);
         }
 
         // ---- Step: sonar (enable + which unit factions / the world map are swept) ----
@@ -259,17 +251,15 @@ namespace WrathAccess.Screens
         // include toggle flips the node between its default faction sound and Silent. Enabled / world-map are
         // the plain overlay-enable flags. We apply the recommended starting set ONCE on first entry (allies and
         // the world map off — they're the noisy ones; see the help text), then bind live so the user can tune.
-        private static void BuildSonarStep(Container content)
+        private void BuildSonarStep(GraphBuilder b, string k)
         {
             if (!s_sonarInit) { ApplySonarDefaults(); s_sonarInit = true; }
-            content.Add(new TextElement(() => Loc.T("wizard.sonar.help")));
-            var list = new ListContainer();
-            list.Add(SonarFlagToggle("wizard.sonar.enabled", "defaults.sonar.mode"));
-            list.Add(SonarIncludeToggle("wizard.sonar.enemy", ScanTaxonomy.UnitsEnemies));
-            list.Add(SonarIncludeToggle("wizard.sonar.neutral", ScanTaxonomy.UnitsNeutrals));
-            list.Add(SonarIncludeToggle("wizard.sonar.ally", ScanTaxonomy.UnitsParty));
-            list.Add(SonarFlagToggle("wizard.sonar.worldmap", "defaults.worldmap_sonar.mode"));
-            content.Add(list);
+            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.sonar.help")));
+            b.AddItem(ControlId.Structural(k + "enabled"), SonarFlagToggle("wizard.sonar.enabled", "defaults.sonar.mode"));
+            b.AddItem(ControlId.Structural(k + "enemy"), SonarIncludeToggle("wizard.sonar.enemy", ScanTaxonomy.UnitsEnemies));
+            b.AddItem(ControlId.Structural(k + "neutral"), SonarIncludeToggle("wizard.sonar.neutral", ScanTaxonomy.UnitsNeutrals));
+            b.AddItem(ControlId.Structural(k + "ally"), SonarIncludeToggle("wizard.sonar.ally", ScanTaxonomy.UnitsParty));
+            b.AddItem(ControlId.Structural(k + "worldmap"), SonarFlagToggle("wizard.sonar.worldmap", "defaults.worldmap_sonar.mode"));
         }
 
         // The wizard's recommended sonar baseline: sonar on, enemies + neutrals swept, allies and world-map
@@ -285,17 +275,17 @@ namespace WrathAccess.Screens
 
         // A simplified on/off over the system's play mode (on => Continuous, off => Off); the full
         // Off / When moving / Continuous choice lives on the Exploration/Sonar tabs.
-        private static ProxyBoolToggle SonarFlagToggle(string labelKey, string modePath)
+        private static NodeVtable SonarFlagToggle(string labelKey, string modePath)
         {
             var s = ModSettings.GetSetting<ChoiceSetting>(modePath);
-            return new ProxyBoolToggle(Loc.T(labelKey),
+            return GraphNodes.Toggle(() => Loc.T(labelKey),
                 () => s != null && s.ValueId != "off",
                 () => s?.Set(s.ValueId == "off" ? "continuous" : "off"));
         }
 
         // A faction-include toggle: included == the taxonomy node sounds (resolves to a non-silent stem).
-        private static ProxyBoolToggle SonarIncludeToggle(string labelKey, string nodeKey)
-            => new ProxyBoolToggle(Loc.T(labelKey),
+        private static NodeVtable SonarIncludeToggle(string labelKey, string nodeKey)
+            => GraphNodes.Toggle(() => Loc.T(labelKey),
                 () => ScanSounds.Resolve(nodeKey) != null,
                 () => SetSonarInclude(nodeKey, ScanSounds.Resolve(nodeKey) == null));
 
@@ -304,8 +294,8 @@ namespace WrathAccess.Screens
         {
             string id = on ? (ScanTaxonomy.Get(nodeKey)?.DefaultSound ?? ScanTaxonomy.Silent) : ScanTaxonomy.Silent;
             var setting = ScanSounds.SoundSetting(nodeKey);
-            if (setting is Settings.ChoiceSetting c) c.Set(id);
-            else if (setting is Settings.NullableChoiceSetting nc) nc.SetExplicit(id);
+            if (setting is ChoiceSetting c) c.Set(id);
+            else if (setting is NullableChoiceSetting nc) nc.SetExplicit(id);
         }
 
         // ---- Step: event feedback (one mode choice → events + log + SAPI voices). "Events" not "combat":
@@ -319,17 +309,15 @@ namespace WrathAccess.Screens
         // voice (below); screen-reader / log modes set all four the same way via this list.
         private static readonly string[] SourceBuckets = { "party", "enemy", "neutral", "unitless" };
 
-        private static void BuildEventFeedbackStep(Container content)
+        private static void BuildEventFeedbackStep(GraphBuilder b, string k)
         {
-            content.Add(new TextElement(() => Loc.T("wizard.events.help")));
-            var list = new ListContainer();
-            list.Add(new ProxyRadioOption(() => Loc.T("wizard.events.positional"),
-                () => CurrentMode() == "positional", ApplyPositional));
-            list.Add(new ProxyRadioOption(() => Loc.T("wizard.events.screen_reader"),
-                () => CurrentMode() == "screen_reader", ApplyScreenReader));
-            list.Add(new ProxyRadioOption(() => Loc.T("wizard.events.log"),
-                () => CurrentMode() == "log", ApplyLog));
-            content.Add(list);
+            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.events.help")));
+            b.AddItem(ControlId.Structural(k + "positional"), GraphNodes.ChoiceOption(
+                () => Loc.T("wizard.events.positional"), () => CurrentMode() == "positional", ApplyPositional));
+            b.AddItem(ControlId.Structural(k + "screen_reader"), GraphNodes.ChoiceOption(
+                () => Loc.T("wizard.events.screen_reader"), () => CurrentMode() == "screen_reader", ApplyScreenReader));
+            b.AddItem(ControlId.Structural(k + "log"), GraphNodes.ChoiceOption(
+                () => Loc.T("wizard.events.log"), () => CurrentMode() == "log", ApplyLog));
         }
 
         // Positional: events spoken spatially, with DISTINCT enemy vs ally voices for clarity; the duplicate
@@ -403,32 +391,27 @@ namespace WrathAccess.Screens
         {
             var slot = ModSettings.GetSetting<StringSetting>(slotPath);
             var id = slot?.Get();
-            if (!string.IsNullOrEmpty(id) && SpeechConfigRegistry.Ids().Contains(id)) return id;
+            if (!string.IsNullOrEmpty(id))
+                foreach (var existing in SpeechConfigRegistry.Ids())
+                    if (existing == id) return id;
             id = SpeechConfigRegistry.Add();
             SpeechConfigRegistry.SetName(id, Loc.T(nameKey));
             // An additional config's handler is a NullableChoiceSetting (inherits the default config).
-            SpeechConfigRegistry.Get(id)?.Tree?.Get<Settings.NullableChoiceSetting>("handler")?.SetExplicit("sapi");
+            SpeechConfigRegistry.Get(id)?.Tree?.Get<NullableChoiceSetting>("handler")?.SetExplicit("sapi");
             slot?.Set(id);
             return id;
         }
 
-        // ---- Steps: tune the enemy / ally voices (each config's own settings tree + a test line) ----
+        // ---- Steps: tune the enemy / ally / sourceless voices (each config's tree + a test line) ----
 
-        private static void BuildEnemyVoiceStep(Container content)
-            => BuildVoiceStep(content, EnemySlot, "wizard.events.enemy_voice_help");
-
-        private static void BuildAllyVoiceStep(Container content)
-            => BuildVoiceStep(content, AllySlot, "wizard.events.ally_voice_help");
-
-        private static void BuildUnitlessVoiceStep(Container content)
-            => BuildVoiceStep(content, UnitlessSlot, "wizard.events.unitless_voice_help");
-
-        private static void BuildVoiceStep(Container content, string slotPath, string helpKey)
+        private static void BuildVoiceStep(GraphBuilder b, string k, string slotPath, string helpKey)
         {
-            content.Add(new TextElement(() => Loc.T(helpKey)));
+            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T(helpKey)));
             var sapi = ConfigParams(slotPath);
-            if (sapi != null) content.Add(SettingsTree(sapi.Children));
-            content.Add(new ProxyActionButton(() => Loc.T("wizard.events.test"), null, () => TestVoice(slotPath)));
+            if (sapi != null)
+                foreach (var s in sapi.Children) ModSettingNodes.Emit(b, s, k);
+            b.AddItem(ControlId.Structural(k + "test"),
+                GraphNodes.Button(() => Loc.T("wizard.events.test"), () => TestVoice(slotPath), sound: null));
         }
 
         private static CategorySetting ConfigParams(string slotPath)
@@ -460,8 +443,15 @@ namespace WrathAccess.Screens
             return steps.ToArray();
         }
 
-        protected override void OnBack() => GoTo(-1);
-        protected override void OnNext() => GoTo(+1);
+        // Jump straight to a phase from the roadmap — any active phase, forward or back (the wizard's phases
+        // are independent settings, no gating); this is the "go back and adjust later" path.
+        private static void JumpTo(Step step)
+        {
+            if (s_step == step) return;
+            s_step = step;
+            UiSound.Play(UISoundType.BookPageTurn);
+            Navigation.FocusStop("content"); // land on the new page (its keys carry the step)
+        }
 
         // Step by ±1 through the active sequence; stepping off either end leaves the wizard.
         private static void GoTo(int delta)
@@ -473,10 +463,9 @@ namespace WrathAccess.Screens
             if (i >= steps.Length) { UiSound.Play(UISoundType.ChargenCompleteClick); Close(); return; }
             if (i < 0) { Close(); return; }
             s_step = steps[i];
-            s_phase = new object();
+            UiSound.Play(UISoundType.BookPageTurn);
+            Navigation.FocusStop("content");
         }
-
-        protected override string NextLabel() => IsLastStep() ? Loc.T("wizard.finish") : Loc.T("wizard.next");
 
         private static bool IsLastStep()
         {

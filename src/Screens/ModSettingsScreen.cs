@@ -3,7 +3,6 @@ using System.Linq;
 using WrathAccess.Settings;
 using WrathAccess.UI;
 using WrathAccess.UI.Graph;
-using WrathAccess.UI.Proxies;
 
 namespace WrathAccess.Screens
 {
@@ -545,59 +544,5 @@ namespace WrathAccess.Screens
             b.EndGroup();
         }
 
-        // ---- legacy element builder (used ONLY by the setup wizard until it migrates; dies with it) ----
-
-        internal static void BuildSettingNode(Container parent, Setting s)
-        {
-            if (s.Hidden) return; // hidden globals (no [ShowInGlobalSettings]) + hidden state settings
-            switch (s)
-            {
-                case CategorySetting cat:
-                    var group = new TreeGroup(cat.Label);
-                    foreach (var c in cat.Children) BuildSettingNode(group, c);
-                    if (group.Children.Count > 0) parent.Add(group); // skip empty groups
-                    break;
-                case BindingSetting bs:
-                    parent.Add(new ProxyModBinding(bs.Action));
-                    break;
-                case BoolSetting b:
-                    parent.Add(new ProxyBoolToggle(b.Label, b.Get, () => b.Set(!b.Get())));
-                    break;
-                case NullableBoolSetting nb:
-                    parent.Add(new ProxyOverrideToggle(nb));
-                    break;
-                case NullableIntSetting ni:
-                    parent.Add(new ProxyNullableIntSetting(ni));
-                    break;
-                case IntSetting i:
-                    parent.Add(new ProxyIntSetting(i));
-                    break;
-                case ChoiceSetting c:
-                    parent.Add(new ProxyChoiceDropdown(c.Label,
-                        c.Choices.Select(ch => ch.Label).ToList(),
-                        () => ModSettingNodes.IndexOfChoice(c),
-                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); }));
-                    break;
-                case NullableChoiceSetting nc:
-                    // Interim shim: the inherit option leads the list; picking it resets. (Dies with the wizard.)
-                    var opts = new List<string> { nc.InheritOption.Label };
-                    opts.AddRange(nc.Choices.Select(ch => ch.Label));
-                    parent.Add(new ProxyChoiceDropdown(nc.Label, opts,
-                        () =>
-                        {
-                            if (!nc.IsOverridden) return 0;
-                            for (int i = 0; i < nc.Choices.Count; i++)
-                                if (nc.Choices[i].Id == nc.LocalValue) return i + 1;
-                            return 0;
-                        },
-                        idx =>
-                        {
-                            if (idx == 0) nc.Reset();
-                            else if (idx - 1 < nc.Choices.Count) nc.SetExplicit(nc.Choices[idx - 1].Id);
-                        },
-                        inheritedValue: () => nc.IsOverridden ? null : nc.ResolvedLabel));
-                    break;
-            }
-        }
     }
 }

@@ -11,8 +11,9 @@ namespace WrathAccess.UI
     /// tree emitter — the graph analog of the retired ModSettingsScreen.BuildSettingNode. Categories
     /// become expandable groups keyed by their settings PATH (stable across renders, so expansion and
     /// focus persist); leaves become typed controls whose values are read live. Inherit-aware settings
-    /// (nullable bool/int, inheriting dropdowns) speak "inheriting default value X" and reset to inherit
-    /// on Backspace, with LIVE value parts so a reset or capture announces the new state under focus.
+    /// (nullable bool/int, dropdowns with an "inherit" choice) all speak ONE consistent form — the
+    /// resolved value first, then "overridden" or "inherited" — and reset to inherit on Backspace, with
+    /// LIVE value parts so a reset or capture announces the new state under focus.
     /// </summary>
     internal static class ModSettingNodes
     {
@@ -83,13 +84,13 @@ namespace WrathAccess.UI
         }
 
         /// <summary>A <see cref="NullableIntSetting"/> — a slider that follows the default config until
-        /// overridden: speaks the RESOLVED value plus overridden/inheriting; Left/Right write an explicit
-        /// override from the resolved value; Backspace resets to inherit (the live part re-reads it).</summary>
+        /// overridden: speaks the RESOLVED value plus the state word ("5, inherited"); Left/Right write an
+        /// explicit override from the resolved value; Backspace resets to inherit (the live part re-reads it).</summary>
         public static NodeVtable NullableIntSlider(NullableIntSetting setting)
         {
-            Func<string> value = () => setting.IsOverridden
-                ? setting.Resolved + ", " + Loc.T("value.overridden")
-                : Loc.T("value.inheriting_default", new { value = setting.Resolved });
+            // Consistent inherit wording: the RESOLVED value first, then the state word.
+            Func<string> value = () => setting.Resolved + ", "
+                + Loc.T(setting.IsOverridden ? "value.overridden" : "value.inherited");
             return new NodeVtable
             {
                 ControlType = ControlTypes.Slider,
@@ -106,17 +107,13 @@ namespace WrathAccess.UI
         }
 
         /// <summary>A <see cref="NullableBoolSetting"/> — the per-type announcement override: a checkbox of
-        /// the RESOLVED value; Enter writes an explicit on/off ("overridden"), Backspace resets to inherit
-        /// (spoken as "inheriting default value on/off" so it's unambiguous).</summary>
+        /// the RESOLVED value ("on, overridden" / "on, inherited"); Enter writes an explicit on/off,
+        /// Backspace resets to inherit.</summary>
         public static NodeVtable OverrideToggle(NullableBoolSetting setting)
         {
-            Func<string> value = () =>
-            {
-                string onOff = Loc.T(setting.Resolved ? "value.on" : "value.off");
-                return setting.IsOverridden
-                    ? onOff + ", " + Loc.T("value.overridden")
-                    : Loc.T("value.inheriting_default", new { value = onOff });
-            };
+            // Consistent inherit wording: the RESOLVED value first, then the state word.
+            Func<string> value = () => Loc.T(setting.Resolved ? "value.on" : "value.off") + ", "
+                + Loc.T(setting.IsOverridden ? "value.overridden" : "value.inherited");
             return new NodeVtable
             {
                 ControlType = ControlTypes.Toggle,
@@ -139,16 +136,14 @@ namespace WrathAccess.UI
         /// <summary>A combo box over a fixed list of strings, opening the shared choice submenu — generic,
         /// delegate-driven (the old ProxyChoiceDropdown). Options beyond <paramref name="selectableCount"/>
         /// are VIRTUAL: displayable as the current value (a derived "Custom" state) but not offered in the
-        /// chooser. <paramref name="inheritedValue"/> non-empty means the current selection is an "Inherit
-        /// default" option and it's spoken as "inheriting default value X".</summary>
+        /// chooser. Inherit-capable ChoiceSettings go through <see cref="ChoiceSettingDropdown"/>, which
+        /// owns the overridden/inherited wording and the Backspace reset.</summary>
         public static NodeVtable ChoiceDropdown(string label, List<string> options, Func<int> current,
-            Action<int> onSelect, int selectableCount = -1, Func<string> inheritedValue = null)
+            Action<int> onSelect, int selectableCount = -1)
         {
             int selectable = (selectableCount < 0 || options == null) ? (options?.Count ?? 0) : selectableCount;
             Func<string> value = () =>
             {
-                string inh = inheritedValue?.Invoke();
-                if (!string.IsNullOrEmpty(inh)) return Loc.T("value.inheriting_default", new { value = inh });
                 int i = current != null ? current() : -1;
                 return options != null && i >= 0 && i < options.Count ? options[i] : "";
             };
@@ -171,14 +166,51 @@ namespace WrathAccess.UI
             };
         }
 
-        private static NodeVtable ChoiceSettingDropdown(ChoiceSetting c)
+        /// <summary>A <see cref="ChoiceSetting"/> as a dropdown. When the setting carries an "inherit"
+        /// sentinel choice, the value speaks the consistent inherit state — "{picked}, overridden" for an
+        /// explicit pick, "{resolved}, inherited" while inheriting (the sentinel's resolved display via
+        /// InheritedValue; the bare sentinel label when it can't resolve) — and Backspace resets to
+        /// inherit. Choices are re-read live (some option sets are runtime rosters).</summary>
+        public static NodeVtable ChoiceSettingDropdown(ChoiceSetting c, string labelOverride = null)
         {
-            var labels = new List<string>(c.Choices.Count);
-            foreach (var ch in c.Choices) labels.Add(ch.Label);
-            return ChoiceDropdown(c.Label, labels,
-                () => IndexOfChoice(c),
-                idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); },
-                inheritedValue: c.InheritedValue);
+            string InheritId() // the sentinel choice's id, or null when the setting doesn't inherit
+            {
+                foreach (var ch in c.Choices)
+                    if (ch.Id == "inherit") return ch.Id;
+                return null;
+            }
+            Func<string> label = () => labelOverride ?? c.Label;
+            Func<string> value = () =>
+            {
+                string inh = c.InheritedValue?.Invoke();
+                if (!string.IsNullOrEmpty(inh)) return inh + ", " + Loc.T("value.inherited");
+                string cur = c.Current?.Label ?? "";
+                if (InheritId() != null)
+                    return c.ValueId == "inherit"
+                        ? cur // unresolvable inherit: the sentinel's own label already says it
+                        : cur + ", " + Loc.T("value.overridden");
+                return cur;
+            };
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.ComboBox,
+                Announcements = new[]
+                {
+                    GraphNodes.LabelPart(label),
+                    new NodeAnnouncement(value, live: true, kind: AnnouncementKinds.Value),
+                },
+                SearchText = label,
+                OnActivate = () =>
+                {
+                    var choices = c.Choices;
+                    var labels = new List<string>(choices.Count);
+                    foreach (var ch in choices) labels.Add(ch.Label);
+                    Screens.ChoiceSubmenuScreen.Open(label(), labels, IndexOfChoice(c),
+                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); });
+                },
+                // Backspace = back to inheriting (the live value part re-reads the resolved state).
+                OnSecondary = InheritId() == null ? (System.Action)null : () => c.Set("inherit"),
+            };
         }
 
         public static int IndexOfChoice(ChoiceSetting c)

@@ -519,14 +519,8 @@ namespace WrathAccess.Screens
 
             var sound = WrathAccess.Exploration.ScanSounds.SoundSetting(node.Key);
             if (sound != null)
-            {
-                var snd = sound;
-                b.AddItem(ControlId.Structural(nk + "sound"), ModSettingNodes.ChoiceDropdown(
-                    L("scanner.sound", "Sound"),
-                    snd.Choices.Select(ch => ch.Label).ToList(),
-                    () => ModSettingNodes.IndexOfChoice(snd),
-                    idx => { if (idx >= 0 && idx < snd.Choices.Count) snd.Set(snd.Choices[idx].Id); }));
-            }
+                b.AddItem(ControlId.Structural(nk + "sound"),
+                    ModSettingNodes.ChoiceSettingDropdown(sound, L("scanner.sound", "Sound")));
 
             var annCat = ModSettings.GetCategory("proxy_elem." + node.Key);
             if (annCat != null)

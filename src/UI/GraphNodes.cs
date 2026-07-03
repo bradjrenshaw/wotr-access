@@ -441,6 +441,44 @@ namespace WrathAccess.UI
             };
         }
 
+        /// <summary>The game's generic selection contract (<see cref="Owlcat.Runtime.UI.SelectionGroup.SelectionGroupEntityVM"/>:
+        /// IsSelected / IsAvailable / SetSelectedFromView) as a radio button — race, pregen, save slot,
+        /// scenario… <paramref name="extraParts"/> append after the selected part (a table row's
+        /// metadata); <paramref name="onActivate"/> overrides the default select.</summary>
+        public static NodeVtable SelectionItem(Owlcat.Runtime.UI.SelectionGroup.SelectionGroupEntityVM vm,
+            Func<string> label, Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> tooltip = null,
+            Func<bool> available = null, Action onActivate = null, UISoundType? sound = UISoundType.ButtonClick,
+            IEnumerable<NodeAnnouncement> extraParts = null)
+        {
+            Func<bool> enabled = () => available != null ? available() : (vm != null && vm.IsAvailable != null && vm.IsAvailable.Value);
+            var anns = new List<NodeAnnouncement>
+            {
+                LabelPart(label),
+                SelectedPart(() => vm != null && vm.IsSelected.Value),
+                DisabledPart(enabled),
+            };
+            if (extraParts != null) anns.AddRange(extraParts);
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.RadioButton,
+                Announcements = anns,
+                SearchText = label,
+                StateText = () => vm != null && vm.IsSelected.Value ? Loc.T("state.selected") : null,
+                OnActivate = () =>
+                {
+                    if (!enabled()) return;
+                    if (sound.HasValue) UiSound.Play(sound.Value);
+                    if (onActivate != null) onActivate();
+                    else vm?.SetSelectedFromView(true);
+                },
+                OnTooltip = tooltip == null ? (Action)null : () =>
+                {
+                    var tpl = tooltip();
+                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
+                },
+            };
+        }
+
         private static void OpenSimpleTooltip(string title, string description)
         {
             var tpl = WrathAccess.UI.Tooltips.SimpleTooltip.Make(title, description);

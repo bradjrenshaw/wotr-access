@@ -92,6 +92,8 @@ namespace WrathAccess.UI
             _pendingStop = stopKey;
         }
 
+        public override object FocusedStopKey => _graph?.CurrentNode?.StopKey;
+
         // Graph-native screens declare fresh from live game state on every render (immediate mode);
         // legacy screens' retained Container trees are compiled by the adapter until they migrate.
         private GraphRender BuildRender(Screens.Screen screen)

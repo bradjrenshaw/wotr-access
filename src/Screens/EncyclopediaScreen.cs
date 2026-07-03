@@ -1,26 +1,26 @@
-using System;
 using System.Collections.Generic;
 using Kingmaker;
-using Kingmaker.Blueprints.Encyclopedia; // IPage, INode
+using Kingmaker.Blueprints.Encyclopedia; // IPage, UnitInfoPage
 using Kingmaker.PubSubSystem; // EventBus, IEncyclopediaHandler
 using Kingmaker.UI.MVVM._VM.ServiceWindows; // ServiceWindowsType, ServiceWindowsVM
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Encyclopedia; // EncyclopediaVM, EncyclopediaNavigationElementVM
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Encyclopedia.Blocks; // block VMs
 using WrathAccess.UI;
-using WrathAccess.UI.Announcements;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The encyclopedia service window (<see cref="EncyclopediaVM"/>). The game has no search; its navigation
-    /// is a fully-expandable hierarchy tree (chapters → pages → subpages), so we mirror that: a treeview of
-    /// the whole hierarchy (built once, kept stable so expansion/position survive) plus the current page —
-    /// title, text, and links to its child pages. Tree nodes lazily build their children on expand; Enter on
-    /// any node loads its page and moves focus to the page so you read it. Navigation goes through the
-    /// IEncyclopediaHandler EventBus (like the game's own clicks) so the on-screen visuals stay in sync. We
-    /// keep our own history so Escape goes back, then closes the window at the root. Class-progression /
-    /// bestiary / image blocks are noted but not yet rendered.
+    /// The encyclopedia service window (<see cref="EncyclopediaVM"/>), graph-native. The game has no
+    /// search; its navigation is a fully-expandable hierarchy tree (chapters → pages → subpages), so we
+    /// mirror that: the whole hierarchy as nested GROUPS (children materialize lazily — a collapsed
+    /// chapter's child VMs are never built, gated on <see cref="GraphBuilder.IsExpanded"/>) plus the
+    /// current page — title, text, and links to its child pages, keyed per page so navigating re-keys it
+    /// while the tree keeps its expansion and position. Enter on any node loads its page and lands focus
+    /// on the page top (announced). Navigation goes through the IEncyclopediaHandler EventBus (like the
+    /// game's own clicks) so the on-screen visuals stay in sync. We keep our own history so Escape goes
+    /// back from the page (from the tree — a jump-anywhere navigator — it closes). Creature pages render
+    /// their unit-inspect bricks; class-progression / image blocks are noted but not yet rendered.
     /// </summary>
     public sealed class EncyclopediaScreen : Screen
     {
@@ -30,42 +30,37 @@ namespace WrathAccess.Screens
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Encyclopedia;
 
-        private TreeGroup _nav;     // the hierarchy tree (built once, stable)
-        private Container _page;    // the current page (rebuilt on navigation)
-        private bool _built;
-        private bool _navigated;
-        private string _sig;
-        private string _lastPageLabel;
+        private bool _navigated;      // an Enter/back happened: land on the page once its VM swaps
+        private string _lastPage;     // the page identity last seen (detects the swap)
         private readonly Stack<IPage> _history = new Stack<IPage>();
 
-        public override void OnPush() { _built = false; _navigated = false; _sig = null; _lastPageLabel = null; _history.Clear(); }
-        public override void OnPop() { Clear(); _nav = null; _page = null; _built = false; _history.Clear(); }
+        public override void OnPush() { _navigated = false; _lastPage = null; _history.Clear(); }
+        public override void OnPop() { _history.Clear(); }
 
         public override void OnUpdate()
         {
             var vm = Vm();
             if (vm == null) return;
-            if (!_built) BuildShell(vm);
-            var sig = Sig(vm);
-            if (sig != _sig) { _sig = sig; RefillPage(vm); }
+            // After a navigation, wait for the VM's page to actually swap, then land on the page top
+            // (announced via the differ). Landing immediately would hit the OLD page's nodes.
+            var page = vm.Page?.Value?.Page;
+            var id = page != null ? PageLabel(page) : "";
+            if (id != _lastPage)
+            {
+                _lastPage = id;
+                if (_navigated) { _navigated = false; Navigation.FocusStop("page"); }
+            }
         }
 
         public override IEnumerable<ElementAction> GetActions()
         {
-            // History-back is a page-view notion: only when focus is in the page and we've drilled via a link.
-            // From the tree (a jump-anywhere navigator), or with nothing to go back to, Escape closes.
+            // History-back is a page-view notion: only when focus is in the page and we've drilled via a
+            // link. From the tree (a jump-anywhere navigator), or with nothing to return to, Escape closes.
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ =>
             {
-                if (!FocusInTree() && _history.Count > 0) Back();
+                if (!Equals(Navigation.FocusedStopKey, "tree") && _history.Count > 0) Back();
                 else ServiceWindows()?.HandleCloseAll();
             });
-        }
-
-        private bool FocusInTree()
-        {
-            for (var e = Navigation.Active?.Current; e != null; e = e.Parent)
-                if (ReferenceEquals(e, _nav)) return true;
-            return false;
         }
 
         private static EncyclopediaVM Vm()
@@ -91,14 +86,6 @@ namespace WrathAccess.Screens
             if (page is Kingmaker.Blueprints.BlueprintScriptableObject bp && !string.IsNullOrEmpty(bp.name))
                 return bp.name.Replace('_', ' ');
             return Loc.T("ency.untitled");
-        }
-
-        // Identity by label (PageLabel is unique even for titleless pages, where GetNavigationTitle
-        // is "" and two such pages would otherwise read as the same signature).
-        private static string Sig(EncyclopediaVM vm)
-        {
-            var page = vm.Page?.Value?.Page;
-            return page != null ? PageLabel(page) : "";
         }
 
         // Jumping via the tree resets history — it's a "go anywhere" navigator, not a drill-down, so there's
@@ -129,149 +116,133 @@ namespace WrathAccess.Screens
             EventBus.RaiseEvent<IEncyclopediaHandler>(x => x.HandleEncyclopediaPage(prev, scrollToCenter: false));
         }
 
-        private void BuildShell(EncyclopediaVM vm)
-        {
-            _built = true;
-            Clear();
+        public override bool BuildsGraph => true;
 
-            // The full hierarchy tree (top-level chapters; each node lazily expands to its children).
-            _nav = new TreeGroup();
+        public override void Build(GraphBuilder b)
+        {
+            var vm = Vm();
+            if (vm == null) return;
+
+            // The hierarchy tree: nested groups keyed by page label (stable), children materialized
+            // only while their group is expanded (the child VMs are created lazily by the game).
+            b.BeginStop("tree").PushContext(Loc.T("screen.encyclopedia"), role: null, positions: false);
             var chapters = vm.NavigationVM?.GetChapters();
             if (chapters != null)
                 foreach (var ch in chapters)
-                    if (ch != null && HasVisibleTitle(ch.Page)) _nav.Add(new EncyclopediaNavNode(ch, NavigateJump));
-            Add(_nav);
+                    if (ch != null && HasVisibleTitle(ch.Page)) EmitNavNode(b, ch, "ency:");
+            b.PopContext();
 
-            _page = new Panel();
-            Add(_page);
-
-            Navigation.Attach(this);
+            BuildPage(b, vm);
         }
 
-        // The current page: title, text, then links to its child pages. Rebuilt on navigation; the tree above
-        // is left untouched so its expansion/position survive.
-        private void RefillPage(EncyclopediaVM vm)
+        // One tree node: expandable (a group whose children build lazily on expand) or a leaf; Enter
+        // loads its page either way. Labels avoid the raw VM title (empty for the titleless chapter).
+        private void EmitNavNode(GraphBuilder b, EncyclopediaNavigationElementVM vm, string prefix)
         {
-            if (_page == null) return;
-            _page.Clear();
+            var page = vm.Page;
+            string key = prefix + PageLabel(page);
+            var id = ControlId.Structural(key);
+            var vt = new NodeVtable
+            {
+                ControlType = ControlTypes.Text, // no role word: label (+ expanded/collapsed on groups)
+                Announcements = new[] { GraphNodes.LabelPart(() => PageLabel(page)) },
+                SearchText = () => PageLabel(page),
+                OnActivate = () =>
+                {
+                    UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
+                    NavigateJump(page);
+                },
+            };
 
+            if (vm.IsCanCollapse) // has children (even before they're built)
+            {
+                b.BeginGroup(id, vt);
+                if (b.IsExpanded(id)) // materialize child VMs only while open
+                    foreach (var child in vm.GetOrCreateChildsVM())
+                        if (child != null && HasVisibleTitle(child.Page))
+                            EmitNavNode(b, child, key + "/");
+                b.EndGroup();
+            }
+            else
+            {
+                b.AddItem(id, vt);
+            }
+        }
+
+        // The current page: title, text, links to its child pages, and (creature pages) the unit-inspect
+        // bricks. Keyed per page, so navigating re-keys it while the tree keeps expansion and position.
+        private void BuildPage(GraphBuilder b, EncyclopediaVM vm)
+        {
+            b.BeginStop("page").PushContext(Loc.T("ency.page"), role: null, positions: false);
             var page = vm.Page?.Value;
-            var sheet = new FlowSheet(Loc.T("ency.page"));
             if (page == null)
             {
-                sheet.List(null).Item(new TextElement(() => Loc.T("ency.select_topic")));
-                sheet.Reflow();
-                _page.Add(sheet);
+                b.AddItem(ControlId.Structural("ency:noselect"), GraphNodes.Text(() => Loc.T("ency.select_topic")));
+                b.PopContext();
                 return;
             }
+            string pk = "ency:page:" + PageLabel(page.Page) + ":";
 
-            var body = sheet.List(null);
             var heading = !string.IsNullOrWhiteSpace(page.Title) ? page.Title : PageLabel(page.Page);
-            body.Item(new TextElement(heading, "heading"));
+            b.AddItem(ControlId.Structural(pk + "title"), GraphNodes.Text(() => TextUtil.StripRichText(heading)));
+
+            int bi = 0;
             foreach (var block in page.BlockVMs)
             {
                 switch (block)
                 {
                     case EncyclopediaPageBlockTextVM t when !string.IsNullOrWhiteSpace(t.Text):
-                        body.Item(new TextElement(t.Text));
+                        var raw = t.Text;
+                        b.AddItem(ControlId.Structural(pk + "block:" + bi), new NodeVtable
+                        {
+                            ControlType = ControlTypes.Text,
+                            Announcements = new[] { new NodeAnnouncement(() => TextUtil.StripRichText(raw)) },
+                            // Glossary links inside the text follow on Space.
+                            OnTooltip = () => TooltipScreen.FollowLinks(raw, null),
+                        });
                         break;
                     case EncyclopediaPageBlockClassProgressionVM _:
-                        body.Item(new TextElement(() => Loc.T("ency.progression_not_shown")));
+                        b.AddItem(ControlId.Structural(pk + "block:" + bi),
+                            GraphNodes.Text(() => Loc.T("ency.progression_not_shown")));
                         break;
                     case EncyclopediaPageBlockUnitVM _:
-                        body.Item(new TextElement(() => Loc.T("ency.stats_not_shown")));
+                        b.AddItem(ControlId.Structural(pk + "block:" + bi),
+                            GraphNodes.Text(() => Loc.T("ency.stats_not_shown")));
                         break;
                     // Child pages are listed below; images are skipped.
                 }
+                bi++;
             }
 
             var childs = page.Page?.GetChilds();
             if (childs != null && childs.Count > 0)
             {
-                var topics = sheet.List(Message.Localized("ui", "encyclopedia.topics").Resolve());
+                b.PushContext(Message.Localized("ui", "encyclopedia.topics").Resolve());
+                int ti = 0;
                 foreach (var child in childs)
                 {
-                    if (child == null || !HasVisibleTitle(child)) continue;
+                    if (child == null || !HasVisibleTitle(child)) { ti++; continue; }
                     var c = child;
-                    topics.Item(new ProxyActionButton(() => PageLabel(c), () => true, () => NavigateDrill(c), actionVerb: "open"));
+                    b.AddItem(ControlId.Structural(pk + "topic:" + ti),
+                        GraphNodes.Button(() => PageLabel(c), () => NavigateDrill(c)));
+                    ti++;
                 }
+                b.PopContext();
             }
-
-            sheet.Reflow();
-            _page.Add(sheet);
+            b.PopContext();
 
             // Creature pages (the Creatures group: inspected monsters) carry no blocks — the game's
             // view renders them through the tooltip-brick system instead (EncyclopediaPagePCView binds
             // a TooltipTemplateUnitInspect when IsBricks). Mirror that: the same template through our
-            // brick renderer, as its own Tab-stop after the heading. What it reveals follows the
-            // game's inspect rules (more details as your knowledge checks succeed).
+            // brick renderer, as its own Tab-stop after the page. What it reveals follows the game's
+            // inspect rules (more details as your knowledge checks succeed).
             if (page.Page is UnitInfoPage uip && uip.UnitInfo != null)
             {
-                var bricks = WrathAccess.UI.Tooltips.TooltipFlowBuilder.Build(
+                b.BeginStop("bricks");
+                WrathAccess.UI.Tooltips.TooltipFlowBuilder.Emit(b, pk + "bricks:",
                     new Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateUnitInspect(uip.UnitInfo.Blueprint),
                     includeEmptyNotice: false);
-                if (bricks.RowCount > 0) _page.Add(bricks);
             }
-
-            if (_navigated) { _navigated = false; FocusPage(sheet); }
-        }
-
-        // After navigating, drop focus onto the top of the page (its title), not back into the tree.
-        private void FocusPage(FlowSheet sheet)
-        {
-            if (sheet.RowCount == 0) return;
-            int c = sheet.LeftmostVisitable(0);
-            var cell = c >= 0 ? sheet.CellAt(0, c) : null;
-            if (cell == null) return;
-            _lastPageLabel = cell.GetLabelText();
-            Navigation.Focus(cell, announce: true);
-        }
-    }
-
-    /// <summary>
-    /// One node in the encyclopedia navigation tree (<see cref="EncyclopediaNavigationElementVM"/>): a chapter
-    /// or page. A Tree container so the navigator's Right/Left expand/collapse and up/down DFS work; children
-    /// are built lazily on first expand (the hierarchy is large). Reads its title + expanded/collapsed state;
-    /// Enter loads its page.
-    /// </summary>
-    internal sealed class EncyclopediaNavNode : Container
-    {
-        private readonly EncyclopediaNavigationElementVM _vm;
-        private readonly Action<IPage> _navigate;
-        private bool _built;
-
-        public EncyclopediaNavNode(EncyclopediaNavigationElementVM vm, Action<IPage> navigate)
-            : base(ContainerShape.Tree, EncyclopediaScreen.PageLabel(vm.Page))
-        {
-            _vm = vm;
-            _navigate = navigate;
-        }
-
-        public override bool Expandable => _vm.IsCanCollapse; // has children (even before they're built)
-
-        public override void Expand()
-        {
-            if (!_built)
-            {
-                _built = true;
-                foreach (var child in _vm.GetOrCreateChildsVM())
-                    if (child != null && EncyclopediaScreen.HasVisibleTitle(child.Page))
-                        Add(new EncyclopediaNavNode(child, _navigate));
-            }
-            base.Expand();
-        }
-
-        public override IEnumerable<Announcement> GetFocusAnnouncements()
-        {
-            // Label (set from PageLabel in the ctor), NOT _vm.Title: the raw title is empty for the
-            // titleless VoiceoverChapter, which read as a blank root node.
-            yield return new LabelAnnouncement(Message.Raw(Label));
-            if (Expandable) yield return new RoleAnnouncement(Expanded ? "expanded" : "collapsed");
-        }
-
-        public override IEnumerable<ElementAction> GetActions()
-        {
-            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.open"), _ => _navigate(_vm.Page));
         }
     }
 }

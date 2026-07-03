@@ -63,6 +63,10 @@ namespace WrathAccess.UI
         /// content after Next; a screen seating a section whose node keys vary per state).</summary>
         public virtual void FocusStop(object stopKey) { }
 
+        /// <summary>The Tab-stop the focused node belongs to, or null (screen logic that branches on
+        /// where focus is — e.g. Escape drills back only from the page stop, closes from the tree).</summary>
+        public virtual object FocusedStopKey => null;
+
         // ---- shared focus-restore rules ----
 
         /// <summary>The child to land on when first focusing a container: the remembered focus, else —

@@ -58,5 +58,8 @@ namespace WrathAccess.UI
 
         /// <summary>Move focus to the first node of a Tab-stop (graph-native screens).</summary>
         public static void FocusStop(object stopKey) => Active?.FocusStop(stopKey);
+
+        /// <summary>The Tab-stop the focused node belongs to, or null.</summary>
+        public static object FocusedStopKey => Active?.FocusedStopKey;
     }
 }

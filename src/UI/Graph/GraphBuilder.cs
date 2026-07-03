@@ -175,6 +175,11 @@ namespace WrathAccess.UI.Graph
 
         public GraphBuilder EndGroup() => PopContext();
 
+        /// <summary>Whether a group id is expanded in the persistent set — for screens that must avoid
+        /// even BUILDING a collapsed group's children (a lazy hierarchy whose child VMs materialize on
+        /// first access). Groups with an explicit expanded: argument manage their own state instead.</summary>
+        public bool IsExpanded(ControlId id) => _expansion != null && id != null && _expansion.Contains(id);
+
         /// <summary>Focus starts here when the graph has no prior position (defaults to the first node).</summary>
         public GraphBuilder SetStart(ControlId id)
         {

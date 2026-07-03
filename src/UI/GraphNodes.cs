@@ -71,6 +71,39 @@ namespace WrathAccess.UI
             };
         }
 
+        /// <summary>A checkbox over an arbitrary boolean ("label, toggle, on/off[, disabled]").
+        /// Activation flips it with the game's switch sound and re-announces the new value synchronously
+        /// (StateText) — for toggles whose effect settles ASYNCHRONOUSLY in the game, pass
+        /// <paramref name="announceOnActivate"/> false and let a state watcher speak the settled truth.
+        /// The value part is LIVE, so a game-driven flip under focus announces itself.</summary>
+        public static NodeVtable Toggle(Func<string> label, Func<bool> isChecked, Action onToggle,
+            Func<bool> enabled = null, NodeAnnouncement position = null, bool announceOnActivate = true)
+        {
+            Func<string> value = () => Loc.T(isChecked != null && isChecked() ? "value.on" : "value.off");
+            var anns = new List<NodeAnnouncement>
+            {
+                LabelPart(label),
+                // Always LIVE: a game-driven flip under focus announces itself. Safe alongside the
+                // synchronous StateText — VtableActivate rebaselines the live watch after speaking.
+                new NodeAnnouncement(value, live: true, kind: AnnouncementKinds.Value),
+                DisabledPart(enabled),
+            };
+            if (position != null) anns.Add(position);
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Toggle,
+                Announcements = anns,
+                SearchText = label,
+                StateText = announceOnActivate ? value : null,
+                OnActivate = () =>
+                {
+                    if (enabled != null && !enabled()) return;
+                    UiSound.Play(UISoundType.SettingsSwitchToggle);
+                    onToggle?.Invoke();
+                },
+            };
+        }
+
         /// <summary>One option of a single-select group ("label, radio button[, selected][, n of m]") —
         /// a dropdown option, a tab. Activation selects it (the game's click sound).</summary>
         public static NodeVtable ChoiceOption(Func<string> label, Func<bool> selected, Action select,

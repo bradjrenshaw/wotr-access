@@ -5,29 +5,33 @@ using Kingmaker.Tutorial; // TutorialData
 using Kingmaker.UI.MVVM._VM.Tutorial;
 using UnityEngine;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// A tutorial popup: reads the current page's text, offers a "don't show" checkbox and a Dismiss
-    /// button. Handles BOTH window kinds off the shared <see cref="TutorialWindowVM"/> base — the modal
-    /// "big" window (<see cref="TutorialModalWindowVM"/>, multi-page) and the "small"/hint window
-    /// (<see cref="TutorialHintWindowVM"/>). The basic-controls tutorials (Movement/camera) are actually
-    /// the *small* kind despite rendering full-size (their blueprint's Windowed flag is false).
+    /// A tutorial popup: reads the current page's text, offers page controls (multi-page modals), a
+    /// "don't show" checkbox and a Dismiss button. Handles BOTH window kinds off the shared
+    /// <see cref="TutorialWindowVM"/> base — the modal "big" window (<see cref="TutorialModalWindowVM"/>,
+    /// multi-page) and the "small"/hint window (<see cref="TutorialHintWindowVM"/>). The basic-controls
+    /// tutorials (Movement/camera) are actually the *small* kind despite rendering full-size (their
+    /// blueprint's Windowed flag is false).
     ///
     /// It announces the text on appearance even when Focus Mode is off (a blocking popup shouldn't be
-    /// silent); navigating to the checkbox/Dismiss still needs Focus Mode. Dismiss mirrors the game's
-    /// close/Esc (<c>ShowWindow.Value = false</c>); the checkbox applies <c>BanTutor()</c> on dismiss.
+    /// silent); navigating still needs Focus Mode. Dismiss mirrors the game's close/Esc
+    /// (<c>ShowWindow.Value = false</c>); the checkbox applies <c>BanTutor()</c> on dismiss.
+    ///
+    /// Graph-native: node keys carry the VM identity AND the page, so a new tutorial or a page flip drops
+    /// the old keys — focus re-homes onto the text and the differ reads it (the old rebuild+announce dance).
     /// </summary>
     public sealed class TutorialScreen : Screen
     {
         public override string Key => "ctx.tutorial";
         public override int Layer => 28; // modal popup, above gameplay/windows/settings
 
-        private TutorialWindowVM _builtVm;
-        private TutorialData.Page _builtPage;
         private bool _banOnClose;
+        private TutorialWindowVM _spokenVm;    // focus-mode-OFF fallback delivery markers
+        private TutorialData.Page _spokenPage;
 
         private static TutorialWindowVM Vm()
         {
@@ -41,58 +45,56 @@ namespace WrathAccess.Screens
             return null;
         }
 
-        public override bool IsActive() { Diagnose(); return Vm() != null; }
+        public override bool IsActive() => Vm() != null;
 
-        public override void OnPush()
-        {
-            Build();
-            Main.Log?.Log("[tut] OnPush vm=" + (_builtVm != null) + " bannable=" + (_builtVm != null && _builtVm.CanBeBanned)
-                + " textLen=" + PageText(_builtVm).Length);
-        }
-        public override void OnPop() { Clear(); _builtVm = null; _builtPage = null; _banOnClose = false; }
+        public override void OnPush() { _banOnClose = false; }
+        public override void OnPop() { _banOnClose = false; _spokenVm = null; _spokenPage = null; }
 
         public override void OnFocus()
         {
-            Main.Log?.Log("[tut] OnFocus focusMode=" + FocusMode.Active);
-            // ScreenManager calls AnnounceCurrent after this when focus mode is on; cover the off case
-            // so a blocking tutorial is never silent.
+            // The differ reads the landing under focus mode; cover the off case so a blocking tutorial is
+            // never silent.
             if (!FocusMode.Active) SpeakText();
         }
 
         public override void OnUpdate()
         {
+            // A new tutorial replacing the current one resets the checkbox; the focus-mode-off fallback
+            // speaks new content (under focus mode the key change re-homes + announces via the differ).
             var vm = Vm();
             if (vm == null) return;
-            if (vm != _builtVm) { _banOnClose = false; Build(); Announce(); }
-            else if (CurrentPageOf(vm) != _builtPage) { Build(); Announce(); }
+            if (vm != _spokenVm) _banOnClose = false;
+            if (!FocusMode.Active && (vm != _spokenVm || CurrentPageOf(vm) != _spokenPage)) SpeakText();
+            _spokenVm = vm;
+            _spokenPage = CurrentPageOf(vm);
         }
 
-        private void Build()
-        {
-            Clear();
-            var vm = Vm();
-            _builtVm = vm;
-            _builtPage = CurrentPageOf(vm);
-            if (vm == null) return;
+        public override bool BuildsGraph => true;
 
-            var list = new ListContainer(Loc.T("tutorial.title"));
-            list.Add(new TextElement(() => PageText(Vm()))); // full current-page text — focus to re-read
-            if (Vm() is TutorialModalWindowVM modal && modal.MultiplePages)
+        public override void Build(GraphBuilder b)
+        {
+            var vm = Vm();
+            if (vm == null) return;
+            var modal = vm as TutorialModalWindowVM;
+            int page = modal != null ? modal.CurrentPageIndex.Value : 0;
+            string k = "tutorial:" + vm.GetHashCode() + ":" + page + ":";
+
+            b.PushContext(Loc.T("tutorial.title"), "list");
+            b.AddItem(ControlId.Structural(k + "text"), GraphNodes.Text(() => PageText(Vm())));
+            if (modal != null && modal.MultiplePages)
             {
-                list.Add(new ProxyActionButton(() => Loc.T("tutorial.prev_page"), CanPrev, () => StepPage(-1)));
-                list.Add(new ProxyActionButton(() => Loc.T("tutorial.next_page"), CanNext, () => StepPage(1)));
+                b.AddItem(ControlId.Structural(k + "prev"),
+                    GraphNodes.Button(() => Loc.T("tutorial.prev_page"), () => StepPage(-1), CanPrev));
+                b.AddItem(ControlId.Structural(k + "next"),
+                    GraphNodes.Button(() => Loc.T("tutorial.next_page"), () => StepPage(1), CanNext));
             }
             if (vm.CanBeBanned)
-                list.Add(new ProxyBoolToggle((string)UIStrings.Instance.Tutorial.DontShowThisTutorial,
+                b.AddItem(ControlId.Structural(k + "ban"), GraphNodes.Toggle(
+                    () => (string)UIStrings.Instance.Tutorial.DontShowThisTutorial,
                     () => _banOnClose, () => _banOnClose = !_banOnClose));
-            list.Add(new ProxyActionButton(() => Loc.T("tutorial.dismiss"), null, Dismiss));
-            Add(list);
-        }
-
-        private void Announce()
-        {
-            if (FocusMode.Active) { Navigation.Attach(this); Navigation.AnnounceCurrent(); }
-            else SpeakText();
+            b.AddItem(ControlId.Structural(k + "dismiss"),
+                GraphNodes.Button(() => Loc.T("tutorial.dismiss"), Dismiss));
+            b.PopContext();
         }
 
         private void SpeakText()
@@ -149,34 +151,6 @@ namespace WrathAccess.Screens
             if (!string.IsNullOrEmpty(page.Description)) parts.Add(page.Description);
             if (!string.IsNullOrEmpty(page.SolutionText)) parts.Add(page.SolutionText);
             return string.Join(". ", parts.ToArray());
-        }
-
-        // Temporary: log the tutorial VM state (on change) to confirm detection.
-        private static string _dbg;
-        private static void Diagnose()
-        {
-            string sig;
-            try
-            {
-                var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
-                var cv = rc != null ? rc.CommonVM : null;
-                if (rc == null) sig = "rcNull";
-                else if (cv == null) sig = "commonNull";
-                else
-                {
-                    var tv = cv.TutorialVM != null ? cv.TutorialVM.Value : null;
-                    if (tv == null) sig = "tvNull";
-                    else
-                    {
-                        var big = tv.BigWindowVM;
-                        var small = tv.SmallWindowVM;
-                        sig = "bigShow=" + (big != null && big.ShowWindow.Value) + " smallShow=" + (small != null && small.ShowWindow.Value)
-                            + " -> active=" + (Vm() != null);
-                    }
-                }
-            }
-            catch (System.Exception e) { sig = "threw: " + e.Message; }
-            if (sig != _dbg) { _dbg = sig; Main.Log?.Log("[tut] " + sig); }
         }
     }
 }

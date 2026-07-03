@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine; // Application.OpenURL
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -12,6 +12,7 @@ namespace WrathAccess.Screens
     /// or the wizard opens that screen ON TOP (it sits at a higher layer), so closing it returns here; the
     /// external links open a browser and leave the menu up. Opening engages focus mode so it owns the
     /// keyboard everywhere; Escape closes. The settings browser itself lives in <see cref="ModSettingsScreen"/>.
+    /// Graph-native.
     /// </summary>
     public sealed class ModMenuScreen : Screen
     {
@@ -33,10 +34,9 @@ namespace WrathAccess.Screens
         {
             _priorFocus = FocusMode.Active;
             FocusMode.Set(true); // own the keyboard everywhere while the menu is up
-            Build();
         }
 
-        public override void OnPop() { Clear(); FocusMode.Set(_priorFocus); }
+        public override void OnPop() { FocusMode.Set(_priorFocus); }
 
         // Escape closes the menu.
         public override IEnumerable<ElementAction> GetActions()
@@ -44,29 +44,28 @@ namespace WrathAccess.Screens
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ => CloseMenu());
         }
 
-        private void Build()
-        {
-            Clear();
-            var list = new ListContainer();
+        public override bool BuildsGraph => true;
 
+        public override void Build(GraphBuilder b)
+        {
             // Settings / the wizard open ON TOP (higher layer) and return here when closed; the launcher
             // stays open beneath them. (We don't close it on pick — the layering is the back-stack.)
-            list.Add(Item("menu.settings", ModSettingsScreen.Open));
-            list.Add(Item("menu.help", HelpScreen.Open));
-            list.Add(Item("menu.setup_wizard", SetupWizardScreen.Open));
-            list.Add(Link("menu.discord", DiscordUrl, "menu.opening_discord"));
-            list.Add(Link("menu.patreon", PatreonUrl, "menu.opening_patreon"));
-
-            Add(list);
-            SetFocusedChild(list);
+            Item(b, 1, "menu.settings", ModSettingsScreen.Open);
+            Item(b, 2, "menu.help", HelpScreen.Open);
+            Item(b, 3, "menu.setup_wizard", SetupWizardScreen.Open);
+            Link(b, 4, "menu.discord", DiscordUrl, "menu.opening_discord");
+            Link(b, 5, "menu.patreon", PatreonUrl, "menu.opening_patreon");
         }
 
-        private static ProxyActionButton Item(string labelKey, Action activate)
-            => new ProxyActionButton(() => Loc.T(labelKey), null, activate);
+        private const int EntryCount = 5;
+
+        private static void Item(GraphBuilder b, int index, string labelKey, Action activate)
+            => b.AddItem(ControlId.Structural("modmenu:" + labelKey),
+                GraphNodes.Button(() => Loc.T(labelKey), activate, position: GraphNodes.Position(index, EntryCount)));
 
         // An external link: open it in the browser and say so, since the result is off-screen.
-        private static ProxyActionButton Link(string labelKey, string url, string speakKey)
-            => new ProxyActionButton(() => Loc.T(labelKey), null, () =>
+        private static void Link(GraphBuilder b, int index, string labelKey, string url, string speakKey)
+            => Item(b, index, labelKey, () =>
             {
                 Application.OpenURL(url);
                 Tts.Speak(Loc.T(speakKey));

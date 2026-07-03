@@ -85,6 +85,64 @@ namespace WrathAccess.Tests
             Assert.Equal("Hold position, toggle, on", GraphAnnouncer.ComposeFull(node));
         }
 
+        private static readonly ControlType TestButton = new ControlType
+        {
+            Key = "button",
+            Order = new[] { AnnouncementKinds.Label, AnnouncementKinds.Role, AnnouncementKinds.Value, AnnouncementKinds.Enabled, AnnouncementKinds.Position },
+            Common = () => new[] { new NodeAnnouncement(() => "button", kind: AnnouncementKinds.Role) },
+        };
+
+        private static GraphNode TypedNode(ControlType type, params NodeAnnouncement[] parts) => new GraphNode
+        {
+            Id = ControlId.Structural("typed"),
+            Vtable = new NodeVtable { ControlType = type, Announcements = parts },
+        };
+
+        [Fact]
+        public void ControlTypeSuppliesRoleAndOrdering()
+        {
+            // Parts declared out of order — the type's kind order sorts them; the common role merges in.
+            var node = TypedNode(TestButton,
+                new NodeAnnouncement(() => "on", kind: AnnouncementKinds.Value),
+                new NodeAnnouncement(() => "Hold position", kind: AnnouncementKinds.Label));
+
+            Assert.Equal("Hold position, button, on", GraphAnnouncer.ComposeFull(node));
+        }
+
+        [Fact]
+        public void NodePartOverridesCommonOfSameKind()
+        {
+            var node = TypedNode(TestButton,
+                new NodeAnnouncement(() => "Continue", kind: AnnouncementKinds.Label),
+                new NodeAnnouncement(() => "menu button", kind: AnnouncementKinds.Role));
+
+            Assert.Equal("Continue, menu button", GraphAnnouncer.ComposeFull(node));
+        }
+
+        [Fact]
+        public void KindlessPartsKeepDeclarationOrderAfterKnownKinds()
+        {
+            var node = TypedNode(TestButton,
+                new NodeAnnouncement(() => "custom one"),
+                new NodeAnnouncement(() => "Continue", kind: AnnouncementKinds.Label),
+                new NodeAnnouncement(() => "custom two"));
+
+            Assert.Equal("Continue, button, custom one, custom two", GraphAnnouncer.ComposeFull(node));
+        }
+
+        [Fact]
+        public void PartFilterDropsParts()
+        {
+            var node = TypedNode(TestButton,
+                new NodeAnnouncement(() => "Continue", kind: AnnouncementKinds.Label));
+            try
+            {
+                GraphAnnouncer.PartFilter = (type, part) => part.Kind != AnnouncementKinds.Role;
+                Assert.Equal("Continue", GraphAnnouncer.ComposeFull(node));
+            }
+            finally { GraphAnnouncer.PartFilter = null; }
+        }
+
         [Fact]
         public void TransitionLabelLeads()
         {

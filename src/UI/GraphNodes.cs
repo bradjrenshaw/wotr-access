@@ -20,31 +20,40 @@ namespace WrathAccess.UI
     {
         /// <summary>An "index of count" announcement part (lists spoke their children's position).</summary>
         public static NodeAnnouncement Position(int index, int count)
-            => new NodeAnnouncement(() => Loc.T("nav.position", new { index, count }));
+            => new NodeAnnouncement(() => Loc.T("nav.position", new { index, count }), kind: AnnouncementKinds.Position);
+
+        /// <summary>The label part (always first in the standard order).</summary>
+        public static NodeAnnouncement LabelPart(Func<string> label)
+            => new NodeAnnouncement(label, kind: AnnouncementKinds.Label);
 
         /// <summary>The disabled-state part: silent while enabled, "disabled" otherwise — LIVE, so a
         /// control graying out under focus announces it.</summary>
         public static NodeAnnouncement DisabledPart(Func<bool> enabled)
-            => new NodeAnnouncement(() => enabled == null || enabled() ? null : Loc.T("state.disabled"), live: true);
+            => new NodeAnnouncement(() => enabled == null || enabled() ? null : Loc.T("state.disabled"),
+                live: true, kind: AnnouncementKinds.Enabled);
 
         /// <summary>A plain read-only text line (the modal body, a help paragraph).</summary>
-        public static NodeVtable Text(Func<string> text)
-            => new NodeVtable { Announcements = new[] { new NodeAnnouncement(text) } };
+        public static NodeVtable Text(Func<string> text) => new NodeVtable
+        {
+            ControlType = ControlTypes.Text,
+            Announcements = new[] { LabelPart(text) },
+        };
 
-        /// <summary>A push button: "label, button[, disabled][, n of m]"; activation plays the game's
-        /// button click. A disabled button consumes activation silently (its action isn't advertised).</summary>
+        /// <summary>A push button: "label, button[, disabled][, n of m]" — the role word, ordering, and
+        /// per-type announcement settings ride <see cref="ControlTypes.Button"/>; activation plays the
+        /// game's button click. A disabled button consumes activation silently.</summary>
         public static NodeVtable Button(Func<string> label, Action activate, Func<bool> enabled = null,
             NodeAnnouncement position = null, UISoundType? sound = UISoundType.ButtonClick)
         {
             var anns = new List<NodeAnnouncement>
             {
-                new NodeAnnouncement(label),
-                new NodeAnnouncement(() => Loc.T("role.button")),
+                LabelPart(label),
                 DisabledPart(enabled),
             };
             if (position != null) anns.Add(position);
             return new NodeVtable
             {
+                ControlType = ControlTypes.Button,
                 Announcements = anns,
                 SearchText = label,
                 OnActivate = () =>
@@ -85,14 +94,14 @@ namespace WrathAccess.UI
             };
             var anns = new List<NodeAnnouncement>
             {
-                new NodeAnnouncement(() => sv?.Title ?? ""),
-                new NodeAnnouncement(() => Loc.T("role.slider")),
-                new NodeAnnouncement(value),
+                LabelPart(() => sv?.Title ?? ""),
+                new NodeAnnouncement(value, kind: AnnouncementKinds.Value),
                 DisabledPart(enabled),
             };
             if (position != null) anns.Add(position);
             return new NodeVtable
             {
+                ControlType = ControlTypes.Slider,
                 Announcements = anns,
                 SearchText = () => sv?.Title ?? "",
                 StateText = value, // spoken (interrupting) after each adjust — key-repeat friendly

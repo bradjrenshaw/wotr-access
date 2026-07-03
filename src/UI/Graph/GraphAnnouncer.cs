@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -58,12 +59,74 @@ namespace WrathAccess.UI.Graph
         /// <summary>The full readout for a landing with no prior focus (screen entry, focus restore).</summary>
         public static string ComposeFull(GraphNode to) => Compose(null, to);
 
-        /// <summary>A node's own readout: its announcement parts, resolved live, non-empty ones joined.
-        /// The first part is the control's label, so context dedupe's prefix check still applies.</summary>
+        /// <summary>Pluggable per-part filter — installed by the host to consult the user's announcement
+        /// settings (per control type + per kind); null (tests, boot) = everything speaks. Returning false
+        /// drops the part from readouts AND from the live watch.</summary>
+        public static Func<ControlType, NodeAnnouncement, bool> PartFilter;
+
+        /// <summary>
+        /// A node's EFFECTIVE announcement parts: the control type's common parts (the role word) merged
+        /// with the node's own — a node part overrides a common part of the same kind — sorted by the
+        /// type's kind order (unknown/kindless parts append in declaration order), then filtered by the
+        /// user's settings. This is the single list readouts and the live watch operate on.
+        /// </summary>
+        public static List<NodeAnnouncement> EffectiveAnnouncements(GraphNode node)
+        {
+            var result = new List<NodeAnnouncement>();
+            var vt = node?.Vtable;
+            if (vt == null) return result;
+            var type = vt.ControlType;
+
+            var common = type?.Common?.Invoke();
+            if (common != null)
+                foreach (var c in common)
+                    if (c != null && !HasKind(vt.Announcements, c.Kind)) result.Add(c);
+            if (vt.Announcements != null)
+                foreach (var a in vt.Announcements)
+                    if (a != null) result.Add(a);
+
+            if (type?.Order != null && type.Order.Length > 0 && result.Count > 1)
+            {
+                // Stable: composite key = (kind's order index, declaration index) — List.Sort alone is
+                // unstable and would scramble same-bucket (kindless) parts.
+                var keyed = new List<KeyValuePair<long, NodeAnnouncement>>(result.Count);
+                for (int i = 0; i < result.Count; i++)
+                    keyed.Add(new KeyValuePair<long, NodeAnnouncement>(
+                        (long)OrderIndex(type.Order, result[i].Kind) << 32 | (uint)i, result[i]));
+                keyed.Sort((x, y) => x.Key.CompareTo(y.Key));
+                result.Clear();
+                foreach (var kv in keyed) result.Add(kv.Value);
+            }
+
+            if (PartFilter != null)
+                result.RemoveAll(a => !PartFilter(type, a));
+            return result;
+        }
+
+        private static bool HasKind(IReadOnlyList<NodeAnnouncement> anns, string kind)
+        {
+            if (anns == null || kind == null) return false;
+            foreach (var a in anns)
+                if (a != null && a.Kind == kind) return true;
+            return false;
+        }
+
+        // Stable sort key: declared kinds by their order index; everything else after, keeping declaration
+        // order (List.Sort is unstable, so unknown parts share one bucket — see the tie-break below).
+        private static int OrderIndex(string[] order, string kind)
+        {
+            if (kind != null)
+                for (int i = 0; i < order.Length; i++)
+                    if (order[i] == kind) return i;
+            return order.Length;
+        }
+
+        /// <summary>A node's own readout: its effective announcement parts, resolved live, non-empty ones
+        /// joined. The first part is the control's label, so context dedupe's prefix check still applies.</summary>
         public static string LeafText(GraphNode node)
         {
-            var anns = node?.Vtable?.Announcements;
-            if (anns == null || anns.Count == 0) return null;
+            var anns = EffectiveAnnouncements(node);
+            if (anns.Count == 0) return null;
             var sb = new StringBuilder();
             for (int i = 0; i < anns.Count; i++)
             {

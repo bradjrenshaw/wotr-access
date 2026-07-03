@@ -26,6 +26,20 @@ namespace WrathAccess.UI.Graph
         public ContextEntry(string label, string role = null) { Label = label; Role = role; }
     }
 
+    /// <summary>The well-known announcement-part kinds. A part's kind is its identity for control-type
+    /// ordering, node-over-type overriding, and the user's per-kind announcement settings — the same keys
+    /// the legacy per-announcement settings used, so the global toggles cover both systems.</summary>
+    public static class AnnouncementKinds
+    {
+        public const string Label = "label";
+        public const string Role = "role";
+        public const string Value = "value";
+        public const string Selected = "selected";
+        public const string Enabled = "enabled";
+        public const string Tooltip = "tooltip";
+        public const string Position = "position";
+    }
+
     /// <summary>
     /// One part of a control's spoken focus readout ("Hold position" / "toggle" / "on"), resolved live at
     /// speak time. A LIVE part is additionally watched while its node is focused: when its resolved text
@@ -41,9 +55,41 @@ namespace WrathAccess.UI.Graph
         /// <summary>Watch this part while the node is focused and speak it when its value changes.</summary>
         public bool Live;
 
-        public NodeAnnouncement(Func<string> text, bool live = false) { Text = text; Live = live; }
+        /// <summary>The part's kind (<see cref="AnnouncementKinds"/>), or null for a custom one-off part.
+        /// Kinds drive the control type's speak order, let a node's part override the type's common part
+        /// of the same kind, and key the user's per-kind announcement settings.</summary>
+        public string Kind;
+
+        public NodeAnnouncement(Func<string> text, bool live = false, string kind = null)
+        {
+            Text = text;
+            Live = live;
+            Kind = kind;
+        }
 
         public static NodeAnnouncement Static(string text) => new NodeAnnouncement(() => text);
+    }
+
+    /// <summary>
+    /// A CONTROL TYPE — "button", "toggle", "slider" — as a registry value rather than a C# class (the
+    /// legacy system derived type identity from proxy classes via [AnnouncementOrder]/[ElementSettingsKey],
+    /// which forced attribute unions and class collapsing to share settings). A type owns the speak ORDER
+    /// of its announcement kinds and the parts COMMON to every control of the type (the localized role
+    /// word); nodes contribute their specific parts, overriding a common part of the same kind. The user's
+    /// per-type announcement settings key off <see cref="Key"/>.
+    /// </summary>
+    public sealed class ControlType
+    {
+        /// <summary>Stable settings/registry key ("button", "toggle", "slider").</summary>
+        public string Key;
+
+        /// <summary>The announcement kinds in speak order; parts with unknown/absent kinds append after,
+        /// in declaration order.</summary>
+        public string[] Order;
+
+        /// <summary>The parts every control of this type shares (the role word), resolved per compose.
+        /// Null = none.</summary>
+        public Func<IReadOnlyList<NodeAnnouncement>> Common;
     }
 
     /// <summary>
@@ -54,9 +100,15 @@ namespace WrathAccess.UI.Graph
     /// </summary>
     public sealed class NodeVtable
     {
-        /// <summary>Required, at least one part. The control's spoken focus readout, in speak order.
-        /// Parts marked <see cref="NodeAnnouncement.Live"/> re-speak on change while focused.</summary>
+        /// <summary>Required, at least one part. The control's spoken focus readout. Parts marked
+        /// <see cref="NodeAnnouncement.Live"/> re-speak on change while focused. When
+        /// <see cref="ControlType"/> is set, the type's common parts merge in and the type's kind order
+        /// applies; otherwise parts speak in declaration order.</summary>
         public IReadOnlyList<NodeAnnouncement> Announcements;
+
+        /// <summary>The control's type (registry value) — supplies the role word, the speak order, and the
+        /// per-type announcement settings identity. Null = an untyped one-off.</summary>
+        public ControlType ControlType;
 
         /// <summary>Optional. Primary activation — the left-click equivalent (Enter).</summary>
         public Action OnActivate;

@@ -347,6 +347,9 @@ namespace WrathAccess
             // UI = per-announcement settings (global toggles) + per-element-type overrides, discovered
             // by reflection. Creates "announcements" + "ui" categories under the settings Root.
             WrathAccess.UI.Announcements.AnnouncementRegistry.RegisterDefaults();
+            // The graph announcer consults the same announcement settings (per control type + per kind).
+            WrathAccess.UI.Graph.GraphAnnouncer.PartFilter = (type, part) =>
+                WrathAccess.UI.Announcements.AnnouncementRegistry.PartEnabled(type?.Key, part.Kind);
 
             // Scan-item (proxy) announcements: their own parallel pipeline (NOT UI elements) — global
             // per-part toggles + per-proxy-type overrides. Creates "proxy_announce" + "proxy_elem".

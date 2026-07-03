@@ -42,6 +42,52 @@ namespace WrathAccess.UI.Announcements
                 try { RegisterElementOverrides(t); }
                 catch (Exception e) { Main.Log?.Error("[ann] per-element register failed for " + t.Name + ": " + e.Message); }
             }
+
+            // Graph control types (the registry): the same per-type override schema, keyed on the registry
+            // entry instead of a proxy class. Keys shared with legacy collapsed element keys ("toggle",
+            // "slider") land in the SAME categories — one settings identity across both systems.
+            foreach (var ct in WrathAccess.UI.ControlTypes.All)
+            {
+                try { RegisterControlTypeOverrides(ct); }
+                catch (Exception e) { Main.Log?.Error("[ann] control-type register failed for " + ct.Key + ": " + e.Message); }
+            }
+        }
+
+        private static void RegisterControlTypeOverrides(WrathAccess.UI.Graph.ControlType ct)
+        {
+            if (ct?.Key == null || ct.Order == null) return;
+            var typeDisplay = SnakeToTitle(ct.Key);
+            foreach (var kind in ct.Order)
+            {
+                var kindDisplay = SnakeToTitle(kind);
+                var global = ModSettingsRegistry.EnsureCategory("announcements." + kind, "Announcements/" + kindDisplay);
+                var perType = ModSettingsRegistry.EnsureCategory(
+                    "ui." + ct.Key + ".announcements." + kind,
+                    "UI/" + typeDisplay + "/Announcements/" + kindDisplay,
+                    "/element." + ct.Key + "/announcements_group/announcement." + kind);
+                foreach (var child in global.Children)
+                {
+                    if (perType.GetByKey(child.Key) != null) continue;
+                    var ov = CreateOverride(child);
+                    if (ov != null) perType.Add(ov);
+                }
+            }
+        }
+
+        /// <summary>Is an announcement part enabled for a control type — the graph announcer's
+        /// PartFilter resolver: per-type override → global per-kind toggle → true. Kindless (custom)
+        /// parts always speak.</summary>
+        public static bool PartEnabled(string typeKey, string kind)
+        {
+            if (kind == null) return true;
+            if (typeKey != null)
+            {
+                var ov = ModSettings.GetSetting<NullableBoolSetting>(
+                    "ui." + typeKey + ".announcements." + kind + ".enabled");
+                if (ov != null && ov.IsOverridden) return ov.LocalValue.Value;
+            }
+            var global = ModSettings.GetSetting<BoolSetting>("announcements." + kind + ".enabled");
+            return global == null || global.Get();
         }
 
         private static void RegisterGlobal(Type annType)

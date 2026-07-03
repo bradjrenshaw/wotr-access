@@ -138,8 +138,8 @@ namespace WrathAccess.UI
 
         private void WatchLive(GraphNode node)
         {
-            var anns = node.Vtable?.Announcements;
-            if (anns == null) return;
+            var anns = GraphAnnouncer.EffectiveAnnouncements(node); // type-merged + settings-filtered
+            if (anns.Count == 0) return;
             bool baseline = _liveKey == null || !_liveKey.Equals(node.Id) || _liveValues.Count != anns.Count;
             if (baseline) { _liveKey = node.Id; _liveValues.Clear(); }
 
@@ -775,7 +775,7 @@ namespace WrathAccess.UI
         public override void TickTypeahead()
         {
             if (Screen == null || Screen.CapturesRawInput || !Screen.AllowsTypeahead
-                || !FocusMode.Active || Current == null)
+                || !FocusMode.Active || _graph?.CurrentNode == null) // node-based: Current (the element) is null on graph-native screens
             {
                 if (_search.IsSearchActive || _search.HasBuffer) ClearSearch(announce: false);
                 _lastTypeaheadScreen = Screen;

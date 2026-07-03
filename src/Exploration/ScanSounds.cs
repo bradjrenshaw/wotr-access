@@ -123,6 +123,7 @@ namespace WrathAccess.Exploration
         /// Read live (settings dictionary lookups — cheap enough per ping).</summary>
         public static string Resolve(string nodeKey)
         {
+            if (nodeKey == null) return null; // items with no sound node (the old loop's entry guard)
             var setting = SoundSetting(nodeKey);
             string id = setting is NullableChoiceSetting nc ? nc.EffectiveId
                 : setting is ChoiceSetting c ? c.ValueId : null;

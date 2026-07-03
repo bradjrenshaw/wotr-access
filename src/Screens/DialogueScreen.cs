@@ -10,17 +10,17 @@ using Kingmaker.UI.Common;               // UIUtility.SkillCheckText / alignment
 using Kingmaker.UI.MVVM._VM.Dialog.Dialog;
 using UniRx;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// An in-game conversation (the common <see cref="DialogVM"/>) as ONE FlowSheet that reads like a
+    /// An in-game conversation (the common <see cref="DialogVM"/>) as ONE graph stop that reads like a
     /// transcript: the scrollback (the game's own pre-formatted <c>DialogVM.History</c> lines — past
     /// cues and chosen answers — plus NOTIFICATION rows we inject: alignment shifts, items gained or
     /// lost, XP, revealed locations, mirroring DialogNotificationsView's formats and settings gates),
-    /// then the CURRENT cue row, then the answers region. A new cue rebuilds the sheet and lands focus
-    /// on the cue row silently — you hear the line via the delivery announcement, press Down for the
+    /// then the CURRENT cue row, then the answers. A new cue re-keys the cue/answer nodes and focus is
+    /// pointed at the cue SILENTLY — you hear the line via the delivery announcement, press Down for the
     /// answers/continue, or Up to re-read earlier lines. No Tab hop (user spec: dialogue should flow).
     ///
     /// We speak a line only once it's actually delivered on screen, driven by model state — so it fires
@@ -33,8 +33,7 @@ namespace WrathAccess.Screens
     /// scheduled. Notification lines arrive with the cue-show event (the VM clears its lists right after
     /// the command, so the subscriber snapshots synchronously) and are QUEUED ahead of the cue line as
     /// separate utterances — nothing in dialogue ever interrupts speech (user spec). Book events,
-    /// interchapters, global-map conversations, and kingdom/crusade notification categories are not
-    /// handled here yet.
+    /// interchapters, and kingdom/crusade notification categories are not handled here yet.
     /// </summary>
     public sealed class DialogueScreen : Screen
     {
@@ -45,14 +44,13 @@ namespace WrathAccess.Screens
 
         private DialogVM _subscribedVm;   // the conversation our notification subscription belongs to
         private IDisposable _notifSub;
-        private CueVM _builtCue;          // cue the sheet was built for
+        private CueVM _focusedCue;        // cue whose node focus was pointed at
         private CueVM _spokenCue;         // cue we've spoken
 
         private readonly List<string> _rows = new List<string>();         // the transcript: history + notifications
         private readonly List<string> _pendingNotifRows = new List<string>(); // notif lines awaiting ordered insertion
         private readonly List<string> _pendingSpeak = new List<string>();     // notif lines to speak before the next cue
         private int _historyConsumed;
-        private TextElement _cueRow;
 
         private static DialogVM Vm()
             // In-area OR world-map context (the global map carries its own DialogContextVM) — see DialogTranscript.Context.
@@ -76,10 +74,8 @@ namespace WrathAccess.Screens
         public override bool IsActive() => Vm() != null && DialogVisibility.Shown;
 
         // A hide is a pop-while-the-conversation-continues: keep the transcript + notification subscription
-        // (so nothing is lost across the cutscene), and just force a rebuild on the way back in. Only fully
-        // reset when the conversation has actually ended (the VM is gone).
-        public override void OnPush() { Clear(); _builtCue = null; }
-        public override void OnPop() { Clear(); if (Vm() == null) Reset(); }
+        // (so nothing is lost across the cutscene). Only fully reset when the conversation actually ended.
+        public override void OnPop() { if (Vm() == null) Reset(); }
 
         // Escape opens the game's pause menu, exactly like the game's own Esc key during a conversation —
         // required for save/load/quit/settings mid-dialogue. Without this the dialogue screen swallows
@@ -94,13 +90,12 @@ namespace WrathAccess.Screens
 
         private void Reset()
         {
-            _builtCue = null;
+            _focusedCue = null;
             _spokenCue = null;
             _rows.Clear();
             _pendingNotifRows.Clear();
             _pendingSpeak.Clear();
             _historyConsumed = 0;
-            _cueRow = null;
             _notifSub?.Dispose();
             _notifSub = null;
             _subscribedVm = null;
@@ -142,7 +137,13 @@ namespace WrathAccess.Screens
             var cue = vm.Cue.Value;
             if (cue == null) return;
 
-            if (cue != _builtCue) { _builtCue = cue; Rebuild(vm); }
+            // A new cue: point focus at its (re-keyed) node SILENTLY — the delivery announcement below is
+            // the speech; Down reaches the answers, Up scrolls back through the conversation so far.
+            if (cue != _focusedCue)
+            {
+                _focusedCue = cue;
+                Navigation.FocusNode(CueId(vm), announce: false);
+            }
 
             // Speak once delivered: in Dialog mode and not waiting on a cutscene. Once per cue, QUEUED —
             // never interrupting (user spec) — the notification lines first (the results of the previous
@@ -156,60 +157,70 @@ namespace WrathAccess.Screens
             }
         }
 
-        private void Rebuild(DialogVM vm)
+        public override bool BuildsGraph => true;
+
+        private static ControlId CueId(DialogVM vm)
+            => ControlId.Structural("dlg:" + vm.GetHashCode() + ":cue:"
+                + (vm.Cue.Value != null ? vm.Cue.Value.GetHashCode().ToString() : "?"));
+
+        public override void Build(GraphBuilder b)
         {
-            Clear();
-            bool hasRealAnswers = vm.Answers.Value != null && vm.Answers.Value.Count > 0;
-            // The live line — focus here to repeat it; Enter on it presses Continue when that's the
-            // only way forward (never when real choices exist).
-            _cueRow = new CueRow(() => CueLine(vm), () => hasRealAnswers ? null : vm.SystemAnswer.Value,
-                () => vm.Cue.Value?.SkillChecks);
+            var vm = Vm();
+            if (vm == null) return;
+            string k = "dlg:" + vm.GetHashCode() + ":";
 
-            // Real answers, else the system Continue when that's the only way forward, else none.
-            List<AnswerVM> answers = null;
-            if (hasRealAnswers) answers = new List<AnswerVM>(vm.Answers.Value);
-            else if (vm.SystemAnswer.Value != null) answers = new List<AnswerVM> { vm.SystemAnswer.Value };
+            // One stop, no positions (a transcript, not a list — "37 of 40" per line is noise; the old
+            // FlowSheet announced none). The empty-label context is a silent positions-off scope.
+            b.PushContext("", role: null, positions: false);
 
-            var sheet = DialogTranscript.Build(_rows, _cueRow, answers, out var focus);
-            Add(sheet);
-            Navigation.Attach(this);
-            // Land on the current line silently (the delivery announcement speaks it): Down reaches the
-            // answers, Up scrolls back through the conversation so far.
-            Navigation.Focus(focus, announce: false);
-        }
-
-        // The current-line row: focusing repeats the line; when the only way forward is the system
-        // Continue, Enter HERE advances the dialogue too (user spec — Enter straight through exposition
-        // without scrolling down). Real answer sets never ride this shortcut. Activation is the same
-        // VM call as the Continue button (the game plays its own NextDialogLine sound; ours stays off).
-        private sealed class CueRow : TextElement
-        {
-            private readonly Func<AnswerVM> _continueAnswer;
-            private readonly Func<List<Kingmaker.Controllers.Dialog.SkillCheckResult>> _skillChecks;
-
-            public CueRow(Func<string> text, Func<AnswerVM> continueAnswer,
-                Func<List<Kingmaker.Controllers.Dialog.SkillCheckResult>> skillChecks) : base(text)
+            // The scrollback: absolute-index keys, stable as lines append.
+            for (int i = 0; i < _rows.Count; i++)
             {
-                _continueAnswer = continueAnswer;
-                _skillChecks = skillChecks;
+                var text = _rows[i];
+                b.AddItem(ControlId.Structural(k + "row:" + i), GraphNodes.Text(() => text));
             }
 
-            public override Kingmaker.UI.UISoundType? ActivateSound => null;
-
-            // The cue line carries a skill-check RESULT <link> when a check was just rolled; resolve it
-            // from the cue's result list (Space → the roll breakdown). Glossary links fall through.
-            public override Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate ResolveLink(string id, string[] keys)
-                => WrathAccess.UI.Proxies.DialogLinks.ResolveSkillCheck(keys, _skillChecks?.Invoke(), null);
-
-            public override IEnumerable<ElementAction> GetActions()
+            // The live line — focusing repeats it; Enter presses Continue when that's the only way
+            // forward (never when real choices exist); Space resolves the skill-check result link (the
+            // roll breakdown) with glossary links falling through. Keyed per cue (a new cue re-homes).
+            var cue = vm.Cue.Value;
+            if (cue != null)
             {
-                // Only while the window is actually shown — during a cutscene transition the game hides it
-                // and the button isn't clickable, so we must not let Enter spam-advance the dialogue.
-                var a = _continueAnswer();
-                if (a != null && a.Enable.Value && DialogVisibility.Shown)
-                    yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.choose"),
-                        _ => a.OnChooseAnswer());
+                bool hasRealAnswers = vm.Answers.Value != null && vm.Answers.Value.Count > 0;
+                b.AddItem(CueId(vm), new NodeVtable
+                {
+                    ControlType = ControlTypes.Text,
+                    Announcements = new[] { new NodeAnnouncement(() => CueLine(vm)) },
+                    // Enter = the system Continue, only while the window is actually shown (during a
+                    // cutscene transition the game hides it and the real button isn't clickable — Enter
+                    // must not spam-advance). The game plays its own NextDialogLine sound.
+                    OnActivate = () =>
+                    {
+                        if (hasRealAnswers) return;
+                        var a = vm.SystemAnswer.Value;
+                        if (a != null && a.Enable.Value && DialogVisibility.Shown) a.OnChooseAnswer();
+                    },
+                    OnTooltip = () => TooltipScreen.FollowLinks(CueLineRaw(vm),
+                        (id, keys) => WrathAccess.UI.Proxies.DialogLinks.ResolveSkillCheck(
+                            keys, vm.Cue.Value?.SkillChecks, null)),
+                });
+
+                // Real answers, else the system Continue when that's the only way forward.
+                List<AnswerVM> answers = null;
+                if (hasRealAnswers) answers = new List<AnswerVM>(vm.Answers.Value);
+                else if (vm.SystemAnswer.Value != null) answers = new List<AnswerVM> { vm.SystemAnswer.Value };
+                if (answers != null)
+                {
+                    int ai = 0;
+                    foreach (var a in answers)
+                    {
+                        if (a != null)
+                            b.AddItem(ControlId.Referenced(a, k + "ans:" + ai), DialogTranscript.AnswerNode(a));
+                        ai++;
+                    }
+                }
             }
+            b.PopContext();
         }
 
         // Mirrors DialogNotificationsView: the same per-category game settings gates and the same
@@ -266,14 +277,17 @@ namespace WrathAccess.Screens
             return lines;
         }
 
-        private static string CueLine(DialogVM vm)
+        private static string CueLine(DialogVM vm) => TextUtil.StripRichText(CueLineRaw(vm));
+
+        // Markup-intact (for the link extractor); Tts/announcements strip at speak time anyway.
+        private static string CueLineRaw(DialogVM vm)
         {
             var cue = vm.Cue.Value;
             var text = cue != null ? cue.BaseText : null;
 
             // The check result ("[Failed an Athletics check]") is a runtime prefix the cue view composes
             // from the cue's SkillChecks — it's NOT part of BaseText — so prepend it the same way the game
-            // does (UIUtility.SkillCheckText). Tts strips the rich-text colour at speak time.
+            // does (UIUtility.SkillCheckText).
             if (cue != null && cue.SkillChecks != null && cue.SkillChecks.Count > 0)
             {
                 var check = UIUtility.SkillCheckText(cue.SkillChecks);

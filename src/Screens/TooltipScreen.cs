@@ -48,16 +48,25 @@ namespace WrathAccess.Screens
         public static void FollowElement(UIElement el)
         {
             if (el == null) return;
-            var tpl = el.GetTooltipTemplate();
-            var links = TooltipLinks.Extract(el.GetLinkSourceText(), el.ResolveLink);
+            FollowLinks(el.GetLinkSourceText(), el.ResolveLink, el.GetTooltipTemplate());
+        }
 
-            int targets = (tpl != null ? 1 : 0) + links.Count;
+        /// <summary>The same drill-in dispatch over RAW (markup-intact) text + a custom link resolver —
+        /// for graph nodes with no backing element (a dialogue cue's skill-check result link, an
+        /// answer's DC-preview link; glossary links fall through inside the extractor).</summary>
+        public static void FollowLinks(string rawText,
+            Func<string, string[], TooltipBaseTemplate> resolver, TooltipBaseTemplate own = null)
+        {
+            var links = TooltipLinks.Extract(rawText, resolver);
+
+            int targets = (own != null ? 1 : 0) + links.Count;
             if (targets == 0) { Tts.Speak(Loc.T("nav.no_tooltip")); return; }
-            if (tpl != null && links.Count == 0) { Open(tpl); return; }
+            if (own != null && links.Count == 0) { Open(own); return; }
+            if (own == null && links.Count == 1) { var t = links[0].Open(); if (t != null) Open(t); return; }
 
             var labels = new List<string>();
             var opens = new List<Func<TooltipBaseTemplate>>();
-            if (tpl != null) { var own = tpl; labels.Add(Loc.T("tooltip.view")); opens.Add(() => own); }
+            if (own != null) { var o = own; labels.Add(Loc.T("tooltip.view")); opens.Add(() => o); }
             foreach (var lk in links) { labels.Add(lk.Label); opens.Add(lk.Open); }
             OpenMenu(Loc.T("tooltip.links_title"), labels, opens);
         }

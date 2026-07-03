@@ -4,6 +4,7 @@ using Kingmaker.DialogSystem.Blueprints; // BlueprintBookPage
 using Kingmaker.UI.MVVM._VM.Dialog.BookEvent; // BookEventVM
 using Kingmaker.UI.MVVM._VM.Dialog.Interchapter; // InterchapterVM (a BookEventVM subclass)
 using WrathAccess.UI;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -29,8 +30,8 @@ namespace WrathAccess.Screens
         public override string ScreenName => Loc.T("screen.book_event");
         public override int Layer => 15; // over the in-game context + service windows, like dialogue
 
-        private BlueprintBookPage _builtPage;  // page the tree was built for
-        private BlueprintBookPage _spokenPage; // page we've read aloud
+        private BlueprintBookPage _focusedPage; // page whose first line focus was pointed at
+        private BlueprintBookPage _spokenPage;  // page we've read aloud
 
         private static BookEventVM Vm()
         {
@@ -42,9 +43,9 @@ namespace WrathAccess.Screens
 
         public override bool IsActive() => Vm() != null;
 
-        public override void OnPush() { Clear(); Reset(); }
-        public override void OnPop() { Clear(); Reset(); }
-        private void Reset() { _builtPage = null; _spokenPage = null; }
+        public override void OnPush() { Reset(); }
+        public override void OnPop() { Reset(); }
+        private void Reset() { _focusedPage = null; _spokenPage = null; }
 
         public override void OnUpdate()
         {
@@ -53,27 +54,64 @@ namespace WrathAccess.Screens
             var page = vm.BlueprintBookPage.Value;
             if (page == null) return; // VM exists a frame before the first page is pushed
 
-            if (page != _builtPage) { _builtPage = page; Rebuild(vm); }
+            // A new page: land focus on the top of the passage SILENTLY (the queued passage read below
+            // is the speech); Down reaches the choices, Up re-reads earlier paragraphs.
+            if (page != _focusedPage)
+            {
+                _focusedPage = page;
+                Navigation.FocusNode(ControlId.Structural(PageKey(vm) + "row:0"), announce: false);
+            }
             if (page != _spokenPage) { _spokenPage = page; Speak(vm); }
-        }
-
-        // Same transcript FlowSheet as ordinary dialogue: the passage as the log region, the choices as
-        // the answers region. Focus lands at the top of the passage; Down reaches the choices.
-        private void Rebuild(BookEventVM vm)
-        {
-            Clear();
-            var sheet = DialogTranscript.Build(PassageLines(vm), null, vm.Answers.Value, out var focus);
-            Add(sheet);
-            Navigation.Attach(this);
-            Navigation.Focus(focus, announce: false);
         }
 
         // Speak the whole passage once per page, QUEUED (never interrupting — the dialogue rule). Re-reading
         // individual paragraphs is done by arrowing the rows.
-        private void Speak(BookEventVM vm)
+        private static void Speak(BookEventVM vm)
         {
             var lines = PassageLines(vm);
-            if (lines.Count > 0) Tts.Speak(string.Join("\n", lines.ToArray()), interrupt: false);
+            if (lines.Count > 0)
+                Tts.Speak(TextUtil.StripRichText(string.Join("\n", lines.ToArray())), interrupt: false);
+        }
+
+        private static string PageKey(BookEventVM vm)
+            => "book:" + vm.GetHashCode() + ":" + (vm.BlueprintBookPage.Value?.GetHashCode() ?? 0) + ":";
+
+        public override bool BuildsGraph => true;
+
+        // Same shape as ordinary dialogue: the passage rows, then the choices — one stop, no positions.
+        // Keys carry the page, so choosing an answer re-keys everything (OnUpdate re-homes silently).
+        public override void Build(GraphBuilder b)
+        {
+            var vm = Vm();
+            if (vm == null || vm.BlueprintBookPage.Value == null) return;
+            string k = PageKey(vm);
+
+            b.PushContext("", role: null, positions: false); // silent positions-off scope (a transcript)
+            var lines = PassageLines(vm);
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var raw = lines[i];
+                b.AddItem(ControlId.Structural(k + "row:" + i), new NodeVtable
+                {
+                    ControlType = ControlTypes.Text,
+                    Announcements = new[] { new NodeAnnouncement(() => TextUtil.StripRichText(raw)) },
+                    // Raw text kept un-stripped so glossary links survive for Space.
+                    OnTooltip = () => TooltipScreen.FollowLinks(raw, null),
+                });
+            }
+
+            var answers = vm.Answers.Value;
+            if (answers != null)
+            {
+                int ai = 0;
+                foreach (var a in answers)
+                {
+                    if (a != null)
+                        b.AddItem(ControlId.Referenced(a, k + "ans:" + ai), DialogTranscript.AnswerNode(a));
+                    ai++;
+                }
+            }
+            b.PopContext();
         }
 
         // The page as transcript lines: the interchapter title first (e.g. "Trapped in the Darkness"), then

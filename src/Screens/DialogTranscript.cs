@@ -1,19 +1,17 @@
-using System.Collections.Generic;
+using System;
 using Kingmaker;                            // Game
 using Kingmaker.UI.MVVM._VM.Dialog;         // DialogContextVM
 using Kingmaker.UI.MVVM._VM.Dialog.Dialog;  // AnswerVM
+using Kingmaker.Utility;                    // UIConsts.GetAnswerString
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;              // DialogAnswerButton
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Builds the shared conversation transcript as one FlowSheet — used by both the ordinary dialogue
-    /// screen and book-event/interchapter pages so they read and behave identically. Two unlabeled
-    /// regions: a log (the scrollback / passage, one row per line, plus an optional trailing live row —
-    /// the dialogue cue), then the answers (a <see cref="DialogAnswerButton"/> per <see cref="AnswerVM"/>;
-    /// dropped when empty). Returns the sheet and the row to focus (the trailing row if given, else the
-    /// first line). Callers do the Add / Attach / Focus so each can land focus and time speech its way.
+    /// Shared pieces of the conversation surfaces (ordinary dialogue + book events/interchapters):
+    /// the live dialog context lookup and the player-answer node, so both screens read and behave
+    /// identically.
     /// </summary>
     internal static class DialogTranscript
     {
@@ -28,32 +26,42 @@ namespace WrathAccess.Screens
             return rc.InGameVM?.StaticPartVM?.DialogContextVM ?? rc.GlobalMapVM?.DialogContextVM;
         }
 
-        public static FlowSheet Build(IList<string> lines, UIElement trailingRow,
-            IEnumerable<AnswerVM> answers, out UIElement focusRow)
+        /// <summary>One player answer: the game's own answer formatter (numbered prefix plus skill-check /
+        /// alignment / mythic tags, gated by the same dialogue settings, so we surface only what's drawn);
+        /// Enter chooses via <see cref="AnswerVM.OnChooseAnswer"/> (the game plays NextDialogLine — no
+        /// click of ours); Space resolves the per-stat DC-preview links (glossary falls through). Disabled
+        /// while the dialogue window is hidden (a cutscene transition must not let Enter choose through a
+        /// hidden window).</summary>
+        public static NodeVtable AnswerNode(AnswerVM vm)
         {
-            var sheet = new FlowSheet();
-            var log = sheet.List(null); // unlabeled — region entry stays quiet
-            focusRow = null;
-            if (lines != null)
-                foreach (var line in lines)
+            Func<bool> enabled = () => vm != null && vm.Enable.Value && WrathAccess.DialogVisibility.Shown;
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Button,
+                Announcements = new[]
                 {
-                    var text = line;
-                    var row = new TextElement(() => text);
-                    log.Item(row);
-                    if (focusRow == null) focusRow = row;
-                }
-            if (trailingRow != null) { log.Item(trailingRow); focusRow = trailingRow; }
+                    GraphNodes.LabelPart(() => AnswerText(vm)),
+                    GraphNodes.DisabledPart(enabled),
+                },
+                SearchText = () => AnswerText(vm),
+                OnActivate = () => { if (enabled()) vm.OnChooseAnswer(); },
+                OnTooltip = () => TooltipScreen.FollowLinks(AnswerText(vm),
+                    (id, keys) => WrathAccess.UI.Proxies.DialogLinks.ResolveSkillCheck(
+                        keys, null, vm?.Answer?.Value?.SkillChecksDC)),
+            };
+        }
 
-            var ans = sheet.List(null); // unlabeled: "Answers" before the choices is auditory noise
-            int count = 0;
-            if (answers != null)
-                foreach (var a in answers)
-                    if (a != null) { ans.Item(DialogAnswerButton.For(a)); count++; }
-            if (count == 0) sheet.RemoveRegion(ans);
-
-            sheet.Reflow();
-            if (focusRow == null) focusRow = sheet.FirstFocusable();
-            return sheet;
+        // The bind name matches the view's own (DialogAnswerView builds "DialogChoice{Index}"). Returns
+        // TMP rich text (<link>-wrapped checks); Tts strips that at speak time. Plain fallback for
+        // system answers — the game's button reads an UNNUMBERED "Continue".
+        public static string AnswerText(AnswerVM vm)
+        {
+            if (vm == null) return "";
+            var bp = vm.Answer?.Value;
+            var text = bp != null ? bp.DisplayText : null;
+            if (string.IsNullOrEmpty(text)) return Loc.T("label.continue");
+            try { return UIConsts.GetAnswerString(bp, "DialogChoice" + vm.Index, vm.Index); }
+            catch { return vm.Index + ". " + text; }
         }
     }
 }

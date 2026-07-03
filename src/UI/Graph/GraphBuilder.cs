@@ -406,18 +406,32 @@ namespace WrathAccess.UI.Graph
         // Tab-stop). Shared non-null row keys preserve the column; otherwise vertical lands on first item.
         private void WireMenuEdges(GraphRender render)
         {
+            // Segment rows in DECLARATION order: within a stop, consecutive menu rows chain vertically
+            // only when no raw node was declared between them. Interleaved raw content (a sheet between
+            // menu controls, e.g. the class progression grid between the skills list and the auto-level
+            // button) BREAKS the chain — StitchModeBoundaries wires the seams. Without the break, menu
+            // edges would skip straight over the raw block; the stitcher (which only fills missing
+            // edges) would find the gap already bridged, leaving the block an unreachable island.
             var byStop = new List<List<Row>>();
-            var stopIndex = new Dictionary<object, int>();
-            foreach (var row in _rows)
+            var openSegment = new Dictionary<object, List<Row>>(); // stop → its currently-open segment
+            foreach (var node in _declared)
             {
-                int idx;
-                if (!stopIndex.TryGetValue(row.StopKey, out idx))
+                Row row;
+                if (_rowOf.TryGetValue(node, out row))
                 {
-                    idx = byStop.Count;
-                    stopIndex.Add(row.StopKey, idx);
-                    byStop.Add(new List<Row>());
+                    List<Row> seg;
+                    if (!openSegment.TryGetValue(node.StopKey, out seg))
+                    {
+                        seg = new List<Row>();
+                        openSegment.Add(node.StopKey, seg);
+                        byStop.Add(seg);
+                    }
+                    if (seg.Count == 0 || seg[seg.Count - 1] != row) seg.Add(row);
                 }
-                byStop[idx].Add(row);
+                else
+                {
+                    openSegment.Remove(node.StopKey); // raw node: close this stop's segment
+                }
             }
 
             foreach (var rows in byStop)

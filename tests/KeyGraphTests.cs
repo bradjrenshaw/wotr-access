@@ -267,6 +267,35 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
+        public void RawBlockBetweenMenuRowsStaysReachable()
+        {
+            // Menu row, raw block (its own internal wiring), menu row — all one stop. Menu wiring must
+            // BREAK at the raw block (declaration order), and the stitcher wires the seams; otherwise
+            // the menu edges skip over the block and it becomes an unreachable island (the class
+            // progression grid between the skills list and the auto-level button).
+            var state = new GraphState();
+            var g = new KeyGraph(() => new GraphBuilder()
+                .AddItem(Id("above"), Vt("Above"))
+                .AddNode(Id("raw1"), Vt("Raw 1"))
+                .AddNode(Id("raw2"), Vt("Raw 2"))
+                .Connect(Id("raw1"), GraphDir.Down, Id("raw2"))
+                .Connect(Id("raw2"), GraphDir.Up, Id("raw1"))
+                .AddItem(Id("below"), Vt("Below"))
+                .Build(), state);
+
+            Assert.True(g.Rerender());
+            Assert.Equal(Id("above"), state.CurKey);
+            g.Move(GraphDir.Down);
+            Assert.Equal(Id("raw1"), state.CurKey);   // into the block, not over it
+            g.Move(GraphDir.Down);
+            Assert.Equal(Id("raw2"), state.CurKey);
+            g.Move(GraphDir.Down);
+            Assert.Equal(Id("below"), state.CurKey);  // out the bottom
+            g.Move(GraphDir.Up);
+            Assert.Equal(Id("raw2"), state.CurKey);   // and back in
+        }
+
+        [Fact]
         public void TreeOpsExpandCollapseDescendAscend()
         {
             var state = new GraphState();

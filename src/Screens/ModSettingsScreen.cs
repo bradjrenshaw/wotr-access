@@ -518,9 +518,12 @@ namespace WrathAccess.Screens
             b.BeginGroup(ControlId.Structural(nk + "group"), GraphNodes.Group(() => L(node.LocKey, node.Label)));
 
             var sound = WrathAccess.Exploration.ScanSounds.SoundSetting(node.Key);
-            if (sound != null)
+            if (sound is ChoiceSetting plainSound)
                 b.AddItem(ControlId.Structural(nk + "sound"),
-                    ModSettingNodes.ChoiceSettingDropdown(sound, L("scanner.sound", "Sound")));
+                    ModSettingNodes.ChoiceSettingDropdown(plainSound, L("scanner.sound", "Sound")));
+            else if (sound is NullableChoiceSetting inheritSound)
+                b.AddItem(ControlId.Structural(nk + "sound"),
+                    ModSettingNodes.NullableChoiceDropdown(inheritSound, L("scanner.sound", "Sound")));
 
             var annCat = ModSettings.GetCategory("proxy_elem." + node.Key);
             if (annCat != null)
@@ -573,8 +576,26 @@ namespace WrathAccess.Screens
                     parent.Add(new ProxyChoiceDropdown(c.Label,
                         c.Choices.Select(ch => ch.Label).ToList(),
                         () => ModSettingNodes.IndexOfChoice(c),
-                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); },
-                        inheritedValue: c.InheritedValue));
+                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); }));
+                    break;
+                case NullableChoiceSetting nc:
+                    // Interim shim: the inherit option leads the list; picking it resets. (Dies with the wizard.)
+                    var opts = new List<string> { nc.InheritOption.Label };
+                    opts.AddRange(nc.Choices.Select(ch => ch.Label));
+                    parent.Add(new ProxyChoiceDropdown(nc.Label, opts,
+                        () =>
+                        {
+                            if (!nc.IsOverridden) return 0;
+                            for (int i = 0; i < nc.Choices.Count; i++)
+                                if (nc.Choices[i].Id == nc.LocalValue) return i + 1;
+                            return 0;
+                        },
+                        idx =>
+                        {
+                            if (idx == 0) nc.Reset();
+                            else if (idx - 1 < nc.Choices.Count) nc.SetExplicit(nc.Choices[idx - 1].Id);
+                        },
+                        inheritedValue: () => nc.IsOverridden ? null : nc.ResolvedLabel));
                     break;
             }
         }

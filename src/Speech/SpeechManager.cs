@@ -16,7 +16,6 @@ namespace WrathAccess.Speech
     {
         /// <summary>Sentinel value for an additional config's setting that follows the default config (the
         /// choice id; the loc key is "choice.inherit"). The default config never uses it — it's the base.</summary>
-        internal const string Inherit = "inherit";
 
         private static bool _initialized;
         private static ChoiceSetting _handlerSetting;          // the DEFAULT config's handler choice
@@ -52,17 +51,21 @@ namespace WrathAccess.Speech
         {
             bool inherit = inheritFrom != null;
 
-            var handlerChoices = new List<Choice>();
-            if (inherit) handlerChoices.Add(new Choice(Inherit, "Inherit default", "choice.inherit_default"));
-            handlerChoices.Add(new Choice("auto", "Auto", "speech.auto"));
+            var handlerChoices = new List<Choice> { new Choice("auto", "Auto", "speech.auto") };
             foreach (var handler in Handlers)
                 handlerChoices.Add(new Choice(handler.Key, handler.Label, handler.LocalizationKey));
-            var handlerSetting = new ChoiceSetting("handler", "Speech handler", handlerChoices,
-                inherit ? Inherit : "auto", "speech.handler");
             if (inherit)
-                handlerSetting.InheritedValue = () => handlerSetting.ValueId == Inherit
-                    ? inheritFrom.Get<ChoiceSetting>("handler")?.Current?.Label : null;
-            into.Add(handlerSetting);
+            {
+                // An additional config's handler inherits the default config's until overridden.
+                var nc = new NullableChoiceSetting("handler", "Speech handler", handlerChoices,
+                    localizationKey: "speech.handler");
+                nc.ResolveInherited = () => inheritFrom.Get<ChoiceSetting>("handler")?.ValueId ?? "auto";
+                into.Add(nc);
+            }
+            else
+            {
+                into.Add(new ChoiceSetting("handler", "Speech handler", handlerChoices, "auto", "speech.handler"));
+            }
 
             foreach (var handler in Handlers)
             {
@@ -93,11 +96,10 @@ namespace WrathAccess.Speech
                             i.Min, i.Max, i.Step, i.LocalizationKey));
                         break;
                     case ChoiceSetting c:
-                        var choices = new List<Choice> { new Choice(Inherit, "Inherit default", "choice.inherit_default") };
-                        foreach (var ch in c.Choices) choices.Add(ch);
-                        var cs = new ChoiceSetting(c.Key, c.Label, choices, Inherit, c.LocalizationKey);
+                        var cs = new NullableChoiceSetting(c.Key, c.Label, c.Choices,
+                            localizationKey: c.LocalizationKey);
                         var defChoice = defaultSub?.Get<ChoiceSetting>(c.Key);
-                        cs.InheritedValue = () => cs.ValueId == Inherit ? defChoice?.Current?.Label : null;
+                        cs.ResolveInherited = () => defChoice?.ValueId;
                         into.Add(cs);
                         break;
                     default:

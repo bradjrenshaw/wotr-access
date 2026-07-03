@@ -42,13 +42,6 @@ namespace WrathAccess.Settings
         public string ValueId { get; private set; }
         public event Action<string> Changed;
 
-        /// <summary>Optional: when the current selection inherits a default (the "Inherit default" sentinel),
-        /// returns the DISPLAY of the value it actually resolves to — so a dropdown can announce "inheriting
-        /// default value X" instead of a bare "Inherit default". Null/empty = not inheriting (announce the
-        /// option label normally). Wired by the builder that knows the inherit source (speech configs, events),
-        /// since a ChoiceSetting can't resolve inheritance itself.</summary>
-        public Func<string> InheritedValue;
-
         public ChoiceSetting(string key, string label, IReadOnlyList<Choice> choices, string defaultId,
             string localizationKey = "") : base(key, label, localizationKey)
         {

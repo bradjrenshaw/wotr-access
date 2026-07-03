@@ -48,17 +48,25 @@ namespace WrathAccess.Exploration
                 if (cat.IsBranch)
                 {
                     var catCat = new CategorySetting(cat.Key, cat.Label, localizationKey: cat.LocKey);
-                    // The branch's own pick ("All <category>"), then each child (Inherit-capable).
-                    catCat.Add(new ChoiceSetting("all", cat.Label, Choices(false, stems), Def(cat, stems),
-                        "taxonomy." + cat.Key + ".all"));
+                    // The branch's own pick ("All <category>"), then each child — a nullable choice
+                    // inheriting the branch pick (concrete taxonomy defaults stay explicit overrides).
+                    var all = new ChoiceSetting("all", cat.Label, Choices(stems), Def(cat, stems),
+                        "taxonomy." + cat.Key + ".all");
+                    catCat.Add(all);
                     foreach (var child in cat.Children)
-                        catCat.Add(new ChoiceSetting(LeafKey(child.Key), child.Label, Choices(true, stems),
-                            Def(child, stems), child.LocKey));
+                    {
+                        var nc = new NullableChoiceSetting(LeafKey(child.Key), child.Label, Choices(stems),
+                            defaultId: Def(child, stems),
+                            inheritOption: new Choice("inherit", "Inherit", "choice.inherit"),
+                            localizationKey: child.LocKey);
+                        nc.ResolveInherited = () => all.ValueId;
+                        catCat.Add(nc);
+                    }
                     root.Add(catCat);
                 }
                 else
                 {
-                    root.Add(new ChoiceSetting(cat.Key, cat.Label, Choices(false, stems), Def(cat, stems), cat.LocKey));
+                    root.Add(new ChoiceSetting(cat.Key, cat.Label, Choices(stems), Def(cat, stems), cat.LocKey));
                 }
             }
 
@@ -68,18 +76,17 @@ namespace WrathAccess.Exploration
             {
                 var catCat = new CategorySetting(cat.Key, cat.Label, localizationKey: cat.LocKey);
                 foreach (var child in cat.Children)
-                    catCat.Add(new ChoiceSetting(LeafKey(child.Key), child.Label, Choices(false, stems), Def(child, stems), child.LocKey));
+                    catCat.Add(new ChoiceSetting(LeafKey(child.Key), child.Label, Choices(stems), Def(child, stems), child.LocKey));
                 root.Add(catCat);
             }
 
             ModSettings.Root.Add(root);
         }
 
-        private static List<Choice> Choices(bool includeInherit, List<string> stems)
+        // The REAL options (inheritance is the nullable child settings' own state, not a list entry).
+        private static List<Choice> Choices(List<string> stems)
         {
-            var choices = new List<Choice>();
-            if (includeInherit) choices.Add(new Choice(ScanTaxonomy.Inherit, "Inherit", "choice.inherit"));
-            choices.Add(new Choice(ScanTaxonomy.Silent, "Silent", "choice.silent"));
+            var choices = new List<Choice> { new Choice(ScanTaxonomy.Silent, "Silent", "choice.silent") };
             foreach (var s in stems) choices.Add(new Choice(s, s, "sound." + s));
             return choices;
         }
@@ -104,24 +111,22 @@ namespace WrathAccess.Exploration
             return node != null && node.IsBranch ? "sounds." + key + ".all" : "sounds." + key;
         }
 
-        /// <summary>The sound dropdown setting for a taxonomy node (for the Scanner-tab Entities tree).</summary>
-        public static ChoiceSetting SoundSetting(string nodeKey)
-            => ModSettings.GetSetting<ChoiceSetting>(PathFor(nodeKey));
+        /// <summary>The sound dropdown setting for a taxonomy node (for the Scanner-tab Entities tree):
+        /// a plain <see cref="ChoiceSetting"/> for roots/branch "all" picks, a
+        /// <see cref="NullableChoiceSetting"/> for inherit-capable children.</summary>
+        public static Setting SoundSetting(string nodeKey)
+            => (Setting)ModSettings.GetSetting<ChoiceSetting>(PathFor(nodeKey))
+               ?? ModSettings.GetSetting<NullableChoiceSetting>(PathFor(nodeKey));
 
-        /// <summary>The wav stem the given taxonomy node should play, honouring Inherit, or null for
-        /// silent/unknown nodes. Read live (settings dictionary lookups — cheap enough per ping).</summary>
+        /// <summary>The wav stem the given taxonomy node should play, or null for silent/unknown nodes.
+        /// Inheritance resolves inside the nullable settings themselves (child → the branch's "all").
+        /// Read live (settings dictionary lookups — cheap enough per ping).</summary>
         public static string Resolve(string nodeKey)
         {
-            for (int guard = 0; nodeKey != null && guard < 4; guard++)
-            {
-                var setting = ModSettings.GetSetting<ChoiceSetting>(PathFor(nodeKey));
-                if (setting == null) return null;
-                var id = setting.ValueId;
-                if (id == ScanTaxonomy.Silent) return null;
-                if (id != ScanTaxonomy.Inherit) return id;
-                nodeKey = ScanTaxonomy.Get(nodeKey)?.Parent?.Key;
-            }
-            return null;
+            var setting = SoundSetting(nodeKey);
+            string id = setting is NullableChoiceSetting nc ? nc.EffectiveId
+                : setting is ChoiceSetting c ? c.ValueId : null;
+            return id == null || id == ScanTaxonomy.Silent ? null : id;
         }
     }
 }

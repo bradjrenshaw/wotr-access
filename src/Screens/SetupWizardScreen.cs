@@ -302,9 +302,10 @@ namespace WrathAccess.Screens
         // Turn a unit-faction node's sonar sound on (its default faction stem) or off (Silent).
         private static void SetSonarInclude(string nodeKey, bool on)
         {
+            string id = on ? (ScanTaxonomy.Get(nodeKey)?.DefaultSound ?? ScanTaxonomy.Silent) : ScanTaxonomy.Silent;
             var setting = ScanSounds.SoundSetting(nodeKey);
-            if (setting == null) return;
-            setting.Set(on ? (ScanTaxonomy.Get(nodeKey)?.DefaultSound ?? ScanTaxonomy.Silent) : ScanTaxonomy.Silent);
+            if (setting is Settings.ChoiceSetting c) c.Set(id);
+            else if (setting is Settings.NullableChoiceSetting nc) nc.SetExplicit(id);
         }
 
         // ---- Step: event feedback (one mode choice → events + log + SAPI voices). "Events" not "combat":
@@ -405,7 +406,8 @@ namespace WrathAccess.Screens
             if (!string.IsNullOrEmpty(id) && SpeechConfigRegistry.Ids().Contains(id)) return id;
             id = SpeechConfigRegistry.Add();
             SpeechConfigRegistry.SetName(id, Loc.T(nameKey));
-            SpeechConfigRegistry.Get(id)?.Tree?.Get<ChoiceSetting>("handler")?.Set("sapi");
+            // An additional config's handler is a NullableChoiceSetting (inherits the default config).
+            SpeechConfigRegistry.Get(id)?.Tree?.Get<Settings.NullableChoiceSetting>("handler")?.SetExplicit("sapi");
             slot?.Set(id);
             return id;
         }

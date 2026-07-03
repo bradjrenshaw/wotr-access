@@ -21,14 +21,17 @@ namespace WrathAccess.Speech
 
         public SpeechConfig(CategorySetting tree, SpeechConfig baseConfig = null) { Tree = tree; _base = baseConfig; }
 
-        /// <summary>The chosen handler key ("auto" = best available), from the config's handler dropdown;
-        /// "inherit" resolves to the base (default) config's handler.</summary>
+        /// <summary>The chosen handler key ("auto" = best available). The default config's handler is a
+        /// plain choice; an inheriting config's is a NullableChoiceSetting whose EffectiveId already
+        /// resolves through the base.</summary>
         public string HandlerKey
         {
             get
             {
-                var raw = Tree?.Get<ChoiceSetting>("handler")?.Current?.Id ?? "auto";
-                return raw == SpeechManager.Inherit && _base != null ? _base.HandlerKey : raw;
+                var plain = Tree?.Get<ChoiceSetting>("handler");
+                if (plain != null) return plain.Current?.Id ?? "auto";
+                var nullable = Tree?.Get<NullableChoiceSetting>("handler");
+                return nullable?.EffectiveId ?? "auto";
             }
         }
 
@@ -47,7 +50,7 @@ namespace WrathAccess.Speech
         }
 
         // Merge an inheriting config's param subtree over the base's: walk the base (canonical) subtree and,
-        // per setting, take the explicit override (NullableInt set / Choice != Inherit) or the base's value.
+        // per setting, take the explicit override (nullable setting overridden) or the base's value.
         private static CategorySetting Resolve(CategorySetting mine, CategorySetting baseSub, ISpeechHandler h)
         {
             if (baseSub == null) return mine; // nothing to inherit from
@@ -62,8 +65,8 @@ namespace WrathAccess.Speech
                         resolved.Add(new IntSetting(bi.Key, bi.Label, v, bi.Min, bi.Max, bi.Step, bi.LocalizationKey));
                         break;
                     case ChoiceSetting bc:
-                        var mc = mine?.Get<ChoiceSetting>(bc.Key);
-                        string id = mc != null && mc.ValueId != SpeechManager.Inherit ? mc.ValueId : bc.ValueId;
+                        var mc = mine?.Get<NullableChoiceSetting>(bc.Key);
+                        string id = mc != null && mc.IsOverridden ? mc.LocalValue : bc.ValueId;
                         resolved.Add(new ChoiceSetting(bc.Key, bc.Label, bc.Choices, id, bc.LocalizationKey));
                         break;
                 }

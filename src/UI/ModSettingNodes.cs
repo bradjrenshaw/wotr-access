@@ -49,6 +49,9 @@ namespace WrathAccess.UI
                 case ChoiceSetting c:
                     b.AddItem(ControlId.Structural(prefix + c.Key), ChoiceSettingDropdown(c));
                     break;
+                case NullableChoiceSetting nc:
+                    b.AddItem(ControlId.Structural(prefix + nc.Key), NullableChoiceDropdown(nc));
+                    break;
             }
         }
 
@@ -166,30 +169,44 @@ namespace WrathAccess.UI
             };
         }
 
-        /// <summary>A <see cref="ChoiceSetting"/> as a dropdown. When the setting carries an "inherit"
-        /// sentinel choice, the value speaks the consistent inherit state — "{picked}, overridden" for an
-        /// explicit pick, "{resolved}, inherited" while inheriting (the sentinel's resolved display via
-        /// InheritedValue; the bare sentinel label when it can't resolve) — and Backspace resets to
-        /// inherit. Choices are re-read live (some option sets are runtime rosters).</summary>
+        /// <summary>A plain <see cref="ChoiceSetting"/> as a dropdown (no inheritance — that's
+        /// <see cref="NullableChoiceDropdown"/>). Choices are re-read live per open (runtime rosters).</summary>
         public static NodeVtable ChoiceSettingDropdown(ChoiceSetting c, string labelOverride = null)
         {
-            string InheritId() // the sentinel choice's id, or null when the setting doesn't inherit
+            Func<string> label = () => labelOverride ?? c.Label;
+            return new NodeVtable
             {
-                foreach (var ch in c.Choices)
-                    if (ch.Id == "inherit") return ch.Id;
-                return null;
-            }
+                ControlType = ControlTypes.ComboBox,
+                Announcements = new[]
+                {
+                    GraphNodes.LabelPart(label),
+                    new NodeAnnouncement(() => c.Current?.Label ?? "", live: true, kind: AnnouncementKinds.Value),
+                },
+                SearchText = label,
+                OnActivate = () =>
+                {
+                    var choices = c.Choices;
+                    var labels = new List<string>(choices.Count);
+                    foreach (var ch in choices) labels.Add(ch.Label);
+                    Screens.ChoiceSubmenuScreen.Open(label(), labels, IndexOfChoice(c),
+                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); });
+                },
+            };
+        }
+
+        /// <summary>A <see cref="NullableChoiceSetting"/> as a dropdown — the choice counterpart of the
+        /// nullable sliders/toggles, same consistent wording: "{picked}, overridden" for an explicit pick,
+        /// "{resolved}, inherited" while inheriting (the inherit option's label when it can't resolve).
+        /// The chooser leads with the inherit option (picking it resets); Backspace resets too.</summary>
+        public static NodeVtable NullableChoiceDropdown(NullableChoiceSetting c, string labelOverride = null)
+        {
             Func<string> label = () => labelOverride ?? c.Label;
             Func<string> value = () =>
             {
-                string inh = c.InheritedValue?.Invoke();
-                if (!string.IsNullOrEmpty(inh)) return inh + ", " + Loc.T("value.inherited");
-                string cur = c.Current?.Label ?? "";
-                if (InheritId() != null)
-                    return c.ValueId == "inherit"
-                        ? cur // unresolvable inherit: the sentinel's own label already says it
-                        : cur + ", " + Loc.T("value.overridden");
-                return cur;
+                if (c.IsOverridden)
+                    return (c.Current?.Label ?? c.LocalValue) + ", " + Loc.T("value.overridden");
+                var resolved = c.ResolvedLabel ?? c.InheritOption.Label;
+                return resolved + ", " + Loc.T("value.inherited");
             };
             return new NodeVtable
             {
@@ -203,13 +220,20 @@ namespace WrathAccess.UI
                 OnActivate = () =>
                 {
                     var choices = c.Choices;
-                    var labels = new List<string>(choices.Count);
+                    var labels = new List<string>(choices.Count + 1) { c.InheritOption.Label };
                     foreach (var ch in choices) labels.Add(ch.Label);
-                    Screens.ChoiceSubmenuScreen.Open(label(), labels, IndexOfChoice(c),
-                        idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); });
+                    int current = 0; // inheriting preselects the inherit option
+                    if (c.IsOverridden)
+                        for (int i = 0; i < choices.Count; i++)
+                            if (choices[i].Id == c.LocalValue) { current = i + 1; break; }
+                    Screens.ChoiceSubmenuScreen.Open(label(), labels, current, idx =>
+                    {
+                        if (idx == 0) c.Reset();
+                        else if (idx - 1 < c.Choices.Count) c.SetExplicit(c.Choices[idx - 1].Id);
+                    });
                 },
                 // Backspace = back to inheriting (the live value part re-reads the resolved state).
-                OnSecondary = InheritId() == null ? (System.Action)null : () => c.Set("inherit"),
+                OnSecondary = () => c.Reset(),
             };
         }
 

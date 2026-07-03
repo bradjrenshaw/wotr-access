@@ -25,7 +25,6 @@ namespace WrathAccess.Exploration
         /// <summary>A sound pick meaning "play nothing".</summary>
         public const string Silent = "silent";
         /// <summary>A child sound pick meaning "use the parent category's pick".</summary>
-        public const string Inherit = "inherit";
 
         // Node-key constants — what ScanItem.Nodes / .Primary return (avoids magic strings).
         public const string Units = "units";

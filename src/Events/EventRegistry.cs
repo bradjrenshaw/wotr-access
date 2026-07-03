@@ -25,7 +25,6 @@ namespace WrathAccess.Events
     /// </summary>
     internal static class EventRegistry
     {
-        private const string Inherit = "inherit"; // sentinel in the per-event speech-config dropdown
         private static readonly Dictionary<Type, string> _keys = new Dictionary<Type, string>();
         private static readonly EventSources[] SourceOrder = { EventSources.Party, EventSources.Enemy, EventSources.Neutral };
         // The global buckets, in display order. "unitless" is the default for sourceless events.
@@ -73,7 +72,7 @@ namespace WrathAccess.Events
             if (into.GetByKey("enabled") == null)
                 into.Add(new BoolSetting("enabled", "Announce", true, "event.enabled"));
             if (into.GetByKey("speech_config") == null)
-                into.Add(new ChoiceSetting("speech_config", "Speech configuration", () => ConfigChoices(false), "default", "event.speech_config"));
+                into.Add(new ChoiceSetting("speech_config", "Speech configuration", () => ConfigChoices(), "default", "event.speech_config"));
             if (into.GetByKey("positional") == null)
                 into.Add(new BoolSetting("positional", "Positional audio", true, "event.positional"));
         }
@@ -110,30 +109,29 @@ namespace WrathAccess.Events
         }
 
         // One event-source override: Announce/Positional follow the global (NullableBool, null = inherit);
-        // the speech config dropdown leads with "Inherit". <paramref name="global"/> is the source's bucket.
+        // the speech-config dropdown is a NullableChoiceSetting resolving through the source's bucket.
         private static void BuildCustomOutput(CategorySetting into, CategorySetting global)
         {
             if (into.GetByKey("enabled") == null)
                 into.Add(new NullableBoolSetting("enabled", "Announce", global?.Get<BoolSetting>("enabled"), "event.enabled"));
             if (into.GetByKey("speech_config") == null)
             {
-                var sc = new ChoiceSetting("speech_config", "Speech configuration", () => ConfigChoices(true), Inherit, "event.speech_config");
+                var sc = new NullableChoiceSetting("speech_config", "Speech configuration",
+                    () => ConfigChoices(), localizationKey: "event.speech_config");
                 var globalSc = global?.Get<ChoiceSetting>("speech_config");
-                sc.InheritedValue = () => sc.ValueId == Inherit ? globalSc?.Current?.Label : null;
+                sc.ResolveInherited = () => globalSc?.Current?.Id ?? "default";
                 into.Add(sc);
             }
             if (into.GetByKey("positional") == null)
                 into.Add(new NullableBoolSetting("positional", "Positional audio", global?.Get<BoolSetting>("positional"), "event.positional"));
         }
 
-        // Default + the user's additional speech configs, optionally led by "Inherit" (per-event). Read
-        // LIVE (the dropdowns hold a provider, not this list), so configs added/removed at runtime show up
-        // the next time a dropdown is built (i.e. on the next events-tab open/rebuild).
-        private static List<Choice> ConfigChoices(bool includeInherit)
+        // Default + the user's additional speech configs. Read LIVE (the dropdowns hold a provider, not
+        // this list), so configs added/removed at runtime show up the next time a dropdown reads it.
+        // (Inheriting is the setting's own nullable state now, not a sentinel option in this list.)
+        private static List<Choice> ConfigChoices()
         {
-            var choices = new List<Choice>();
-            if (includeInherit) choices.Add(new Choice(Inherit, "Inherit default", "choice.inherit_default"));
-            choices.Add(new Choice("default", "Default", "event.config_default"));
+            var choices = new List<Choice> { new Choice("default", "Default", "event.config_default") };
             foreach (var id in SpeechConfigRegistry.Ids())
                 choices.Add(new Choice(id, SpeechConfigRegistry.Name(id)));
             return choices;
@@ -155,8 +153,8 @@ namespace WrathAccess.Events
 
         public static string ConfigId(ModEvent e)
         {
-            var id = ModSettings.GetSetting<ChoiceSetting>(CustomPath(e) + ".speech_config")?.Current?.Id;
-            return string.IsNullOrEmpty(id) || id == Inherit ? GlobalConfigId(e.Source) : id;
+            var id = ModSettings.GetSetting<NullableChoiceSetting>(CustomPath(e) + ".speech_config")?.EffectiveId;
+            return string.IsNullOrEmpty(id) ? GlobalConfigId(e.Source) : id;
         }
 
         private static bool GlobalEnabled(EventSources s)

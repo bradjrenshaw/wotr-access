@@ -1,63 +1,64 @@
+using System.Collections.Generic;
 using System.Linq;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Pregen;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 using WrathAccess.UI.Tooltips;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Pregen phase: the premade-character list (ending with Custom Character) + a live Details
-    /// panel — the selected option's build, rendered as a single treeview from its tooltip (one
-    /// Tab-stop you arrow through; groups collapse/expand), refreshed on selection.
+    /// Pregen phase: the premade-character list (ending with Custom Character) + a live Details panel —
+    /// the selected option's build, rendered as a document from its tooltip, keyed per selection (so
+    /// picking re-keys the detail while list focus stays put).
     /// </summary>
     public sealed class PregenPhaseContent : CharGenPhaseContent<CharGenPregenPhaseVM>
     {
-        private Panel _detailPanel;
-        private object _detailFrom;
-
         public PregenPhaseContent(CharGenPregenPhaseVM phase) : base(phase) { }
 
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            var list = new ListContainer();
+            int i = 0;
             foreach (var item in Phase.PregenSelectionGroup.EntitiesCollection)
             {
+                if (item == null) { i++; continue; }
                 var it = item; // capture for the live closures
                 // Label = name, race, class, role (skipping blanks). Details (class description +
                 // features) are the selected character's, shown by the phase's InfoVM as a drill-in.
-                list.Add(new ProxySelectionItem(it,
-                    () => string.Join(", ", new[] { it.CharacterName.Value, it.Race.Value, it.Class.Value, it.Role.Value }
-                        .Where(p => !string.IsNullOrWhiteSpace(p))),
-                    tooltip: () => it.IsSelected.Value && Phase.InfoVM != null ? Phase.InfoVM.CurrentTooltip : null));
+                b.AddItem(ControlId.Referenced(it, k + "pregen:" + i),
+                    GraphNodes.SelectionItem(it,
+                        () => string.Join(", ", new[] { it.CharacterName.Value, it.Race.Value, it.Class.Value, it.Role.Value }
+                            .Where(p => !string.IsNullOrWhiteSpace(p))),
+                        tooltip: () => it.IsSelected.Value && Phase.InfoVM != null ? Phase.InfoVM.CurrentTooltip : null));
+                i++;
             }
-            list.Add(new ProxyCustomCharacter(Phase)); // last entry, in the list itself
-            content.Add(list);
+            // "Custom Character" — the final option; selecting it branches into the full custom flow.
+            b.AddItem(ControlId.Structural(k + "custom"), new NodeVtable
+            {
+                ControlType = ControlTypes.RadioButton,
+                Announcements = new List<NodeAnnouncement>
+                {
+                    GraphNodes.LabelPart(() => Loc.T("label.custom_character")),
+                    GraphNodes.SelectedPart(() => Phase.IsCustomCharacter.Value),
+                },
+                SearchText = () => Loc.T("label.custom_character"),
+                StateText = () => Phase.IsCustomCharacter.Value ? Loc.T("state.selected") : null,
+                OnActivate = () =>
+                {
+                    UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
+                    Phase.SelectCreateCustomCharacter();
+                },
+            });
 
-            _detailPanel = new Panel(Loc.T("chargen.details"));
-            content.Add(_detailPanel);
-            FillDetail();
-        }
-
-        public override void Tick()
-        {
-            if (_detailPanel != null && !ReferenceEquals(Phase.SelectedPregenEntity.Value, _detailFrom))
-                FillDetail();
-        }
-
-        private void FillDetail()
-        {
-            if (_detailPanel == null) return;
-            _detailPanel.Clear();
-            _detailFrom = Phase.SelectedPregenEntity.Value;
+            // The selected pregen's build, as a document keyed per selection.
             var tpl = Phase.InfoVM != null ? Phase.InfoVM.CurrentTooltip : null;
-            if (tpl == null) return;
-
-            // One flow-sheet document for the whole build (title sections → regions you arrow through
-            // and Ctrl+Up/Down between); glossary links follow on Space. Skip when there's no content.
-            var sheet = TooltipFlowBuilder.Build(tpl, includeEmptyNotice: false);
-            if (sheet.RowCount == 0) return;
-            _detailPanel.Add(sheet);
+            if (tpl != null)
+            {
+                string dk = k + "detail:" + (Phase.SelectedPregenEntity.Value?.GetHashCode() ?? 0) + ":";
+                b.BeginStop("details").PushContext(Loc.T("chargen.details"), role: null, positions: false);
+                TooltipFlowBuilder.Emit(b, dk, tpl, includeEmptyNotice: false);
+                b.PopContext();
+            }
         }
     }
 }

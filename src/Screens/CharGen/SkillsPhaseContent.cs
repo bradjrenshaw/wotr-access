@@ -1,9 +1,11 @@
+using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Skills;
 using Kingmaker.UnitLogic.Class.LevelUp;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -12,7 +14,7 @@ namespace WrathAccess.Screens
     /// Rank / Modifier / Raise / Lower. Pathfinder skill points are flat — 1 point per rank, capped at
     /// the character's level (max rank) — so Raise/Lower are stepper buttons (the same window logic is
     /// reused at level-up, where ranks climb past 1). The skill name is annotated "(class skill)" where
-    /// it applies; Space on the Rank cell opens the skill detail. Values read live from the preview
+    /// it applies; Space anywhere in the row opens the skill detail. Values read live from the preview
     /// stat + level-up state (synchronous with Spend/UnspendSkillPoint), so steps aren't stale.
     /// </summary>
     public sealed class SkillsPhaseContent : CharGenPhaseContent<CharGenSkillsPhaseVM>
@@ -25,31 +27,67 @@ namespace WrathAccess.Screens
         public SkillsPhaseContent(CharGenSkillsPhaseVM phase) : base(phase)
             => _controller = ControllerField?.GetValue(phase) as LevelUpController;
 
-        // One FlowSheet (one Tab-stop): a status line region, then the skills grid. Arrows move
-        // cell-to-cell across both; Ctrl+Up/Down jump between them.
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            var sheet = new FlowSheet();
+            var sheet = new GraphSheet(b, k + "sk:");
 
-            sheet.List(null) // unlabelled status line
-                .Item(new TextElement(() => Loc.T("chargen.skill_points", new { points = Points(), rank = MaxRank() })));
+            sheet.Region(null); // unlabelled status line
+            sheet.Line(GraphNodes.Text(() => Loc.T("chargen.skill_points", new { points = Points(), rank = MaxRank() })));
 
-            var table = sheet.Table(Loc.T("section.skills"), Loc.T("col.rank"), Loc.T("col.modifier"), Loc.T("col.raise"), Loc.T("col.lower"));
+            sheet.Region(Loc.T("section.skills"), new[]
+            {
+                Loc.T("col.rank"), Loc.T("col.modifier"), Loc.T("col.raise"), Loc.T("col.lower"),
+            });
             foreach (var s in Phase.SkillAllocators)
             {
                 if (s == null) continue;
                 var sk = s; // capture for the live closures
-                table.Row(new TextElement(() => RowName(sk)), new UIElement[]
+                Action tooltip = () =>
                 {
-                    new TextElement(() => Rank(sk).ToString()),
-                    new TextElement(() => Signed(Total(sk))),
-                    new ProxyStepper(() => RaiseLabel(sk), () => CanAdd(sk), sk.TryIncreaseValue, () => Summary(sk)),
-                    new ProxyStepper(() => LowerLabel(sk), () => CanRemove(sk), sk.TryDecreaseValue, () => Summary(sk)),
-                }, tooltip: () => sk.TooltipTemplate()); // Space on any cell in the row → skill detail
+                    var tpl = sk.TooltipTemplate();
+                    if (tpl != null) TooltipScreen.Open(tpl);
+                };
+                sheet.RowAt(
+                    new NodeVtable
+                    {
+                        ControlType = ControlTypes.Text,
+                        Announcements = new[] { GraphNodes.LabelPart(() => RowName(sk)) },
+                        SearchText = () => sk.Name.Value,
+                        OnTooltip = tooltip,
+                    },
+                    sk,
+                    new[]
+                    {
+                        Cell(1, () => Rank(sk).ToString(), sk, tooltip),
+                        Cell(2, () => Signed(Total(sk)), sk, tooltip),
+                        Stepper(3, sk, raise: true, tooltip),
+                        Stepper(4, sk, raise: false, tooltip),
+                    });
             }
+            sheet.Finish();
+        }
 
-            sheet.Reflow();
-            content.Add(sheet);
+        private KeyValuePair<int, NodeVtable> Cell(int col, Func<string> value,
+            CharGenSkillAllocatorVM sk, Action tooltip)
+            => new KeyValuePair<int, NodeVtable>(col, new NodeVtable
+            {
+                ControlType = ControlTypes.Text,
+                Announcements = new[] { new NodeAnnouncement(value) },
+                SearchText = () => sk.Name.Value,
+                OnTooltip = tooltip, // Space on any cell in the row → skill detail
+            });
+
+        private KeyValuePair<int, NodeVtable> Stepper(int col, CharGenSkillAllocatorVM sk,
+            bool raise, Action tooltip)
+        {
+            var vt = CharGenNodes.Stepper(
+                raise ? (Func<string>)(() => RaiseLabel(sk)) : () => LowerLabel(sk),
+                raise ? (Func<bool>)(() => CanAdd(sk)) : () => CanRemove(sk),
+                raise ? (Action)sk.TryIncreaseValue : sk.TryDecreaseValue,
+                () => Summary(sk));
+            vt.SearchText = () => sk.Name.Value;
+            vt.OnTooltip = tooltip;
+            return new KeyValuePair<int, NodeVtable>(col, vt);
         }
 
         // Live reads (synchronous with Spend/UnspendSkillPoint), mirroring the allocator's own sources.

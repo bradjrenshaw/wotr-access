@@ -3,7 +3,7 @@ using TMPro;
 using Kingmaker.UI.MVVM._PCView.CharGen;       // CharGenView (static self-ref + SelectedDetailView)
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Name; // CharGenNamePhaseVM
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -16,23 +16,27 @@ namespace WrathAccess.Screens
     {
         public NamePhaseContent(CharGenNamePhaseVM phase) : base(phase) { }
 
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            content.Add(new ProxyTextField("Character name", AcquireNameField, () => Phase.InputText));
+            b.AddItem(ControlId.Structural(k + "name"),
+                CharGenNodes.TextField("Character name", AcquireNameField, () => Phase.InputText));
 
-            content.Add(new ProxyActionButton(() => Loc.T("chargen.random_name"), () => true, () =>
-            {
-                // Mirror CharGenNamePhaseDetailedPCView.OnGenerateButtonClick: roll a name, push it to
-                // the visual field, and commit it through the VM's onEndEdit.
-                string name = Phase.GetRandomName();
-                var field = AcquireNameField();
-                if (field != null) field.text = name;
-                Phase.OnEndEdit(name);
-                Tts.Speak(Loc.T("name.announce", new { name = string.IsNullOrEmpty(name) ? Loc.T("name.blank") : name }), interrupt: true);
-            }));
+            b.AddItem(ControlId.Structural(k + "random"),
+                GraphNodes.Button(() => Loc.T("chargen.random_name"), () =>
+                {
+                    // Mirror CharGenNamePhaseDetailedPCView.OnGenerateButtonClick: roll a name, push it
+                    // to the visual field, and commit it through the VM's onEndEdit.
+                    string name = Phase.GetRandomName();
+                    var field = AcquireNameField();
+                    if (field != null) field.text = name;
+                    Phase.OnEndEdit(name);
+                    Tts.Speak(Loc.T("name.announce", new { name = string.IsNullOrEmpty(name) ? Loc.T("name.blank") : name }), interrupt: true);
+                }));
 
-            content.Add(new ProxySequentialSelector("Birth month", () => Phase.MonthSelectorVM));
-            content.Add(new ProxySequentialSelector("Birth day", () => Phase.DaySelectorVM));
+            b.AddItem(ControlId.Structural(k + "month"),
+                CharGenNodes.SequentialSelector("Birth month", () => Phase.MonthSelectorVM));
+            b.AddItem(ControlId.Structural(k + "day"),
+                CharGenNodes.SequentialSelector("Birth day", () => Phase.DaySelectorVM));
         }
 
         // The TMP_InputField lives on the active detailed phase view, which the one-way MVVM binding

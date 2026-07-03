@@ -1,15 +1,16 @@
 using Kingmaker.UI; // UISoundType
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Shared shell for the game's phase-based wizards (New Game setup, character generation):
-    /// a content panel labeled with the current phase, plus Back/Next footer buttons. Rebuilds
-    /// and re-homes focus onto the new page when the wizard VM or current phase changes (so
-    /// pressing Next lands you on the next phase's content). Subclasses supply the VM, the current
-    /// phase, the phase content, and the footer behaviour.
+    /// Shared graph-native shell for the game's phase-based wizards (New Game setup, character
+    /// generation): an optional header (the chargen roadmap), the current phase's content under the
+    /// phase name as context — keys carry the phase, so advancing re-keys the page — and Back/Next
+    /// stops. A phase change plays the page-turn and lands focus on the new page's content
+    /// (<c>FocusStop("content")</c>); opening lands there too (<see cref="InitialFocusStop"/>).
+    /// Subclasses supply the VM, the current phase, the phase content, and the footer behaviour.
     /// </summary>
     public abstract class WizardScreen : Screen
     {
@@ -23,11 +24,12 @@ namespace WrathAccess.Screens
         /// <summary>The current phase object — compared by reference to detect phase changes.</summary>
         protected abstract object CurrentPhase();
 
-        /// <summary>Label for the content panel (the current phase's name).</summary>
+        /// <summary>Label for the content (the current phase's name) — its context level.</summary>
         protected abstract string PhaseLabel();
 
-        /// <summary>Fill the current phase's content.</summary>
-        protected abstract void BuildContent(Container content);
+        /// <summary>Emit the current phase's content. <paramref name="k"/> is the phase-scoped key
+        /// prefix (carries the VM + phase, so a phase change re-keys the page).</summary>
+        protected abstract void BuildContent(GraphBuilder b, string k);
 
         protected abstract void OnBack();
         protected abstract void OnNext();
@@ -35,86 +37,63 @@ namespace WrathAccess.Screens
         protected virtual bool NextEnabled() => true;
         protected virtual bool BackEnabled() => true;
 
-        private object _builtVm;
-        private object _builtPhase;
-        private Container _content;
+        /// <summary>Optional content above the phase content — chargen uses it for the roadmap strip.</summary>
+        protected virtual void BuildHeader(GraphBuilder b) { }
 
-        // The first NODE inside the phase content: descend through structural containers (lists,
-        // panels — never nodes themselves in the adapter) to a leaf, stopping early on a tree group
-        // (tree containers ARE nodes: the group header is the landing).
-        private UIElement ContentLanding()
-        {
-            UIElement e = _content?.FirstFocusable();
-            while (e is Container c && c.Shape != ContainerShape.Tree)
-            {
-                var inner = c.FirstFocusable();
-                if (inner == null) return null; // empty structure — nothing focusable here
-                e = inner;
-            }
-            return e;
-        }
+        /// <summary>Called each update while the phase is unchanged.</summary>
+        protected virtual void OnPhaseTick() { }
 
-        public override void OnPush() { _builtVm = null; _builtPhase = null; Rebuild(); }
-        public override void OnPop() { Clear(); _builtVm = null; _builtPhase = null; }
+        // Open landing goes to the phase content, not the header (the roadmap stays first in Tab order).
+        public override object InitialFocusStop => "content";
+
+        private object _lastVm;
+        private object _lastPhase;
+
+        public override void OnPop() { _lastVm = null; _lastPhase = null; }
 
         public override void OnUpdate()
         {
             var vm = WizardVm();
             if (vm == null) return;
-            if (!ReferenceEquals(vm, _builtVm) || !ReferenceEquals(CurrentPhase(), _builtPhase))
+            var phase = CurrentPhase();
+            if (!ReferenceEquals(vm, _lastVm) || !ReferenceEquals(phase, _lastPhase))
             {
-                // A phase change WITHIN this wizard (Next/Back/step pick) — not the initial build or a
-                // VM swap. The game plays a page-turn on phase advance; our VM-level SelectNext/Prev
-                // bypasses it, so play it here.
-                bool phaseChange = ReferenceEquals(vm, _builtVm) && _builtPhase != null;
-
-                // VM swapped or phase changed — rebuild and land on it. The rebuild recreates every
-                // element (all node ids die), so reconciliation alone would fall to the start node (the
-                // roadmap); focus the new phase's content explicitly, like the old initial-landing did.
-                Rebuild();
-                Navigation.Attach(this);
-                if (phaseChange) UiSound.Play(UISoundType.BookPageTurn);
-                var landing = ContentLanding();
-                if (landing != null) Navigation.Focus(landing);
+                // A phase change WITHIN this wizard (Next/Back/roadmap jump) — not the initial build or
+                // a VM swap. The game plays a page-turn on phase advance; our VM-level SelectNext/Prev
+                // bypasses it, so play it here, and land focus on the new page (its keys changed).
+                bool phaseChange = ReferenceEquals(vm, _lastVm) && _lastPhase != null;
+                _lastVm = vm;
+                _lastPhase = phase;
+                if (phaseChange)
+                {
+                    UiSound.Play(UISoundType.BookPageTurn);
+                    Navigation.FocusStop("content");
+                }
                 return;
             }
-            // Same phase: let subclasses refresh selection-driven content in place (e.g. a detail
-            // panel) without rebuilding the whole tree or moving focus.
             OnPhaseTick();
         }
 
-        /// <summary>Called each update while the phase is unchanged — for live, in-place updates
-        /// (a detail panel that tracks the current selection). Must not disturb the focus path.</summary>
-        protected virtual void OnPhaseTick() { }
+        public override bool BuildsGraph => true;
 
-        /// <summary>Optional content above the phase panel — chargen uses it for the roadmap strip.
-        /// Default: nothing (NewGame has no header).</summary>
-        protected virtual void BuildHeader(Container root) { }
-
-        private void Rebuild()
+        public override void Build(GraphBuilder b)
         {
-            Clear();
             var vm = WizardVm();
-            _builtVm = vm;
-            _builtPhase = vm != null ? CurrentPhase() : null;
             if (vm == null) return;
 
-            // Header (e.g. the chargen roadmap) above the phase content, matching the game's layout.
-            BuildHeader(this);
+            BuildHeader(b); // e.g. the chargen roadmap (its own stop, first in Tab order)
 
-            // Content panel, labeled with the current phase so entering it announces the phase.
-            var content = new Panel(PhaseLabel());
-            BuildContent(content);
-            Add(content);
-            _content = content;
+            var phase = CurrentPhase();
+            string k = "wiz:" + vm.GetHashCode() + ":" + (phase != null ? phase.GetHashCode() : 0) + ":";
+            b.BeginStop("content").PushContext(PhaseLabel());
+            BuildContent(b, k);
+            b.PopContext();
 
             // Footer: Back then Next (label + availability track the current phase live).
-            Add(new ProxyActionButton(() => Loc.T("wizard.back"), BackEnabled, OnBack));
-            Add(new ProxyActionButton(NextLabel, NextEnabled, OnNext));
-
-            // Land initial focus on the phase content, not the header — so advancing/jumping phases
-            // drops you onto the new phase, not back on the roadmap (the header is first in tab order).
-            SetFocusedChild(content);
+            b.BeginStop("back").AddItem(ControlId.Structural("wiz:back"),
+                GraphNodes.Button(() => Loc.T("wizard.back"), OnBack, BackEnabled));
+            b.BeginStop("next").AddItem(ControlId.Structural("wiz:next"),
+                GraphNodes.Button(NextLabel, OnNext, NextEnabled));
         }
     }
 }

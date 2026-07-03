@@ -1,28 +1,28 @@
-using System.Collections.Generic;
 using System.Linq;
 using Kingmaker;
 using Kingmaker.Blueprints.Root.Strings;
 using Kingmaker.UI; // UISoundType
 using Kingmaker.UI.MVVM._VM.CharGen;
-using Kingmaker.UI.MVVM._VM.CharGen.Phases; // CharGenPhaseBaseVM
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Character generation / level-up (CharGenVM) on the shared <see cref="WizardScreen"/> shell.
-    /// This same VM drives initial chargen, every in-game companion/mythic level-up, and respec —
-    /// only the host differs, so we detect it in the main-menu OR in-game context. Next advances
-    /// the phase (or Complete on the last), Back retreats (or Close on the first); Next is gated by
-    /// the current phase's completion. Phase content is filled in per-phase (M1+); for now each
-    /// phase shows a placeholder.
+    /// Character generation / level-up (CharGenVM) on the shared <see cref="WizardScreen"/> shell,
+    /// graph-native. This same VM drives initial chargen, every in-game companion/mythic level-up, and
+    /// respec — only the host differs, so we detect it in the main-menu OR in-game context. The header
+    /// is the roadmap strip: one live entry per phase (name + state + summary, each a jump target),
+    /// rendered fresh every frame so the phase SET changing (a class adding Spells, a race adding
+    /// phases) just shows up — the old set-polling/rebuild machinery is gone. Next advances the phase
+    /// (or Complete on the last), Back retreats (or Close on the first); Next is gated by the current
+    /// phase's completion. Phase content is per-phase (<see cref="CharGenPhaseContentFactory"/>).
     /// </summary>
     public sealed class CharGenScreen : WizardScreen
     {
         public override string Key => "ctx.chargen";
         public override int Layer => 15; // full-screen flow: above game contexts + service windows
-        // No ScreenName — the content panel is labeled with the current phase's name.
+        // No ScreenName — the content is labeled with the current phase's name.
 
         private static CharGenVM Vm()
         {
@@ -38,71 +38,33 @@ namespace WrathAccess.Screens
         protected override object CurrentPhase() => Vm()?.CurrentPhaseVM.Value;
         protected override string PhaseLabel() => Vm()?.CurrentPhaseVM.Value?.PhaseName.Value;
 
-        // The current phase's content builder (per-phase class; see CharGenPhaseContentFactory).
-        private CharGenPhaseContent _phaseContent;
-
-        protected override void BuildContent(Container content)
+        protected override void BuildContent(GraphBuilder b, string k)
         {
-            _phaseContent = CharGenPhaseContentFactory.Create(Vm()?.CurrentPhaseVM.Value);
-            if (_phaseContent != null)
-                _phaseContent.Build(content);
+            var content = CharGenPhaseContentFactory.Create(Vm()?.CurrentPhaseVM.Value);
+            if (content != null)
+                content.Build(b, k);
             else
-                content.Add(new TextElement(() => Loc.T("chargen.phase_unavailable")));
+                b.AddItem(ControlId.Structural(k + "unavailable"),
+                    GraphNodes.Text(() => Loc.T("chargen.phase_unavailable")));
         }
 
         // The roadmap strip (top of screen): one entry per phase, name + state + live summary, each a
-        // jump target. Built first (above the phase content) via the WizardScreen header hook.
-        private Panel _roadmapPanel;
-        private List<CharGenPhaseBaseVM> _roadmapPhases;
-
-        protected override void BuildHeader(Container root)
-        {
-            _roadmapPanel = new Panel();
-            root.Add(_roadmapPanel);
-            FillRoadmap();
-        }
-
-        private void FillRoadmap()
-        {
-            if (_roadmapPanel == null) return;
-            _roadmapPanel.Clear();
-            var phases = Vm()?.PhasesCollection;
-            _roadmapPhases = phases != null ? phases.ToList() : new List<CharGenPhaseBaseVM>();
-            if (_roadmapPhases.Count == 0) return;
-
-            var list = new ListContainer(Loc.T("chargen.steps"));
-            foreach (var p in _roadmapPhases)
-            {
-                if (p == null) continue;
-                var phase = p; // capture for the live summary closure
-                list.Add(new ProxyRoadmapEntry(phase, () => RoadmapSummary.For(phase)));
-            }
-            _roadmapPanel.Add(list);
-        }
-
-        // The phase set changes from many events (a class adds Spells, race adds/removes phases, …)
-        // without the current phase changing, so poll the set each tick and rebuild the strip in place
-        // when it differs. Summaries read live, so only add/remove/reorder needs a rebuild. Focus isn't
-        // disturbed: these changes originate from choices made in the content, where focus lives.
-        protected override void OnPhaseTick()
-        {
-            _phaseContent?.Tick();
-            if (PhaseSetChanged()) FillRoadmap();
-        }
-
-        private bool PhaseSetChanged()
+        // jump target — read live from PhasesCollection each render, so set changes just render.
+        protected override void BuildHeader(GraphBuilder b)
         {
             var phases = Vm()?.PhasesCollection;
-            int n = phases?.Count ?? 0;
-            if (_roadmapPhases == null || _roadmapPhases.Count != n) return true;
+            if (phases == null) return;
+            b.BeginStop("roadmap").PushContext(Loc.T("chargen.steps"), "list");
             int i = 0;
-            if (phases != null)
-                foreach (var p in phases)
-                {
-                    if (!ReferenceEquals(p, _roadmapPhases[i])) return true;
-                    i++;
-                }
-            return false;
+            foreach (var p in phases)
+            {
+                if (p == null) { i++; continue; }
+                var phase = p; // capture for the live summary closure
+                b.AddItem(ControlId.Referenced(phase, "cg:step:" + i),
+                    CharGenNodes.RoadmapEntry(phase, () => RoadmapSummary.For(phase)));
+                i++;
+            }
+            b.PopContext();
         }
 
         protected override void OnBack()

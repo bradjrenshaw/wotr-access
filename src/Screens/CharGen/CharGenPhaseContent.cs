@@ -25,11 +25,10 @@ namespace WrathAccess.Screens
     /// </summary>
     public abstract class CharGenPhaseContent
     {
-        public abstract void Build(Container content);
-
-        /// <summary>Called each frame while the phase is unchanged — for in-place updates (e.g. a
-        /// list that depends on a sub-selection). Must not disturb the focus path.</summary>
-        public virtual void Tick() { }
+        /// <summary>Emit the phase's content (immediate mode — declared fresh from the live VM every
+        /// render, so the old Tick()-driven refills are gone). <paramref name="k"/> is the phase-scoped
+        /// key prefix from the wizard shell.</summary>
+        public abstract void Build(WrathAccess.UI.Graph.GraphBuilder b, string k);
     }
 
     /// <summary>Typed base: reads the concrete phase VM without casting.</summary>

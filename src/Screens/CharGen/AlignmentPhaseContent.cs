@@ -1,9 +1,8 @@
-using System.Collections.Generic;
 using Kingmaker.UI.Common; // UIUtility.GetAlignmentName
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Alignment;
 using Kingmaker.UI.MVVM._VM.Tooltip.Templates; // TooltipTemplateAlignment
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -12,46 +11,30 @@ namespace WrathAccess.Screens
     /// in the game's row-major order). The names are self-describing, so a flat list reads cleanly
     /// without the visual wheel. Class-restricted alignments read "disabled" and can't be picked (via
     /// IsAvailable); Space on any one opens its description (TooltipTemplateAlignment). The sector list
-    /// is built lazily on entering detailed view, so we (re)build when it materializes.
+    /// is built lazily by the game — immediate mode simply renders it once it materializes.
     /// </summary>
     public sealed class AlignmentPhaseContent : CharGenPhaseContent<CharGenAlignmentPhaseVM>
     {
-        private Panel _listPanel;
-        private int _count = -1;
-
         public AlignmentPhaseContent(CharGenAlignmentPhaseVM phase) : base(phase) { }
 
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            _listPanel = new Panel();
-            content.Add(_listPanel);
-            FillList();
-        }
-
-        public override void Tick()
-        {
-            if (Count() != _count) FillList();
-        }
-
-        private void FillList()
-        {
-            if (_listPanel == null) return;
             var sectors = Phase.AlignmentSectorViewModels;
-            _count = sectors != null ? sectors.Count : 0;
-            _listPanel.Clear();
-            if (sectors == null || sectors.Count == 0) return;
-            var list = new ListContainer(Loc.T("chargen.alignments"));
+            if (sectors == null || sectors.Count == 0) return; // lazy — renders once it materializes
+
+            b.PushContext(Loc.T("chargen.alignments"), "list");
+            int i = 0;
             foreach (var sector in sectors)
             {
-                if (sector == null) continue;
+                if (sector == null) { i++; continue; }
                 var s = sector; // capture for the live closures
-                list.Add(new ProxySelectionItem(s,
-                    () => UIUtility.GetAlignmentName(s.Alignment),
-                    () => new TooltipTemplateAlignment(s.Alignment, isUndetectable: false)));
+                b.AddItem(ControlId.Referenced(s, k + "align:" + i),
+                    GraphNodes.SelectionItem(s,
+                        () => UIUtility.GetAlignmentName(s.Alignment),
+                        tooltip: () => new TooltipTemplateAlignment(s.Alignment, isUndetectable: false)));
+                i++;
             }
-            _listPanel.Add(list);
+            b.PopContext();
         }
-
-        private int Count() => Phase.AlignmentSectorViewModels != null ? Phase.AlignmentSectorViewModels.Count : 0;
     }
 }

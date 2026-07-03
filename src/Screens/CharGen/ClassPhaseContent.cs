@@ -6,7 +6,7 @@ using Kingmaker.UI.MVVM._VM.CharGen.Phases.Class;
 using Kingmaker.UI.MVVM._VM.Tooltip.Templates; // TooltipTemplateGlossary
 using Owlcat.Runtime.UI.Tooltips;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 using WrathAccess.UI.Tooltips;
 
 namespace WrathAccess.Screens
@@ -16,14 +16,12 @@ namespace WrathAccess.Screens
     /// Details panel that mirrors the game's two detail modes (toggled by a "Detailed description"
     /// switch, matching its in-UI button):
     ///   • Short — renders the exact template the game put in <c>ReactiveTooltipTemplate</c> (the
-    ///     InfoSectionView's source), at <see cref="TooltipTemplateType.Info"/>. The game chooses
-    ///     that template per item (short-description build info for a class that has one; the
-    ///     first-level-class template — full description + skills + features — for archetypes and
-    ///     short-less classes), so we don't second-guess which field to read.
+    ///     InfoSectionView's source), at <see cref="TooltipTemplateType.Info"/>.
     ///   • Mechanic — the plain bindings: name + full description + saves/BAB/HP grades + caster
-    ///     stats + class skills, plus the per-level progression grid (see ProgressionGrid).
-    /// Classes/archetypes come from the canonical (selectable) instances so SetSelectedFromView
-    /// works. The archetype list refreshes on class change; the detail on class or archetype change.
+    ///     stats + class skills, plus the per-level progression grid (ProgressionGrid.Emit).
+    /// Classes/archetypes come from the canonical (selectable) instances so SetSelectedFromView works.
+    /// Archetype/detail keys carry the selection (+ mode), so they re-key on change while list focus
+    /// stays put.
     /// </summary>
     public sealed class ClassPhaseContent : CharGenPhaseContent<CharGenClassPhaseVM>
     {
@@ -70,39 +68,73 @@ namespace WrathAccess.Screens
             return System.Nullable.GetUnderlyingType(arg) ?? arg;
         }
 
-        private Panel _archetypePanel;
-        private Panel _detailPanel;
-        private object _classFrom;
-        private object _archetypeFrom;
-        private bool _detailed; // false = Short mode (the chargen default), true = Mechanic mode
+        private bool _detailed; // view state: false = Short mode (the chargen default), true = Mechanic
 
-        public ClassPhaseContent(CharGenClassPhaseVM phase) : base(phase) { }
-
-        public override void Build(Container content)
+        public ClassPhaseContent(CharGenClassPhaseVM phase) : base(phase)
         {
-            var classList = new ListContainer();
-            foreach (var item in Classes())
-                classList.Add(new ProxyClassItem(item));
-            content.Add(classList);
-
-            _archetypePanel = new Panel();
-            content.Add(_archetypePanel);
-
-            // Mode switch — mirrors the game's "Detailed description" button. Flipping it re-renders
-            // the detail panel in place (a sibling, so the toggle keeps focus across the rebuild).
-            content.Add(new ProxyBoolToggle(
-                UIStrings.Instance.CharGen.DetailedDescription,
-                () => _detailed,
-                () => { _detailed = !_detailed; SyncGameViewMode(); FillDetail(); }));
-
-            _detailPanel = new Panel(Loc.T("chargen.details"));
-            content.Add(_detailPanel);
-
-            _classFrom = Phase.SelectedClassVM.Value;
-            _archetypeFrom = Phase.SelectedArchetypeVM.Value;
             SyncGameViewMode(); // align the on-screen view with our default on entry
-            FillArchetypes();
-            FillDetail();
+        }
+
+        public override void Build(GraphBuilder b, string k)
+        {
+            int ci = 0;
+            foreach (var item in Classes())
+            {
+                b.AddItem(ControlId.Referenced(item, k + "class:" + ci), CharGenNodes.ClassItem(item));
+                ci++;
+            }
+
+            // The selected class's archetypes — keyed per class, so a class change re-keys the list.
+            var cls = Phase.SelectedClassVM.Value;
+            var archetypes = Archetypes().ToList();
+            if (archetypes.Count > 0)
+            {
+                string ak = k + "arch:" + (cls?.GetHashCode() ?? 0) + ":";
+                b.BeginStop("archetypes").PushContext(Loc.T("chargen.archetypes"), "list");
+                // "No archetype" (base class) — selected when none is chosen; the game has no VM for
+                // this, so we synthesize a clear, discoverable control alongside the game's gestures.
+                b.AddItem(ControlId.Structural(ak + "none"), new NodeVtable
+                {
+                    ControlType = ControlTypes.RadioButton,
+                    Announcements = new List<NodeAnnouncement>
+                    {
+                        GraphNodes.LabelPart(() => Loc.T("chargen.no_archetype")),
+                        GraphNodes.SelectedPart(() => Phase.SelectedArchetypeVM.Value == null),
+                    },
+                    SearchText = () => Loc.T("chargen.no_archetype"),
+                    StateText = () => Phase.SelectedArchetypeVM.Value == null ? Loc.T("state.selected") : null,
+                    OnActivate = () =>
+                    {
+                        UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
+                        var c = Phase.SelectedClassVM.Value;
+                        c?.WarnLevelupPlansWillDropBeforeAction(() => c.TryUnselectArchetypes());
+                    },
+                });
+                int ai = 0;
+                foreach (var a in archetypes)
+                {
+                    b.AddItem(ControlId.Referenced(a, ak + ai), CharGenNodes.ClassItem(a));
+                    ai++;
+                }
+                b.PopContext();
+            }
+
+            // Mode switch — mirrors the game's "Detailed description" button.
+            b.BeginStop("mode").AddItem(ControlId.Structural(k + "mode"), GraphNodes.Toggle(
+                () => (string)UIStrings.Instance.CharGen.DetailedDescription,
+                () => _detailed,
+                () => { _detailed = !_detailed; SyncGameViewMode(); }));
+
+            // The details, keyed per class + archetype + mode so any change re-keys them.
+            string dk = k + "detail:" + (cls?.GetHashCode() ?? 0) + ":"
+                + (Phase.SelectedArchetypeVM.Value?.GetHashCode() ?? 0) + ":" + (_detailed ? "M" : "S") + ":";
+            b.BeginStop("details").PushContext(Loc.T("chargen.details"), role: null, positions: false);
+            if (cls != null)
+            {
+                if (_detailed) EmitMechanic(b, dk);
+                else EmitShort(b, dk);
+            }
+            b.PopContext();
         }
 
         // Flip the game's own detail view (Short/Mechanic) to match our toggle so the rendered screen
@@ -120,143 +152,100 @@ namespace WrathAccess.Screens
             if (!cur.Equals(target)) SwitchModeMethod.Invoke(view, null);       // toggles Short↔Mechanic to match
         }
 
-        public override void Tick()
-        {
-            var cls = Phase.SelectedClassVM.Value;
-            var arch = Phase.SelectedArchetypeVM.Value;
-            if (!ReferenceEquals(cls, _classFrom))
-            {
-                _classFrom = cls;
-                _archetypeFrom = arch;
-                FillArchetypes(); // new class → its archetypes
-                FillDetail();
-            }
-            else if (!ReferenceEquals(arch, _archetypeFrom))
-            {
-                _archetypeFrom = arch;
-                FillDetail(); // archetype changes the stats/detail
-            }
-        }
-
-        private void FillArchetypes()
-        {
-            if (_archetypePanel == null) return;
-            _archetypePanel.Clear();
-            var archetypes = Archetypes().ToList();
-            if (archetypes.Count == 0) return; // class has no archetypes → no list
-
-            var list = new ListContainer(Loc.T("chargen.archetypes"));
-            list.Add(new ProxyNoArchetypeItem(Phase)); // "No archetype" (base class) — selected when none is chosen
-            foreach (var a in archetypes) list.Add(new ProxyClassItem(a));
-            _archetypePanel.Add(list);
-        }
-
-        private void FillDetail()
-        {
-            if (_detailPanel == null) return;
-            _detailPanel.Clear();
-            // Bail when nothing's selected yet (a class auto-selects on phase entry, so this is rare).
-            if (Phase.SelectedClassVM.Value == null) return;
-
-            if (_detailed) FillMechanic();
-            else FillShort();
-        }
-
         // Short mode mirrors the game's InfoSectionView: render the exact template it feeds there
-        // (ReactiveTooltipTemplate) as one treeview — short build-info for a short-desc class; the
-        // first-level-class body (full description + skills + per-level features) for an archetype.
-        private void FillShort()
+        // (ReactiveTooltipTemplate) — short build-info for a short-desc class; the first-level-class
+        // body (full description + skills + per-level features) for an archetype.
+        private void EmitShort(GraphBuilder b, string dk)
         {
             var tpl = Phase.ReactiveTooltipTemplate.Value;
             if (tpl == null) return;
-            // Flow-sheet document: title sections become regions, glossary links follow on Space. Skip
-            // the panel when the template has no content.
-            var sheet = TooltipFlowBuilder.Build(tpl, TooltipTemplateType.Info, includeEmptyNotice: false);
-            if (sheet.RowCount == 0) return;
-            _detailPanel.Add(sheet);
+            TooltipFlowBuilder.Emit(b, dk, tpl, TooltipTemplateType.Info, includeEmptyNotice: false);
         }
 
-        // Mechanic mode reconstructs the game's Detailed PANEL (which is plain VM bindings, NOT a
-        // tooltip) as a treeview tab-stop: name, full description, then Martial / Caster / Class-skill
-        // groups (each value a child). After the tree come the progression grid and — only
-        // when actually present — the auto-levelup button, as their own tab-stops.
-        private void FillMechanic()
+        // Mechanic mode reconstructs the game's Detailed PANEL (plain VM bindings, NOT a tooltip):
+        // name, full description, then Martial / Caster / Class-skill groups, the progression grid,
+        // and — only when actually present — the auto-levelup button.
+        private void EmitMechanic(GraphBuilder b, string dk)
         {
-            // Flow-sheet document: name + description lead, then a region per stat group (arrow through,
-            // Ctrl+Up/Down between groups). Each stat row carries the game's glossary tooltip (Space) and
-            // uses the game's own localized label, matching the panel views' SetTitle/SetTooltip calls.
             var cs = UIStrings.Instance.CharacterSheet;
             var cg = UIStrings.Instance.CharGen;
-            var sheet = new FlowSheet();
 
-            var lead = sheet.List(null);
             var name = Phase.ClassDisplayName.Value;
-            if (!string.IsNullOrEmpty(name)) lead.Item(new TextElement(name));
+            if (!string.IsNullOrEmpty(name))
+                b.AddItem(ControlId.Structural(dk + "name"), GraphNodes.Text(() => Phase.ClassDisplayName.Value));
             var desc = Phase.ClassDescription.Value;
-            if (!string.IsNullOrEmpty(desc)) lead.Item(new TextElement(desc));
+            if (!string.IsNullOrEmpty(desc))
+                b.AddItem(ControlId.Structural(dk + "desc"), GraphNodes.Text(() => Phase.ClassDescription.Value));
 
             // Saves/BAB are progression GRADES here (the panel's representation), not numbers.
             var m = Phase.MartialStatsVM.Value;
             if (m != null)
             {
-                var g = sheet.List(Loc.T("chargen.martial_stats"));
-                g.Item(StatRow((string)cs.BAB, m.BAB.Value, "BaseAttackBonus"));
-                g.Item(StatRow((string)cs.FORTITUDE, m.Fortitude.Value, "SaveFortitude"));
-                g.Item(StatRow((string)cs.REFLEX, m.Reflex.Value, "SaveReflex"));
-                g.Item(StatRow((string)cs.WILL, m.Will.Value, "SaveWill"));
-                g.Item(StatRow((string)cs.HP, m.HitPointsFirstLevel.Value, "HP"));
-                g.Item(StatRow((string)cg.HPPerLevel, m.HitPointsPerLevel.Value, "HPPerLevel"));
+                b.PushContext(Loc.T("chargen.martial_stats"));
+                StatRow(b, dk + "bab", (string)cs.BAB, () => m.BAB.Value, "BaseAttackBonus");
+                StatRow(b, dk + "fort", (string)cs.FORTITUDE, () => m.Fortitude.Value, "SaveFortitude");
+                StatRow(b, dk + "reflex", (string)cs.REFLEX, () => m.Reflex.Value, "SaveReflex");
+                StatRow(b, dk + "will", (string)cs.WILL, () => m.Will.Value, "SaveWill");
+                StatRow(b, dk + "hp", (string)cs.HP, () => m.HitPointsFirstLevel.Value, "HP");
+                StatRow(b, dk + "hpl", (string)cg.HPPerLevel, () => m.HitPointsPerLevel.Value, "HPPerLevel");
+                b.PopContext();
             }
 
             var c = Phase.ClassCasterStatsVM.Value;
             if (c != null && c.CanCast.Value)
             {
-                var g = sheet.List(Loc.T("chargen.caster_stats"));
-                g.Item(StatRow((string)cg.MaxSpellsLevel, c.MaxSpellsLevel.Value, "MaxSpellsLevel"));
-                g.Item(StatRow((string)cg.CasterAbilityScore, c.CasterAbilityScore.Value, "CasterAbilityScore"));
-                g.Item(StatRow((string)cg.CasterType, c.CasterMindType.Value, "CasterType"));
-                g.Item(StatRow((string)cg.SpellbookUseType, c.SpellbookUseType.Value, "CasterMemoryType"));
+                b.PushContext(Loc.T("chargen.caster_stats"));
+                StatRow(b, dk + "msl", (string)cg.MaxSpellsLevel, () => c.MaxSpellsLevel.Value, "MaxSpellsLevel");
+                StatRow(b, dk + "cas", (string)cg.CasterAbilityScore, () => c.CasterAbilityScore.Value, "CasterAbilityScore");
+                StatRow(b, dk + "ct", (string)cg.CasterType, () => c.CasterMindType.Value, "CasterType");
+                StatRow(b, dk + "sut", (string)cg.SpellbookUseType, () => c.SpellbookUseType.Value, "CasterMemoryType");
+                b.PopContext();
             }
 
             var s = Phase.ClassSkillsVM.Value;
             if (s != null && s.ClassSkills != null && s.ClassSkills.Count > 0)
             {
-                var g = sheet.List((string)cs.ClassSkills);
+                b.PushContext((string)cs.ClassSkills);
+                int i = 0;
                 foreach (var entry in s.ClassSkills)
-                    if (entry != null) { var e = entry; g.Item(new TextElement(e.DisplayName, null, () => e.TooltipTemplate)); }
+                {
+                    if (entry == null) { i++; continue; }
+                    var e = entry;
+                    b.AddItem(ControlId.Structural(dk + "skill:" + i), GraphNodes.Text(
+                        () => e.DisplayName, () => e.TooltipTemplate));
+                    i++;
+                }
+                b.PopContext();
             }
 
-            sheet.Reflow();
-            if (sheet.RowCount > 0) _detailPanel.Add(sheet);
-
-            // Progression grid as a Table tab-stop: levels = columns, feature lines = rows (banded by
-            // class / Shared). Space on a cell drills into the feature. The chargen class-Mechanic
-            // UnitProgressionView prefab instance is the one place the game leaves m_FeatProgressionView
-            // unwired, suppressing the Feats band here (and with it the racial feat selections that
-            // FeatProgressionVM packs into AdditionalChupaChupsList). Mirror that — feats/race show up
-            // on the feature-selector phases via the global edge-window, not on the class screen.
-            var grid = ProgressionGrid.Build(Phase.ProgressionVM, Phase.SelectedClassVM.Value?.Class,
+            // Progression grid: levels = columns, feature lines = rows (banded by class / Shared). The
+            // chargen class-Mechanic UnitProgressionView prefab uniquely leaves m_FeatProgressionView
+            // unwired, suppressing the Feats band here — mirror that (feats/race show up on the
+            // feature-selector phases via the global edge-window, not on the class screen).
+            ProgressionGrid.Emit(b, dk + "prog:", Phase.ProgressionVM, Phase.SelectedClassVM.Value?.Class,
                 new ProgressionGrid.Options { IncludeFeats = false });
-            if (grid != null) _detailPanel.Add(grid);
 
             // Auto-levelup button: present only when the game shows it active (first level + a default
             // build plan). Label/enabled mirror the view; activate opens its confirm dialog.
             var al = Phase.AutoLevelupButtonVM;
             if (al != null && al.ButtonIsActiveProperty.Value)
             {
-                _detailPanel.Add(new ProxyActionButton(
+                b.AddItem(ControlId.Structural(dk + "autolevel"), GraphNodes.Button(
                     () => al.AutoLevelupIsAccessible.Value
-                        ? UIStrings.Instance.CharGen.LoadDefaultClassButton
-                        : UIStrings.Instance.CharGen.NoDefaultBuildForArchetype,
-                    () => al.ButtonIsActiveProperty.Value && al.AutoLevelupIsAccessible.Value && !al.AutoLevelupIsOnProperty.Value,
-                    () => al.RequestActivateAutoLevelup()));
+                        ? (string)UIStrings.Instance.CharGen.LoadDefaultClassButton
+                        : (string)UIStrings.Instance.CharGen.NoDefaultBuildForArchetype,
+                    () => al.RequestActivateAutoLevelup(),
+                    () => al.ButtonIsActiveProperty.Value && al.AutoLevelupIsAccessible.Value && !al.AutoLevelupIsOnProperty.Value));
             }
         }
 
-        // One mechanic stat row: "Label: grade", with the stat's game glossary tooltip drilled in on Space.
-        private static TextElement StatRow(string label, string value, string glossaryKey)
-            => new TextElement(string.IsNullOrEmpty(value) ? label : label + ": " + value,
-                null, () => new TooltipTemplateGlossary(glossaryKey));
+        // One mechanic stat row: "Label: grade", with the stat's game glossary tooltip on Space.
+        private static void StatRow(GraphBuilder b, string key, string label, System.Func<string> value, string glossaryKey)
+        {
+            b.AddItem(ControlId.Structural(key), GraphNodes.Text(
+                () => { var v = value(); return string.IsNullOrEmpty(v) ? label : label + ": " + v; },
+                () => new TooltipTemplateGlossary(glossaryKey)));
+        }
 
         private IEnumerable<CharGenClassSelectorItemVM> Classes()
         {

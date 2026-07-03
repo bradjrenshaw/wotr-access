@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using Kingmaker.Blueprints; // Gender
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Voice;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -11,67 +11,53 @@ namespace WrathAccess.Screens
     /// voices. The selector holds both genders, but the game shows one at a time, defaulting to the
     /// character's; we mirror that with a "Voice gender" chooser defaulting to the character's gender.
     /// Selecting a voice chooses it and plays a sample (the game plays off the resulting Barks), and
-    /// re-selecting the current one replays it (see the onActivate at the call site). The selector is built
-    /// lazily (once gender is known), so we (re)build the list when it materializes.
+    /// re-selecting the current one replays it. The selector is built lazily by the game — immediate
+    /// mode renders it once it materializes.
     /// </summary>
     public sealed class VoicePhaseContent : CharGenPhaseContent<CharGenVoicePhaseVM>
     {
         private static readonly List<string> GenderOptions = new List<string> { "Male", "Female" };
 
-        private Panel _listPanel;
-        private int _count = -1;
-        private Gender _filter;
+        private Gender? _filter; // view state: which gender's voices show (defaults to the character's)
 
         public VoicePhaseContent(CharGenVoicePhaseVM phase) : base(phase) { }
 
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            _filter = Phase.CharacterGender; // default to the character's gender, like the game
-            content.Add(new ProxyChoiceDropdown("Voice gender", GenderOptions,
-                () => _filter == Gender.Female ? 1 : 0,
-                i => { _filter = i == 1 ? Gender.Female : Gender.Male; FillList(); }));
+            if (_filter == null) _filter = Phase.CharacterGender; // default, like the game
 
-            _listPanel = new Panel();
-            content.Add(_listPanel);
-            FillList();
-        }
+            b.AddItem(ControlId.Structural(k + "genderfilter"),
+                ModSettingNodes.ChoiceDropdown("Voice gender", GenderOptions,
+                    () => _filter == Gender.Female ? 1 : 0,
+                    i => _filter = i == 1 ? Gender.Female : Gender.Male));
 
-        public override void Tick()
-        {
-            if (VoiceCount() != _count) FillList();
-        }
-
-        private void FillList()
-        {
-            if (_listPanel == null) return;
             var voices = Voices();
-            _count = voices.Count; // unfiltered count, for lazy-materialize detection
-            _listPanel.Clear();
-            var list = new ListContainer(Loc.T("chargen.voices"));
+            if (voices.Count == 0) return; // lazy — renders once the selector materializes
 
             // Mirror CharGenVoiceSelectorPCView.IsVisible: same-gender items are always visible;
             // cross-gender items are hidden EXCEPT the empty ("None") voice, which is always visible
-            // regardless of filter. The VM dedups the cross-gender empty so the selector holds exactly
-            // one "None" — that single entry appears under both Male and Female filters.
+            // regardless of filter. Mirror EntityComparer: empty voices sort to the end.
             var visible = new List<CharGenVoiceItemVM>();
             foreach (var v in voices)
                 if (v != null && (v.Gender == _filter || v.IsEmptyVoice)) visible.Add(v);
+            visible.Sort((a, bb) => a.IsEmptyVoice == bb.IsEmptyVoice ? 0 : a.IsEmptyVoice ? 1 : -1);
 
-            // Mirror EntityComparer: empty voices sort to the end.
-            visible.Sort((a, b) => a.IsEmptyVoice == b.IsEmptyVoice ? 0 : a.IsEmptyVoice ? 1 : -1);
-
-            // Activate mirrors the game's item view: re-activating the current voice replays its sample
-            // (PlayPreview); picking a new one selects it (the game plays the sample off the resulting Barks).
+            b.BeginStop("voices").PushContext(Loc.T("chargen.voices"), "list");
+            int i = 0;
             foreach (var v in visible)
             {
                 var voice = v; // capture for the live closure
-                list.Add(new ProxySelectionItem(voice, () => voice.DisplayName, onActivate: () =>
-                {
-                    if (voice.IsSelected.Value) voice.Barks?.PlayPreview();
-                    else voice.SetSelectedFromView(true);
-                }));
+                // Activate mirrors the game's item view: re-activating the current voice replays its
+                // sample (PlayPreview); picking a new one selects it (the sample plays off the Barks).
+                b.AddItem(ControlId.Referenced(voice, k + "voice:" + i),
+                    GraphNodes.SelectionItem(voice, () => voice.DisplayName, onActivate: () =>
+                    {
+                        if (voice.IsSelected.Value) voice.Barks?.PlayPreview();
+                        else voice.SetSelectedFromView(true);
+                    }, sound: null));
+                i++;
             }
-            if (list.Children.Count > 0) _listPanel.Add(list);
+            b.PopContext();
         }
 
         private List<CharGenVoiceItemVM> Voices()
@@ -82,7 +68,5 @@ namespace WrathAccess.Screens
                 foreach (var v in entities) if (v != null) result.Add(v);
             return result;
         }
-
-        private int VoiceCount() => Phase.VoiceSelector?.EntitiesCollection?.Count ?? 0;
     }
 }

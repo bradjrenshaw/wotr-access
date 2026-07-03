@@ -4,16 +4,17 @@ using Kingmaker.UI.MVVM._VM.NewGame;
 using Kingmaker.UI.MVVM._VM.NewGame.Difficulty;
 using Kingmaker.UI.MVVM._VM.NewGame.Story;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The New Game wizard (MainMenuVM.NewGameVM): Story → Difficulty → Save injector, on the
-    /// shared <see cref="WizardScreen"/> shell. Next/Back delegate to the VM's OnButton*; the Next
-    /// label/availability come from the current phase. Advancing past the last step enters
+    /// The New Game wizard (MainMenuVM.NewGameVM): Story → Difficulty → Save injector, on the shared
+    /// graph-native <see cref="WizardScreen"/> shell. Next/Back delegate to the VM's OnButton*; the
+    /// Next label/availability come from the current phase. Advancing past the last step enters
     /// character generation; backing past the first exits to the menu. Story + Difficulty are
-    /// implemented; the save injector is a placeholder.
+    /// implemented (Difficulty rides the same <see cref="SettingsEntityGraph"/> emitter as the game
+    /// settings window — collapsible header sections); the save injector is a placeholder.
     /// </summary>
     public sealed class NewGameScreen : WizardScreen
     {
@@ -37,17 +38,17 @@ namespace WrathAccess.Screens
 
         protected override string PhaseLabel() => Vm()?.MenuSelectionGroup.SelectedEntity.Value?.Title;
 
-        protected override void BuildContent(Container content)
+        protected override void BuildContent(GraphBuilder b, string k)
         {
             var phase = Vm()?.MenuSelectionGroup.SelectedEntity.Value?.NewGamePhaseVM;
             if (phase is NewGamePhaseStoryVM story)
-                BuildStory(content, story);
+                BuildStory(b, k, story);
             else if (phase is NewGamePhaseDifficultyVM difficulty)
-                // Same VMs as the Settings screen — build them as a treeview (collapsible header groups,
-                // one Tab-stop each, arrow within) to match it, rather than a flat wall of Tab-stops.
-                SettingsEntityBuilder.BuildInto(content, difficulty.SettingEntities, tree: true);
+                // Same VMs as the Settings screen — the same collapsible header-section emitter.
+                SettingsEntityGraph.Emit(b, difficulty.SettingEntities, k);
             else
-                content.Add(new TextElement(() => Loc.T("wizard.step_unavailable")));
+                b.AddItem(ControlId.Structural(k + "unavailable"),
+                    GraphNodes.Text(() => Loc.T("wizard.step_unavailable")));
         }
 
         protected override void OnBack() => Vm()?.OnButtonBack();
@@ -65,30 +66,31 @@ namespace WrathAccess.Screens
             return p == null || p.IsButtonNextAvailable.Value;
         }
 
-        private static void BuildStory(Container content, NewGamePhaseStoryVM story)
+        private static void BuildStory(GraphBuilder b, string k, NewGamePhaseStoryVM story)
         {
-            // Campaign choices (unlabeled list → reads as "<name>, radio button, selected, N of M").
-            var campaigns = new ListContainer();
+            // Campaign choices (reads as "<name>, radio button, selected, N of M").
+            int i = 0;
             foreach (var e in story.SelectionGroup.EntitiesCollection)
             {
+                if (e == null) continue;
                 var ent = e; // capture for the live closure
-                campaigns.Add(new ProxySelectionItem(ent, () => ent.Title));
+                b.AddItem(ControlId.Referenced(ent, k + "camp:" + i),
+                    GraphNodes.SelectionItem(ent, () => ent.Title));
+                i++;
             }
-            content.Add(campaigns);
 
             // Live description of the currently-selected campaign (updates as you pick).
-            content.Add(new TextElement(
+            b.AddItem(ControlId.Structural(k + "desc"), GraphNodes.Text(
                 () => story.Description != null ? story.Description.Value : ""));
 
-            // Hardcore/permadeath mode toggle (code name "Last Azlanti"; the localized label
-            // reads "Sink or Swim Mode"). Only enabled for dungeon campaigns (Midnight Isles),
-            // and the game hides it otherwise — so hideWhenDisabled drops it from nav there too.
-            content.Add(new ProxyBoolToggle(
-                (string)UIStrings.Instance.NewGameWin.LastAzlantiMode,
-                () => story.LastAzlantiIsOn.Value,
-                () => story.SwitchLastAzlanti(),
-                () => story.LastAzlantiEnabled.Value,
-                hideWhenDisabled: true));
+            // Hardcore/permadeath mode toggle (code name "Last Azlanti"; the localized label reads
+            // "Sink or Swim Mode"). Only enabled for dungeon campaigns (Midnight Isles) and hidden by
+            // the game otherwise — immediate mode: emitted only while enabled.
+            if (story.LastAzlantiEnabled.Value)
+                b.AddItem(ControlId.Structural(k + "azlanti"), GraphNodes.Toggle(
+                    () => (string)UIStrings.Instance.NewGameWin.LastAzlantiMode,
+                    () => story.LastAzlantiIsOn.Value,
+                    () => story.SwitchLastAzlanti()));
         }
     }
 }

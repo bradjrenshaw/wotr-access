@@ -5,22 +5,20 @@ using Kingmaker.Blueprints.Root.Strings; // UIStrings (KnownSpell)
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Spells;
 using Kingmaker.UI.MVVM._VM.Other; // RecommendationType
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.Switchers; // SpellbookLevelSwitcherEntityVM
-using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.KnownSpells; // AbilityDataVM
 using WrathAccess.UI;
-using WrathAccess.UI.Announcements; // LabelAnnouncement, RoleAnnouncement, ValueAnnouncement (associated readout)
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
     /// Spells phase: two parts. First, the picker — a multi-select check group with a slot budget: a
-    /// live "spells to select" count, then a table of choosable spells (Level / School / Recommendation,
-    /// spell name = checkbox; Enter toggles, Space opens the tooltip), in the game's own order. Second,
-    /// a "Known spells" reference mirroring the game's spellbook panel: radio buttons pick a spell level
-    /// (only levels that have spells), and a list shows that level's known spells (the game's own
-    /// per-level AbilityDataVMs, which refresh as the level changes). Per-level is deliberate — a
-    /// character can end up knowing hundreds of spells, so we never flatten them into one list.
-    /// Everything is created lazily on entering detailed view; per-item state is read live.
+    /// live "spells to select" count, then a table of choosable spells (Level / School / Recommendation;
+    /// the spell name is a toggle: Enter flips it, Space opens the tooltip), in the game's own order.
+    /// Second, a "Known spells" reference mirroring the game's spellbook panel: radio buttons pick a
+    /// spell level (only levels that have spells), and a list shows that level's known spells (keyed
+    /// per level — the game's per-level AbilityDataVMs refresh as the level changes). Per-level is
+    /// deliberate — a character can end up knowing hundreds of spells, so we never flatten them into
+    /// one list. Everything is created lazily by the game; immediate mode renders it as it appears.
     /// </summary>
     public sealed class SpellsPhaseContent : CharGenPhaseContent<CharGenSpellsPhaseVM>
     {
@@ -40,155 +38,130 @@ namespace WrathAccess.Screens
         private static readonly string[] Words =
             { "Cantrips", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth" };
 
-        private Panel _selectorPanel;
-        private bool _selBuilt;
-
-        private Panel _knownSection; // "Known spells" — holds the level radio + the per-level list
-        private Panel _knownList;    // the selected level's spells (rebuilt on change)
-        private string _levelsSig;   // which levels have spells (rebuild the radio when this changes)
-        private string _spellsSig;   // current level + its spells (rebuild the list when this changes)
-
         public SpellsPhaseContent(CharGenSpellsPhaseVM phase) : base(phase) { }
 
         private bool NoSelections => Phase.SelectorMode == CharGenSpellsPhaseVM.SpellSelectorMode.NoSelections;
 
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            if (!NoSelections)
-                content.Add(new TextElement(() =>
-                    Phase.AvailableSpellCount.Value <= 0
-                        ? "All spells selected"
-                        : "Spells to select: " + Phase.AvailableSpellCount.Value));
+            if (NoSelections)
+            {
+                b.AddItem(ControlId.Structural(k + "auto"), GraphNodes.Text(() => Loc.T("chargen.spells_auto")));
+                BuildKnown(b, k);
+                return;
+            }
 
-            _selectorPanel = new Panel();
-            content.Add(_selectorPanel);
-            FillSelector();
+            b.AddItem(ControlId.Structural(k + "count"), GraphNodes.Text(() =>
+                Phase.AvailableSpellCount.Value <= 0
+                    ? "All spells selected"
+                    : "Spells to select: " + Phase.AvailableSpellCount.Value));
 
-            _knownSection = new Panel(Loc.T("chargen.known_spells"));
-            content.Add(_knownSection);
-        }
-
-        public override void Tick()
-        {
-            if (!_selBuilt && (NoSelections || Phase.SpellsSelector.Value != null)) FillSelector();
-            TickKnown();
+            BuildSelector(b, k);
+            BuildKnown(b, k);
         }
 
         // ----- the picker (choosable spells) -----
 
-        private void FillSelector()
+        private void BuildSelector(GraphBuilder b, string k)
         {
-            if (_selectorPanel == null) return;
-            _selectorPanel.Clear();
-
-            if (NoSelections)
-            {
-                _selBuilt = true;
-                _selectorPanel.Add(new TextElement(() => Loc.T("chargen.spells_auto")));
-                return;
-            }
-
             var selector = Phase.SpellsSelector.Value;
-            if (selector == null) return; // not in detailed view yet — Tick will retry
-            _selBuilt = true;
+            if (selector == null) return; // not in detailed view yet — renders once it materializes
 
             var items = selector.EntitiesCollection.OrderBy(v => v, Order).ToList();
             if (items.Count == 0) return;
 
-            // A FlowSheet with an associated-element table: column 0 holds each spell's toggle (the row's
-            // element), columns 1-3 are data. Up/Down reads the toggle's focus string + the column data
-            // ("Fireball, toggle, on, Level 1, School evocation, …"); Left/Right reads normally; Enter/Space
-            // on any cell fall through to the toggle. A toggle in a multi-select group (slot budget):
-            // SetSelectedFromView(!IsSelected), the same OnClick the view uses.
-            var sheet = new FlowSheet(Loc.T("chargen.choose_spells"));
-            var table = sheet.Table(Loc.T("chargen.choose_spells"), Loc.T("col.level"), Loc.T("col.school"), Loc.T("col.recommendation"));
+            // A sheet table: column 0 is each spell's toggle; Level/School/Recommendation are parts on
+            // the toggle (the row reads whole) and header-labelled cells for Left/Right. Rows key by
+            // the item VM (picking doesn't reorder — HasInSpellbook only flips on commit).
+            b.BeginStop("picker");
+            var sheet = new GraphSheet(b, k + "pick:");
+            sheet.Region(Loc.T("chargen.choose_spells"),
+                new[] { Loc.T("col.level"), Loc.T("col.school"), Loc.T("col.recommendation") });
             foreach (var it in items)
             {
                 var item = it; // capture for the live closures
-                table.Row(
-                    new ProxySelectionItem(item, () => item.DisplayName, role: "toggle",
-                        onActivate: () => item.SetSelectedFromView(!item.IsSelected.Value)),
-                    new UIElement[]
+                Func<string> level = () => item.Level.ToString();
+                Func<string> school = () => School(item);
+                Func<string> rec = () => RecLabel(item);
+                var vt = new NodeVtable
                 {
-                    new TextElement(() => item.Level.ToString()),
-                    new TextElement(() => School(item)),
-                    new TextElement(() => RecLabel(item)),
-                }, tooltip: () => item.TooltipTemplate()); // Space anywhere in the row → spell detail
+                    ControlType = ControlTypes.Toggle,
+                    Announcements = new List<NodeAnnouncement>
+                    {
+                        GraphNodes.LabelPart(() => item.DisplayName),
+                        new NodeAnnouncement(() => Loc.T(item.IsSelected.Value ? "value.on" : "value.off"),
+                            live: true, kind: AnnouncementKinds.Value),
+                        new NodeAnnouncement(level),
+                        new NodeAnnouncement(school),
+                        new NodeAnnouncement(rec),
+                    },
+                    SearchText = () => item.DisplayName,
+                    StateText = () => Loc.T(item.IsSelected.Value ? "value.on" : "value.off"),
+                    // A toggle in a multi-select group (slot budget) — the same OnClick the view uses.
+                    OnActivate = () =>
+                    {
+                        UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
+                        item.SetSelectedFromView(!item.IsSelected.Value);
+                    },
+                    OnTooltip = () =>
+                    {
+                        var tpl = item.TooltipTemplate();
+                        if (tpl != null) TooltipScreen.Open(tpl);
+                    },
+                };
+                sheet.Row(vt, item, level, school, rec);
             }
-            table.Associate(0, new[] { typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement) });
-            sheet.Reflow();
-            _selectorPanel.Add(sheet);
+            sheet.Finish();
         }
 
         // ----- the known-spells reference (mirrors the game's spellbook panel) -----
 
-        private void TickKnown()
+        private void BuildKnown(GraphBuilder b, string k)
         {
-            if (_knownSection == null) return;
             var sb = Phase.SpellbookVM;
             if (sb == null || sb.CurrentSpellbook?.Value == null) return; // spellbook not built yet
 
-            // Rebuild the level radio only when the set of levels-with-spells changes (rare — happens
-            // when picking a spell adds a previously-empty level). Focus is in the picker then, not here.
+            b.BeginStop("knownlevels").PushContext(Loc.T("chargen.known_spells"), role: null, positions: false);
             var levels = AvailableLevels().ToList();
-            string lsig = string.Join(",", levels.Select(e => e.SpellbookLevel.Level));
-            if (lsig != _levelsSig)
-            {
-                _levelsSig = lsig;
-                _spellsSig = null;
-                BuildKnownLevels(levels);
-            }
-
-            // Rebuild the spell list when the selected level (or its contents) changes. The known-spells
-            // VM refreshes on LateUpdate, so this lands a frame after a level pick — fine, focus is on
-            // the radio, and the list is its sibling.
-            string ssig = KnownSig();
-            if (ssig != _spellsSig)
-            {
-                _spellsSig = ssig;
-                FillKnownList();
-            }
-        }
-
-        private void BuildKnownLevels(List<SpellbookLevelSwitcherEntityVM> levels)
-        {
-            _knownSection.Clear();
-            _knownList = null;
             if (levels.Count == 0)
             {
-                _knownSection.Add(new TextElement(() => Loc.T("chargen.no_spells_yet")));
+                b.AddItem(ControlId.Structural(k + "nospells"), GraphNodes.Text(() => Loc.T("chargen.no_spells_yet")));
+                b.PopContext();
                 return;
             }
 
-            var radio = new ListContainer(Loc.T("metamagic.spell_level"));
+            b.PushContext(Loc.T("metamagic.spell_level"), "list");
+            int li = 0;
             foreach (var e in levels)
             {
                 var ent = e; // capture
-                radio.Add(new ProxySelectionItem(ent, () => LevelName(ent.SpellbookLevel.Level)));
+                b.AddItem(ControlId.Referenced(ent, k + "klvl:" + li),
+                    GraphNodes.SelectionItem(ent, () => LevelName(ent.SpellbookLevel.Level)));
+                li++;
             }
-            _knownSection.Add(radio);
+            b.PopContext();
+            b.PopContext();
 
-            _knownList = new Panel();
-            _knownSection.Add(_knownList);
-        }
-
-        private void FillKnownList()
-        {
-            if (_knownList == null) return;
-            _knownList.Clear();
-            var known = Phase.SpellbookVM?.SpellbookKnownSpellsVM?.KnownSpells;
+            // The selected level's spells, keyed per level (the VM list refreshes a frame after a level
+            // pick — focus is on the radio, and this just re-renders).
+            string lk = k + "known:" + (sb.CurrentSpellbookLevel?.Value?.Level ?? -1) + ":";
+            b.BeginStop("knownlist");
+            var known = sb.SpellbookKnownSpellsVM?.KnownSpells;
             if (known == null || known.Count == 0)
             {
-                _knownList.Add(new TextElement(() => Loc.T("chargen.no_spells_at_level")));
+                b.AddItem(ControlId.Structural(lk + "none"),
+                    GraphNodes.Text(() => Loc.T("chargen.no_spells_at_level")));
                 return;
             }
-            var list = new ListContainer();
+            int i = 0;
             foreach (var vm in known)
             {
+                if (vm == null) { i++; continue; }
                 var v = vm; // capture
-                list.Add(new TextElement(v.DisplayName, tooltip: () => v.Tooltip));
+                b.AddItem(ControlId.Referenced(v, lk + i),
+                    GraphNodes.Text(() => v.DisplayName, () => v.Tooltip));
+                i++;
             }
-            _knownList.Add(list);
         }
 
         private IEnumerable<SpellbookLevelSwitcherEntityVM> AvailableLevels()
@@ -197,16 +170,6 @@ namespace WrathAccess.Screens
             var entities = sw?.SelectionGroup?.EntitiesCollection;
             if (entities == null) return Enumerable.Empty<SpellbookLevelSwitcherEntityVM>();
             return entities.Where(e => e != null && e.IsAvailable.Value); // only levels with spells
-        }
-
-        private string KnownSig()
-        {
-            var sb = Phase.SpellbookVM;
-            int lvl = sb?.CurrentSpellbookLevel?.Value?.Level ?? -1;
-            var known = sb?.SpellbookKnownSpellsVM?.KnownSpells;
-            int count = known?.Count ?? 0;
-            string first = count > 0 ? known[0].DisplayName : "";
-            return lvl + ":" + count + ":" + first;
         }
 
         // ----- shared cell text -----

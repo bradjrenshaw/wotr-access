@@ -1,72 +1,61 @@
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Race;
 using Owlcat.Runtime.UI.Tooltips; // TooltipTemplateType
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 using WrathAccess.UI.Tooltips;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Race phase: the race list, a gender selector, and a live Details panel. Race has no nested
-    /// sub-selection (unlike class archetypes) and no Short/Mechanic toggle — the detail is just the
-    /// template the game feeds its InfoSection (<c>ReactiveTooltipTemplate</c> = TooltipTemplateLevelUpRace:
-    /// ability-score bonuses, racial features, description), rendered as one treeview at
-    /// <see cref="TooltipTemplateType.Info"/>, exactly like the class phase's Short mode. Selecting goes
-    /// through the game's own SetSelectedFromView; the detail refreshes on race or gender change.
+    /// Race phase: the race list, a gender selector, and a live Details panel — the template the game
+    /// feeds its InfoSection (<c>ReactiveTooltipTemplate</c> = TooltipTemplateLevelUpRace: ability-score
+    /// bonuses, racial features, description), rendered as a document at
+    /// <see cref="TooltipTemplateType.Info"/>. Selecting goes through the game's own SetSelectedFromView;
+    /// the detail keys carry race + gender, so it re-keys on change while list focus stays put.
     /// </summary>
     public sealed class RacePhaseContent : CharGenPhaseContent<CharGenRacePhaseVM>
     {
-        private Panel _detailPanel;
-        private object _raceFrom;
-        private object _genderFrom;
-
         public RacePhaseContent(CharGenRacePhaseVM phase) : base(phase) { }
 
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            var raceList = new ListContainer(Loc.T("chargen.races"));
+            b.PushContext(Loc.T("chargen.races"), "list");
+            int i = 0;
             if (Phase.RaceSelector?.EntitiesCollection != null)
                 foreach (var item in Phase.RaceSelector.EntitiesCollection)
-                    if (item != null) raceList.Add(new ProxySelectionItem(item, () => item.DisplayName));
-            content.Add(raceList);
+                {
+                    if (item == null) { i++; continue; }
+                    var it = item;
+                    b.AddItem(ControlId.Referenced(it, k + "race:" + i),
+                        GraphNodes.SelectionItem(it, () => it.DisplayName));
+                    i++;
+                }
+            b.PopContext();
 
-            var genderList = new ListContainer(Loc.T("chargen.gender"));
+            b.BeginStop("gender").PushContext(Loc.T("chargen.gender"), "list");
+            int gi = 0;
             if (Phase.GenderSelector?.EntitiesCollection != null)
                 foreach (var g in Phase.GenderSelector.EntitiesCollection)
-                    if (g != null) genderList.Add(new ProxySelectionItem(g, () => g.DisplayName));
-            content.Add(genderList);
+                {
+                    if (g == null) { gi++; continue; }
+                    var ge = g;
+                    b.AddItem(ControlId.Referenced(ge, k + "gender:" + gi),
+                        GraphNodes.SelectionItem(ge, () => ge.DisplayName));
+                    gi++;
+                }
+            b.PopContext();
 
-            _detailPanel = new Panel(Loc.T("chargen.details"));
-            content.Add(_detailPanel);
-
-            _raceFrom = Phase.SelectedRaceVM.Value;
-            _genderFrom = Phase.SelectedGenderVM.Value;
-            FillDetail();
-        }
-
-        public override void Tick()
-        {
-            var race = Phase.SelectedRaceVM.Value;
-            var gender = Phase.SelectedGenderVM.Value;
-            if (!ReferenceEquals(race, _raceFrom) || !ReferenceEquals(gender, _genderFrom))
-            {
-                _raceFrom = race;
-                _genderFrom = gender;
-                FillDetail();
-            }
-        }
-
-        private void FillDetail()
-        {
-            if (_detailPanel == null) return;
-            _detailPanel.Clear();
+            // The detail as a document: keys carry race + gender, so a change re-keys it (focus in the
+            // lists is untouched); glossary links follow on Space.
             var tpl = Phase.ReactiveTooltipTemplate.Value;
-            if (tpl == null) return;
-            // The detail as a flow-sheet document: title sections become regions you arrow through and
-            // Ctrl+Up/Down between; glossary links follow on Space. Skip the panel when there's no content.
-            var sheet = TooltipFlowBuilder.Build(tpl, TooltipTemplateType.Info, includeEmptyNotice: false);
-            if (sheet.RowCount == 0) return;
-            _detailPanel.Add(sheet);
+            if (tpl != null)
+            {
+                string dk = k + "detail:" + (Phase.SelectedRaceVM.Value?.GetHashCode() ?? 0)
+                    + ":" + (Phase.SelectedGenderVM.Value?.GetHashCode() ?? 0) + ":";
+                b.BeginStop("details").PushContext(Loc.T("chargen.details"), role: null, positions: false);
+                TooltipFlowBuilder.Emit(b, dk, tpl, TooltipTemplateType.Info, includeEmptyNotice: false);
+                b.PopContext();
+            }
         }
     }
 }

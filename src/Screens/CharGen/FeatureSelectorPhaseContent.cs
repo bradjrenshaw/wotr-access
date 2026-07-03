@@ -1,95 +1,175 @@
+using System;
 using System.Collections.Generic;
 using Kingmaker.Blueprints.Classes;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.FeatureSelector;
+using Kingmaker.UI.MVVM._VM.Other; // RecommendationType
+using Kingmaker.UnitLogic.Class.LevelUp; // FeatureSelectionViewState.SelectState
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
     /// The generic feature-selector phase (Background, deity, heritage, and other feature picks),
-    /// presented as a treeview over the game's nested selection: the selectable features are the
-    /// top-level nodes, and a feature that opens sub-choices reveals them inline as children when
-    /// selected (faithful to the game — selecting IS expanding). Each node reads its name +
+    /// presented as a tree over the game's nested selection: the selectable features are the top-level
+    /// nodes, and a feature that opens sub-choices reveals them inline as children when selected
+    /// (faithful to the game — selecting IS expanding, so a node's expansion state IS
+    /// <c>IsSelected && HasNesting</c>; a view-only collapse set lets Left close a selected feature
+    /// without deselecting it, matching the old behavior). Each node reads its name +
     /// selected/disabled state (with reason), activates via the game's SetSelectedFromView, and Space
     /// opens its full write-up. The phase name supplies the header (e.g. "Background"). The list is
-    /// built lazily by the game (OnBeginDetailedView), so we (re)build the tree once it materializes.
+    /// built lazily by the game — immediate mode renders it once it materializes.
     /// </summary>
     public sealed class FeatureSelectorPhaseContent : CharGenPhaseContent<CharGenFeatureSelectorPhaseVM>
     {
-        private Panel _filterPanel;
-        private Panel _treePanel;
-        private int _rawCount = -1;          // unfiltered top-level count (for lazy-materialize detection)
-        private bool _filterBuilt;
-        private int _tagIndex;               // 0 = All; 1.. = a tag
-        private List<string> _tagOptions;    // ["All", tag1, …]
+        private int _tagIndex; // view state: 0 = All; 1.. = a tag
+        private readonly HashSet<object> _viewCollapsed = new HashSet<object>(); // Left-collapsed selected nodes
 
         public FeatureSelectorPhaseContent(CharGenFeatureSelectorPhaseVM phase) : base(phase) { }
 
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            // Source + description as one vertical list (a single tab-stop): the source of this pick —
-            // the granting class / race / progression (item 1) — then the selection's own description,
-            // "what this choice is" (item 2). The game shows the description in its info panel; the
-            // source isn't shown anywhere, but it's too useful to omit. Just the description, not the
-            // selection's full tooltip (which would re-list the options below).
-            var info = new ListContainer();
+            // Source + description: the source of this pick — the granting class / race / progression —
+            // then the selection's own description ("what this choice is"). The game shows the
+            // description in its info panel; the source isn't shown anywhere, but it's too useful to
+            // omit (deliberate exception to surface-only-visible).
             var source = SourceLabel();
-            if (!string.IsNullOrWhiteSpace(source)) info.Add(new TextElement(() => Loc.T("chargen.source", new { value = source })));
+            if (!string.IsNullOrWhiteSpace(source))
+                b.AddItem(ControlId.Structural(k + "source"),
+                    GraphNodes.Text(() => Loc.T("chargen.source", new { value = source })));
             var overview = Phase.FeatureSelectorStateVM?.Feature?.Description;
-            if (!string.IsNullOrWhiteSpace(overview)) info.Add(new TextElement(overview));
-            if (info.Children.Count > 0) content.Add(info);
+            if (!string.IsNullOrWhiteSpace(overview))
+                b.AddItem(ControlId.Structural(k + "overview"), GraphNodes.Text(() => overview));
 
             if (Phase.SelectionIsProhibited != null && Phase.SelectionIsProhibited.Value)
-                content.Add(new TextElement(() => Loc.T("chargen.nothing_to_select")));
-            _filterPanel = new Panel(); // the tag filter, when the selection actually has tags
-            content.Add(_filterPanel);
-            _treePanel = new Panel();
-            content.Add(_treePanel);
-            FillTree();
-        }
+                b.AddItem(ControlId.Structural(k + "prohibited"),
+                    GraphNodes.Text(() => Loc.T("chargen.nothing_to_select")));
 
-        public override void Tick()
-        {
-            // The selector + its top-level entities are created lazily on entering detailed view;
-            // (re)build when they appear (tracked by the UNFILTERED count). Add the tag filter once the
-            // list exists and actually has tags. Per-node state is read live, so no rebuild for that.
-            if (!_filterBuilt && Phase.HasFeatureTags) BuildFilter();
-            if (TopEntities().Count != _rawCount) FillTree();
-        }
+            // The game's tag dropdown: present only when the selection has tagged features. "All" clears.
+            List<string> tagOptions = null;
+            if (Phase.HasFeatureTags)
+            {
+                var tags = Phase.CharGenFeatureSearchVM?.LocalizedValues;
+                if (tags != null && tags.Count > 0)
+                {
+                    tagOptions = new List<string> { Loc.T("filter.all") };
+                    tagOptions.AddRange(tags);
+                    var opts = tagOptions;
+                    b.BeginStop("filter").AddItem(ControlId.Structural(k + "filter"),
+                        ModSettingNodes.ChoiceDropdown("Filter by tag", opts,
+                            () => _tagIndex, i => _tagIndex = i));
+                }
+            }
 
-        private void FillTree()
-        {
-            if (_treePanel == null) return;
             var top = TopEntities();
-            _rawCount = top.Count;
-            _treePanel.Clear();
+            if (top.Count == 0) return; // lazy — renders once the selector materializes
 
-            // Filter by the chosen tag (top level only — sub-choices of a matching feat aren't filtered),
-            // then sort the game's way (selectable → recommended → name).
+            // Filter by the chosen tag (top level only — sub-choices of a matching feat aren't
+            // filtered), then sort the game's way (selectable → recommended → name).
             var items = new List<CharGenFeatureSelectorItemVM>();
             foreach (var it in top)
-                if (_tagIndex <= 0 || (_tagOptions != null && it.HasText(_tagOptions[_tagIndex]))) items.Add(it);
-            items.Sort(ProxyNestedFeatureItem.CompareItems);
+                if (_tagIndex <= 0 || (tagOptions != null && _tagIndex < tagOptions.Count && it.HasText(tagOptions[_tagIndex])))
+                    items.Add(it);
+            items.Sort(CompareItems);
             if (items.Count == 0) return;
 
-            var tree = new TreeGroup(); // unlabeled root; the phase name announces "Background" / "Feat"
-            foreach (var it in items) tree.Add(new ProxyNestedFeatureItem(it, Phase.SelectorVM));
-            _treePanel.Add(tree);
+            b.BeginStop("features");
+            foreach (var it in items) EmitFeature(b, it, k + "f:");
+            // (the wizard shell's phase-name context announces "Background" / "Feat")
         }
 
-        // The game's tag dropdown: present only when the selection has tagged features. "All" clears it.
-        private void BuildFilter()
+        // One feature node — BOTH the selectable option AND the expandable parent of its sub-choices,
+        // mirroring the game's nested-selection model (selecting IS what expands it; radio: one open
+        // per level, which falls out of expansion == IsSelected).
+        private void EmitFeature(GraphBuilder b, CharGenFeatureSelectorItemVM vm, string prefix)
         {
-            _filterBuilt = true;
-            var tags = Phase.CharGenFeatureSearchVM?.LocalizedValues;
-            if (_filterPanel == null || tags == null || tags.Count == 0) return;
-            _tagOptions = new List<string> { Loc.T("filter.all") };
-            _tagOptions.AddRange(tags);
-            _filterPanel.Clear();
-            _filterPanel.Add(new ProxyChoiceDropdown("Filter by tag", _tagOptions,
-                () => _tagIndex, i => { _tagIndex = i; FillTree(); }));
+            Func<bool> canSelect = () => vm.SelectState == FeatureSelectionViewState.SelectState.CanSelect;
+            Func<bool> isSelected = () => vm.IsSelected.Value;
+            string key = prefix + vm.GetHashCode();
+
+            var vt = new NodeVtable
+            {
+                ControlType = ControlTypes.RadioButton,
+                Announcements = new List<NodeAnnouncement>
+                {
+                    GraphNodes.LabelPart(() => vm.FeatureName ?? ""),
+                    GraphNodes.SelectedPart(isSelected),
+                    // The unavailable reason, when it can't be picked (live).
+                    new NodeAnnouncement(() => !canSelect() && !isSelected()
+                        ? vm.NotAvailableLabel?.Value : null, live: true, kind: AnnouncementKinds.Value),
+                    GraphNodes.DisabledPart(() => canSelect() || isSelected()),
+                },
+                SearchText = () => vm.FeatureName ?? "",
+                StateText = () => isSelected() ? Loc.T("state.selected") : null,
+                OnActivate = () =>
+                {
+                    if (!canSelect() && !isSelected()) return;
+                    UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
+                    _viewCollapsed.Remove(vm);
+                    vm.SetSelectedFromView(true); // selecting expands next render; siblings auto-collapse
+                },
+                OnTooltip = () =>
+                {
+                    var tpl = vm.TooltipTemplate();
+                    if (tpl != null) TooltipScreen.Open(tpl);
+                },
+            };
+
+            if (vm.HasNesting && (canSelect() || isSelected()))
+            {
+                // Expansion state IS the game's selection (minus a view-only collapse): Right selects
+                // (and thus expands); Left collapses the view WITHOUT deselecting (the old behavior —
+                // the pick persists when you close it).
+                bool expanded = isSelected() && !_viewCollapsed.Contains(vm);
+                vt.OnExpand = () =>
+                {
+                    _viewCollapsed.Remove(vm);
+                    if (!vm.IsSelected.Value) vm.SetSelectedFromView(true);
+                };
+                vt.OnCollapse = () => _viewCollapsed.Add(vm);
+                b.BeginGroup(ControlId.Referenced(vm, key), vt, expanded: expanded);
+                if (expanded)
+                {
+                    var kids = Children(vm);
+                    kids.Sort(CompareItems);
+                    foreach (var kid in kids) EmitFeature(b, kid, key + "/");
+                }
+                b.EndGroup();
+            }
+            else
+            {
+                b.AddItem(ControlId.Referenced(vm, key), vt);
+            }
         }
+
+        private List<CharGenFeatureSelectorItemVM> Children(CharGenFeatureSelectorItemVM vm)
+        {
+            var result = new List<CharGenFeatureSelectorItemVM>();
+            var sel = Phase.SelectorVM;
+            if (sel != null && sel.NestedEntityCollections.TryGetValue(vm, out var kids) && kids != null)
+                foreach (var kk in kids)
+                    if (kk is CharGenFeatureSelectorItemVM it) result.Add(it);
+            return result;
+        }
+
+        // The game's feature-list order (CharGenFeatureSelectorPCView.EntityComparer): selectable
+        // (selected or can-select) first, then by recommendation (Recommended > Neutral >
+        // NotRecommended), then alphabetical. The game's "already has" tier is a no-op (it compares an
+        // item to itself — a copy-paste bug), so we skip it to match the observable order.
+        private static int CompareItems(CharGenFeatureSelectorItemVM a, CharGenFeatureSelectorItemVM b)
+        {
+            int s = Pickable(b).CompareTo(Pickable(a));
+            if (s != 0) return s;
+            int r = Recommend(b).CompareTo(Recommend(a));
+            if (r != 0) return r;
+            return string.Compare(a.FeatureName, b.FeatureName, StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        private static bool Pickable(CharGenFeatureSelectorItemVM x)
+            => x.IsSelected.Value || x.SelectState == FeatureSelectionViewState.SelectState.CanSelect;
+
+        private static RecommendationType Recommend(CharGenFeatureSelectorItemVM x)
+            => x.FeatureRecommendation.Value?.Recommendation.Value ?? RecommendationType.Neutral;
 
         // The selection's source blueprint reads as a class / race / progression name (the level-up
         // origin of this pick), or null if unknown.

@@ -22,16 +22,17 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class TotalPhaseContent : CharGenPhaseContent<CharGenTotalPhaseVM>
     {
-        // The accessible presentation. Swap this (later, from a setting) to re-shape the sheet — the
-        // unified grid here, or PanelCharSheetSink's separate Tab-stops — without touching the assembly.
-        private readonly ICharSheetSink _sink = new FlowSheetCharSheetSink();
+        // The accessible presentation — the graph char-sheet sink (one sheet stop, a region per
+        // section), created per render in Build.
+        private ICharSheetSink _sink;
 
         public TotalPhaseContent(CharGenTotalPhaseVM phase) : base(phase) { }
 
         private static UITextCharSheet S => UIStrings.Instance.CharacterSheet;
 
-        public override void Build(Container content)
+        public override void Build(WrathAccess.UI.Graph.GraphBuilder b, string k)
         {
+            _sink = new GraphCharSheetSink(b, k + "total:");
             BuildSummary();
 
             // Ability Scores — Score + Modifier as a grid (no localized group title; the game shows an
@@ -61,7 +62,7 @@ namespace WrathAccess.Screens
             BuildDamageReduction();
             BuildEnergyResistance();
 
-            content.Add(_sink.Build());
+            _sink.Build();
         }
 
         // Race / gender / alignment and HP — free-form lines, each with the game's tooltip.

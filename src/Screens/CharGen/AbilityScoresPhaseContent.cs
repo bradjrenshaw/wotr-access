@@ -1,20 +1,22 @@
+using System;
+using System.Collections.Generic;
 using HarmonyLib;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.AbilityScores;
 using Kingmaker.UnitLogic.Class.LevelUp;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
     /// Ability Scores (point-buy) phase. A live "points remaining" line, then a grid of the six
     /// abilities (rows) by Score / Modifier / Race bonus / Raise / Lower (columns). Score/Modifier/Race
-    /// bonus are read-only (Score's Space opens the stat detail); Raise/Lower are the game's stepper
-    /// buttons — they read the point cost and Activate to spend/refund, re-announcing the new score and
-    /// remaining points. All numbers read the live point-buy state (synchronous with the step), not the
-    /// LateUpdate-lagged reactives, so values are correct the instant you step. A race-bonus chooser
-    /// (which stat gets the racial +2) appears below when the race offers one.
+    /// bonus are read-only (Space anywhere in the row opens the stat detail); Raise/Lower are the game's
+    /// stepper buttons — they read the point cost and Enter to spend/refund, re-announcing the new score
+    /// and remaining points. All numbers read the live point-buy state (synchronous with the step), not
+    /// the LateUpdate-lagged reactives. A race-bonus chooser (which stat gets the racial +2) appears
+    /// below when the race offers one (immediate mode — it renders whenever available).
     /// </summary>
     public sealed class AbilityScoresPhaseContent : CharGenPhaseContent<CharGenAbilityScoresVM>
     {
@@ -23,75 +25,79 @@ namespace WrathAccess.Screens
             AccessTools.Field(typeof(CharGenPhaseBaseVM), "m_LevelUpController");
 
         private readonly LevelUpController _controller;
-        private FlowSheet _sheet;
-        private ListRegion _raceRegion; // present only when the race offers a bonus choice
 
         public AbilityScoresPhaseContent(CharGenAbilityScoresVM phase) : base(phase)
             => _controller = ControllerField?.GetValue(phase) as LevelUpController;
 
-        // One FlowSheet, three regions (one Tab-stop): a status line, the abilities grid, and — when the
-        // race offers a +2 choice — a racial-bonus selector. Arrows move cell-to-cell across all three;
-        // Ctrl+Up/Down jump between regions.
-        public override void Build(Container content)
+        public override void Build(GraphBuilder b, string k)
         {
-            _sheet = new FlowSheet();
+            var sheet = new GraphSheet(b, k + "abl:");
 
-            _sheet.List(null) // unlabelled status line (self-describing, single cell)
-                .Item(new TextElement(() => Loc.T("chargen.points_remaining", new { value = Points() })));
+            sheet.Region(null); // unlabelled status line (self-describing, single cell)
+            sheet.Line(GraphNodes.Text(() => Loc.T("chargen.points_remaining", new { value = Points() })));
 
-            var table = _sheet.Table(Loc.T("section.ability_scores"), Loc.T("col.score"), Loc.T("col.modifier"), Loc.T("col.race_bonus"), Loc.T("col.raise"), Loc.T("col.lower"));
+            sheet.Region(Loc.T("section.ability_scores"), new[]
+            {
+                Loc.T("col.score"), Loc.T("col.modifier"), Loc.T("col.race_bonus"),
+                Loc.T("col.raise"), Loc.T("col.lower"),
+            });
             foreach (var a in Phase.AbilityScoreAllocators)
             {
                 if (a == null) continue;
                 var alloc = a; // capture for the live closures
-                table.Row(new TextElement(() => alloc.Name.Value), new UIElement[]
+                Action tooltip = () =>
                 {
-                    // The game's "Scores"/Modifier/Race bonus are the live total (incl. racial), the
-                    // ability modifier of that total, and the racial component — read on focus (settled),
-                    // so the racial choice is reflected here.
-                    new TextElement(() => alloc.StatValue.Value.ToString()),
-                    new TextElement(() => Signed(alloc.Bonus.Value)),
-                    new TextElement(() => alloc.RaceBonus.Value.HasValue ? Signed(alloc.RaceBonus.Value.Value) : ""),
-                    new ProxyStepper(() => CostLabel(alloc, raise: true), () => CanAct(alloc, raise: true),
-                        alloc.TryIncreaseValue, () => Summary(alloc), actionVerb: "raise"),
-                    new ProxyStepper(() => CostLabel(alloc, raise: false), () => CanAct(alloc, raise: false),
-                        alloc.TryDecreaseValue, () => Summary(alloc), actionVerb: "lower"),
-                }, tooltip: () => alloc.TooltipTemplate()); // Space on any cell in the row → stat detail
+                    var tpl = alloc.TooltipTemplate();
+                    if (tpl != null) TooltipScreen.Open(tpl);
+                };
+                sheet.RowAt(
+                    new NodeVtable
+                    {
+                        ControlType = ControlTypes.Text,
+                        Announcements = new[] { GraphNodes.LabelPart(() => alloc.Name.Value) },
+                        SearchText = () => alloc.Name.Value,
+                        OnTooltip = tooltip,
+                    },
+                    alloc,
+                    new[]
+                    {
+                        Cell(1, () => alloc.StatValue.Value.ToString(), alloc, tooltip),
+                        Cell(2, () => Signed(alloc.Bonus.Value), alloc, tooltip),
+                        Cell(3, () => alloc.RaceBonus.Value.HasValue ? Signed(alloc.RaceBonus.Value.Value) : "", alloc, tooltip),
+                        Stepper(4, alloc, raise: true, tooltip),
+                        Stepper(5, alloc, raise: false, tooltip),
+                    });
             }
+            sheet.Finish();
 
-            UpdateRace();   // adds the race region if applicable
-            _sheet.Reflow();
-            content.Add(_sheet);
+            // The race ability-bonus chooser only exists for races that let you pick where the +2 goes.
+            if (Phase.RaceBonusAvailable != null && Phase.RaceBonusAvailable.Value)
+                b.AddItem(ControlId.Structural(k + "racebonus"),
+                    CharGenNodes.SequentialSelector("Racial ability bonus",
+                        () => Phase.RaceBonusSelector != null ? Phase.RaceBonusSelector.Value : null));
         }
 
-        public override void Tick()
-        {
-            // Add/remove the race region as availability changes; reflow re-lays the matrix while keeping
-            // the other regions' cells (so a focused ability cell survives the change).
-            if (UpdateRace()) _sheet.Reflow();
-        }
+        private KeyValuePair<int, NodeVtable> Cell(int col, Func<string> value,
+            CharGenAbilityScoreAllocatorVM alloc, Action tooltip)
+            => new KeyValuePair<int, NodeVtable>(col, new NodeVtable
+            {
+                ControlType = ControlTypes.Text,
+                Announcements = new[] { new NodeAnnouncement(value) },
+                SearchText = () => alloc.Name.Value,
+                OnTooltip = tooltip, // Space on any cell in the row → stat detail
+            });
 
-        // The race ability-bonus chooser only exists for races that let you pick where the +2 goes.
-        // Returns true if the region set changed (caller reflows).
-        private bool UpdateRace()
+        private KeyValuePair<int, NodeVtable> Stepper(int col, CharGenAbilityScoreAllocatorVM alloc,
+            bool raise, Action tooltip)
         {
-            bool show = Phase.RaceBonusAvailable != null && Phase.RaceBonusAvailable.Value;
-            bool has = _raceRegion != null && _sheet.HasRegion(_raceRegion);
-            if (show && !has)
-            {
-                _raceRegion = new ListRegion("Racial ability bonus");
-                _raceRegion.Item(new ProxySequentialSelector("Racial ability bonus",
-                    () => Phase.RaceBonusSelector != null ? Phase.RaceBonusSelector.Value : null));
-                _sheet.AddRegion(_raceRegion);
-                return true;
-            }
-            if (!show && has)
-            {
-                _sheet.RemoveRegion(_raceRegion);
-                _raceRegion = null;
-                return true;
-            }
-            return false;
+            var vt = CharGenNodes.Stepper(
+                () => CostLabel(alloc, raise),
+                () => CanAct(alloc, raise),
+                raise ? (Action)alloc.TryIncreaseValue : alloc.TryDecreaseValue,
+                () => Summary(alloc));
+            vt.SearchText = () => alloc.Name.Value;
+            vt.OnTooltip = tooltip;
+            return new KeyValuePair<int, NodeVtable>(col, vt);
         }
 
         // Live reads from the point-buy model (falling back to the allocator's reactive only when not in
@@ -132,7 +138,7 @@ namespace WrathAccess.Screens
         private string Summary(CharGenAbilityScoreAllocatorVM a)
         {
             int total = Score(a) + (a.RaceBonus.Value ?? 0);
-            int mod = (int)System.Math.Floor((total - 10) / 2.0);
+            int mod = (int)Math.Floor((total - 10) / 2.0);
             return L("value.ability_summary", new { name = a.Name.Value, total, mod = Signed(mod), points = Points() });
         }
 

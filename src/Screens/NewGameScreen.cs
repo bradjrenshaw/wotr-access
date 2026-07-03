@@ -44,8 +44,9 @@ namespace WrathAccess.Screens
             if (phase is NewGamePhaseStoryVM story)
                 BuildStory(b, k, story);
             else if (phase is NewGamePhaseDifficultyVM difficulty)
-                // Same VMs as the Settings screen — the same collapsible header-section emitter.
-                SettingsEntityGraph.Emit(b, difficulty.SettingEntities, k);
+                // Same VMs as the Settings screen, but FLAT: one short section, so headers read as
+                // labels and the options are a plain vertical list (no collapsed tree to open first).
+                SettingsEntityGraph.Emit(b, difficulty.SettingEntities, k, flat: true);
             else
                 b.AddItem(ControlId.Structural(k + "unavailable"),
                     GraphNodes.Text(() => Loc.T("wizard.step_unavailable")));

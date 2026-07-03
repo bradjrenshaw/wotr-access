@@ -52,5 +52,8 @@ namespace WrathAccess.UI
 
         /// <summary>Notify that a screen left the stack (its per-screen nav state is dropped).</summary>
         public static void ScreenClosed(Screens.Screen screen) => Active?.ScreenClosed(screen);
+
+        /// <summary>Move focus to a graph node by id (graph-native screens).</summary>
+        public static void FocusNode(UI.Graph.ControlId id, bool announce = true) => Active?.FocusNode(id, announce);
     }
 }

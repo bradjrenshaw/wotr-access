@@ -74,6 +74,13 @@ namespace WrathAccess.UI
             if (screen != null) _states.Remove(screen);
         }
 
+        public override void FocusNode(ControlId id, bool announce = true)
+        {
+            if (id == null) return;
+            _pendingFocus = id;
+            _pendingAnnounce = announce;
+        }
+
         // Graph-native screens declare fresh from live game state on every render (immediate mode);
         // legacy screens' retained Container trees are compiled by the adapter until they migrate.
         private GraphRender BuildRender(Screens.Screen screen)

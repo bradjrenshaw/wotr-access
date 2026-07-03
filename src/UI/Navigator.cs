@@ -53,6 +53,11 @@ namespace WrathAccess.UI
         /// reopened instance starts fresh. Covered-but-alive screens keep theirs.</summary>
         public virtual void ScreenClosed(Screen screen) { }
 
+        /// <summary>Move focus to a graph node by id (graph-native screens' analog of
+        /// <see cref="Focus"/>) — applied when the node exists in a render, with one retry frame for
+        /// content that appears mid-build (e.g. focusing a node just added by an action).</summary>
+        public virtual void FocusNode(Graph.ControlId id, bool announce = true) { }
+
         // ---- shared focus-restore rules ----
 
         /// <summary>The child to land on when first focusing a container: the remembered focus, else —

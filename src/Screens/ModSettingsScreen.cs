@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using WrathAccess.Settings;
 using WrathAccess.UI;
+using WrathAccess.UI.Graph;
 using WrathAccess.UI.Proxies;
 
 namespace WrathAccess.Screens
@@ -9,12 +10,13 @@ namespace WrathAccess.Screens
     /// <summary>
     /// The mod's settings screen — the tabbed category browser. Opened from the <see cref="ModMenuScreen"/>
     /// launcher (Settings entry), not bound directly to a key. Mod-pushed: <see cref="IsActive"/> reads a
-    /// static flag <see cref="Open"/> sets. Two Tab-stops, mirroring the game's settings screen: a CATEGORIES
-    /// tab list (Input, UI…), then a content region holding the selected category's settings treeview.
-    /// Selecting a tab swaps only the content (tabs untouched, so tab focus survives) and the tab announces
-    /// "selected" in place — no extra speech. Opening engages focus mode so it owns the keyboard everywhere;
-    /// closing restores the prior state and reveals the launcher beneath it (it sits at a higher layer).
-    /// Escape closes.
+    /// static flag <see cref="Open"/> sets. Graph-native: a CATEGORIES tab stop, the selected category's
+    /// settings tree (content keys carry the tab, so switching re-keys content only and expansion is
+    /// remembered per tab), then the two Reset stops. Being immediate-mode, the structural tabs are LIVE
+    /// from their registries: adding/removing/renaming overlays or speech configs, and Customize/Reset on
+    /// an overlay system, simply render differently next frame — the old in-place tree-mutation machinery
+    /// (id→node maps, insert-before-add-button, per-mutation focus juggling) is gone; after an Add we just
+    /// point focus at the new node's key. Escape closes.
     /// </summary>
     public sealed class ModSettingsScreen : Screen
     {
@@ -27,22 +29,7 @@ namespace WrathAccess.Screens
         public override int Layer => 37; // above the mod-menu launcher (35), so it stacks on top of it
         public override bool IsActive() => s_open;
 
-        private int _active;
-        private int _builtActive;
-        private bool _built;
-        private Container _content; // wraps the active category's treeview; refilled on tab switch
-
-        // Overlays tab: the live tree + the Add button + id→node map, so add/remove/reorder mutate the tree
-        // in place (no destructive rebuild) and focus the affected node.
-        private Container _overlaysTree;
-        private UIElement _addButton;
-        private readonly Dictionary<string, Container> _overlayNodes = new Dictionary<string, Container>();
-
-        // Speech tab: the additional-speech-config subtree + its Add button + id→node map (same in-place
-        // add/remove pattern as overlays).
-        private Container _speechConfigsTree;
-        private UIElement _speechAddButton;
-        private readonly Dictionary<string, Container> _speechConfigNodes = new Dictionary<string, Container>();
+        private int _active; // the selected category tab (view state)
 
         // Explicit tabs (the settings Root holds bindings/announcements/ui, which don't map 1:1 to tabs:
         // the UI tab composes the global announcement settings + the per-element-type overrides).
@@ -61,14 +48,7 @@ namespace WrathAccess.Screens
         };
 
         // Focus mode is owned by the ModMenuScreen launcher (always open beneath us), so we don't touch it.
-        public override void OnPush() { _active = 0; _built = false; }
-        public override void OnPop() { Clear(); _content = null; }
-
-        public override void OnUpdate()
-        {
-            if (!_built) { Build(); return; }
-            if (_active != _builtActive) RebuildContent(); // tab changed → refill content only
-        }
+        public override void OnPush() { _active = 0; }
 
         // Escape closes the whole menu.
         public override IEnumerable<ElementAction> GetActions()
@@ -77,63 +57,49 @@ namespace WrathAccess.Screens
         }
 
         // Localized menu string ("settings" table) with the English fallback.
-        private static string Loc(string key, string fallback)
+        private static string L(string key, string fallback)
             => WrathAccess.Localization.LocalizationManager.GetOrDefault("settings", key, fallback);
 
-        private void Build()
-        {
-            _built = true;
-            Clear();
+        public override bool BuildsGraph => true;
 
-            var tabs = new ListContainer(Loc("menu.categories", "Categories"));
+        public override void Build(GraphBuilder b)
+        {
+            // The category tabs.
+            b.BeginStop("tabs").PushContext(L("menu.categories", "Categories"), "list");
             for (int i = 0; i < Tabs.Length; i++)
             {
                 int idx = i;
-                tabs.Add(new ProxyTab(Loc(Tabs[i].loc, Tabs[i].label), () => _active == idx, () => _active = idx));
+                b.AddItem(ControlId.Structural("modset:tab:" + Tabs[i].key),
+                    GraphNodes.Tab(TabLabelFunc(i), () => _active == idx, () => _active = idx));
             }
-            Add(tabs);
+            b.PopContext();
 
-            _content = new Panel(); // structural wrapper; the tree inside it is the second Tab-stop
-            Add(_content);
-            RebuildContent();
+            // The selected category's settings tree. Keys are settings PATHS under a per-tab prefix, so a
+            // tab switch re-keys the content (tab focus survives) and expansion is remembered per tab.
+            string tabKey = _active >= 0 && _active < Tabs.Length ? Tabs[_active].key : null;
+            b.BeginStop("content");
+            BuildTab(b, tabKey, "modset:" + tabKey + ":");
 
-            // Two standing Tab-stops after the tree (NOT inside _content, so they survive tab switches
-            // and focus stays put after a reset): reset THIS tab, and reset everything.
-            Add(new ProxyActionButton(
-                () => Message.Localized("settings", "reset.tab", new { name = ActiveTabLabel() }).Resolve(),
-                () => true, ResetActiveTab));
-            Add(new ProxyActionButton(
-                () => Message.Localized("settings", "reset.all").Resolve(),
-                () => true, ResetAllSettings));
-
-            Navigation.Attach(this);
-            Tts.Speak(Loc("menu.title", "Mod menu")); // once, on open (Build runs only on open now)
-            Navigation.AnnounceCurrent();
+            // Two standing stops after the tree: reset THIS tab, and reset everything.
+            b.BeginStop("resettab").AddItem(ControlId.Structural("modset:resettab"),
+                GraphNodes.Button(
+                    () => Message.Localized("settings", "reset.tab", new { name = ActiveTabLabel() }).Resolve(),
+                    ResetActiveTab));
+            b.BeginStop("resetall").AddItem(ControlId.Structural("modset:resetall"),
+                GraphNodes.Button(
+                    () => Message.Localized("settings", "reset.all").Resolve(),
+                    ResetAllSettings));
         }
 
-        // Refill ONLY the content wrapper (tabs untouched) so focus on the tab list survives a switch — the
-        // new tree (and its label) replaces the old; the user Tabs into it.
-        private void RebuildContent()
-        {
-            _builtActive = _active;
-            if (_content == null) return;
-            _content.Clear();
-            _overlaysTree = null; _overlayNodes.Clear(); // (re)set when the overlays tab builds
-            _speechConfigsTree = null; _speechConfigNodes.Clear(); // (re)set when the speech tab builds
-            // Unlabeled = the structural tree root (silent, never focused as a node); only real sub-groups
-            // announce expand/collapse. The category is already conveyed by the selected tab.
-            var tree = new TreeGroup();
-            BuildTab(tree, _active >= 0 && _active < Tabs.Length ? Tabs[_active].key : null);
-            _content.Add(tree);
-        }
+        private static System.Func<string> TabLabelFunc(int i) => () => L(Tabs[i].loc, Tabs[i].label);
 
-        private void BuildTab(TreeGroup tree, string key)
+        private void BuildTab(GraphBuilder b, string key, string k)
         {
             if (key == "input")
             {
                 var bindings = ModSettings.Root.Get<CategorySetting>("bindings");
                 if (bindings != null)
-                    foreach (var s in bindings.Children) BuildSettingNode(tree, s);
+                    foreach (var s in bindings.Children) ModSettingNodes.Emit(b, s, k);
             }
             else if (key == "ui")
             {
@@ -143,51 +109,53 @@ namespace WrathAccess.Screens
                 // case, first. The full per-type detail (suffix etc.) lives under Per-element overrides.
                 if (annRoot != null)
                 {
-                    var announcements = new TreeGroup(Loc("ui.announcements", "Announcements"));
-                    announcements.Add(BuildVerbosityDropdown(annRoot));
+                    b.BeginGroup(ControlId.Structural(k + "announcements"),
+                        GraphNodes.Group(() => L("ui.announcements", "Announcements")));
+                    b.AddItem(ControlId.Structural(k + "verbosity"), BuildVerbosityDropdown(annRoot));
                     foreach (var child in annRoot.Children)
                     {
                         if (!(child is CategorySetting annCat) || annCat.Hidden) continue;
                         var enabled = annCat.Get<BoolSetting>("enabled");
                         if (enabled != null)
-                            announcements.Add(new ProxyBoolToggle(annCat.Label, enabled.Get,
-                                () => enabled.Set(!enabled.Get())));
+                        {
+                            var en = enabled;
+                            b.AddItem(ControlId.Structural(k + "ann." + annCat.Key),
+                                GraphNodes.Toggle(() => annCat.Label, en.Get, () => en.Set(!en.Get())));
+                        }
                     }
-                    tree.Add(announcements);
+                    b.EndGroup();
                 }
-
-                // (future root-level UI settings slot in here)
 
                 // Per-element overrides, tucked at the bottom: the Global node carries each announcement
                 // type's FULL settings (suffix punctuation etc.); then every element type's tri-state
                 // inherit/on/off overrides, alphabetical.
-                var overrides = new TreeGroup(Loc("ui.element_overrides", "Per-element overrides"));
+                b.BeginGroup(ControlId.Structural(k + "overrides"),
+                    GraphNodes.Group(() => L("ui.element_overrides", "Per-element overrides")));
                 if (annRoot != null)
                 {
-                    var global = new TreeGroup(Loc("global.group", "Global"));
-                    foreach (var s in annRoot.Children) BuildSettingNode(global, s);
-                    if (global.Children.Count > 0) overrides.Add(global);
+                    b.BeginGroup(ControlId.Structural(k + "overrides.global"),
+                        GraphNodes.Group(() => L("global.group", "Global")));
+                    foreach (var s in annRoot.Children) ModSettingNodes.Emit(b, s, k + "g.");
+                    b.EndGroup();
                 }
                 var ui = ModSettings.Root.Get<CategorySetting>("ui");
                 if (ui != null)
                     foreach (var s in ui.Children.OrderBy(c => c.Label, System.StringComparer.CurrentCultureIgnoreCase))
-                        BuildSettingNode(overrides, s);
-                if (overrides.Children.Count > 0) tree.Add(overrides);
+                        ModSettingNodes.Emit(b, s, k + "o.");
+                b.EndGroup();
             }
             else if (key == "overlays")
             {
-                // Each overlay is a root node (Cursor + systems + Make-standard + Remove); the Add button at
-                // the bottom appends one. Add/remove/reorder mutate this live tree in place — see
-                // BuildOverlayNode / AddOverlay / RemoveOverlay / MakeStandard (no destructive rebuild).
-                _overlaysTree = tree;
+                // Each overlay is a root group (Cursor + systems + Rename/Remove); the Add button at the
+                // bottom appends one. All LIVE from the registry — an add/remove just renders differently.
                 var overlays = ModSettings.Root.Get<CategorySetting>("overlays");
                 foreach (var id in WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayIds())
                 {
                     var oc = overlays?.Get<CategorySetting>(id);
-                    if (oc != null) tree.Add(BuildOverlayNode(oc, id));
+                    if (oc != null) EmitOverlay(b, oc, id, k);
                 }
-                _addButton = new ProxyActionButton(Loc("overlay.add", "Add overlay"), null, AddOverlay);
-                tree.Add(_addButton);
+                b.AddItem(ControlId.Structural(k + "add"),
+                    GraphNodes.Button(() => L("overlay.add", "Add overlay"), () => AddOverlay(k)));
             }
             else if (key == "audio")
             {
@@ -198,96 +166,106 @@ namespace WrathAccess.Screens
                     foreach (var s in audio.Children)
                     {
                         if (s is CategorySetting volumes && volumes.Key == "volumes")
-                            foreach (var v in volumes.Children) BuildSettingNode(tree, v);
+                            foreach (var v in volumes.Children) ModSettingNodes.Emit(b, v, k);
                         else
-                            BuildSettingNode(tree, s);
+                            ModSettingNodes.Emit(b, s, k);
                     }
             }
             else if (key == "speech")
             {
                 // The DEFAULT config (handler dropdown + each handler's subtree) first, then the advanced
-                // "Additional speech configurations" node — each config a clone of the same schema with
-                // Rename/Remove, and an Add button at the bottom (in-place add/remove like overlays).
+                // "Additional speech configurations" group — each config a clone of the same schema with
+                // Rename/Remove, and an Add button at the bottom. All live from the registry.
                 var speech = ModSettings.Root.Get<CategorySetting>("speech");
                 if (speech != null)
                     foreach (var s in speech.Children)
                     {
                         if (s is CategorySetting cs && cs.Key == "additional") continue; // rendered specially below
-                        BuildSettingNode(tree, s);
+                        ModSettingNodes.Emit(b, s, k);
                     }
 
-                var configs = new TreeGroup(Loc("speech.additional", "Additional speech configurations"));
-                _speechConfigsTree = configs;
+                b.BeginGroup(ControlId.Structural(k + "additional"),
+                    GraphNodes.Group(() => L("speech.additional", "Additional speech configurations")));
                 foreach (var id in WrathAccess.Speech.SpeechConfigRegistry.Ids())
                 {
                     var cc = SpeechConfigCat(id);
-                    if (cc != null) configs.Add(BuildSpeechConfigNode(cc, id));
+                    if (cc != null) EmitSpeechConfig(b, cc, id, k);
                 }
-                _speechAddButton = new ProxyActionButton(Loc("speech.config.add", "Add speech configuration"), null, AddSpeechConfig);
-                configs.Add(_speechAddButton);
-                tree.Add(configs);
+                b.AddItem(ControlId.Structural(k + "addconfig"),
+                    GraphNodes.Button(() => L("speech.config.add", "Add speech configuration"), () => AddSpeechConfig(k)));
+                b.EndGroup();
             }
             else if (key == "events")
             {
-                // Two nodes, both rendered generically: "Event settings" (per-source global defaults) and
+                // Two groups, both rendered generically: "Event settings" (per-source global defaults) and
                 // "Individual event customization" (per-event, per-source, inheriting those globals).
                 var events = ModSettings.Root.Get<CategorySetting>("events");
                 if (events != null)
-                    foreach (var s in events.Children) BuildSettingNode(tree, s);
+                    foreach (var s in events.Children) ModSettingNodes.Emit(b, s, k);
             }
             else if (key == "scanner")
             {
                 // One unified system: per-entity-type settings (sound + announcements, mirroring the
                 // taxonomy) under Entities, then the sonar's own tunables under Sonar.
-                var entities = new TreeGroup(Loc("scanner.entities", "Entities"));
+                b.BeginGroup(ControlId.Structural(k + "entities"),
+                    GraphNodes.Group(() => L("scanner.entities", "Entities")));
 
                 // The global announcement base every entity inherits.
                 var paRoot = ModSettings.Root.Get<CategorySetting>("proxy_announce");
                 if (paRoot != null)
                 {
-                    var defaults = new TreeGroup(Loc("scanner.ann_defaults", "Announcement defaults"));
+                    b.BeginGroup(ControlId.Structural(k + "anndefaults"),
+                        GraphNodes.Group(() => L("scanner.ann_defaults", "Announcement defaults")));
                     foreach (var p in paRoot.Children)
                     {
                         // One-toggle parts read flat; the spatial part (sub-toggles) keeps its subgroup.
                         if (p is CategorySetting pc && pc.Children.Count == 1
                             && pc.Get<BoolSetting>("enabled") is BoolSetting en)
-                            defaults.Add(new ProxyBoolToggle(pc.Label, en.Get, () => en.Set(!en.Get())));
+                        {
+                            var e = en;
+                            var cat = pc;
+                            b.AddItem(ControlId.Structural(k + "annd." + pc.Key),
+                                GraphNodes.Toggle(() => cat.Label, e.Get, () => e.Set(!e.Get())));
+                        }
                         else
-                            BuildSettingNode(defaults, p);
+                            ModSettingNodes.Emit(b, p, k + "annd.");
                     }
-                    if (defaults.Children.Count > 0) entities.Add(defaults);
+                    b.EndGroup();
                 }
 
                 foreach (var cat in WrathAccess.Exploration.ScanTaxonomy.Categories)
-                    BuildEntityNode(cat, entities);
+                    EmitEntityNode(b, cat, k + "ent.");
                 // World-map entity types (separate taxonomy) share this tree — same sound dropdowns.
                 foreach (var cat in WrathAccess.Exploration.GlobalMapTaxonomy.Categories)
-                    BuildEntityNode(cat, entities);
-                tree.Add(entities);
+                    EmitEntityNode(b, cat, k + "went.");
+                b.EndGroup();
 
-                var sonar = new TreeGroup(Loc("category.sonar", "Sonar"));
                 var d = SystemDefaults("sonar");
-                if (d != null) foreach (var s in d.Children) BuildSettingNode(sonar, s);
-                if (sonar.Children.Count > 0) tree.Add(sonar);
+                if (d != null && ModSettingNodes.HasVisibleLeaf(d))
+                {
+                    b.BeginGroup(ControlId.Structural(k + "sonar"),
+                        GraphNodes.Group(() => L("category.sonar", "Sonar")));
+                    foreach (var s in d.Children) ModSettingNodes.Emit(b, s, k + "son.");
+                    b.EndGroup();
+                }
             }
             else if (key == "log")
             {
                 // The shared log message-type tree, configured once for all overlays.
                 var d = SystemDefaults("log");
                 if (d != null)
-                    foreach (var s in d.Children) BuildSettingNode(tree, s);
+                    foreach (var s in d.Children) ModSettingNodes.Emit(b, s, k);
             }
             else if (key == "exploration")
             {
                 // The Default overlay's cursor (mode + speed per slot) first, then the remaining shared
-                // system defaults, one collapsible node per system (empty ones — systems with no
-                // tunables — are skipped by BuildSettingNode).
+                // system defaults, one collapsible group per system (empty ones are skipped by Emit).
                 var cursor = ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>("cursor");
-                if (cursor != null) BuildSettingNode(tree, cursor);
+                if (cursor != null) ModSettingNodes.Emit(b, cursor, k);
                 foreach (var sysKey in new[] { "grid", "spatial", "slope", "walltones", "object", "fog", "path" })
                 {
                     var d = SystemDefaults(sysKey);
-                    if (d != null) BuildSettingNode(tree, d);
+                    if (d != null) ModSettingNodes.Emit(b, d, k);
                 }
             }
         }
@@ -301,14 +279,14 @@ namespace WrathAccess.Screens
             ("Concise", "preset.concise", new[] { "role", "tooltip", "position" }),
         };
 
-        private UIElement BuildVerbosityDropdown(CategorySetting annRoot)
+        private static NodeVtable BuildVerbosityDropdown(CategorySetting annRoot)
         {
             var visible = annRoot.Children.OfType<CategorySetting>().Where(c => !c.Hidden)
                 .Select(c => (Key: c.Key, Enabled: c.Get<BoolSetting>("enabled")))
                 .Where(t => t.Enabled != null).ToList();
 
-            var labels = VerbosityPresets.Select(p => Loc(p.loc, p.label)).ToList();
-            labels.Add(Loc("preset.custom", "Custom"));
+            var labels = VerbosityPresets.Select(p => L(p.loc, p.label)).ToList();
+            labels.Add(L("preset.custom", "Custom"));
 
             int Current()
             {
@@ -332,102 +310,106 @@ namespace WrathAccess.Screens
             }
 
             // "Custom" is a derived display state, not a choice — mark it virtual.
-            return new ProxyChoiceDropdown(Loc("ui.verbosity", "Verbosity"), labels, Current, Apply,
+            return ModSettingNodes.ChoiceDropdown(L("ui.verbosity", "Verbosity"), labels, Current, Apply,
                 selectableCount: VerbosityPresets.Length);
         }
 
         private static CategorySetting SystemDefaults(string key)
             => ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>(key);
 
-        // One system inside an overlay: enabled toggle + whole-subtree inheritance. "Following
-        // defaults" shows just a Customize button (the tunables live on the Sonar/Log/Exploration
-        // tabs); Customize materializes the overlay's own full copy of the system tree (seeded from
-        // the current defaults) in place, and Reset drops it again. The node label carries the live
-        // state so the deviation is audible at a glance.
-        private Container BuildSystemNode(string id, CategorySetting sysCat)
+        // ---- overlays: live from the registry; Customize/Reset just render differently next frame ----
+
+        // One overlay = a group (live name; Cursor + systems + Rename/Remove).
+        private static void EmitOverlay(GraphBuilder b, CategorySetting oCat, string id, string k)
         {
-            var key = sysCat.Key;
-            var node = new TreeGroup("")
+            string ok = k + "ov." + id + ".";
+            b.BeginGroup(ControlId.Structural(ok + "group"), GraphNodes.Group(
+                () => WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayName(id)));
+            foreach (var c in oCat.Children) // hidden "name" is skipped by Emit
             {
-                LabelProvider = () => Loc("system." + key,
-                        WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SystemName(key))
-                    + ", " + (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key)
-                        ? Loc("overlay.state_customized", "customized")
-                        : Loc("overlay.state_default", "following defaults"))
-            };
-            FillSystemNode(node, id, key, sysCat);
-            return node;
+                if (c is CategorySetting sysCat
+                    && WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SystemName(sysCat.Key) != null)
+                    EmitSystemNode(b, id, sysCat, ok);
+                else
+                    ModSettingNodes.Emit(b, c, ok);
+            }
+            b.AddItem(ControlId.Structural(ok + "rename"),
+                GraphNodes.Button(() => L("overlay.rename", "Rename overlay"), () => RenameOverlay(id)));
+            b.AddItem(ControlId.Structural(ok + "remove"),
+                GraphNodes.Button(() => L("overlay.remove", "Remove overlay"), () => RemoveOverlay(id)));
+            b.EndGroup();
         }
 
-        private void FillSystemNode(Container node, string id, string key, CategorySetting sysCat)
+        // One system inside an overlay: play-mode dropdown + whole-subtree inheritance. "Following
+        // defaults" shows just a Customize button (the tunables live on the Sonar/Log/Exploration tabs);
+        // Customize materializes the overlay's own full copy (seeded from the current defaults) — which
+        // simply RENDERS next frame; Reset drops it again. The group label carries the live state.
+        private static void EmitSystemNode(GraphBuilder b, string id, CategorySetting sysCat, string ok)
         {
-            node.Clear();
+            var key = sysCat.Key;
+            string sk = ok + key + ".";
+            b.BeginGroup(ControlId.Structural(sk + "group"), GraphNodes.Group(
+                () => L("system." + key, WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SystemName(key))
+                    + ", " + (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key)
+                        ? L("overlay.state_customized", "customized")
+                        : L("overlay.state_default", "following defaults"))));
+
             var mode = sysCat.Get<ChoiceSetting>("mode"); // the play-mode dropdown (Off / When moving / Continuous)
-            if (mode != null) BuildSettingNode(node, mode);
+            if (mode != null) ModSettingNodes.Emit(b, mode, sk);
 
             if (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key))
             {
                 var custom = sysCat.Get<CategorySetting>("custom");
                 if (custom != null)
-                    foreach (var c in custom.Children) BuildSettingNode(node, c);
-                node.Add(new ProxyActionButton(Loc("overlay.reset_defaults", "Reset to defaults"), null, () =>
-                {
-                    WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.ResetSystem(id, key);
-                    FillSystemNode(node, id, key, sysCat);
-                    Tts.Speak(Loc("overlay.state_default", "following defaults"));
-                    Navigation.Focus(node, announce: false);
-                }));
+                    foreach (var c in custom.Children) ModSettingNodes.Emit(b, c, sk);
+                b.AddItem(ControlId.Structural(sk + "reset"),
+                    GraphNodes.Button(() => L("overlay.reset_defaults", "Reset to defaults"), () =>
+                    {
+                        WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.ResetSystem(id, key);
+                        Tts.Speak(L("overlay.state_default", "following defaults"));
+                        Navigation.FocusNode(ControlId.Structural(sk + "group"), announce: false);
+                    }));
             }
             else
             {
-                node.Add(new ProxyActionButton(Loc("overlay.customize", "Customize for this overlay"), null, () =>
-                {
-                    WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Customize(id, key);
-                    FillSystemNode(node, id, key, sysCat);
-                    Tts.Speak(Loc("overlay.state_customized", "customized"));
-                    Navigation.Focus(node, announce: false);
-                }));
+                b.AddItem(ControlId.Structural(sk + "customize"),
+                    GraphNodes.Button(() => L("overlay.customize", "Customize for this overlay"), () =>
+                    {
+                        WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Customize(id, key);
+                        Tts.Speak(L("overlay.state_customized", "customized"));
+                        Navigation.FocusNode(ControlId.Structural(sk + "group"), announce: false);
+                    }));
             }
+            b.EndGroup();
         }
 
-        // One overlay = a collapsible node (Cursor + systems) with a LIVE "(standard)" tag, plus always-on
-        // Make-standard + Remove actions. Returned (not added) so the caller can add or insert it.
-        private Container BuildOverlayNode(CategorySetting oCat, string id)
-        {
-            var group = new TreeGroup("")
-            {
-                LabelProvider = () => WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayName(id)
-            };
-            foreach (var c in oCat.Children) // hidden "name" is skipped
-            {
-                if (c is CategorySetting sysCat
-                    && WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SystemName(sysCat.Key) != null)
-                    group.Add(BuildSystemNode(id, sysCat));
-                else
-                    BuildSettingNode(group, c);
-            }
-            group.Add(new ProxyActionButton(Loc("overlay.rename", "Rename overlay"), null, () => RenameOverlay(id)));
-            group.Add(new ProxyActionButton(Loc("overlay.remove", "Remove overlay"), null, () => RemoveOverlay(id)));
-            _overlayNodes[id] = group;
-            return group;
-        }
-
-        // ---- incremental overlay add / remove / reorder (mutate the live tree, no rebuild) ----
-
-        private void AddOverlay()
+        private static void AddOverlay(string k)
         {
             var id = WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Add();
-            var oc = ModSettings.Root.Get<CategorySetting>("overlays")?.Get<CategorySetting>(id);
-            if (oc == null || _overlaysTree == null) return;
-            var node = BuildOverlayNode(oc, id);
-            int at = _addButton != null ? _overlaysTree.IndexOf(_addButton) : _overlaysTree.Children.Count;
-            _overlaysTree.Insert(at, node);
-            Tts.Speak(Loc("overlay.added", "Overlay added"));
-            Navigation.Focus(node);
+            Tts.Speak(L("overlay.added", "Overlay added"));
+            Navigation.FocusNode(ControlId.Structural(k + "ov." + id + ".group"));
+        }
+
+        private static void RemoveOverlay(string id)
+        {
+            if (!WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Remove(id)) return;
+            // The node vanishes next render; nearest-survivor reconciliation lands on the neighbor.
+            Tts.Speak(L("overlay.removed", "Overlay removed"));
+        }
+
+        private static void RenameOverlay(string id)
+        {
+            var current = WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayName(id);
+            ModTextEntryScreen.Open(L("overlay.rename", "Rename overlay"), current, name =>
+            {
+                if (string.IsNullOrWhiteSpace(name)) return;
+                WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SetOverlayName(id, name);
+                Tts.Speak(L("overlay.renamed", "Renamed to") + " " + name); // group label reads live
+            });
         }
 
         private string ActiveTabLabel()
-            => _active >= 0 && _active < Tabs.Length ? Loc(Tabs[_active].loc, Tabs[_active].label) : "";
+            => _active >= 0 && _active < Tabs.Length ? L(Tabs[_active].loc, Tabs[_active].label) : "";
 
         // The settings subtrees each tab renders — what its Reset button restores. Overlays are special:
         // reset = remove every overlay (back to the empty default list); the shared system defaults they
@@ -462,7 +444,6 @@ namespace WrathAccess.Screens
                     foreach (var path in ResetRootsFor(key))
                         ModSettings.GetCategory(path)?.ResetToDefault();
             });
-            RebuildContent(); // values are read live, but structural tabs (overlays/sounds) need the refresh
             Tts.Speak(Message.Localized("settings", "reset.tab_done", new { name = ActiveTabLabel() }).Resolve());
         }
 
@@ -477,7 +458,6 @@ namespace WrathAccess.Screens
                 foreach (var s in ModSettings.Root.Children) s.ResetToDefault();
                 ModSettings.GetSetting<BoolSetting>("wizard.completed")?.Set(wizardShown);
             });
-            RebuildContent();
             Tts.Speak(Message.Localized("settings", "reset.all_done").Resolve());
         }
 
@@ -487,116 +467,89 @@ namespace WrathAccess.Screens
             foreach (var id in ids) WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Remove(id);
         }
 
-        private void RemoveOverlay(string id)
-        {
-            if (_overlaysTree == null || !_overlayNodes.TryGetValue(id, out var node)) return;
-            if (!WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Remove(id)) return;
-            int idx = _overlaysTree.IndexOf(node);
-            _overlaysTree.Remove(node);
-            _overlayNodes.Remove(id);
-            var kids = _overlaysTree.Children;
-            UIElement target = kids.Count == 0 ? null : kids[idx < kids.Count ? idx : kids.Count - 1];
-            Tts.Speak(Loc("overlay.removed", "Overlay removed"));
-            Navigation.Focus(target);
-        }
-
-        private void RenameOverlay(string id)
-        {
-            var current = WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.OverlayName(id);
-            ModTextEntryScreen.Open(Loc("overlay.rename", "Rename overlay"), current, name =>
-            {
-                if (string.IsNullOrWhiteSpace(name)) return;
-                WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SetOverlayName(id, name);
-                // The node's label is a live LabelProvider, so it already reflects the new name.
-                Tts.Speak(Loc("overlay.renamed", "Renamed to") + " " + name);
-            });
-        }
-
-        // ---- additional speech configs (same in-place add / remove / rename as overlays) ----
+        // ---- additional speech configs (same live-registry pattern as overlays) ----
 
         private static CategorySetting SpeechConfigCat(string id)
             => ModSettings.Root.Get<CategorySetting>("speech")?.Get<CategorySetting>("additional")?.Get<CategorySetting>(id);
 
-        // One config = a collapsible node (the cloned handler/params schema; the hidden name is skipped)
-        // with Rename + Remove. Returned (not added) so the caller can add or insert it.
-        private Container BuildSpeechConfigNode(CategorySetting cc, string id)
+        // One config = a group (the cloned handler/params schema; the hidden name is skipped) + Rename/Remove.
+        private static void EmitSpeechConfig(GraphBuilder b, CategorySetting cc, string id, string k)
         {
-            var group = new TreeGroup(WrathAccess.Speech.SpeechConfigRegistry.Name(id))
-            {
-                LabelProvider = () => WrathAccess.Speech.SpeechConfigRegistry.Name(id)
-            };
-            foreach (var s in cc.Children) BuildSettingNode(group, s); // the hidden "name" is skipped
-            group.Add(new ProxyActionButton(Loc("speech.config.rename", "Rename"), null, () => RenameSpeechConfig(id)));
-            group.Add(new ProxyActionButton(Loc("speech.config.remove", "Remove"), null, () => RemoveSpeechConfig(id)));
-            _speechConfigNodes[id] = group;
-            return group;
+            string ck = k + "cfg." + id + ".";
+            b.BeginGroup(ControlId.Structural(ck + "group"), GraphNodes.Group(
+                () => WrathAccess.Speech.SpeechConfigRegistry.Name(id)));
+            foreach (var s in cc.Children) ModSettingNodes.Emit(b, s, ck); // the hidden "name" is skipped
+            b.AddItem(ControlId.Structural(ck + "rename"),
+                GraphNodes.Button(() => L("speech.config.rename", "Rename"), () => RenameSpeechConfig(id)));
+            b.AddItem(ControlId.Structural(ck + "remove"),
+                GraphNodes.Button(() => L("speech.config.remove", "Remove"), () => RemoveSpeechConfig(id)));
+            b.EndGroup();
         }
 
-        private void AddSpeechConfig()
+        private static void AddSpeechConfig(string k)
         {
             var id = WrathAccess.Speech.SpeechConfigRegistry.Add();
-            var cc = SpeechConfigCat(id);
-            if (cc == null || _speechConfigsTree == null) return;
-            var node = BuildSpeechConfigNode(cc, id);
-            int at = _speechAddButton != null ? _speechConfigsTree.IndexOf(_speechAddButton) : _speechConfigsTree.Children.Count;
-            _speechConfigsTree.Insert(at, node);
-            Tts.Speak(Loc("speech.config.added", "Speech configuration added"));
-            Navigation.Focus(node);
+            Tts.Speak(L("speech.config.added", "Speech configuration added"));
+            Navigation.FocusNode(ControlId.Structural(k + "cfg." + id + ".group"));
         }
 
-        private void RemoveSpeechConfig(string id)
+        private static void RemoveSpeechConfig(string id)
         {
-            if (_speechConfigsTree == null || !_speechConfigNodes.TryGetValue(id, out var node)) return;
             if (!WrathAccess.Speech.SpeechConfigRegistry.Remove(id)) return;
-            int idx = _speechConfigsTree.IndexOf(node);
-            _speechConfigsTree.Remove(node);
-            _speechConfigNodes.Remove(id);
-            var kids = _speechConfigsTree.Children;
-            UIElement target = kids.Count == 0 ? null : kids[idx < kids.Count ? idx : kids.Count - 1];
-            Tts.Speak(Loc("speech.config.removed", "Speech configuration removed"));
-            Navigation.Focus(target);
+            Tts.Speak(L("speech.config.removed", "Speech configuration removed"));
         }
 
-        private void RenameSpeechConfig(string id)
+        private static void RenameSpeechConfig(string id)
         {
             var current = WrathAccess.Speech.SpeechConfigRegistry.Name(id);
-            ModTextEntryScreen.Open(Loc("speech.config.rename", "Rename"), current, name =>
+            ModTextEntryScreen.Open(L("speech.config.rename", "Rename"), current, name =>
             {
                 if (string.IsNullOrWhiteSpace(name)) return;
-                WrathAccess.Speech.SpeechConfigRegistry.SetName(id, name); // node label is a live LabelProvider
-                Tts.Speak(Loc("overlay.renamed", "Renamed to") + " " + name);
+                WrathAccess.Speech.SpeechConfigRegistry.SetName(id, name); // group label reads live
+                Tts.Speak(L("overlay.renamed", "Renamed to") + " " + name);
             });
         }
 
-
         // One entity node of the Scanner tab's Entities tree: its sound dropdown + an Announcements
         // subgroup (the per-part tri-states), then its subcategories recursively. Mirrors ScanTaxonomy.
-        private static void BuildEntityNode(WrathAccess.Exploration.ScanTaxonomy.Node node, Container parent)
+        private static void EmitEntityNode(GraphBuilder b, WrathAccess.Exploration.ScanTaxonomy.Node node, string k)
         {
-            var group = new TreeGroup(Loc(node.LocKey, node.Label));
+            string nk = k + node.Key + ".";
+            b.BeginGroup(ControlId.Structural(nk + "group"), GraphNodes.Group(() => L(node.LocKey, node.Label)));
 
             var sound = WrathAccess.Exploration.ScanSounds.SoundSetting(node.Key);
             if (sound != null)
-                group.Add(new ProxyChoiceDropdown(Loc("scanner.sound", "Sound"),
-                    sound.Choices.Select(ch => ch.Label).ToList(),
-                    () => IndexOfChoice(sound),
-                    idx => { if (idx >= 0 && idx < sound.Choices.Count) sound.Set(sound.Choices[idx].Id); }));
+            {
+                var snd = sound;
+                b.AddItem(ControlId.Structural(nk + "sound"), ModSettingNodes.ChoiceDropdown(
+                    L("scanner.sound", "Sound"),
+                    snd.Choices.Select(ch => ch.Label).ToList(),
+                    () => ModSettingNodes.IndexOfChoice(snd),
+                    idx => { if (idx >= 0 && idx < snd.Choices.Count) snd.Set(snd.Choices[idx].Id); }));
+            }
 
             var annCat = ModSettings.GetCategory("proxy_elem." + node.Key);
             if (annCat != null)
             {
-                var ann = new TreeGroup(Loc("scanner.announcements", "Announcements"));
-                foreach (var c in annCat.Children)
-                    if (c is NullableBoolSetting nb) ann.Add(new ProxyOverrideToggle(nb));
-                if (ann.Children.Count > 0) group.Add(ann);
+                bool any = false;
+                foreach (var c in annCat.Children) if (c is NullableBoolSetting) { any = true; break; }
+                if (any)
+                {
+                    b.BeginGroup(ControlId.Structural(nk + "ann"),
+                        GraphNodes.Group(() => L("scanner.announcements", "Announcements")));
+                    foreach (var c in annCat.Children)
+                        if (c is NullableBoolSetting nb)
+                            b.AddItem(ControlId.Structural(nk + "ann." + nb.Key), ModSettingNodes.OverrideToggle(nb));
+                    b.EndGroup();
+                }
             }
 
-            foreach (var child in node.Children) BuildEntityNode(child, group);
-            parent.Add(group);
+            foreach (var child in node.Children) EmitEntityNode(b, child, nk);
+            b.EndGroup();
         }
 
-        // Map a setting to a navigable control; categories recurse into collapsible tree groups.
-        // Internal so other screens (e.g. the setup wizard) render the same controls over a subtree.
+        // ---- legacy element builder (used ONLY by the setup wizard until it migrates; dies with it) ----
+
         internal static void BuildSettingNode(Container parent, Setting s)
         {
             if (s.Hidden) return; // hidden globals (no [ShowInGlobalSettings]) + hidden state settings
@@ -625,18 +578,11 @@ namespace WrathAccess.Screens
                 case ChoiceSetting c:
                     parent.Add(new ProxyChoiceDropdown(c.Label,
                         c.Choices.Select(ch => ch.Label).ToList(),
-                        () => IndexOfChoice(c),
+                        () => ModSettingNodes.IndexOfChoice(c),
                         idx => { if (idx >= 0 && idx < c.Choices.Count) c.Set(c.Choices[idx].Id); },
                         inheritedValue: c.InheritedValue));
                     break;
             }
-        }
-
-        private static int IndexOfChoice(ChoiceSetting c)
-        {
-            for (int i = 0; i < c.Choices.Count; i++)
-                if (c.Choices[i].Id == c.ValueId) return i;
-            return -1;
         }
     }
 }

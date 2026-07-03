@@ -72,9 +72,11 @@ namespace WrathAccess.Screens
                 b.AddItem(ControlId.Referenced(voice, k + "voice:" + i),
                     GraphNodes.SelectionItem(voice, () => voice.DisplayName, onActivate: () =>
                     {
+                        // The game plays the voice SAMPLE (off Barks) on top of the UI click, so keep the
+                        // default click (don't suppress it — that was a port slip).
                         if (voice.IsSelected.Value) voice.Barks?.PlayPreview();
                         else voice.SetSelectedFromView(true);
-                    }, sound: null));
+                    }));
                 i++;
             }
             b.PopContext();

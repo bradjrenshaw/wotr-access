@@ -7,20 +7,25 @@ using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Progression.Ma
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Progression.Spellbook;
 using Kingmaker.UI.MVVM._VM.Tooltip.Templates;
 using WrathAccess.UI;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Maps the game's progression grid (<see cref="UnitProgressionVM"/>) onto one navigable
-    /// <see cref="FlowSheet"/>. The game's view (UnitProgressionView prefab) stacks the sections in a
-    /// vertical layout in this order: Feats, then one section per class — Statistics (BAB/saves), the
-    /// spellbook, then one block per <see cref="ProgressionVM"/> (the main progression and each
-    /// sub-progression such as Weapon Training) — then any Shared tracks last; each block carries its own
-    /// level ruler (verified from the prefab). We mirror that as one FlowSheet **region per block**: the
-    /// region's label is the block name (announced on entry), its columns are the level ruler ("Level 1…N",
-    /// announced on column change), and its rows are the data. A feature cell is the feature at that (line,
-    /// level) with rank + Added/Removed marker and a Space drill-in; a stat cell is the value at that level.
-    /// The game packs rank-less features onto shared lines, which we label "Features".
+    /// Maps the game's progression grid (<see cref="UnitProgressionVM"/>) onto one navigable sheet.
+    /// The game's view (UnitProgressionView prefab) stacks the sections in a vertical layout in this
+    /// order: Feats, then one section per class — Statistics (BAB/saves), the spellbook, then one block
+    /// per <see cref="ProgressionVM"/> (the main progression and each sub-progression such as Weapon
+    /// Training) — then any Shared tracks last; each block carries its own level ruler (verified from
+    /// the prefab). We mirror that as one **region per block**: the region's label is the block name
+    /// (announced on entry), its columns are the level ruler ("Level 1…N", announced on column change),
+    /// and its rows are the data. A feature cell is the feature at that (line, level) with rank +
+    /// Added/Removed marker and a Space drill-in; a stat cell is the value at that level. The game packs
+    /// rank-less features onto shared lines, which we label "Features".
+    ///
+    /// Dual-output: <see cref="Build"/> renders a retained <see cref="FlowSheet"/> (the remaining
+    /// adapter consumer — chargen — until it migrates); <see cref="Emit"/> renders graph nodes on a
+    /// <see cref="GraphSheet"/> for graph-native screens (the char sheet's Progression page).
     /// </summary>
     internal static class ProgressionGrid
     {
@@ -48,6 +53,78 @@ namespace WrathAccess.Screens
             public bool AllClassBands { get; set; }
         }
 
+        // ---- the render target: one grid, two presentations ----
+
+        // The block/row emission surface both outputs implement. Rows are SPARSE: a null cell means
+        // "nothing at that level" — not landable (the graph target skips it; the FlowSheet leaves it
+        // non-visitable).
+        private interface ITarget
+        {
+            void Heading(UIElement el);
+            void Table(string name, string[] cols);
+            void Row(UIElement head, UIElement[] cells);
+        }
+
+        private sealed class FlowTarget : ITarget
+        {
+            public readonly FlowSheet Sheet;
+            private TableRegion _region;
+            public FlowTarget(FlowSheet sheet) { Sheet = sheet; }
+            public void Heading(UIElement el) => Sheet.List(null).Item(el);
+            public void Table(string name, string[] cols) => _region = Sheet.Table(name ?? "", cols);
+            public void Row(UIElement head, UIElement[] cells) => _region.Row(head, cells);
+        }
+
+        private sealed class GraphTarget : ITarget
+        {
+            private readonly GraphSheet _sheet;
+            private string[] _cols;
+            public GraphTarget(GraphSheet sheet) { _sheet = sheet; }
+            public void Heading(UIElement el) => _sheet.Line(Wrap(el));
+            public void Table(string name, string[] cols) { _cols = cols; _sheet.Region(name ?? "", cols); }
+            public void Row(UIElement head, UIElement[] cells)
+            {
+                var sparse = new List<KeyValuePair<int, NodeVtable>>();
+                if (cells != null)
+                    for (int i = 0; i < cells.Length; i++)
+                        if (cells[i] != null) sparse.Add(new KeyValuePair<int, NodeVtable>(i + 1, Wrap(cells[i])));
+                _sheet.RowAt(Wrap(head), null, sparse);
+            }
+
+            // Adapter-style wrap: the element's composed message + its drill-in on Space (dies when
+            // the grid's cell builders are re-typed to vtables with the rest of the element layer).
+            private static NodeVtable Wrap(UIElement e) => new NodeVtable
+            {
+                ControlType = ControlTypes.Text,
+                Announcements = new[] { new NodeAnnouncement(() => e.GetFocusMessage().Resolve()) },
+                SearchText = e.GetLabelText,
+                OnTooltip = () => TooltipScreen.FollowElement(e),
+            };
+        }
+
+        /// <summary>Render as a retained FlowSheet (adapter consumers), or null when empty.</summary>
+        public static FlowSheet Build(UnitProgressionVM prog, BlueprintCharacterClass selectedClass,
+                                      Options options = null)
+        {
+            var target = new FlowTarget(new FlowSheet(Loc.T("chargen.progression")));
+            if (!Render(target, prog, selectedClass, options)) return null;
+            target.Sheet.Reflow();
+            return target.Sheet.RowCount > 0 ? target.Sheet : null;
+        }
+
+        /// <summary>Render as graph nodes under <paramref name="keyPrefix"/> (graph-native screens).
+        /// True when anything was emitted.</summary>
+        public static bool Emit(GraphBuilder b, string keyPrefix, UnitProgressionVM prog,
+            BlueprintCharacterClass selectedClass, Options options = null)
+        {
+            b.PushContext(Loc.T("chargen.progression"));
+            var sheet = new GraphSheet(b, keyPrefix);
+            bool any = Render(new GraphTarget(sheet), prog, selectedClass, options);
+            sheet.Finish();
+            b.PopContext();
+            return any;
+        }
+
         // Each ClassProgressionVM keeps its class/archetype private; we reflect them to compute the
         // per-level BAB/saves (the grid's stat chupachups only flag increases, not the numbers).
         private static readonly System.Reflection.FieldInfo ClassField =
@@ -55,12 +132,12 @@ namespace WrathAccess.Screens
         private static readonly System.Reflection.FieldInfo ArchetypeField =
             AccessTools.Field(typeof(ClassProgressionVM), "m_UnitArchetype");
 
-        public static FlowSheet Build(UnitProgressionVM prog, BlueprintCharacterClass selectedClass,
-                                      Options options = null)
+        private static bool Render(ITarget t, UnitProgressionVM prog, BlueprintCharacterClass selectedClass,
+            Options options)
         {
             options ??= new Options();
             var levels = prog?.LevelProgressionVM?.EntryVms;
-            if (levels == null || levels.Count == 0) return null;
+            if (levels == null || levels.Count == 0) return false;
 
             // UnitProgressionVM.ClassProgressionVms retains the *previously* selected class as a stale
             // second band (it holds the last two classes touched, newest first), even though the preview
@@ -77,26 +154,24 @@ namespace WrathAccess.Screens
                 else bands.AddRange(SelectBands(prog.ClassProgressionVms, selectedClass));
             }
 
-            var sheet = new FlowSheet(Loc.T("chargen.progression"));
-
             // Section order mirrors the game's UnitProgressionView prefab (verified from
             // mainmenupcview.res, which lays the scroll content out in a vertical layout):
             // Feats first, then the class blocks, then shared progressions last.
+            bool any = false;
             if (options.IncludeFeats && prog.FeatProgressionVM != null)
-                AddBand(sheet, "Feats", prog.FeatProgressionVM.MainChupaChupsLines,
+                any |= AddBand(t, "Feats", prog.FeatProgressionVM.MainChupaChupsLines,
                     prog.FeatProgressionVM.AdditionalChupaChupsList, levels);
 
             bool prefix = bands.Count > 1; // multiclass → disambiguate group names by class
             foreach (var cls in bands)
-                if (cls != null) AddClassBlocks(sheet, cls, levels, prefix ? cls.Name + " — " : "");
+                if (cls != null) { AddClassBlocks(t, cls, levels, prefix ? cls.Name + " — " : ""); any = true; }
 
             if (options.IncludeShared && prog.SharedProgressionVms != null)
                 foreach (var sh in prog.SharedProgressionVms)
-                    if (sh != null) AddBand(sheet, sh.ProgressionName ?? "Shared",
+                    if (sh != null) any |= AddBand(t, sh.ProgressionName ?? "Shared",
                         sh.MainChupaChupsLines, sh.AdditionalChupaChupsList, levels);
 
-            sheet.Reflow();
-            return sheet.RowCount > 0 ? sheet : null;
+            return any;
         }
 
         // The class band(s) to actually render: the one whose class blueprint matches the current
@@ -122,7 +197,7 @@ namespace WrathAccess.Screens
 
         // A class's stacked blocks, each its own region: a class lead-in line, then Statistics, Spells
         // (casters), then one block per ProgressionVM (the main progression and any sub-progressions).
-        private static void AddClassBlocks(FlowSheet sheet, ClassProgressionVM cls,
+        private static void AddClassBlocks(ITarget t, ClassProgressionVM cls,
             IList<LevelProgressionEntryVM> levels, string prefix)
         {
             // Class lead-in (the game's class header): name + current level + HP gained per level, as a
@@ -130,13 +205,17 @@ namespace WrathAccess.Screens
             var head = cls.Name ?? "Class";
             if (cls.Level != null) head += ", level " + cls.Level.Value;
             if (!string.IsNullOrEmpty(cls.HitPointsPerLevel)) head += ", hit points per level " + cls.HitPointsPerLevel;
-            sheet.List(null).Item(new TextElement(head, "heading"));
+            t.Heading(new TextElement(head, "heading"));
 
-            AddStatRows(NewBlock(sheet, prefix + "Statistics", levels), cls, levels);
+            NewBlock(t, prefix + "Statistics", levels);
+            AddStatRows(t, cls, levels);
 
             var markers = cls.SpellbookProgressionVM?.MainChupaChupsList;
             if (markers != null && markers.Count > 0)
-                AddSpellRow(NewBlock(sheet, prefix + "Spells", levels), markers, levels);
+            {
+                NewBlock(t, prefix + "Spells", levels);
+                AddSpellRow(t, markers, levels);
+            }
 
             if (cls.ProgressionVms != null)
                 foreach (var inner in cls.ProgressionVms)
@@ -144,37 +223,37 @@ namespace WrathAccess.Screens
                     if (inner == null) continue;
                     if (!HasLines(inner.MainChupaChupsLines) && !HasDets(inner.AdditionalChupaChupsList)) continue;
                     var name = string.IsNullOrEmpty(inner.ProgressionName) ? "Features" : inner.ProgressionName;
-                    var region = NewBlock(sheet, prefix + name, levels);
-                    AddDeterminators(region, inner.AdditionalChupaChupsList); // level-1 foundational features first
-                    AddFeatureRows(region, inner.MainChupaChupsLines, levels);
+                    NewBlock(t, prefix + name, levels);
+                    AddDeterminators(t, inner.AdditionalChupaChupsList); // level-1 foundational features first
+                    AddFeatureRows(t, inner.MainChupaChupsLines, levels);
                 }
         }
 
         // A new block = a table region whose columns are this block's level ruler (restated per block,
         // matching the game). The region label (the block name) is announced on entry; the column headers
         // ("Level N") on column change — no in-grid header row needed.
-        private static TableRegion NewBlock(FlowSheet sheet, string name, IList<LevelProgressionEntryVM> levels)
+        private static void NewBlock(ITarget t, string name, IList<LevelProgressionEntryVM> levels)
         {
             var cols = new string[levels.Count];
             for (int i = 0; i < levels.Count; i++) cols[i] = "Level " + levels[i].Level;
-            return sheet.Table(name ?? "", cols);
+            t.Table(name, cols);
         }
 
         // BAB + the three saves, one dense row each (value at every level). Headers carry the glossary
         // tooltip so Space on the row header explains the stat. Archetype progressions override the
         // class's where present (matching the game's martial-stats logic).
-        private static void AddStatRows(TableRegion region, ClassProgressionVM cls, IList<LevelProgressionEntryVM> levels)
+        private static void AddStatRows(ITarget t, ClassProgressionVM cls, IList<LevelProgressionEntryVM> levels)
         {
             var bp = ClassField?.GetValue(cls) as BlueprintCharacterClass;
             if (bp == null) return;
             var arch = ArchetypeField?.GetValue(cls) as BlueprintArchetype;
-            AddStatRow(region, "Base attack bonus", arch?.BaseAttackBonus ?? bp.BaseAttackBonus, levels, "BaseAttackBonus");
-            AddStatRow(region, "Fortitude", arch?.FortitudeSave ?? bp.FortitudeSave, levels, "SaveFortitude");
-            AddStatRow(region, "Reflex", arch?.ReflexSave ?? bp.ReflexSave, levels, "SaveReflex");
-            AddStatRow(region, "Will", arch?.WillSave ?? bp.WillSave, levels, "SaveWill");
+            AddStatRow(t, "Base attack bonus", arch?.BaseAttackBonus ?? bp.BaseAttackBonus, levels, "BaseAttackBonus");
+            AddStatRow(t, "Fortitude", arch?.FortitudeSave ?? bp.FortitudeSave, levels, "SaveFortitude");
+            AddStatRow(t, "Reflex", arch?.ReflexSave ?? bp.ReflexSave, levels, "SaveReflex");
+            AddStatRow(t, "Will", arch?.WillSave ?? bp.WillSave, levels, "SaveWill");
         }
 
-        private static void AddStatRow(TableRegion region, string name, BlueprintStatProgression prog,
+        private static void AddStatRow(ITarget t, string name, BlueprintStatProgression prog,
             IList<LevelProgressionEntryVM> levels, string glossaryKey)
         {
             if (prog == null) return;
@@ -184,13 +263,13 @@ namespace WrathAccess.Screens
                 int b = prog.GetBonus(lv.Level);
                 cells.Add(new TextElement(b >= 0 ? "+" + b : b.ToString()));
             }
-            region.Row(new TextElement(name, null, () => new TooltipTemplateGlossary(glossaryKey)), cells.ToArray());
+            t.Row(new TextElement(name, null, () => new TooltipTemplateGlossary(glossaryKey)), cells.ToArray());
         }
 
         // One "Spells" row mirroring the game: a cell at each caster level showing the highest spell
         // level reachable there (running max), with that level's per-day breakdown as a Space drill-in.
         // (The game only places a marker once you reach 1st-level spells, so cantrip-only levels are blank.)
-        private static void AddSpellRow(TableRegion region, IList<SpellbookProgressionChupaChupsVM> markers,
+        private static void AddSpellRow(ITarget t, IList<SpellbookProgressionChupaChupsVM> markers,
             IList<LevelProgressionEntryVM> levels)
         {
             var cellAt = new Dictionary<int, UIElement>();
@@ -204,7 +283,7 @@ namespace WrathAccess.Screens
 
             var cells = new List<UIElement>(levels.Count);
             foreach (var lv in levels) cells.Add(cellAt.TryGetValue(lv.Level, out var c) ? c : null);
-            region.Row(new TextElement(() => Loc.T("chargen.spells")), cells.ToArray());
+            t.Row(new TextElement(() => Loc.T("chargen.spells")), cells.ToArray());
         }
 
         private static string Ordinal(int n)
@@ -231,27 +310,28 @@ namespace WrathAccess.Screens
 
         // Determinators (the game's AdditionalChupaChupsList): foundational level-1 features with no
         // per-level progression, so each is a single labeled row (name + rank + drill-in), no level data.
-        private static void AddDeterminators(TableRegion region, IList<FeatureProgressionChupaChupsVM> dets)
+        private static void AddDeterminators(ITarget t, IList<FeatureProgressionChupaChupsVM> dets)
         {
             if (dets == null) return;
             foreach (var ch in dets)
-                if (ch != null) region.Row(Cell(ch), null);
+                if (ch != null) t.Row(Cell(ch), null);
         }
 
         // A labeled band (Feats / Shared) as its own region: determinators + feature rows, if it has any.
-        private static void AddBand(FlowSheet sheet, string name,
+        private static bool AddBand(ITarget t, string name,
             IEnumerable<List<FeatureProgressionChupaChupsVM>> lines,
             IList<FeatureProgressionChupaChupsVM> additional, IList<LevelProgressionEntryVM> levels)
         {
-            if (!HasLines(lines) && !HasDets(additional)) return;
-            var region = NewBlock(sheet, name, levels);
-            AddDeterminators(region, additional);
-            AddFeatureRows(region, lines, levels);
+            if (!HasLines(lines) && !HasDets(additional)) return false;
+            NewBlock(t, name, levels);
+            AddDeterminators(t, additional);
+            AddFeatureRows(t, lines, levels);
+            return true;
         }
 
         // One row per game line, mirroring the game's packing (≤1 feature per cell, packing invariant).
         // A rank-chain keeps its feature name; a packed row of unrelated features reads "Features".
-        private static void AddFeatureRows(TableRegion region,
+        private static void AddFeatureRows(ITarget t,
             IEnumerable<List<FeatureProgressionChupaChupsVM>> lines, IList<LevelProgressionEntryVM> levels)
         {
             foreach (var line in lines)
@@ -274,7 +354,7 @@ namespace WrathAccess.Screens
                 foreach (var lv in levels)
                     cells.Add(byLevel.TryGetValue(lv.Level, out var ch) ? Cell(ch) : null);
 
-                region.Row(new TextElement(mixed ? "Features" : (header ?? "Feature")), cells.ToArray());
+                t.Row(new TextElement(mixed ? "Features" : (header ?? "Feature")), cells.ToArray());
             }
         }
 

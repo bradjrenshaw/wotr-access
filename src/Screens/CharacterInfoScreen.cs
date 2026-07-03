@@ -22,17 +22,18 @@ using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Stories;
 using Kingmaker.UI.MVVM._VM.Tooltip.Templates; // TooltipTemplateGlossary (section-header glossary tooltips)
 using WrathAccess.UI;
 using WrathAccess.UI.CharSheet;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The in-game character sheet (CharacterInfo service window). Page-based: a tab list of the PC pages
-    /// (Summary / Abilities / Martial / Progression / Biography) from <see cref="CharInfoMenuVM"/>, plus a
-    /// content area built from the live component blocks the game populated for the current page
-    /// (<c>CharacterInfoVM.ComponentVMs</c>). Stat rendering reuses our CharSheet sink (the chargen "Total"
-    /// screen is the same sheet). Tabs are stable; only the content refills on a page switch, so tab focus
-    /// survives. Blocks are rendered in the game's real per-page order/set via
+    /// The in-game character sheet (CharacterInfo service window), graph-native. Page-based: a tab stop
+    /// of the PC pages (Summary / Abilities / Martial / Progression / Biography) from
+    /// <see cref="CharInfoMenuVM"/>, plus the current page's content built live from the component blocks
+    /// the game populated (<c>CharacterInfoVM.ComponentVMs</c>) — stat rendering on the shared
+    /// <see cref="GraphCharSheetSink"/>, the Progression page via <see cref="ProgressionGrid.Emit"/>.
+    /// Content keys carry the page (and viewed unit), so a page switch re-keys content only (tab focus
+    /// survives). Blocks render in the game's real per-page order/set via
     /// <see cref="CharInfoWindowUtility.GetComponentsList"/> (unit-type-aware); the two identical attack
     /// blocks the Martial page carries are de-duplicated. Escape closes the window.
     /// </summary>
@@ -43,22 +44,6 @@ namespace WrathAccess.Screens
         public override int Layer => 10;
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.CharacterInfo;
-
-        private Container _content;
-        private bool _built;
-        private string _sig;
-
-        public override void OnPush() { _built = false; _sig = null; }
-        public override void OnPop() { Clear(); _content = null; _built = false; }
-
-        public override void OnUpdate()
-        {
-            var vm = Vm();
-            if (vm == null) return;
-            if (!_built) BuildShell(vm);
-            var sig = ComponentSig(vm); // changes when the page's block set changes
-            if (sig != _sig) { _sig = sig; RefillContent(vm); }
-        }
 
         public override IEnumerable<ElementAction> GetActions()
         {
@@ -72,15 +57,62 @@ namespace WrathAccess.Screens
         private static ServiceWindowsVM ServiceWindows()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
-        private static string ComponentSig(CharacterInfoVM vm)
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            // Keyed on the current page + which component VMs are live, so the content refills exactly when
-            // the page (and thus its block set + order) changes, but not on every frame.
-            var sb = new StringBuilder();
-            sb.Append((int)(vm.CurrentPage?.Value ?? CharInfoPageType.None)).Append(':');
-            foreach (var kv in vm.ComponentVMs)
-                if (kv.Value?.Value != null) sb.Append((int)kv.Key).Append(',');
-            return sb.ToString();
+            var vm = Vm();
+            if (vm == null) return;
+            string k = "chinfo:" + vm.GetHashCode() + ":";
+
+            // Page tabs — the game's page radio group; activating selects the page (the content below
+            // re-keys). Keyed by entity, so tab focus survives page switches.
+            var entities = vm.CharInfoMenuVM?.SelectionGroup?.EntitiesCollection;
+            if (entities != null)
+            {
+                b.BeginStop("tabs").PushContext(Loc.T("char.pages"), "list");
+                int ti = 0;
+                foreach (var e in entities)
+                {
+                    if (e == null) continue;
+                    var ent = e;
+                    b.AddItem(ControlId.Referenced(ent, k + "tab:" + ti),
+                        GraphNodes.Tab(() => PageName(ent.PageType), () => ent.IsSelected.Value,
+                            () => ent.SetSelectedFromView(true)));
+                    ti++;
+                }
+                b.PopContext();
+            }
+
+            // The current page's blocks, in the game's real order. Keys carry page + viewed unit, so a
+            // page switch (or inspecting another unit) re-keys the content.
+            var page = vm.CurrentPage?.Value ?? CharInfoPageType.None;
+            var unit = vm.UnitDescriptor?.Value;
+            string pk = k + page + ":" + (unit != null ? unit.GetHashCode().ToString() : "?") + ":";
+            b.BeginStop("content");
+            var sink = new GraphCharSheetSink(b, pk);
+            bool attacksShown = false; // Martial has AttackMain + AttackMartial, same VM/data — show once
+            UnitProgressionVM progression = null; // its own stop below, not a sink section
+            foreach (var type in PageComponents(vm))
+            {
+                if (!vm.ComponentVMs.TryGetValue(type, out var rp) || rp?.Value == null) continue;
+                var block = rp.Value;
+                if (block is CharInfoAttacksBlockVM)
+                {
+                    if (attacksShown) continue;
+                    attacksShown = true;
+                }
+                if (block is UnitProgressionVM prog) progression = prog;
+                else RenderBlock(type, block, sink);
+            }
+            sink.Build();
+
+            if (progression != null)
+            {
+                b.BeginStop("progression");
+                ProgressionGrid.Emit(b, pk + "prog:", progression, null,
+                    new ProgressionGrid.Options { AllClassBands = true });
+            }
         }
 
         // The blocks shown on the current page, in the game's real order. CharInfoWindowUtility.PagesContent
@@ -96,57 +128,6 @@ namespace WrathAccess.Screens
             if (unit == null) return new List<CharInfoComponentType>();
             var page = vm.CurrentPage?.Value ?? CharInfoPageType.None;
             return CharInfoWindowUtility.GetComponentsList(page, unit) ?? new List<CharInfoComponentType>();
-        }
-
-        private void BuildShell(CharacterInfoVM vm)
-        {
-            _built = true;
-            Clear();
-
-            // Page tabs — the game's page radio group; activating selects the page (the content then refills).
-            var menu = vm.CharInfoMenuVM;
-            var entities = menu?.SelectionGroup?.EntitiesCollection;
-            if (entities != null)
-            {
-                var tabs = new ListContainer(Loc.T("char.pages"));
-                foreach (var e in entities)
-                {
-                    var ent = e;
-                    tabs.Add(new ProxySelectionItem(ent, () => PageName(ent.PageType), role: "tab"));
-                }
-                Add(tabs);
-            }
-
-            _content = new Panel();
-            Add(_content);
-            Navigation.Attach(this);
-        }
-
-        private void RefillContent(CharacterInfoVM vm)
-        {
-            if (_content == null) return;
-            _content.Clear();
-            var sink = new FlowSheetCharSheetSink();
-            UIElement progression = null; // the Progression block is its own FlowSheet (own Tab-stop), not a sink section
-            bool attacksShown = false;    // Martial has both AttackMain (summary) + AttackMartial (detail), same VM/data — show once
-            // Render in the game's real per-page order (CharInfoWindowUtility.GetComponentsList).
-            foreach (var type in PageComponents(vm))
-            {
-                if (!vm.ComponentVMs.TryGetValue(type, out var rp) || rp?.Value == null) continue;
-                var block = rp.Value;
-                if (block is CharInfoAttacksBlockVM)
-                {
-                    if (attacksShown) continue;
-                    attacksShown = true;
-                }
-                if (block is UnitProgressionVM prog)
-                    progression = ProgressionGrid.Build(prog, null, new ProgressionGrid.Options { AllClassBands = true });
-                else
-                    RenderBlock(type, block, sink);
-            }
-            // Only add the sheet if a section was actually rendered (the Progression page has no sink blocks).
-            if (sink.Build() is FlowSheet sheet && sheet.RowCount > 0) _content.Add(sheet);
-            if (progression != null) _content.Add(progression);
         }
 
         private static void RenderBlock(CharInfoComponentType type, CharInfoComponentVM block, ICharSheetSink sink)

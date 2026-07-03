@@ -26,11 +26,15 @@ namespace WrathAccess.UI
         private int _regionIndex = -1;
         private bool _contextOpen;
 
-        // Current region state.
+        // Current region state. Row cells carry their LOGICAL column (sparse rows skip empty cells --
+        // they aren't landable, like the old FlowSheet's visitability -- but vertical navigation still
+        // matches columns by logical number).
+        private struct CellRef { public int Col; public ControlId Id; }
+
         private string[] _columns; // headers for cells 1..N (null = a plain list region)
         private int _row = -1;
-        private List<ControlId> _prevRowIds;
-        private List<ControlId> _rowIds;
+        private List<CellRef> _prevRowIds;
+        private List<CellRef> _rowIds;
         private Func<string> _rowName; // the current row's primary label (for vertical edge labels)
         private Func<string> _prevRowName;
         private object _rowRef;        // the current row's domain object (identity keys), or null
@@ -68,22 +72,12 @@ namespace WrathAccess.UI
         /// carries it as its reference (tier-1 follow when the row moves).</summary>
         public GraphSheet Row(NodeVtable primary, object rowRef, params Func<string>[] cells)
         {
-            _rowRef = rowRef;
-            _row++;
-            _prevRowIds = _rowIds;
-            _prevRowName = _rowName;
-            _rowIds = new List<ControlId>();
-
-            // The row's name for vertical edge labels = the primary's label (first announcement part).
-            var primaryLabel = primary.Announcements != null && primary.Announcements.Count > 0
-                ? primary.Announcements[0].Text : null;
-            _rowName = primaryLabel;
-
-            EmitCell(primary, 0);
+            BeginRow(primary, rowRef);
             if (cells != null)
                 for (int i = 0; i < cells.Length; i++)
                 {
                     var v = cells[i];
+                    if (v == null) continue; // sparse: an empty logical column isn't landable
                     EmitCell(new NodeVtable
                     {
                         ControlType = ControlTypes.Text,
@@ -95,16 +89,38 @@ namespace WrathAccess.UI
             return this;
         }
 
-        /// <summary>A single full-width line (a lead row like "Your gold", a section note).</summary>
-        public GraphSheet Line(NodeVtable vt)
+        /// <summary>A row whose cells are pre-built vtables at explicit LOGICAL columns (sparse grids --
+        /// the progression level ruler). Column numbers are 1-based (0 is the primary).</summary>
+        public GraphSheet RowAt(NodeVtable primary, object rowRef,
+            IEnumerable<KeyValuePair<int, NodeVtable>> cells)
         {
-            _rowRef = null;
+            BeginRow(primary, rowRef);
+            if (cells != null)
+                foreach (var kv in cells)
+                    if (kv.Value != null) EmitCell(kv.Value, kv.Key);
+            WireVertical();
+            return this;
+        }
+
+        private void BeginRow(NodeVtable primary, object rowRef)
+        {
+            _rowRef = rowRef;
             _row++;
             _prevRowIds = _rowIds;
             _prevRowName = _rowName;
-            _rowIds = new List<ControlId>();
-            _rowName = vt.Announcements != null && vt.Announcements.Count > 0 ? vt.Announcements[0].Text : null;
-            EmitCell(vt, 0);
+            _rowIds = new List<CellRef>();
+
+            // The row's name for vertical edge labels = the primary's label (first announcement part).
+            _rowName = primary.Announcements != null && primary.Announcements.Count > 0
+                ? primary.Announcements[0].Text : null;
+
+            EmitCell(primary, 0);
+        }
+
+        /// <summary>A single full-width line (a lead row like "Your gold", a section note).</summary>
+        public GraphSheet Line(NodeVtable vt)
+        {
+            BeginRow(vt, null);
             WireVertical();
             return this;
         }
@@ -129,35 +145,50 @@ namespace WrathAccess.UI
                 : _key + "r" + _row + "c" + col;
             var id = _rowRef != null && col == 0 ? ControlId.Referenced(_rowRef, skey) : ControlId.Structural(skey);
             _b.AddNode(id, vt);
-            _rowIds.Add(id);
 
-            // Left/right within the row, labeled with the DESTINATION column's header (none onto the
-            // primary — its own full readout identifies it).
-            if (col > 0)
+            // Left/right to the nearest EMITTED cell (sparse rows skip empty columns), labeled with the
+            // destination column's header (none onto the primary, whose full readout identifies it).
+            if (_rowIds.Count > 0)
             {
-                var leftId = _rowIds[col - 1];
-                _b.Connect(id, GraphDir.Left, leftId, col - 1 == 0 ? null : Header(col - 1));
-                _b.Connect(leftId, GraphDir.Right, id, Header(col));
+                var left = _rowIds[_rowIds.Count - 1];
+                _b.Connect(id, GraphDir.Left, left.Id, left.Col == 0 ? null : Header(left.Col));
+                _b.Connect(left.Id, GraphDir.Right, id, Header(col));
             }
+            _rowIds.Add(new CellRef { Col = col, Id = id });
         }
 
-        // Vertical edges between the completed row and the previous one: same column where both rows
-        // have it, else the other row's primary (ragged rows never dead-end). Labels name the
-        // destination ROW when landing off-primary (so you know which row you're in without the full
-        // readout); landings on column 0 stay unlabeled — the primary's parts read the whole row.
+        // Vertical edges between the completed row and the previous one: the same LOGICAL column where
+        // both rows have it, else the other row's primary (sparse/ragged rows never dead-end). Labels
+        // name the destination ROW when landing off-primary (so you know which row you're in without
+        // the full readout); landings on column 0 stay unlabeled -- the primary's parts read the row.
         private void WireVertical()
         {
             if (_prevRowIds == null || _prevRowIds.Count == 0) return;
-            int cols = Math.Max(_rowIds.Count, _prevRowIds.Count);
-            for (int col = 0; col < cols; col++)
+
+            foreach (var cell in _rowIds)
             {
-                var down = col < _rowIds.Count ? _rowIds[col] : _rowIds[0];
-                var up = col < _prevRowIds.Count ? _prevRowIds[col] : _prevRowIds[0];
-                if (col < _prevRowIds.Count)
-                    _b.Connect(up, GraphDir.Down, down, col < _rowIds.Count && col > 0 ? Text(_rowName) : null);
-                if (col < _rowIds.Count)
-                    _b.Connect(down, GraphDir.Up, up, col < _prevRowIds.Count && col > 0 ? Text(_prevRowName) : null);
+                bool matched = HasCol(_prevRowIds, cell.Col);
+                _b.Connect(cell.Id, GraphDir.Up, FindAt(_prevRowIds, cell.Col),
+                    matched && cell.Col > 0 ? Text(_prevRowName) : null);
             }
+            foreach (var cell in _prevRowIds)
+            {
+                bool matched = HasCol(_rowIds, cell.Col);
+                _b.Connect(cell.Id, GraphDir.Down, FindAt(_rowIds, cell.Col),
+                    matched && cell.Col > 0 ? Text(_rowName) : null);
+            }
+        }
+
+        private static ControlId FindAt(List<CellRef> row, int col)
+        {
+            foreach (var c in row) if (c.Col == col) return c.Id;
+            return row[0].Id; // fall to the row's primary
+        }
+
+        private static bool HasCol(List<CellRef> row, int col)
+        {
+            foreach (var c in row) if (c.Col == col) return true;
+            return false;
         }
 
         private string Header(int col)

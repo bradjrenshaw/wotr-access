@@ -692,5 +692,9 @@
   "grip.two_handed": "two-handed",
   "spell.domain": "domain",
   "spell.mythic": "mythic",
-  "spell.opposition": "opposition"
+  "spell.opposition": "opposition",
+  "chargen.voice_gender": "Voice gender",
+  "gender.male": "Male",
+  "gender.female": "Female",
+  "chargen.filter_by_tag": "Filter by tag"
 }

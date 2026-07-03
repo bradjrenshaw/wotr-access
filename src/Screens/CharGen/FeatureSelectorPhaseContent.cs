@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using HarmonyLib;
 using Kingmaker.Blueprints.Classes;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.FeatureSelector;
 using Kingmaker.UI.MVVM._VM.Other; // RecommendationType
@@ -19,12 +20,54 @@ namespace WrathAccess.Screens
     /// via the game's SetSelectedFromView, and Space opens its full write-up. The phase name (from the
     /// wizard shell) supplies the header. Built lazily by the game — renders once it materializes.
     ///
-    /// (The game's tag-filter dropdown is view-only — no VM state to reflect — so it's dropped here;
-    /// type-ahead finds a feature by name on the full list.)
+    /// The game's tag filter is VIEW state — a single <c>SearchRequest</c> string on the live
+    /// <c>CharGenFeatureSearchPCView</c> that BOTH its tag dropdown and its text field write, and the
+    /// selector's <c>IsVisible</c> keeps entities where <c>HasText(SearchRequest)</c> (all when empty).
+    /// We reflect that live property: a tag dropdown reads/writes it (driving the game's real filter),
+    /// and our list mirrors IsVisible. (Type-ahead covers free-text name search.)
     /// </summary>
     public sealed class FeatureSelectorPhaseContent : CharGenPhaseContent<CharGenFeatureSelectorPhaseVM>
     {
+        // CharGenView.s_Instance → SelectedDetailView → (feature) m_CharGenFeatureSearchView → SearchRequest.
+        private static readonly System.Type CharGenViewType =
+            AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.CharGenView");
+        private static readonly System.Reflection.FieldInfo InstanceField =
+            CharGenViewType != null ? AccessTools.Field(CharGenViewType, "s_Instance") : null;
+        private static readonly System.Reflection.FieldInfo SelectedDetailField =
+            CharGenViewType != null ? AccessTools.Field(CharGenViewType, "SelectedDetailView") : null;
+        private static readonly System.Type DetailViewType =
+            AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.Phases.FeatureSelector.CharGenFeatureSelectorPhaseDetailedPCView");
+        private static readonly System.Reflection.FieldInfo SearchViewField =
+            DetailViewType != null ? AccessTools.Field(DetailViewType, "m_CharGenFeatureSearchView") : null;
+        private static readonly System.Type SearchViewType =
+            AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.Phases.FeatureSelector.CharGenFeatureSearchPCView");
+        private static readonly System.Reflection.FieldInfo SearchRequestField =
+            SearchViewType != null ? AccessTools.Field(SearchViewType, "SearchRequest") : null;
+
         public FeatureSelectorPhaseContent(CharGenFeatureSelectorPhaseVM phase) : base(phase) { }
+
+        // The live SearchRequest reactive object, or null when the search view isn't present.
+        private static object SearchRequestReactive()
+        {
+            var cgv = InstanceField?.GetValue(null);
+            if (cgv == null) return null;
+            var view = SelectedDetailField?.GetValue(cgv);
+            if (view == null || DetailViewType == null || !DetailViewType.IsInstanceOfType(view)) return null;
+            var search = SearchViewField?.GetValue(view);
+            return search != null ? SearchRequestField?.GetValue(search) : null;
+        }
+
+        private static string SearchRequest()
+        {
+            var rp = SearchRequestReactive();
+            return rp?.GetType().GetProperty("Value")?.GetValue(rp) as string;
+        }
+
+        private static void SetSearchRequest(string value)
+        {
+            var rp = SearchRequestReactive();
+            rp?.GetType().GetProperty("Value")?.SetValue(rp, value ?? ""); // drives the game's filter too
+        }
 
         public override void Build(GraphBuilder b, string k)
         {
@@ -43,8 +86,27 @@ namespace WrathAccess.Screens
                 b.AddItem(ControlId.Structural(k + "prohibited"),
                     GraphNodes.Text(() => Loc.T("chargen.nothing_to_select")));
 
+            // The tag filter, reflecting the live SearchRequest — shown when the search view is up and the
+            // selection actually has tags (mirroring the game's SetupDropdown gate).
+            var tags = Phase.CharGenFeatureSearchVM?.LocalizedValues;
+            string search = SearchRequest();
+            if (search != null && tags != null && tags.Count > 0)
+            {
+                var options = new List<string> { Loc.T("filter.all") };
+                options.AddRange(tags);
+                b.BeginStop("filter").AddItem(ControlId.Structural(k + "filter"),
+                    ModSettingNodes.ChoiceDropdown(Loc.T("chargen.filter_by_tag"), options,
+                        () => { int idx = tags.IndexOf(SearchRequest() ?? ""); return idx >= 0 ? idx + 1 : 0; },
+                        i => SetSearchRequest(i <= 0 || i - 1 >= tags.Count ? "" : tags[i - 1])));
+            }
+
             var top = TopEntities();
             if (top.Count == 0) return; // lazy — renders once the selector materializes
+
+            // Mirror CharGenFeatureSelectorPCView.IsVisible: all when SearchRequest empty, else HasText.
+            var req = SearchRequest();
+            if (!string.IsNullOrEmpty(req))
+                top.RemoveAll(it => !it.HasText(req));
             top.Sort(CompareItems); // the game's order (selectable → recommended → name)
 
             b.BeginStop("features");

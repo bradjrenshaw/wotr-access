@@ -7,7 +7,7 @@ using Kingmaker.UI.MVVM._VM.Settings.GammaCorrection;     // GammaCorrectionVM
 using Owlcat.Runtime.UI.MVVM; // IHasViewModel
 using UnityEngine; // Resources
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -22,9 +22,11 @@ namespace WrathAccess.Screens
     /// wait loop). "Reset to default" restores the default gamma/contrast.
     ///
     /// Detected via <c>GameStarter.IsGammaCorrectionActive</c> (a public static the boot block toggles); the
-    /// live VM comes from the bound <see cref="GammaCorrectionPCView"/> (mouse mode) via IHasViewModel. Our
-    /// mod is already loaded at this point — mods start at GameStarter line 259, the gamma block is at 471 —
-    /// and focus mode is on, so our normal screen/nav plumbing works.
+    /// live VM comes from the bound <see cref="GammaCorrectionPCView"/> (mouse mode) via IHasViewModel.
+    ///
+    /// Graph-native: declared fresh from the live VM every render. The slider VMs we build over the game's
+    /// UISettings entities are the one piece of retained state (they're disposables observing the underlying
+    /// settings), created per gamma VM and disposed on pop.
     ///
     /// To re-trigger first-time setup for testing: in <c>general_settings.json</c> (LocalLow, game closed)
     /// set <c>"settings.graphics.settings.graphics.gamma-correction-new-was-touched"</c> to <c>false</c>.
@@ -46,23 +48,52 @@ namespace WrathAccess.Screens
             return view is IHasViewModel h ? h.GetViewModel() as GammaCorrectionVM : null;
         }
 
-        private GammaCorrectionVM _built;
         // The slider VMs we build over the game's UISettings entities — ours to dispose (the game disposes
         // its own copies; these are independent observers of the same underlying gamma/contrast settings).
-        private readonly List<SettingsEntitySliderVM> _sliderVms = new List<SettingsEntitySliderVM>();
+        private GammaCorrectionVM _slidersFor;
+        private SettingsEntitySliderVM _gamma, _contrast;
 
-        public override void OnPush() { _built = null; Rebuild(); }
-        public override void OnPop() { Clear(); DisposeSliders(); _built = null; }
+        public override void OnPop() { DisposeSliders(); }
 
-        public override void OnUpdate()
+        private void EnsureSliders(GammaCorrectionVM vm)
         {
-            // The VM is bound by GameStarter; if it appears after we activate, build then.
+            if (ReferenceEquals(vm, _slidersFor)) return;
+            DisposeSliders();
+            _slidersFor = vm;
+            _gamma = new SettingsEntitySliderVM(vm.GammaCorrection);
+            _contrast = new SettingsEntitySliderVM(vm.Contrast);
+        }
+
+        private void DisposeSliders()
+        {
+            _gamma?.Dispose();
+            _contrast?.Dispose();
+            _gamma = null;
+            _contrast = null;
+            _slidersFor = null;
+        }
+
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
+        {
             var vm = Vm();
-            if (vm != null && vm != _built)
-            {
-                Rebuild();
-                Navigation.Attach(this);
-            }
+            if (vm == null) return;
+            EnsureSliders(vm);
+            string k = "gamma:" + vm.GetHashCode() + ":";
+
+            b.BeginStop("help").AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("gamma.help")));
+
+            // The two sliders are one Tab-stop (arrows move between them), matching Settings.
+            b.BeginStop("sliders").PushContext(Loc.T("gamma.sliders"), "list");
+            b.AddItem(ControlId.Referenced(_gamma, k + "g"), GraphNodes.Slider(_gamma, GraphNodes.Position(1, 2)));
+            b.AddItem(ControlId.Referenced(_contrast, k + "c"), GraphNodes.Slider(_contrast, GraphNodes.Position(2, 2)));
+            b.PopContext();
+
+            b.BeginStop("continue").AddItem(ControlId.Structural(k + "continue"),
+                GraphNodes.Button(() => Loc.T("gamma.continue"), () => vm.Close()));
+            b.BeginStop("reset").AddItem(ControlId.Structural(k + "reset"),
+                GraphNodes.Button(() => Loc.T("gamma.reset"), () => vm.Reset()));
         }
 
         // No cancel on this screen (the game only offers Apply / Default) — map Back/Escape to proceed.
@@ -70,36 +101,6 @@ namespace WrathAccess.Screens
         {
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "gamma.continue"),
                 _ => Vm()?.Close());
-        }
-
-        private void Rebuild()
-        {
-            Clear();
-            DisposeSliders();
-            var vm = Vm();
-            _built = vm;
-            if (vm == null) return;
-
-            Add(new TextElement(() => Loc.T("gamma.help")));
-            // The two sliders are one Tab-stop (a list — arrows move between them), matching Settings.
-            var sliders = new ListContainer(Loc.T("gamma.sliders"));
-            sliders.Add(MakeSlider(new SettingsEntitySliderVM(vm.GammaCorrection)));
-            sliders.Add(MakeSlider(new SettingsEntitySliderVM(vm.Contrast)));
-            Add(sliders);
-            Add(new ProxyActionButton(() => Loc.T("gamma.continue"), () => true, () => vm.Close()));
-            Add(new ProxyActionButton(() => Loc.T("gamma.reset"), () => true, () => vm.Reset()));
-        }
-
-        private ProxySlider MakeSlider(SettingsEntitySliderVM sv)
-        {
-            _sliderVms.Add(sv);
-            return new ProxySlider(sv);
-        }
-
-        private void DisposeSliders()
-        {
-            foreach (var sv in _sliderVms) sv.Dispose();
-            _sliderVms.Clear();
         }
     }
 }

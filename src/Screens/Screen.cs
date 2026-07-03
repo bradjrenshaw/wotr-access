@@ -24,6 +24,17 @@ namespace WrathAccess.Screens
         /// <summary>Stable identity used for stack diffing.</summary>
         public abstract string Key { get; }
 
+        /// <summary>Graph-native declaration: when true the navigator builds this screen's graph by
+        /// calling <see cref="Build"/> on every render — IMMEDIATE MODE: declare controls fresh from live
+        /// game state each call (no retained element tree, no VM-swap rebuild bookkeeping, no Clear());
+        /// focus persists by <see cref="WrathAccess.UI.Graph.ControlId"/> identity. False = the legacy
+        /// Container tree, compiled by TreeGraphAdapter (deleted once every screen migrates).</summary>
+        public virtual bool BuildsGraph => false;
+
+        /// <summary>The graph-native declaration (see <see cref="BuildsGraph"/>). Declare nothing (or
+        /// return with an empty builder) while the screen's content doesn't exist yet.</summary>
+        public virtual void Build(WrathAccess.UI.Graph.GraphBuilder b) { }
+
         /// <summary>Spoken when the screen gains focus. Null/empty = silent.</summary>
         public virtual string ScreenName => null;
 

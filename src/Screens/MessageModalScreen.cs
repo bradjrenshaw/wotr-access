@@ -1,8 +1,7 @@
-using System.Collections.Generic;
 using Kingmaker;
 using Kingmaker.UI.MVVM._VM.MessageBox;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -15,6 +14,10 @@ namespace WrathAccess.Screens
     /// Text-field modals (e.g. the save overwrite-rename prompt) add an editable name field that opens
     /// our text-entry overlay; Accept reads the field (the VM's OnAcceptPressed passes InputText on).
     /// The item-list modal variant isn't handled yet.
+    ///
+    /// Graph-native: declared fresh from the live VM every render. Node keys carry the VM's identity,
+    /// so a modal SWAP (one closed, another opened) drops the old keys and focus re-homes to the new
+    /// message with a fresh readout.
     /// </summary>
     public sealed class MessageModalScreen : Screen
     {
@@ -34,46 +37,30 @@ namespace WrathAccess.Screens
                 : null;
         }
 
-        private MessageModalVM _builtFrom;
+        public override bool BuildsGraph => true;
 
-        public override void OnPush() { _builtFrom = null; Rebuild(); }
-        public override void OnPop() { Clear(); _builtFrom = null; }
-
-        public override void OnUpdate()
+        public override void Build(GraphBuilder b)
         {
             var vm = Vm();
-            if (vm != null && vm != _builtFrom)
-            {
-                // Modal VM swapped (one closed, another opened) — re-home focus.
-                Rebuild();
-                Navigation.Attach(this);
-            }
-        }
-
-        private void Rebuild()
-        {
-            Clear();
-            var vm = Vm();
-            _builtFrom = vm;
             if (vm == null) return;
+            string k = "modal:" + vm.GetHashCode() + ":";
 
-            // Message body first (focusable so it can be re-read), then the buttons —
-            // all direct children of the root panel, so they're individual Tab-stops.
+            // Message body first (focusable so it can be re-read), then the buttons — each its own Tab-stop.
             if (!string.IsNullOrEmpty(vm.MessageText))
-                Add(new TextElement(vm.MessageText));
+                b.BeginStop("msg").AddItem(ControlId.Structural(k + "msg"), GraphNodes.Text(() => vm.MessageText));
 
             // Text-field modal (e.g. save overwrite-rename): an editable field. Enter opens our text-entry
             // overlay prefilled with the current value; Accept below submits it (OnAcceptPressed reads InputText).
             if (vm.ModalType == Kingmaker.UI.MessageModalBase.ModalType.TextField)
-                Add(new ProxyActionButton(
+                b.BeginStop("edit").AddItem(ControlId.Structural(k + "edit"), GraphNodes.Button(
                     () => Loc.T("modal.edit_name", new { value = vm.InputText.Value }),
-                    () => true,
-                    () => ModTextEntryScreen.Open(Loc.T("modal.name"), vm.InputText.Value, t => vm.InputText.Value = t),
-                    actionVerb: "edit"));
+                    () => ModTextEntryScreen.Open(Loc.T("modal.name"), vm.InputText.Value, t => vm.InputText.Value = t)));
 
-            Add(new ProxyActionButton(vm.AcceptText, () => true, () => vm.OnAcceptPressed()));
+            b.BeginStop("accept").AddItem(ControlId.Structural(k + "accept"),
+                GraphNodes.Button(() => vm.AcceptText, () => vm.OnAcceptPressed()));
             if (vm.ShowDecline)
-                Add(new ProxyActionButton(vm.DeclineText, () => true, () => vm.OnDeclinePressed()));
+                b.BeginStop("decline").AddItem(ControlId.Structural(k + "decline"),
+                    GraphNodes.Button(() => vm.DeclineText, () => vm.OnDeclinePressed()));
         }
     }
 }

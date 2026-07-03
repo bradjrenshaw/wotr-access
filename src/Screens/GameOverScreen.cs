@@ -6,7 +6,7 @@ using Kingmaker.UI.MVVM._VM.GameOver; // GameOverVM
 using Owlcat.Runtime.UI.MVVM; // IHasViewModel
 using UnityEngine; // Resources
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -20,6 +20,9 @@ namespace WrathAccess.Screens
     ///
     /// Layer 18: above the in-game HUD, but BELOW the save/load window (20) so "Load game" opens navigably on
     /// top of it. Detected via CurrentMode == GameOver (cheap) before the bound-view lookup.
+    ///
+    /// Graph-native: declared fresh from the live VM every render. Node keys carry the VM's identity, so a
+    /// NEW game-over (VM swap) drops the old keys and focus re-homes to the reason with a fresh readout.
     /// </summary>
     public sealed class GameOverScreen : Screen
     {
@@ -40,19 +43,24 @@ namespace WrathAccess.Screens
             return null;
         }
 
-        private GameOverVM _built;
+        public override bool BuildsGraph => true;
 
-        public override void OnPush() { _built = null; Rebuild(); }
-        public override void OnPop() { Clear(); _built = null; }
-
-        public override void OnUpdate()
+        public override void Build(GraphBuilder b)
         {
             var vm = Vm();
-            if (vm != null && vm != _built)
-            {
-                Rebuild();
-                Navigation.Attach(this);
-            }
+            if (vm == null) return;
+            string k = "gameover:" + vm.GetHashCode() + ":";
+
+            // The defeat reason (game-localized, e.g. "Your party has been defeated") — focusable so it reads.
+            if (!string.IsNullOrEmpty(vm.Reason.Value))
+                b.BeginStop("reason").AddItem(ControlId.Structural(k + "reason"), GraphNodes.Text(() => vm.Reason.Value));
+            if (vm.CanQuickLoad.Value)
+                b.BeginStop("quick").AddItem(ControlId.Structural(k + "quick"),
+                    GraphNodes.Button(() => Loc.T("gameover.quick_load"), () => vm.OnQuickLoad()));
+            b.BeginStop("load").AddItem(ControlId.Structural(k + "load"),
+                GraphNodes.Button(() => Loc.T("gameover.load"), () => vm.OnButtonLoadGame()));
+            b.BeginStop("menu").AddItem(ControlId.Structural(k + "menu"),
+                GraphNodes.Button(() => Loc.T("gameover.main_menu"), () => vm.OnButtonMainMenu()));
         }
 
         // Terminal — there's nothing to go back to; Escape just re-reads the screen rather than popping it.
@@ -60,21 +68,6 @@ namespace WrathAccess.Screens
         {
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "screen.game_over"),
                 _ => Tts.Speak(ScreenName, interrupt: true));
-        }
-
-        private void Rebuild()
-        {
-            Clear();
-            var vm = Vm();
-            _built = vm;
-            if (vm == null) return;
-
-            // The defeat reason (game-localized, e.g. "Your party has been defeated") — focusable so it reads.
-            if (!string.IsNullOrEmpty(vm.Reason.Value)) Add(new TextElement(() => vm.Reason.Value));
-            if (vm.CanQuickLoad.Value)
-                Add(new ProxyActionButton(() => Loc.T("gameover.quick_load"), () => true, () => vm.OnQuickLoad()));
-            Add(new ProxyActionButton(() => Loc.T("gameover.load"), () => true, () => vm.OnButtonLoadGame()));
-            Add(new ProxyActionButton(() => Loc.T("gameover.main_menu"), () => true, () => vm.OnButtonMainMenu()));
         }
     }
 }

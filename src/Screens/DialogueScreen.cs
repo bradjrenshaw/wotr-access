@@ -75,7 +75,14 @@ namespace WrathAccess.Screens
 
         // A hide is a pop-while-the-conversation-continues: keep the transcript + notification subscription
         // (so nothing is lost across the cutscene). Only fully reset when the conversation actually ended.
-        public override void OnPop() { if (Vm() == null) Reset(); }
+        // Popping DROPS the per-screen graph state (ScreenClosed), so clear the focus marker too: the next
+        // OnUpdate re-points focus at the current line — a re-push (Esc menu closed, cutscene gap over)
+        // lands on the most recent line, not the top of the transcript.
+        public override void OnPop()
+        {
+            _focusedCue = null;
+            if (Vm() == null) Reset();
+        }
 
         // Escape opens the game's pause menu, exactly like the game's own Esc key during a conversation —
         // required for save/load/quit/settings mid-dialogue. Without this the dialogue screen swallows

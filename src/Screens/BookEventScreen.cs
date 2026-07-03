@@ -44,7 +44,9 @@ namespace WrathAccess.Screens
         public override bool IsActive() => Vm() != null;
 
         public override void OnPush() { Reset(); }
-        public override void OnPop() { Reset(); }
+        // Keep _spokenPage across a hide/re-push (don't re-read the passage); clear only the focus
+        // marker so the re-push lands back on the passage top (the pop dropped the graph state).
+        public override void OnPop() { _focusedPage = null; if (Vm() == null) Reset(); }
         private void Reset() { _focusedPage = null; _spokenPage = null; }
 
         public override void OnUpdate()

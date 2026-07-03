@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Owlcat.Runtime.UI.Tooltips;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 using WrathAccess.UI.Tooltips;
 
 namespace WrathAccess.Screens
@@ -13,8 +13,8 @@ namespace WrathAccess.Screens
     /// <see cref="Open"/>/<see cref="OpenMenu"/> push one onto the current screen — the element's screen on
     /// a fresh open, the current page when drilling deeper (Space from inside the reader). So following a
     /// link or nested tooltip just pushes another child and Back pops one: the child-screen stack IS the
-    /// drill stack, and focus returns to where you were automatically (no manual page cache / saved focus).
-    /// A DOC page renders a template as a FlowSheet (<see cref="TooltipFlowBuilder"/>); a MENU page lists
+    /// drill stack, and focus returns to where you were automatically (per-screen graph state). A DOC page
+    /// renders a template's rows as graph nodes (<see cref="TooltipFlowBuilder.Emit"/>); a MENU page lists
     /// the element's own tooltip + each inline link when there's more than one drill target.
     /// </summary>
     public sealed class TooltipScreen : Screen
@@ -42,12 +42,29 @@ namespace WrathAccess.Screens
                 ScreenManager.Current?.PushChild(new TooltipScreen(title, labels, opens));
         }
 
+        /// <summary>Follow an element's drill-in from Space: its template alone opens directly; inline
+        /// glossary links (alone or alongside the template) go through the chooser page; nothing at all
+        /// speaks the "no tooltip" line. The graph rows' shared OnTooltip handler.</summary>
+        public static void FollowElement(UIElement el)
+        {
+            if (el == null) return;
+            var tpl = el.GetTooltipTemplate();
+            var links = TooltipLinks.Extract(el.GetLinkSourceText(), el.ResolveLink);
+
+            int targets = (tpl != null ? 1 : 0) + links.Count;
+            if (targets == 0) { Tts.Speak(Loc.T("nav.no_tooltip")); return; }
+            if (tpl != null && links.Count == 0) { Open(tpl); return; }
+
+            var labels = new List<string>();
+            var opens = new List<Func<TooltipBaseTemplate>>();
+            if (tpl != null) { var own = tpl; labels.Add(Loc.T("tooltip.view")); opens.Add(() => own); }
+            foreach (var lk in links) { labels.Add(lk.Label); opens.Add(lk.Open); }
+            OpenMenu(Loc.T("tooltip.links_title"), labels, opens);
+        }
+
         public override string Key => "overlay.tooltip";
         // No ScreenName: opening jumps straight to the content (you pressed the key to read it fast).
         public override bool IsActive() => false; // only ever a child — the drill stack lives in the child tree
-
-        public override void OnPush() { Clear(); Build(); }
-        public override void OnPop() { Clear(); }
 
         public override IEnumerable<ElementAction> GetActions()
         {
@@ -56,20 +73,26 @@ namespace WrathAccess.Screens
                 _ => ParentScreen?.RemoveChild(this));
         }
 
-        private void Build()
-        {
-            if (_doc != null) { Add(TooltipFlowBuilder.Build(_doc)); return; }
+        public override bool BuildsGraph => true;
 
-            var sheet = new FlowSheet(_title);
-            var list = sheet.List(null);
+        public override void Build(GraphBuilder b)
+        {
+            string k = "tt:" + GetHashCode() + ":"; // per page instance (each drill level is its own screen)
+            if (_doc != null)
+            {
+                TooltipFlowBuilder.Emit(b, k, _doc);
+                return;
+            }
+
+            b.PushContext(_title);
             for (int i = 0; i < _labels.Count; i++)
             {
                 var open = _opens[i]; // capture
-                list.Item(new ProxyActionButton(_labels[i], null,
-                    () => { var t = open(); if (t != null) Open(t); }, actionVerb: "choose"));
+                var label = _labels[i];
+                b.AddItem(ControlId.Structural(k + "link:" + i),
+                    GraphNodes.Button(() => label, () => { var t = open(); if (t != null) Open(t); }, sound: null));
             }
-            sheet.Reflow();
-            Add(sheet);
+            b.PopContext();
         }
     }
 }

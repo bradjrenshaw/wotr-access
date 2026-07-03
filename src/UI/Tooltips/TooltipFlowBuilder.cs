@@ -31,12 +31,53 @@ namespace WrathAccess.UI.Tooltips
             TooltipTemplateType type = TooltipTemplateType.Info, bool includeEmptyNotice = true)
         {
             var sheet = new FlowSheet();
-            if (template == null) return sheet;
-            Prepare(template, type);
-
             var current = sheet.List(null); // ONE flat region holds the whole document (headings inline)
             int rows = 0;
+            foreach (var el in Rows(template, type)) { current.Item(el); rows++; }
+            if (rows == 0 && includeEmptyNotice)
+                sheet.List(null).Item(new TextElement(() => Loc.T("tooltip.empty")));
+            sheet.Reflow();
+            return sheet;
+        }
 
+        /// <summary>The GRAPH twin: emit the document's rows as text nodes under
+        /// <paramref name="keyPrefix"/>-indexed keys — same layout as <see cref="Build"/>, with Space
+        /// following each row's own drill-in (template and/or inline glossary links) via
+        /// <see cref="WrathAccess.Screens.TooltipScreen.FollowElement"/>. Returns the row count.</summary>
+        public static int Emit(WrathAccess.UI.Graph.GraphBuilder b, string keyPrefix,
+            TooltipBaseTemplate template, TooltipTemplateType type = TooltipTemplateType.Info,
+            bool includeEmptyNotice = true)
+        {
+            int i = 0;
+            foreach (var el in Rows(template, type))
+            {
+                var e = el;
+                b.AddItem(WrathAccess.UI.Graph.ControlId.Structural(keyPrefix + "r" + i), new WrathAccess.UI.Graph.NodeVtable
+                {
+                    ControlType = ControlTypes.Text,
+                    Announcements = new[] { new WrathAccess.UI.Graph.NodeAnnouncement(() => e.GetFocusMessage().Resolve()) },
+                    SearchText = e.GetLabelText,
+                    // Every row offers Space: the handler resolves the drill targets LIVE (template +
+                    // inline links) and speaks "no tooltip" when there are none — the old reader's UX.
+                    OnTooltip = () => WrathAccess.Screens.TooltipScreen.FollowElement(e),
+                });
+                i++;
+            }
+            if (i == 0 && includeEmptyNotice)
+            {
+                b.AddItem(WrathAccess.UI.Graph.ControlId.Structural(keyPrefix + "empty"),
+                    GraphNodes.Text(() => Loc.T("tooltip.empty")));
+                i++;
+            }
+            return i;
+        }
+
+        // The document's rows, flat: headings inline, each brick's renderer elements, plain multi-line
+        // text split one row per line (each reads on its own); link/label rows keep their drill-ins.
+        private static IEnumerable<UIElement> Rows(TooltipBaseTemplate template, TooltipTemplateType type)
+        {
+            if (template == null) yield break;
+            Prepare(template, type);
             foreach (var brick in Bricks(template, type))
             {
                 var vm = SafeGetVM(brick);
@@ -46,45 +87,30 @@ namespace WrathAccess.UI.Tooltips
                 {
                     // Inline heading element (NOT a new section): "<title>, heading level N", N from H1–H6.
                     if (!string.IsNullOrWhiteSpace(title.Title))
-                        rows += AddRows(current, new TextElement(title.Title, "heading_level", null,
-                            new { level = (int)title.Type + 1 }));
+                        yield return new TextElement(title.Title, "heading_level", null,
+                            new { level = (int)title.Type + 1 });
                     continue;
                 }
 
                 foreach (var el in TooltipBrickRegistry.Elements(vm, expanded: true))
-                    rows += AddRows(current, el);
-            }
-
-            if (rows == 0 && includeEmptyNotice)
-                sheet.List(null).Item(new TextElement(() => Loc.T("tooltip.empty")));
-            sheet.Reflow();
-            return sheet;
-        }
-
-        // One element → one or more rows. A plain (drill-in-free) multi-line text brick splits into a
-        // row per line; everything else (link/name rows, label/value rows) stays one row, keeping its
-        // own drill-in tooltip for Space-to-follow.
-        private static int AddRows(ListRegion region, UIElement el)
-        {
-            if (el == null || !el.CanFocus) return 0;
-            if (el is TextElement te && !te.HasTooltip)
-            {
-                var text = te.GetText();
-                if (!string.IsNullOrEmpty(text) && text.IndexOf('\n') >= 0)
                 {
-                    int n = 0;
-                    foreach (var part in text.Split('\n'))
+                    if (el == null || !el.CanFocus) continue;
+                    if (el is TextElement te && !te.HasTooltip)
                     {
-                        var line = part.Trim();
-                        if (line.Length == 0) continue;
-                        region.Item(new TextElement(line));
-                        n++;
+                        var text = te.GetText();
+                        if (!string.IsNullOrEmpty(text) && text.IndexOf('\n') >= 0)
+                        {
+                            foreach (var part in text.Split('\n'))
+                            {
+                                var line = part.Trim();
+                                if (line.Length > 0) yield return new TextElement(line);
+                            }
+                            continue;
+                        }
                     }
-                    return n;
+                    yield return el;
                 }
             }
-            region.Item(el);
-            return 1;
         }
 
         private static IEnumerable<ITooltipBrick> Bricks(TooltipBaseTemplate t, TooltipTemplateType type)

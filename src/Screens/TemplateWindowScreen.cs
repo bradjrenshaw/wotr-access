@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Owlcat.Runtime.UI.Tooltips; // TooltipBaseTemplate
 using WrathAccess.UI;
+using WrathAccess.UI.Graph;
 using WrathAccess.UI.Tooltips; // TooltipFlowBuilder
 
 namespace WrathAccess.Screens
@@ -10,9 +11,9 @@ namespace WrathAccess.Screens
     /// window (item Details / glossary, <see cref="InfoWindowScreen"/>) and the unit Inspect window
     /// (<see cref="InspectScreen"/>). Each is a real modal we must read and close: a subclass points at the
     /// live window object (<see cref="Window"/>, null = closed), supplies its templates, and says how to
-    /// close it; the base renders the templates with <see cref="TooltipFlowBuilder"/> (so headings + glossary
-    /// drill-in work) and maps Back to the close. Layer 30, Exclusive, rebuilds on a window swap (e.g.
-    /// glossary→info) like <see cref="MessageModalScreen"/>.
+    /// close it; the base renders the templates' rows as graph nodes (<see cref="TooltipFlowBuilder.Emit"/>,
+    /// so headings + glossary drill-in work) and maps Back to the close. Node keys carry the window object,
+    /// so a window swap (e.g. glossary→info) re-keys and re-homes emergently. Layer 30, Exclusive.
     /// </summary>
     public abstract class TemplateWindowScreen : Screen
     {
@@ -21,7 +22,7 @@ namespace WrathAccess.Screens
         public override int Layer => 30;
         public override bool Exclusive => true;
 
-        /// <summary>The live window VM (null = closed) — also the rebuild-on-swap key.</summary>
+        /// <summary>The live window VM (null = closed) — also the re-key-on-swap identity.</summary>
         protected abstract object Window { get; }
         /// <summary>The templates this window currently shows (usually one).</summary>
         protected abstract IEnumerable<TooltipBaseTemplate> Templates();
@@ -30,22 +31,6 @@ namespace WrathAccess.Screens
 
         public override bool IsActive() => Window != null;
 
-        private object _builtFrom;
-
-        public override void OnPush() { _builtFrom = null; Rebuild(); }
-        public override void OnPop() { Clear(); _builtFrom = null; }
-
-        public override void OnUpdate()
-        {
-            var w = Window;
-            if (w != null && !ReferenceEquals(w, _builtFrom))
-            {
-                // Window VM swapped (e.g. drilled glossary→info) — re-home focus.
-                Rebuild();
-                Navigation.Attach(this);
-            }
-        }
-
         public override IEnumerable<ElementAction> GetActions()
         {
             // Back/Escape runs the window's own close callback; the reactive nulls, IsActive goes false, we pop.
@@ -53,23 +38,25 @@ namespace WrathAccess.Screens
                 _ => { if (Window != null) CloseWindow(); });
         }
 
-        private void Rebuild()
-        {
-            Clear();
-            _builtFrom = Window;
-            if (Window == null) return;
+        public override bool BuildsGraph => true;
 
-            // Each template becomes a FlowSheet via our normal tooltip pipeline (incl. glossary drill-in).
-            int added = 0;
+        public override void Build(GraphBuilder b)
+        {
+            var w = Window;
+            if (w == null) return;
+            string k = "tplwin:" + w.GetHashCode() + ":"; // window swap (glossary→info) re-keys + re-homes
+
+            int rows = 0, t = 0;
             var templates = Templates();
             if (templates != null)
-                foreach (var t in templates)
+                foreach (var tpl in templates)
                 {
-                    if (t == null) continue;
-                    var sheet = TooltipFlowBuilder.Build(t, includeEmptyNotice: false);
-                    if (sheet.RowCount > 0) { Add(sheet); added++; }
+                    if (tpl == null) continue;
+                    rows += TooltipFlowBuilder.Emit(b, k + "t" + t + ":", tpl, includeEmptyNotice: false);
+                    t++;
                 }
-            if (added == 0) Add(new TextElement(() => Loc.T("tooltip.empty")));
+            if (rows == 0)
+                b.AddItem(ControlId.Structural(k + "empty"), GraphNodes.Text(() => Loc.T("tooltip.empty")));
         }
     }
 }

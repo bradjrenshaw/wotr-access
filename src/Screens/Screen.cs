@@ -35,6 +35,12 @@ namespace WrathAccess.Screens
         /// return with an empty builder) while the screen's content doesn't exist yet.</summary>
         public virtual void Build(WrathAccess.UI.Graph.GraphBuilder b) { }
 
+        /// <summary>Graph-native screens: the Tab-stop initial focus lands on when the screen first
+        /// gains a cursor (a wizard opening on its page content rather than the roadmap, which stays
+        /// first in Tab order). Null = the graph's start node. Declarative — unlike a FocusStop request,
+        /// it can't be lost to the attach that follows OnPush.</summary>
+        public virtual object InitialFocusStop => null;
+
         /// <summary>Spoken when the screen gains focus. Null/empty = silent.</summary>
         public virtual string ScreenName => null;
 

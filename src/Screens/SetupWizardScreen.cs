@@ -47,8 +47,9 @@ namespace WrathAccess.Screens
             ModSettings.GetSetting<BoolSetting>("wizard.completed")?.Set(true);
         }
 
-        // Open landing goes to the page content, not the roadmap (the roadmap is first in tab order).
-        public override void OnPush() { Navigation.FocusStop("content"); }
+        // Open landing goes to the page content, not the roadmap (the roadmap stays first in Tab
+        // order). Declarative: an OnPush FocusStop request would be cleared by the attach that follows.
+        public override object InitialFocusStop => "content";
 
         private static string TitleFor(Step step)
         {

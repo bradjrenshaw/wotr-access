@@ -37,6 +37,22 @@ namespace WrathAccess.Screens
 
         private object _builtVm;
         private object _builtPhase;
+        private Container _content;
+
+        // The first NODE inside the phase content: descend through structural containers (lists,
+        // panels — never nodes themselves in the adapter) to a leaf, stopping early on a tree group
+        // (tree containers ARE nodes: the group header is the landing).
+        private UIElement ContentLanding()
+        {
+            UIElement e = _content?.FirstFocusable();
+            while (e is Container c && c.Shape != ContainerShape.Tree)
+            {
+                var inner = c.FirstFocusable();
+                if (inner == null) return null; // empty structure — nothing focusable here
+                e = inner;
+            }
+            return e;
+        }
 
         public override void OnPush() { _builtVm = null; _builtPhase = null; Rebuild(); }
         public override void OnPop() { Clear(); _builtVm = null; _builtPhase = null; }
@@ -52,10 +68,14 @@ namespace WrathAccess.Screens
                 // bypasses it, so play it here.
                 bool phaseChange = ReferenceEquals(vm, _builtVm) && _builtPhase != null;
 
-                // VM swapped or phase changed — rebuild and land on it.
+                // VM swapped or phase changed — rebuild and land on it. The rebuild recreates every
+                // element (all node ids die), so reconciliation alone would fall to the start node (the
+                // roadmap); focus the new phase's content explicitly, like the old initial-landing did.
                 Rebuild();
                 Navigation.Attach(this);
                 if (phaseChange) UiSound.Play(UISoundType.BookPageTurn);
+                var landing = ContentLanding();
+                if (landing != null) Navigation.Focus(landing);
                 return;
             }
             // Same phase: let subclasses refresh selection-driven content in place (e.g. a detail
@@ -86,6 +106,7 @@ namespace WrathAccess.Screens
             var content = new Panel(PhaseLabel());
             BuildContent(content);
             Add(content);
+            _content = content;
 
             // Footer: Back then Next (label + availability track the current phase live).
             Add(new ProxyActionButton(() => Loc.T("wizard.back"), BackEnabled, OnBack));

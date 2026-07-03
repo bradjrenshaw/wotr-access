@@ -113,9 +113,14 @@ namespace WrathAccess.UI.Graph
                 }
             }
 
-            // Nothing matched (or first render): the start node.
+            // Nothing matched (or first render): the start node — but prefer the SELECTED member of its
+            // stop (initial focus lands on the checked radio/tab, not the top of a long list).
             if (resolved == null)
-                resolved = render.Nodes.ContainsKey(render.StartKey) ? render.Nodes[render.StartKey].Id : render.StartKey;
+            {
+                var startNode = render.Nodes.ContainsKey(render.StartKey) ? render.Nodes[render.StartKey] : null;
+                var sel = startNode != null ? SelectedNodeInStop(render, startNode.StopKey) : null;
+                resolved = sel?.Id ?? startNode?.Id ?? render.StartKey;
+            }
 
             state.CurKey = resolved;
             RememberStop(render, state, resolved);
@@ -331,16 +336,43 @@ namespace WrathAccess.UI.Graph
             return stops;
         }
 
-        private GraphNode StopLanding(object stopKey)
+        /// <summary>Where focus lands when entering a stop with no active cursor: the remembered
+        /// position, else the SELECTED member (a radio/tab/list item currently checked — the old
+        /// RepresentativeChild behavior; a boon on long lists), else the stop's first node.</summary>
+        public GraphNode StopLanding(object stopKey) => StopLanding(_current, _state, stopKey);
+
+        internal static GraphNode StopLanding(GraphRender render, GraphState state, object stopKey)
         {
             ControlId remembered;
-            if (_state.StopMemory.TryGetValue(stopKey, out remembered))
+            if (state.StopMemory.TryGetValue(stopKey, out remembered))
             {
-                var node = _current.NodeAt(remembered);
+                var node = render.NodeAt(remembered);
                 if (node != null && Equals(node.StopKey, stopKey)) return node;
             }
-            foreach (var n in _current.Order)
+            var selected = SelectedNodeInStop(render, stopKey);
+            if (selected != null) return selected;
+            foreach (var n in render.Order)
                 if (Equals(n.StopKey, stopKey)) return n;
+            return null;
+        }
+
+        /// <summary>The first node in a stop that reads as SELECTED — carries a non-empty selected-kind
+        /// announcement part (SelectionItem / ChoiceOption / Tab / radio all declare one), or null.</summary>
+        public static GraphNode SelectedNodeInStop(GraphRender render, object stopKey)
+        {
+            foreach (var n in render.Order)
+            {
+                if (!Equals(n.StopKey, stopKey)) continue;
+                var anns = n.Vtable?.Announcements;
+                if (anns == null) continue;
+                foreach (var a in anns)
+                    if (a != null && a.Kind == AnnouncementKinds.Selected)
+                    {
+                        string t = null;
+                        try { t = a.Text?.Invoke(); } catch { }
+                        if (!string.IsNullOrEmpty(t)) return n;
+                    }
+            }
             return null;
         }
 

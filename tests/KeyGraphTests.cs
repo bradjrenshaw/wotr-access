@@ -220,6 +220,52 @@ namespace WrathAccess.Tests
             Assert.False(g.Tooltip());
         }
 
+        private static NodeVtable Radio(string label, bool selected) => new NodeVtable
+        {
+            Announcements = new[]
+            {
+                NodeAnnouncement.Static(label),
+                new NodeAnnouncement(() => selected ? "selected" : null, kind: AnnouncementKinds.Selected),
+            },
+        };
+
+        [Fact]
+        public void InitialFocusLandsOnSelectedMember()
+        {
+            var state = new GraphState();
+            var g = new KeyGraph(() => new GraphBuilder()
+                .AddItem(Id("a"), Radio("A", false))
+                .AddItem(Id("b"), Radio("B", false))
+                .AddItem(Id("c"), Radio("C", true))   // the checked radio, deep in the list
+                .AddItem(Id("d"), Radio("D", false))
+                .Build(), state);
+
+            Assert.True(g.Rerender());
+            Assert.Equal(Id("c"), state.CurKey); // not the first node
+        }
+
+        [Fact]
+        public void TabIntoStopLandsOnSelectedMemberWhenNoMemory()
+        {
+            var state = new GraphState();
+            var g = new KeyGraph(() => new GraphBuilder()
+                .AddItem(Id("a1"), Vt("A1"))
+                .BeginStop()
+                .AddItem(Id("b1"), Radio("B1", false))
+                .AddItem(Id("b2"), Radio("B2", true))  // selected in the second stop
+                .Build(), state);
+
+            var r = g.MoveStop(+1, wrap: false);
+            Assert.True(r.Moved);
+            Assert.Equal(Id("b2"), r.To.Id); // landed on the checked one, not b1
+
+            // But remembered position wins on return.
+            g.Move(GraphDir.Up); // b1
+            g.MoveStop(-1, wrap: false); // to stop 1
+            r = g.MoveStop(+1, wrap: false);
+            Assert.Equal(Id("b1"), r.To.Id); // memory beats selection
+        }
+
         [Fact]
         public void TreeOpsExpandCollapseDescendAscend()
         {

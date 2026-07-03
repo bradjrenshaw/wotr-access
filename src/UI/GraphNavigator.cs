@@ -131,12 +131,14 @@ namespace WrathAccess.UI
                 if (Screen.BuildsGraph)
                 {
                     if (!_graph.Rerender()) return; // no content yet — Reconcile will seat the start node once there is
-                    // Declared initial landing (a wizard's page content): seat the stop's first node
-                    // instead of the graph start, BEFORE the differ announces below.
+                    // Declared initial landing (a wizard's page content): seat the stop's landing node
+                    // (remembered → selected member → first), BEFORE the differ announces below.
                     var stop = Screen.InitialFocusStop;
                     if (stop != null)
-                        foreach (var n in _graph.Current.Order)
-                            if (Equals(n.StopKey, stop)) { _graph.Focus(n.Id); break; }
+                    {
+                        var land = KeyGraph.StopLanding(_graph.Current, _graph.State, stop);
+                        if (land != null) _graph.Focus(land.Id);
+                    }
                 }
                 else
                 {
@@ -161,8 +163,8 @@ namespace WrathAccess.UI
                 }
                 if (_pendingStop != null)
                 {
-                    foreach (var n in _graph.Current.Order)
-                        if (Equals(n.StopKey, _pendingStop)) { _graph.Focus(n.Id); break; }
+                    var land = KeyGraph.StopLanding(_graph.Current, _graph.State, _pendingStop);
+                    if (land != null) _graph.Focus(land.Id);
                     _pendingStop = null; // announce rides the normal differ below
                 }
             }

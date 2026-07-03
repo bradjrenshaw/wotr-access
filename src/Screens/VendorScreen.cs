@@ -1,57 +1,35 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using Kingmaker;
 using Kingmaker.Blueprints.Root.Strings;          // UIStrings (vendor button labels)
 using Kingmaker.UI.MVVM._VM.Slots;                 // ItemSlotVM, SlotsGroupVM
-using Kingmaker.UI.MVVM._VM.Vendor;                // VendorVM, VendorOptionsItemVM
+using Kingmaker.UI.MVVM._VM.Vendor;                // VendorVM
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The vendor / trade window (<see cref="VendorVM"/>, an in-game static-part reactive). Replicates the
-    /// game's trade as four browsable Tab-stop tables — Your inventory, Store, Buy cart, Sell cart — plus an
-    /// Actions tab stop. The trade engine is <c>VendorLogic</c>: an item moves with one call,
+    /// The vendor / trade window (<see cref="VendorVM"/>, an in-game static-part reactive). Graph-native
+    /// on <see cref="GraphSheet"/>: four browsable table stops — Your inventory (led by your gold), Store,
+    /// Buy cart, Sell cart (each cart ending in its "return all" line) — then Bulk sell, Deal, and Close
+    /// stops. The trade engine is <c>VendorLogic</c>: an item moves with one call,
     /// <see cref="ItemSlotVM.VendorTryMove"/>, which routes by the slot's own collection (stock→buy,
-    /// inventory→sell, cart→return), so a single <see cref="ProxyVendorSlot"/> serves every region (Enter
-    /// moves one, the context menu moves all / shows info). Each cart sheet carries its own "return all"
-    /// button at the bottom; Deal/Mass sale/Mass-sell settings/Close live in the Actions list. The four
-    /// tables refill on any change (capture/restore focus like the inventory window); the Actions list is a
-    /// stable sibling so its focus survives a move. Escape closes. Selling equipped gear (the per-character
-    /// doll) and the redundant item-info toggle are a later slice.
+    /// inventory→sell, cart→return), so one <see cref="GraphNodes.VendorItem"/> serves every region
+    /// (Enter moves one, Backspace moves all / shows info, Space = the item's tooltip). Rows key by
+    /// position, so after a move focus stays at the same row — the next item — and the differ reads it
+    /// (the old signature/capture/restore machinery is deleted). Each item row carries Type/Qty/Price as
+    /// parts; Right steps the columns with their headers. Escape closes. Selling equipped gear (the
+    /// per-character doll) and the redundant item-info toggle are a later slice.
     /// </summary>
     public sealed class VendorScreen : Screen
     {
+        public VendorScreen() { Wrap = true; }
+
         public override string Key => "ctx.vendor";
         public override string ScreenName => Vm()?.VendorName?.Value ?? Loc.T("screen.vendor");
         public override int Layer => 15; // above contexts + service windows, same family as loot/dialogue
         public override bool IsActive() => Vm() != null;
-
-        private Container _content;        // the four refilling tables
-        private VendorVM _builtVm;         // shell rebuilds when the trade VM is recreated
-        private bool _built;
-        private string _sig;
-        private string _lastRestoreLabel;  // dedupe the restore announce across a multi-frame settle burst
-
-        public override void OnPush() { _built = false; _builtVm = null; _sig = null; }
-        public override void OnPop() { Clear(); _content = null; _built = false; _builtVm = null; }
-
-        public override void OnUpdate()
-        {
-            var vm = Vm();
-            if (vm == null) return;
-            bool fresh = !_built || vm != _builtVm;
-            if (fresh) { _builtVm = vm; BuildShell(vm); }
-            var sig = ContentSig(vm);
-            if (sig != _sig) { _sig = sig; RefillContent(vm); }
-            else _lastRestoreLabel = null;
-            // Attach AFTER the first content fill, so initial focus lands on the first table (Your inventory).
-            // Attaching inside BuildShell would run BuildInitialFocus while _content is still empty (the tables
-            // build in RefillContent), dropping focus onto a stable sibling (the Deal list) instead.
-            if (fresh) Navigation.Attach(this);
-        }
 
         public override IEnumerable<ElementAction> GetActions()
         {
@@ -64,71 +42,76 @@ namespace WrathAccess.Screens
 
         private static Kingmaker.Items.VendorLogic Logic => Game.Instance?.Vendor;
 
-        // Refill when any of the four collections, the deal total, or the player's gold changes.
-        private static string ContentSig(VendorVM vm)
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            var sb = new StringBuilder();
-            sb.Append(vm.StashVM?.Money?.Value ?? 0).Append('|').Append(vm.DealPrice.Value).Append('|');
-            AppendGroup(sb, vm.StashVM?.ItemSlotsGroup);
-            AppendGroup(sb, vm.VendorSlotsGroup);
-            AppendGroup(sb, vm.VendorExchangePart);
-            AppendGroup(sb, vm.PlayerExchangePart);
-            return sb.ToString();
+            var vm = Vm();
+            if (vm == null) return;
+            string k = "vendor:" + vm.GetHashCode() + ":";
+
+            // Your inventory — your gold reads first (a lead line), then the sellable items.
+            EmitTable(b, k + "inv", vm.StashVM?.ItemSlotsGroup, Loc.T("vendor.your_inventory"),
+                GraphNodes.VendorSide.Inventory, buy: false,
+                lead: GraphNodes.Text(() => Loc.T("vendor.gold", new { value = vm.StashVM?.Money?.Value ?? 0 })),
+                trailer: null);
+            EmitTable(b, k + "store", vm.VendorSlotsGroup, Loc.T("vendor.store"),
+                GraphNodes.VendorSide.Stock, buy: true, lead: null, trailer: null);
+            EmitTable(b, k + "buycart", vm.VendorExchangePart, Loc.T("vendor.buy_cart"),
+                GraphNodes.VendorSide.BuyCart, buy: true, lead: null,
+                trailer: GraphNodes.Button(() => Strip(UIStrings.Instance.Vendor.ReturnBuy),
+                    () => vm.ReturnBuy(), () => vm.CanVendorExchangeReturn.Value));
+            EmitTable(b, k + "sellcart", vm.PlayerExchangePart, Loc.T("vendor.sell_cart"),
+                GraphNodes.VendorSide.SellCart, buy: false, lead: null,
+                trailer: GraphNodes.Button(() => Strip(UIStrings.Instance.Vendor.ReturnSell),
+                    () => vm.ReturnSale(), () => vm.CanPlayerExchangeReturn.Value));
+
+            // Bulk sell: the three category toggles that decide what Mass sale dumps (Masterwork /
+            // Non-magical / Gems & animal parts, read live off the always-present OptionsVM), then the
+            // Mass sale button.
+            b.BeginStop("bulk").PushContext(Loc.T("vendor.bulk_sell"), "list");
+            if (vm.OptionsVM?.ItemVms != null)
+            {
+                int oi = 0;
+                foreach (var opt in vm.OptionsVM.ItemVms)
+                {
+                    if (opt == null) continue;
+                    var o = opt;
+                    b.AddItem(ControlId.Referenced(o, k + "bulk:" + oi),
+                        GraphNodes.Toggle(() => o.Title.Value, () => o.State.Value, () => o.SwitchOption()));
+                    oi++;
+                }
+            }
+            b.AddItem(ControlId.Structural(k + "masssale"),
+                GraphNodes.Button(() => Strip(UIStrings.Instance.Vendor.MassSell), () => vm.MassSale()));
+            b.PopContext();
+
+            // Deal: the running deal total (you receive / you pay) then the Deal button (enabled only
+            // when the deal is affordable).
+            b.BeginStop("deal").PushContext(Loc.T("vendor.deal_section"), "list");
+            b.AddItem(ControlId.Structural(k + "dealtotal"), GraphNodes.Text(() => DealSummary(vm)));
+            b.AddItem(ControlId.Structural(k + "deal"),
+                GraphNodes.Button(() => Strip(UIStrings.Instance.Vendor.Deal),
+                    () => { vm.Deal(); AnnounceDealt(vm); },
+                    () => vm.IsPossibleDeal.Value));
+            b.PopContext();
+
+            b.BeginStop("close").AddItem(ControlId.Structural(k + "close"),
+                GraphNodes.Button(() => Loc.T("vendor.close"), () => vm.Close()));
         }
 
-        private static void AppendGroup(StringBuilder sb, SlotsGroupVM<ItemSlotVM> group)
+        // One trade region as its own labelled Tab-stop: an optional lead line (your gold), a
+        // Type/Qty/Price table (Price = buy or sell per side), and an optional trailing "return all".
+        // Rows carry their metadata as parts on the item cell; empty regions read one "empty" line.
+        private static void EmitTable(GraphBuilder b, string key, SlotsGroupVM<ItemSlotVM> group,
+            string label, GraphNodes.VendorSide side, bool buy, NodeVtable lead, NodeVtable trailer)
         {
-            sb.Append('[');
-            if (group?.VisibleCollection != null)
-                foreach (var s in group.VisibleCollection)
-                    if (s != null && s.HasItem) sb.Append(s.DisplayName.Value).Append('#').Append(s.Count.Value).Append(',');
-            sb.Append(']');
-        }
+            b.BeginStop(key);
+            var sheet = new GraphSheet(b, key + ":");
+            var cols = new[] { Loc.T("col.type"), Loc.T("col.qty"), Loc.T(buy ? "vendor.col_buy" : "vendor.col_sell") };
+            sheet.Region(label, cols);
+            if (lead != null) sheet.Line(lead);
 
-        private void BuildShell(VendorVM vm)
-        {
-            _built = true;
-            _sig = null; // force RefillContent on this fresh build (before OnUpdate attaches)
-            Clear();
-            _content = new Panel();
-            Add(_content);          // the four trade tables (refilled)
-            // Stable siblings AFTER the tables, so their focus survives a table refill. Each is its own
-            // labeled Tab-stop: bulk-sell (5), deal (6), close (7). (Attach happens in OnUpdate, after fill.)
-            BuildBulkSell(vm);
-            BuildDeal(vm);
-            Add(new ProxyActionButton(Loc.T("vendor.close"), () => true, () => vm.Close(), actionVerb: "close"));
-        }
-
-        private void RefillContent(VendorVM vm)
-        {
-            if (_content == null) return;
-            var cap = CaptureFocus();
-            _content.Clear();
-
-            // Your inventory — your gold reads first (a row before the table), then the sellable items.
-            BuildTable(vm.StashVM?.ItemSlotsGroup, Loc.T("vendor.your_inventory"), VendorSide.Inventory, buy: false,
-                lead: new TextElement(() => Loc.T("vendor.gold", new { value = vm.StashVM?.Money?.Value ?? 0 })), returnBtn: null);
-            BuildTable(vm.VendorSlotsGroup, Loc.T("vendor.store"), VendorSide.Stock, buy: true, lead: null, returnBtn: null);
-            BuildTable(vm.VendorExchangePart, Loc.T("vendor.buy_cart"), VendorSide.BuyCart, buy: true, lead: null,
-                returnBtn: new ProxyActionButton(() => Strip(UIStrings.Instance.Vendor.ReturnBuy),
-                    () => vm.CanVendorExchangeReturn.Value, () => vm.ReturnBuy()));
-            BuildTable(vm.PlayerExchangePart, Loc.T("vendor.sell_cart"), VendorSide.SellCart, buy: false, lead: null,
-                returnBtn: new ProxyActionButton(() => Strip(UIStrings.Instance.Vendor.ReturnSell),
-                    () => vm.CanPlayerExchangeReturn.Value, () => vm.ReturnSale()));
-
-            RestoreFocus(cap);
-        }
-
-        // One trade region as a labeled Tab-stop (the FlowSheet label is what tabbing announces): an optional
-        // lead row (your gold, on the inventory), a Name/Type/Qty/Price table (Price = buy or sell per side),
-        // and an optional trailing "return all" button (the cart sheets).
-        private void BuildTable(SlotsGroupVM<ItemSlotVM> group, string label, VendorSide side, bool buy,
-            UIElement lead, ProxyActionButton returnBtn)
-        {
-            var sheet = new FlowSheet(label);
-            if (lead != null) sheet.List(null).Item(lead);
-            var priceCol = Loc.T(buy ? "vendor.col_buy" : "vendor.col_sell");
-            var items = sheet.Table(null, Loc.T("col.type"), Loc.T("col.qty"), priceCol);
             bool any = false;
             if (group?.VisibleCollection != null)
                 foreach (var slot in group.VisibleCollection)
@@ -136,48 +119,21 @@ namespace WrathAccess.Screens
                     if (slot == null || !slot.HasItem) continue;
                     any = true;
                     var s = slot;
-                    items.Row(new ProxyVendorSlot(s, side), new UIElement[]
-                    {
-                        new TextElement(() => s.TypeName.Value),
-                        new TextElement(() => s.Count.Value > 1 ? s.Count.Value.ToString() : "1"),
-                        new TextElement(() => Price(s, buy)),
-                    });
+                    Func<string> type = () => s.TypeName.Value;
+                    Func<string> qty = () => s.Count.Value > 1 ? s.Count.Value.ToString() : "1";
+                    Func<string> price = () => Price(s, buy);
+                    sheet.Row(
+                        GraphNodes.VendorItem(s, side, new[]
+                        {
+                            new NodeAnnouncement(type),
+                            new NodeAnnouncement(qty),
+                            new NodeAnnouncement(price),
+                        }),
+                        type, qty, price);
                 }
-            if (!any) items.Row(new TextElement(() => Loc.T("vendor.empty")), new UIElement[0]);
-            items.Associate(0);
-
-            if (returnBtn != null) sheet.List(null).Item(returnBtn); // "return all" at the bottom of the cart
-
-            sheet.Reflow();
-            _content.Add(sheet);
-        }
-
-        // Tab stop 5 — Bulk sell: the three category toggles that decide what Mass sale dumps (Masterwork /
-        // Non-magical / Gems & animal parts, read live off the always-present OptionsVM), then the Mass sale
-        // button. Labels + states are live, so it never needs rebuilding on a move.
-        private void BuildBulkSell(VendorVM vm)
-        {
-            var list = new ListContainer(Loc.T("vendor.bulk_sell"));
-            if (vm.OptionsVM?.ItemVms != null)
-                foreach (var opt in vm.OptionsVM.ItemVms)
-                {
-                    if (opt == null) continue;
-                    var o = opt;
-                    list.Add(new ProxyBoolToggle(o.Title.Value, () => o.State.Value, () => o.SwitchOption()));
-                }
-            list.Add(new ProxyActionButton(() => Strip(UIStrings.Instance.Vendor.MassSell), () => true, () => vm.MassSale()));
-            Add(list);
-        }
-
-        // Tab stop 6 — Deal: the running deal total (you receive / you pay) then the Deal button (only
-        // enabled when the deal is affordable). Both live, so no rebuild on a move.
-        private void BuildDeal(VendorVM vm)
-        {
-            var list = new ListContainer(Loc.T("vendor.deal_section"));
-            list.Add(new TextElement(() => DealSummary(vm)));
-            list.Add(new ProxyActionButton(() => Strip(UIStrings.Instance.Vendor.Deal),
-                () => vm.IsPossibleDeal.Value, () => { vm.Deal(); AnnounceDealt(vm); }));
-            Add(list);
+            if (!any) sheet.Line(GraphNodes.Text(() => Loc.T("vendor.empty")));
+            if (trailer != null) sheet.Line(trailer);
+            sheet.Finish();
         }
 
         private static string Price(ItemSlotVM s, bool buy)
@@ -203,35 +159,5 @@ namespace WrathAccess.Screens
 
         private static string Strip(Kingmaker.Localization.LocalizedString s)
             => TextUtil.StripRichText((string)s);
-
-        // ---- focus survival across a refill (same pattern as InventoryScreen) ----
-
-        private (int child, int row, int col) CaptureFocus()
-        {
-            var cur = Navigation.Active?.Current;
-            if (cur != null && _content != null)
-                for (int i = 0; i < _content.Children.Count; i++)
-                    if (_content.Children[i] is FlowSheet fs && fs.TryCoords(cur, out int r, out int c))
-                        return (i, r, c);
-            return (-1, 0, 0);
-        }
-
-        private void RestoreFocus((int child, int row, int col) cap)
-        {
-            if (cap.child < 0) return;
-            UIElement cell = null;
-            if (cap.child < _content.Children.Count && _content.Children[cap.child] is FlowSheet fs && fs.RowCount > 0)
-            {
-                int r = Math.Min(cap.row, fs.RowCount - 1);
-                int c = fs.Visitable(r, cap.col) ? cap.col : fs.LeftmostVisitable(r);
-                if (c >= 0) cell = fs.CellAt(r, c);
-            }
-            cell = cell ?? _content.FirstFocusable();
-            if (cell == null) return;
-            var label = cell.GetLabelText();
-            bool announce = label != _lastRestoreLabel;
-            _lastRestoreLabel = label;
-            Navigation.Focus(cell, announce);
-        }
     }
 }

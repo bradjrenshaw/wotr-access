@@ -479,6 +479,57 @@ namespace WrathAccess.UI
             };
         }
 
+        /// <summary>Which trade region a vendor slot lives in — sets the move verb (the move itself is
+        /// direction-agnostic; <see cref="Kingmaker.UI.MVVM._VM.Slots.ItemSlotVM.VendorTryMove"/> routes
+        /// by the slot's own collection: from stock it buys, from your inventory it sells, from a cart it
+        /// returns).</summary>
+        public enum VendorSide { Stock, Inventory, BuyCart, SellCart }
+
+        /// <summary>One item in a vendor trade region: name (+ magic/notable flags), Enter moves ONE the
+        /// right way (buy/sell/return — VendorTryMove plays the game's own move sound), Backspace opens
+        /// the per-item menu (move ALL / information), Space the item's tooltip (LAST of the slot's
+        /// templates, live per press). <paramref name="extraParts"/> carry the row's type/qty/price.</summary>
+        public static NodeVtable VendorItem(Kingmaker.UI.MVVM._VM.Slots.ItemSlotVM slot, VendorSide side,
+            IEnumerable<NodeAnnouncement> extraParts = null)
+        {
+            string verb = side == VendorSide.Stock ? "buy" : side == VendorSide.Inventory ? "sell" : "return";
+            Func<string> label = () =>
+            {
+                var name = slot.DisplayName.Value;
+                if (string.IsNullOrEmpty(name)) name = slot.Item.Value?.Name ?? "item";
+                var flags = new List<string>();
+                if (slot.IsMagic.Value) flags.Add(Loc.T("item.magic"));
+                if (slot.IsNotable.Value) flags.Add(Loc.T("item.notable"));
+                return flags.Count > 0 ? name + " (" + string.Join(", ", flags.ToArray()) + ")" : name;
+            };
+            var anns = new List<NodeAnnouncement> { LabelPart(label) };
+            if (extraParts != null) anns.AddRange(extraParts);
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Item,
+                Announcements = anns,
+                SearchText = label,
+                // Enter = move ONE (the slot routes by its collection); it plays the game's own sound.
+                OnActivate = () => slot.VendorTryMove(state: false, all: false),
+                // Backspace = the per-item menu (move the whole stack / information).
+                OnSecondary = () =>
+                {
+                    var labels = new List<string> { Loc.T("vendor.move_all." + verb), Loc.T("menu.information") };
+                    Screens.ChoiceSubmenuScreen.Open(label(), labels, -1, idx =>
+                    {
+                        if (idx == 0) slot.VendorTryMove(state: false, all: true);
+                        else if (idx == 1) slot.ShowInfo();
+                    });
+                },
+                OnTooltip = () =>
+                {
+                    var t = slot.Tooltip.Value; // live per press; own template LAST (comparisons first)
+                    var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
+                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
+                },
+            };
+        }
+
         private static void OpenSimpleTooltip(string title, string description)
         {
             var tpl = WrathAccess.UI.Tooltips.SimpleTooltip.Make(title, description);

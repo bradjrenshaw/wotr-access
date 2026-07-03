@@ -1,24 +1,26 @@
+using System.Collections.Generic;
 using Kingmaker;
 using Kingmaker.UI.MVVM;
 using Kingmaker.UI.MVVM._VM.ContextMenu;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The main menu, our first navigable screen. Its root is a vertical list of
-    /// the sidebar entries (Continue / New Game / Load / …) built from
-    /// MainMenuSideBarVM, so the navigator can arrow through them and confirm to
-    /// run each entry's command — letting a blind player start/load a game with
-    /// our own nav and unlock the downstream screens.
+    /// The main menu, our first navigable screen: the sidebar entries (Continue / New Game / Load / …)
+    /// from MainMenuSideBarVM as one arrow-navigable list, each confirming to run its entry's command —
+    /// letting a blind player start/load a game with our own nav and unlock the downstream screens.
+    ///
+    /// Graph-native: declared fresh from the live sidebar VM every render; entry identity rides the entry
+    /// VMs. The "Main Menu" list context reproduces the old labeled-container announcement on entry.
     /// </summary>
     public sealed class MainMenuScreen : Screen
     {
         public override string Key => "ctx.mainmenu";
         public override int Layer => 0;
-        // No ScreenName: the sidebar lives in a labeled "Main Menu" container, so the
-        // navigator announces it via the focus-path diff instead of the screen self-announcing.
+        // No ScreenName: the sidebar list context announces "Main Menu" via the context diff instead of
+        // the screen self-announcing.
 
         public override bool IsActive()
         {
@@ -38,30 +40,26 @@ namespace WrathAccess.Screens
             return true;
         }
 
-        public override void OnPush()
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            Clear();
             var sidebar = RootUIContext.Instance?.MainMenuVM?.MainMenuSideBarVM;
-            if (sidebar == null)
+            if (sidebar == null) return;
+
+            var entries = new List<ContextMenuEntityVM>();
+            foreach (var vm in new[]
             {
-                Main.Log?.Error("MainMenuScreen: sidebar VM was null at OnPush.");
-                return;
-            }
+                sidebar.ContinueVm, sidebar.NewGameVm, sidebar.LoadVm, sidebar.DLCManagerVm,
+                sidebar.OptionsVm, sidebar.CreditVm, sidebar.LicenseVm, sidebar.ExitVm,
+            })
+                if (vm != null && !vm.IsSeparator) entries.Add(vm);
 
-            // Sidebar entries live in a labeled list, so focusing into it announces
-            // "Main Menu" (the container) then the first entry — exercising the path diff.
-            var list = new ListContainer(Loc.T("screen.main_menu"));
-            list.Add(MainMenuButton.For(sidebar.ContinueVm));
-            list.Add(MainMenuButton.For(sidebar.NewGameVm));
-            list.Add(MainMenuButton.For(sidebar.LoadVm));
-            list.Add(MainMenuButton.For(sidebar.DLCManagerVm));
-            list.Add(MainMenuButton.For(sidebar.OptionsVm));
-            list.Add(MainMenuButton.For(sidebar.CreditVm));
-            list.Add(MainMenuButton.For(sidebar.LicenseVm));
-            list.Add(MainMenuButton.For(sidebar.ExitVm));
-            Add(list);
+            b.PushContext(Loc.T("screen.main_menu"), "list");
+            for (int i = 0; i < entries.Count; i++)
+                b.AddItem(ControlId.Referenced(entries[i], "mainmenu:" + i),
+                    GraphNodes.MenuEntry(entries[i], GraphNodes.Position(i + 1, entries.Count)));
+            b.PopContext();
         }
-
-        public override void OnPop() => Clear();
     }
 }

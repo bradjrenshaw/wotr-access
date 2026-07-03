@@ -32,6 +32,12 @@ namespace WrathAccess.UI
             => new NodeAnnouncement(() => enabled == null || enabled() ? null : Loc.T("state.disabled"),
                 live: true, kind: AnnouncementKinds.Enabled);
 
+        /// <summary>The selected-state part: "selected" when selected, silent otherwise — LIVE, so a
+        /// selection moving under focus (another option chosen elsewhere) announces it.</summary>
+        public static NodeAnnouncement SelectedPart(Func<bool> selected)
+            => new NodeAnnouncement(() => selected != null && selected() ? Loc.T("state.selected") : null,
+                live: true, kind: AnnouncementKinds.Selected);
+
         /// <summary>A plain read-only text line (the modal body, a help paragraph).</summary>
         public static NodeVtable Text(Func<string> text) => new NodeVtable
         {
@@ -61,6 +67,30 @@ namespace WrathAccess.UI
                     if (enabled != null && !enabled()) return;
                     if (sound.HasValue) UiSound.Play(sound.Value);
                     activate?.Invoke();
+                },
+            };
+        }
+
+        /// <summary>One option of a single-select group ("label, radio button[, selected][, n of m]") —
+        /// a dropdown option, a tab. Activation selects it (the game's click sound).</summary>
+        public static NodeVtable ChoiceOption(Func<string> label, Func<bool> selected, Action select,
+            NodeAnnouncement position = null)
+        {
+            var anns = new List<NodeAnnouncement>
+            {
+                LabelPart(label),
+                SelectedPart(selected),
+            };
+            if (position != null) anns.Add(position);
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.RadioButton,
+                Announcements = anns,
+                SearchText = label,
+                OnActivate = () =>
+                {
+                    UiSound.Play(UISoundType.ButtonClick);
+                    select?.Invoke();
                 },
             };
         }

@@ -48,6 +48,17 @@ namespace WrathAccess.UI
             Common = () => RoleWord("slider"),
         };
 
+        /// <summary>One option of a single-select group (dropdown options, tab rows). Key matches the
+        /// legacy collapsed element key ("radio_button" — ProxySelectionItem + ProxyChoiceOption shared
+        /// it), so existing user overrides keep applying. The role word's loc key has the legacy space:
+        /// "role.radio button".</summary>
+        public static readonly ControlType RadioButton = new ControlType
+        {
+            Key = "radio_button",
+            Order = StandardOrder,
+            Common = () => RoleWord("radio button"),
+        };
+
         /// <summary>A read-only text line — no role word; typed so its parts are still user-configurable.</summary>
         public static readonly ControlType Text = new ControlType
         {
@@ -56,6 +67,6 @@ namespace WrathAccess.UI
         };
 
         /// <summary>Every registered type, for settings registration. New types are added here.</summary>
-        public static readonly ControlType[] All = { Button, Toggle, Slider, Text };
+        public static readonly ControlType[] All = { Button, Toggle, Slider, RadioButton, Text };
     }
 }

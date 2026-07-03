@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEngine; // Application.OpenURL
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -14,7 +14,7 @@ namespace WrathAccess.Screens
     ///
     /// Read documentation opens the book in your default browser, preferring the copy bundled with this
     /// install (offline, matched to your version) and falling back to the hosted site when no local copy
-    /// shipped with the build.
+    /// shipped with the build. Graph-native.
     /// </summary>
     public sealed class HelpScreen : Screen
     {
@@ -30,22 +30,18 @@ namespace WrathAccess.Screens
         public override int Layer => 38; // above the mod-menu launcher (35), so it stacks on top and returns to it
         public override bool IsActive() => s_open;
 
-        public override void OnPush() { Build(); }
-        public override void OnPop() { Clear(); }
-
         // Escape closes the submenu (back to the mod menu beneath it).
         public override IEnumerable<ElementAction> GetActions()
         {
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ => CloseMenu());
         }
 
-        private void Build()
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            Clear();
-            var list = new ListContainer();
-            list.Add(new ProxyActionButton(() => Loc.T("menu.read_docs"), null, OpenDocs));
-            Add(list);
-            SetFocusedChild(list);
+            b.AddItem(ControlId.Structural("help:docs"),
+                GraphNodes.Button(() => Loc.T("menu.read_docs"), OpenDocs));
         }
 
         // Prefer the docs bundled inside the mod folder (Main.ModDir/docs); fall back to the hosted site.

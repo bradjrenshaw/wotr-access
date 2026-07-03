@@ -3,7 +3,7 @@ using Kingmaker; // Game
 using Kingmaker.Blueprints.Root.Strings; // UIStrings.Lockpick
 using Kingmaker.UI.MVVM._VM.Lockpick; // LockpickVM, LockpickType
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -19,6 +19,9 @@ namespace WrathAccess.Screens
     /// Labels + visibility mirror LockpickBaseView exactly; activate via <c>LockpickVM.OnInteraction</c>
     /// (which closes the window). Back cancels via <c>Close()</c> (the window has no cancel button). Layer
     /// 30, Exclusive.
+    ///
+    /// Graph-native: declared fresh from the live VM every render; node keys carry the VM's identity, so
+    /// a new lock re-homes focus with a fresh readout.
     /// </summary>
     public sealed class LockpickScreen : Screen
     {
@@ -34,21 +37,6 @@ namespace WrathAccess.Screens
         private static LockpickVM Vm()
             => Game.Instance?.RootUiContext?.InGameVM?.DynamicPartVM?.LockpickVM?.Value;
 
-        private LockpickVM _built;
-
-        public override void OnPush() { _built = null; Rebuild(); }
-        public override void OnPop() { Clear(); _built = null; }
-
-        public override void OnUpdate()
-        {
-            var vm = Vm();
-            if (vm != null && vm != _built)
-            {
-                Rebuild();
-                Navigation.Attach(this);
-            }
-        }
-
         public override IEnumerable<ElementAction> GetActions()
         {
             // Back = cancel (close without attempting); the game's window has no explicit cancel button.
@@ -56,29 +44,32 @@ namespace WrathAccess.Screens
                 _ => Vm()?.Close());
         }
 
-        private void Rebuild()
-        {
-            Clear();
-            var vm = Vm();
-            _built = vm;
-            if (vm == null) return;
+        public override bool BuildsGraph => true;
 
+        public override void Build(GraphBuilder b)
+        {
+            var vm = Vm();
+            if (vm == null) return;
             var t = UIStrings.Instance.Lockpick;
+            string k = "lockpick:" + vm.GetHashCode() + ":";
+
             // Skill-only attempt — always available (mirrors m_CommonText).
-            Add(new ProxyActionButton(() => (string)t.Interaction + " - " + vm.BaseChance.Value + "%",
-                () => true, () => vm.OnInteraction(LockpickType.None)));
+            b.BeginStop("skill").AddItem(ControlId.Structural(k + "skill"), GraphNodes.Button(
+                () => (string)t.Interaction + " - " + vm.BaseChance.Value + "%",
+                () => vm.OnInteraction(LockpickType.None)));
             // Basic / masterwork Thieves' Tools, shown only when carried (the +5 / +10 option + its chance).
             if (vm.CanLockpick05.Value != null)
-                Add(new ProxyActionButton(
+                b.BeginStop("tools5").AddItem(ControlId.Structural(k + "tools5"), GraphNodes.Button(
                     () => vm.CanLockpick05.Value.Blueprint.Name + " (" + vm.CanLockpick05.Value.Count + ") - " + vm.FirstChance.Value + "%",
-                    () => true, () => vm.OnInteraction(LockpickType.Lockpick5)));
+                    () => vm.OnInteraction(LockpickType.Lockpick5)));
             if (vm.CanLockpick10.Value != null)
-                Add(new ProxyActionButton(
+                b.BeginStop("tools10").AddItem(ControlId.Structural(k + "tools10"), GraphNodes.Button(
                     () => vm.CanLockpick10.Value.Blueprint.Name + " (" + vm.CanLockpick10.Value.Count + ") - " + vm.SecondChance.Value + "%",
-                    () => true, () => vm.OnInteraction(LockpickType.Lockpick10)));
+                    () => vm.OnInteraction(LockpickType.Lockpick10)));
             // Force the lock open, when destructible.
             if (vm.CanDestroy.Value)
-                Add(new ProxyActionButton(() => (string)t.Destroy, () => true, () => vm.OnInteraction(LockpickType.Destroy)));
+                b.BeginStop("destroy").AddItem(ControlId.Structural(k + "destroy"), GraphNodes.Button(
+                    () => (string)t.Destroy, () => vm.OnInteraction(LockpickType.Destroy)));
         }
     }
 }

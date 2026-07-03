@@ -42,6 +42,7 @@ namespace WrathAccess.UI
         {
             Announcements = new[] { new NodeAnnouncement(() => e.GetFocusMessage().Resolve()) },
             SearchText = e.GetLabelText,
+            SpeaksOwnPosition = true, // GetFocusMessage already appends the container's "n of m"
         };
 
         // A panel (or the screen root): recurse, each non-panel child container = a stop, loose leaves =

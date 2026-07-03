@@ -146,6 +146,35 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
+        public void PositionsAutoStampBySiblingGroup()
+        {
+            var expansion = new System.Collections.Generic.HashSet<ControlId>();
+            expansion.Add(Id("g"));
+            var render = new GraphBuilder(expansion)
+                .AddItem(Id("a"), Vt("A"))          // top level: a, g = 2 siblings
+                .BeginGroup(Id("g"), Vt("G"))
+                    .AddItem(Id("c1"), Vt("C1"))    // group level: 3 siblings
+                    .AddItem(Id("c2"), Vt("C2"))
+                    .AddItem(Id("c3"), Vt("C3"))
+                .EndGroup()
+                .BeginStop()
+                .AddItem(Id("lone"), Vt("Lone"))    // single sibling → no position
+                .BeginStop()
+                .StartRow().AddItem(Id("r1"), Vt("R1")).AddItem(Id("r2"), Vt("R2")).EndRow() // row members
+                .Build();
+
+            Assert.Equal(1, render.Nodes[Id("a")].PositionIndex);
+            Assert.Equal(2, render.Nodes[Id("a")].PositionCount);
+            Assert.Equal(2, render.Nodes[Id("g")].PositionIndex);
+            Assert.Equal(2, render.Nodes[Id("c2")].PositionIndex);
+            Assert.Equal(3, render.Nodes[Id("c2")].PositionCount);
+            Assert.Equal(0, render.Nodes[Id("lone")].PositionCount);
+            Assert.Equal(1, render.Nodes[Id("r1")].PositionIndex);
+            Assert.Equal(2, render.Nodes[Id("r2")].PositionIndex);
+            Assert.Equal(2, render.Nodes[Id("r2")].PositionCount);
+        }
+
+        [Fact]
         public void RegionsAreStamped()
         {
             var render = new GraphBuilder()

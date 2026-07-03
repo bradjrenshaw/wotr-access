@@ -353,6 +353,8 @@ namespace WrathAccess
             // Group headers speak their expanded/collapsed state (localized; same words the old tree used).
             WrathAccess.UI.Graph.GraphAnnouncer.ExpandedStateText = expanded =>
                 Loc.T(expanded ? "role.expanded" : "role.collapsed");
+            WrathAccess.UI.Graph.GraphAnnouncer.PositionText = (index, count) =>
+                Loc.T("nav.position", new { index, count });
 
             // Scan-item (proxy) announcements: their own parallel pipeline (NOT UI elements) — global
             // per-part toggles + per-proxy-type overrides. Creates "proxy_announce" + "proxy_elem".

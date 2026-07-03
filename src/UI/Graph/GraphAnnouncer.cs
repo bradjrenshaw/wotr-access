@@ -169,8 +169,30 @@ namespace WrathAccess.UI.Graph
                     sb.Append(state);
                 }
             }
+
+            // The auto-stamped sibling position, unless the node carries its own (an explicit
+            // position-kind part, or the adapter's composed message). Honors the user's per-kind setting.
+            if (node != null && node.PositionCount > 1 && PositionText != null
+                && !node.Vtable.SpeaksOwnPosition && !HasKind(node.Vtable.Announcements, AnnouncementKinds.Position)
+                && (PartFilter == null || PartFilter(node.Vtable.ControlType, AutoPositionProbe)))
+            {
+                var pos = PositionText(node.PositionIndex, node.PositionCount);
+                if (!string.IsNullOrEmpty(pos))
+                {
+                    if (sb.Length > 0) sb.Append(", ");
+                    sb.Append(pos);
+                }
+            }
             return sb.Length > 0 ? sb.ToString() : null;
         }
+
+        /// <summary>Pluggable "n of m" wording (localized by the host); null = no auto positions.</summary>
+        public static Func<int, int, string> PositionText;
+
+        // A stand-in part handed to the PartFilter so the user's position-kind toggle governs the
+        // auto-stamped position too.
+        private static readonly NodeAnnouncement AutoPositionProbe =
+            new NodeAnnouncement(() => null, kind: AnnouncementKinds.Position);
 
         /// <summary>Pluggable expanded/collapsed wording for group headers (localized by the host);
         /// null = groups don't speak their state.</summary>

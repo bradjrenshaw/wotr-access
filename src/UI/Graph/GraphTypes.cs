@@ -134,6 +134,10 @@ namespace WrathAccess.UI.Graph
         /// <summary>Set when this group's own announcements already include its expanded/collapsed state
         /// (the adapter's composed element messages do), so the announcer doesn't append it again.</summary>
         public bool SpeaksOwnExpansion;
+
+        /// <summary>Set when this node's announcements already include its list position (the adapter's
+        /// composed element messages do), so the announcer doesn't append the auto-stamped one.</summary>
+        public bool SpeaksOwnPosition;
     }
 
     /// <summary>A directed edge to another node, with an optional spoken transition line (a "lane
@@ -186,6 +190,12 @@ namespace WrathAccess.UI.Graph
         /// <summary>The region (within a stop) this node belongs to, or null. Ctrl+Up/Down jumps between
         /// regions in first-appearance order.</summary>
         public object RegionKey;
+
+        /// <summary>Auto-stamped sibling position (1-based) and count, from the builder: menu-mode nodes
+        /// grouped by (parent, stop) — "3 of 10" among the siblings arrows actually reach. 0 = none
+        /// (single sibling, raw/grid nodes, or a multi-item row member positioned within its row).</summary>
+        public int PositionIndex;
+        public int PositionCount;
     }
 
     /// <summary>

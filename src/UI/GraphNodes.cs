@@ -41,6 +41,11 @@ namespace WrathAccess.UI
             => new NodeAnnouncement(() => selected != null && selected() ? Loc.T("state.selected") : null,
                 live: true, kind: AnnouncementKinds.Selected);
 
+        /// <summary>The spoken tooltip/description part ("what this setting does", read after the value —
+        /// the old TooltipAnnouncement). User-togglable via the "tooltip" kind settings.</summary>
+        public static NodeAnnouncement TooltipPart(Func<string> description)
+            => new NodeAnnouncement(description, kind: AnnouncementKinds.Tooltip);
+
         /// <summary>A plain read-only text line (the modal body, a help paragraph).</summary>
         public static NodeVtable Text(Func<string> text) => new NodeVtable
         {
@@ -163,6 +168,7 @@ namespace WrathAccess.UI
                 LabelPart(() => sv?.Title ?? ""),
                 new NodeAnnouncement(value, kind: AnnouncementKinds.Value),
                 DisabledPart(enabled),
+                TooltipPart(() => sv?.Description),
             };
             if (position != null) anns.Add(position);
             return new NodeVtable
@@ -207,6 +213,8 @@ namespace WrathAccess.UI
                 () => vm?.ChangeValue(),
                 () => vm != null && vm.ModificationAllowed.Value,
                 position);
+            var anns = new List<NodeAnnouncement>(vt.Announcements) { TooltipPart(() => vm?.Description) };
+            vt.Announcements = anns; // the type's kind order slots it after value/enabled
             vt.OnTooltip = () => OpenSimpleTooltip(vm?.Title, vm?.Description);
             return vt;
         }
@@ -223,6 +231,7 @@ namespace WrathAccess.UI
                 new NodeAnnouncement(value, live: true, kind: AnnouncementKinds.Value),
                 DisabledPart(enabled),
             };
+            if (description != null) anns.Add(TooltipPart(description));
             if (position != null) anns.Add(position);
             Action tooltip = null;
             if (description != null)

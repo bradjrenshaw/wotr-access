@@ -276,7 +276,46 @@ namespace WrathAccess.UI.Graph
             render.StartKey = _start != null && render.Nodes.ContainsKey(_start)
                 ? _start
                 : render.Order[0].Id;
+            StampPositions();
             return render;
+        }
+
+        // Auto-stamp "n of m" positions the way the old containers did: a multi-item row's members are
+        // positioned within their ROW (a bar); single-item-row nodes among the siblings sharing their
+        // (parent, stop) — the vertical list/tree level arrows actually traverse. Raw/grid nodes get
+        // none. Announced only when m > 1 (a lone button reads no position).
+        private void StampPositions()
+        {
+            var groups = new Dictionary<object, List<GraphNode>>();
+            var keys = new List<object>();
+            foreach (var row in _rows)
+            {
+                if (row.Items.Count > 1)
+                {
+                    Stamp(row.Items);
+                    continue;
+                }
+                var node = row.Items[0];
+                var key = new KeyValuePair<GraphNode, object>(node.Parent, node.StopKey);
+                if (!groups.TryGetValue(key, out var list))
+                {
+                    list = new List<GraphNode>();
+                    groups.Add(key, list);
+                    keys.Add(key);
+                }
+                list.Add(node);
+            }
+            foreach (var key in keys) Stamp(groups[key]);
+        }
+
+        private static void Stamp(List<GraphNode> siblings)
+        {
+            if (siblings.Count < 2) return;
+            for (int i = 0; i < siblings.Count; i++)
+            {
+                siblings[i].PositionIndex = i + 1;
+                siblings[i].PositionCount = siblings.Count;
+            }
         }
 
         private static void AddNodeTo(GraphRender render, GraphNode node)

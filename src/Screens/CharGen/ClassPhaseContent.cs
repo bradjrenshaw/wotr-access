@@ -15,8 +15,8 @@ namespace WrathAccess.Screens
     /// Class phase: the class list, the selected class's archetypes (nested sub-options), and a live
     /// Details panel that mirrors the game's two detail modes (toggled by a "Detailed description"
     /// switch, matching its in-UI button):
-    ///   • Short — renders the exact template the game put in <c>ReactiveTooltipTemplate</c> (the
-    ///     InfoSectionView's source), at <see cref="TooltipTemplateType.Info"/>.
+    ///   • Short — renders the selection's own template (what the game's InfoSectionView shows for
+    ///     the selected class/archetype), at <see cref="TooltipTemplateType.Info"/>.
     ///   • Mechanic — the plain bindings: name + full description + saves/BAB/HP grades + caster
     ///     stats + class skills, plus the per-level progression grid (ProgressionGrid.Emit).
     /// Classes/archetypes come from the canonical (selectable) instances so SetSelectedFromView works.
@@ -165,12 +165,14 @@ namespace WrathAccess.Screens
             SwitchModeMethod.Invoke(view, null);
         }
 
-        // Short mode mirrors the game's InfoSectionView: render the exact template it feeds there
-        // (ReactiveTooltipTemplate) — short build-info for a short-desc class; the first-level-class
-        // body (full description + skills + per-level features) for an archetype.
+        // Short mode mirrors the game's InfoSectionView content, computed LIVE from the SELECTION —
+        // never from the phase's shared ReactiveTooltipTemplate (the game also writes HOVER templates
+        // into that reactive, so it tracks the mouse, not the selection). Same precedence as the VM's
+        // own TooltipTemplate(hover): the selected archetype's template, else the selected class's.
         private void EmitShort(GraphBuilder b, string dk)
         {
-            var tpl = Phase.ReactiveTooltipTemplate.Value;
+            var item = Phase.SelectedArchetypeVM.Value ?? Phase.SelectedClassVM.Value;
+            var tpl = item?.TooltipTemplate(hover: false);
             if (tpl == null) return;
             TooltipFlowBuilder.Emit(b, dk, tpl, TooltipTemplateType.Info, includeEmptyNotice: false);
         }

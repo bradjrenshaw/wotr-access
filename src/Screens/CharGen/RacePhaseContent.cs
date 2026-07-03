@@ -7,9 +7,9 @@ using WrathAccess.UI.Tooltips;
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Race phase: the race list, a gender selector, and a live Details panel — the template the game
-    /// feeds its InfoSection (<c>ReactiveTooltipTemplate</c> = TooltipTemplateLevelUpRace: ability-score
-    /// bonuses, racial features, description), rendered as a document at
+    /// Race phase: the race list, a gender selector, and a live Details panel — the SELECTED race's
+    /// own template (TooltipTemplateLevelUpRace: ability-score bonuses, racial features,
+    /// description), rendered as a document at
     /// <see cref="TooltipTemplateType.Info"/>. Selecting goes through the game's own SetSelectedFromView;
     /// the detail keys carry race + gender, so it re-keys on change while list focus stays put.
     /// </summary>
@@ -45,9 +45,12 @@ namespace WrathAccess.Screens
                 }
             b.PopContext();
 
-            // The detail as a document: keys carry race + gender, so a change re-keys it (focus in the
-            // lists is untouched); glossary links follow on Space.
-            var tpl = Phase.ReactiveTooltipTemplate.Value;
+            // The detail as a document, computed LIVE from the SELECTION — never from the phase's
+            // shared ReactiveTooltipTemplate: the game's race rows write their own template into that
+            // reactive on MOUSE HOVER (CharGenRaceSelectorItemVM.TryShowTooltip), so it tracks whatever
+            // the mouse happens to sit over, not the selected race. Keys carry race + gender, so a
+            // change re-keys it (focus in the lists is untouched); glossary links follow on Space.
+            var tpl = Phase.SelectedRaceVM.Value?.TooltipTemplate();
             if (tpl != null)
             {
                 string dk = k + "detail:" + (Phase.SelectedRaceVM.Value?.GetHashCode() ?? 0)

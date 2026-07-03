@@ -91,7 +91,7 @@ namespace WrathAccess.Screens
                 {
                     int idx = i;
                     b.AddItem(ControlId.Structural("modlog:tab:" + i),
-                        GraphNodes.Tab(Label(channels, i), () => _active == idx, () => _active = idx));
+                        GraphNodes.Tab(TabLabel(channels[i]), () => _active == idx, () => _active = idx));
                 }
             b.PopContext();
 
@@ -119,10 +119,7 @@ namespace WrathAccess.Screens
             b.PopContext();
         }
 
-        private static System.Func<string> Label(List<CombatLogChannel> channels, int i)
-        {
-            var ch = channels[i];
-            return () => ChannelLabel(ch);
-        }
+        // (Named to avoid hiding Container.Label while Screen still derives from it during migration.)
+        private static System.Func<string> TabLabel(CombatLogChannel ch) => () => ChannelLabel(ch);
     }
 }

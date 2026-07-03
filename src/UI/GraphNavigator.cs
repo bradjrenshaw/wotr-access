@@ -11,7 +11,8 @@ namespace WrathAccess.UI
     /// a focus change is announced exactly once no matter what caused it (input, a screen moving focus,
     /// a content rebuild, or the game yanking a VM). Screens keep their retained Container trees and
     /// their existing Navigation API; behavior policies (tree expand/collapse, sheet/table readouts,
-    /// tab semantics, tooltip fall-throughs, type-ahead) are ported from TraditionalNavigator.
+    /// tab semantics, tooltip fall-throughs, type-ahead) carry over from the retired push-based
+    /// navigator unchanged.
     /// </summary>
     public sealed class GraphNavigator : Navigator
     {
@@ -32,8 +33,6 @@ namespace WrathAccess.UI
         }
 
         public override UIElement Current => _graph?.CurrentNode?.Id.Reference as UIElement;
-
-        protected override void BuildInitialFocus() { } // unused (base Attach is overridden)
 
         public override void Attach(Screens.Screen screen)
         {

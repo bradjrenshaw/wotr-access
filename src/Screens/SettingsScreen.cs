@@ -60,7 +60,6 @@ namespace WrathAccess.Screens
                 // Rare: settings VM swapped while open (e.g. locale/font apply). Re-home focus.
                 Rebuild();
                 Navigation.Attach(this);
-                if (FocusMode.Active) Navigation.AnnounceCurrent();
                 return;
             }
             if (!ReferenceEquals(vm.SelectedMenuEntity.Value, _lastTab))

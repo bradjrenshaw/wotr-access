@@ -56,7 +56,6 @@ namespace WrathAccess.Screens
                 Rebuild();
                 Navigation.Attach(this);
                 if (phaseChange) UiSound.Play(UISoundType.BookPageTurn);
-                if (FocusMode.Active) Navigation.AnnounceCurrent();
                 return;
             }
             // Same phase: let subclasses refresh selection-driven content in place (e.g. a detail

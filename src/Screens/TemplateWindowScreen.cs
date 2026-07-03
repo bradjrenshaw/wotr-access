@@ -43,7 +43,6 @@ namespace WrathAccess.Screens
                 // Window VM swapped (e.g. drilled glossary→info) — re-home focus.
                 Rebuild();
                 Navigation.Attach(this);
-                if (FocusMode.Active) Navigation.AnnounceCurrent();
             }
         }
 

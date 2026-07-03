@@ -491,16 +491,10 @@ namespace WrathAccess.UI
                 return true;
             }
 
-            // Graph-native stop: land on its remembered position (GraphState.StopMemory), else its first
-            // node in declaration order.
-            ControlId target = null;
-            if (_state.StopMemory.TryGetValue(stopKey, out var remembered)
-                && _graph.Current.NodeAt(remembered) is GraphNode rn && Equals(rn.StopKey, stopKey))
-                target = remembered;
-            if (target == null)
-                foreach (var n in _graph.Current.Order)
-                    if (Equals(n.StopKey, stopKey)) { target = n.Id; break; }
-            if (target == null || !_graph.Focus(target)) return true;
+            // Graph-native stop: remembered position → SELECTED member → first node (the shared
+            // StopLanding — so Tab into a radio/tab group lands on the current pick, not the top).
+            var land = KeyGraph.StopLanding(_graph.Current, _graph.State, stopKey);
+            if (land == null || !_graph.Focus(land.Id)) return true;
 
             var node = _graph.CurrentNode;
             WrathAccess.UiSound.Hover();

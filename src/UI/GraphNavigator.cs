@@ -875,12 +875,21 @@ namespace WrathAccess.UI
             }
         }
 
+        // The node's type-ahead text, STRIPPED of rich-text markup: node labels are raw game strings
+        // (speech strips downstream in Tts, so markup is invisible there), and matching against raw
+        // markup demoted marked-up titles out of the starts-with tier — "Load Game" in color tags
+        // starts with '<', losing to a plain "DLC" substring match.
         private static string SearchTextOf(GraphNode n)
         {
-            if (n.Vtable.SearchText != null) return n.Vtable.SearchText();
-            var first = n.Vtable.Announcements != null && n.Vtable.Announcements.Count > 0
-                ? n.Vtable.Announcements[0] : null;
-            return first?.Text?.Invoke();
+            string t;
+            if (n.Vtable.SearchText != null) t = n.Vtable.SearchText();
+            else
+            {
+                var first = n.Vtable.Announcements != null && n.Vtable.Announcements.Count > 0
+                    ? n.Vtable.Announcements[0] : null;
+                t = first?.Text?.Invoke();
+            }
+            return t == null ? null : TextUtil.StripRichText(t);
         }
 
         private void RebuildSearchScope()

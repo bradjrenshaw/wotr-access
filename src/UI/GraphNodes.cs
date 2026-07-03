@@ -46,11 +46,18 @@ namespace WrathAccess.UI
         public static NodeAnnouncement TooltipPart(Func<string> description)
             => new NodeAnnouncement(description, kind: AnnouncementKinds.Tooltip);
 
-        /// <summary>A plain read-only text line (the modal body, a help paragraph).</summary>
-        public static NodeVtable Text(Func<string> text) => new NodeVtable
+        /// <summary>A plain read-only text line (the modal body, a help paragraph), optionally carrying
+        /// a tooltip drill-in on Space (resolved live per press — tooltips-live-not-cached).</summary>
+        public static NodeVtable Text(Func<string> text,
+            Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> tooltip = null) => new NodeVtable
         {
             ControlType = ControlTypes.Text,
             Announcements = new[] { LabelPart(text) },
+            OnTooltip = tooltip == null ? (Action)null : () =>
+            {
+                var tpl = tooltip();
+                if (tpl != null) Screens.TooltipScreen.Open(tpl);
+            },
         };
 
         /// <summary>A push button: "label, button[, disabled][, n of m]" — the role word, ordering, and

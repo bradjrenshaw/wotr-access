@@ -10,28 +10,27 @@ using Kingmaker.UI.MVVM._PCView.Rest;    // CraftStage (the stage-event payload)
 using Kingmaker.UI.Common;               // UIUtility.AddSign
 using Kingmaker.UI.MVVM._VM.Rest;        // RestVM family, UIRestPhase
 using WrathAccess.UI;
-using WrathAccess.UI.Announcements; // the slot dropdown's focus announcements
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
     /// The camping window (<c>RestContextVM.RestVM</c>, the same reactive pattern as loot/dialogue),
-    /// covering all three phases. Management is ONE accordion treeview: each role — guards' two
-    /// watches, camouflage, divine service, alchemist, scroll scribe — is a node that reads its live
-    /// assignment collapsed ("Guards, first watch: Seelah"); expanding it builds Primary/Assistant
-    /// member DROPDOWNS (live options via the shared chooser; selecting drives the game's own radio
-    /// contract → AddUnitToRole) and raises the game's stage-open event, so the REAL role panel
-    /// appears on screen in step with the tree — and because expansion is exclusive, moving to
-    /// another role swaps panels exactly like the sighted card click does. Camp-wide settings
-    /// (number-of-rests dropdown over the game's iteration radios; autotune + healing toggles
-    /// written to CampingState exactly like the PC view's toggle handlers) and the action buttons
-    /// are leaf nodes at the root. Start rest is ONE VM call — RestVM.StartRest fires
+    /// covering all three phases. Management is one Tab-stop accordion: each role — guards' two watches,
+    /// camouflage, divine service, alchemist, scroll scribe — is a GROUP that reads its live assignment
+    /// collapsed ("Guards, first watch: Seelah"); expanding builds Primary/Assistant member DROPDOWNS
+    /// (live options via the shared chooser; selecting drives the game's own radio contract →
+    /// AddUnitToRole) and raises the game's stage-open event, so the REAL role panel appears on screen in
+    /// step — and because the open role is the screen's single view-state field, expansion is exclusive:
+    /// opening one role closes the previous (raising its stage-close), exactly like the sighted card
+    /// click. Camp-wide settings (number-of-rests dropdown over the game's iteration radios; autotune +
+    /// healing toggles written to CampingState exactly like the PC view's toggle handlers) and the action
+    /// buttons are leaf nodes in the same stop. Start rest is ONE VM call — RestVM.StartRest fires
     /// StartRestCommand and the game's bound view runs its own per-phase flow (fade + StartCamp /
-    /// SkipPhase / FinishRest). Results reads RestController.Status, mirroring
-    /// RestPCView.ShowResults' iteration picks (current iteration for camp checks, last-rolled for
-    /// craft checks). Escape mirrors CloseRest (refused while InProcess). Craft recipes
-    /// (potions/scrolls) are a follow-up.
+    /// SkipPhase / FinishRest). Results reads RestController.Status, mirroring RestPCView.ShowResults'
+    /// iteration picks (current iteration for camp checks, last-rolled for craft checks); phase keys
+    /// carry the phase, so a transition re-homes and the phase's context label announces it. Escape
+    /// mirrors CloseRest (refused while InProcess). Craft recipes (potions/scrolls) are a follow-up.
     /// </summary>
     public sealed class RestScreen : Screen
     {
@@ -39,8 +38,12 @@ namespace WrathAccess.Screens
         public override string ScreenName => Loc.T("screen.rest");
         public override int Layer => 15; // over the in-game context, alongside dialogue/loot
 
-        private RestVM _builtVm;
-        private UIRestPhase _builtPhase = UIRestPhase.None;
+        // The open role panel (null = all collapsed) — VIEW state mirroring which game panel is up,
+        // driven through the stage events below; exclusivity is by construction.
+        private CampingRoleType? _openRole;
+
+        public override void OnPush() { _openRole = null; }
+        public override void OnPop() { _openRole = null; }
 
         private static RestVM Vm()
         {
@@ -59,197 +62,163 @@ namespace WrathAccess.Screens
             return vm != null && vm.CurrentPhase.Value != UIRestPhase.None;
         }
 
-        public override void OnPush() { _builtVm = null; _builtPhase = UIRestPhase.None; }
-        public override void OnPop() { Clear(); _builtVm = null; _builtPhase = UIRestPhase.None; }
+        public override bool BuildsGraph => true;
 
-        public override void OnUpdate()
+        public override void Build(GraphBuilder b)
         {
             var vm = Vm();
             if (vm == null) return;
             var phase = vm.CurrentPhase.Value;
-            if (vm == _builtVm && phase == _builtPhase) return;
-            bool phaseMoved = _builtVm == vm; // a transition within the open window (start → results)
-            _builtVm = vm;
-            _builtPhase = phase;
-            Rebuild(vm, phase);
-            if (phaseMoved) Tts.Speak(PhaseName(phase), interrupt: false);
-        }
+            // Keys carry the VM and the phase: a phase transition (management → in-process → results)
+            // re-homes onto the new phase's first node, whose context label announces the phase.
+            string k = "rest:" + vm.GetHashCode() + ":" + phase + ":";
 
-        private static string PhaseName(UIRestPhase phase)
-        {
             switch (phase)
             {
-                case UIRestPhase.InProcess: return Loc.T("rest.in_process");
-                case UIRestPhase.Results: return Loc.T("rest.results");
-                default: return Loc.T("screen.rest");
+                case UIRestPhase.Management: BuildManagement(b, vm, k); break;
+                case UIRestPhase.InProcess: BuildInProcess(b, vm, k); break;
+                case UIRestPhase.Results: BuildResults(b, vm, k); break;
             }
         }
 
-        private void Rebuild(RestVM vm, UIRestPhase phase)
+        // ---- management (camp setup): one stop, roles as exclusive groups ----
+
+        private void BuildManagement(GraphBuilder b, RestVM vm, string k)
         {
-            Clear();
-            switch (phase)
-            {
-                case UIRestPhase.Management: BuildManagement(vm); break;
-                case UIRestPhase.InProcess: BuildInProcess(vm); break;
-                case UIRestPhase.Results: BuildResults(vm); break;
-            }
-            Navigation.Attach(this);
-        }
+            b.BeginStop(k + "tree");
 
-        // ---- management (camp setup) ----
+            b.AddItem(ControlId.Structural(k + "time"), GraphNodes.Text(
+                () => Loc.T("rest.time", new { time = TimeText(vm.RestTime.Value) }),
+                () => vm.RestingTimeTooltip));
 
-        private void BuildManagement(RestVM vm)
-        {
-            var tree = new TreeGroup { ExclusiveExpansion = true }; // one role open at a time, like the game
-
-            tree.Add(new TextElement(() => Loc.T("rest.time", new { time = TimeText(vm.RestTime.Value) }),
-                tooltip: () => vm.RestingTimeTooltip));
-
-            // Role nodes. The shift VMs are fetched INSIDE the closures: the game's panel views
-            // dispose their VM whenever a panel hides, and the RestVM lazy properties recreate it.
-            tree.Add(new RoleNode(Loc.T("rest.role.guard_first"), CampingRoleType.GuardFirstWatch,
-                () => new[] { vm.GuardVM.FirstPrimaryShiftVM, vm.GuardVM.FirstSecondaryShiftVM }, vm.GuardRolesVM));
-            tree.Add(new RoleNode(Loc.T("rest.role.guard_second"), CampingRoleType.GuardSecondWatch,
-                () => new[] { vm.GuardVM.SecondPrimaryShiftVM, vm.GuardVM.SecondSecondaryShiftVM }, vm.GuardRolesVM));
-            tree.Add(new RoleNode(Loc.T("rest.role.camouflage"), CampingRoleType.Camouflage,
-                () => new[] { vm.CamouflageVM.PrimaryShiftVM, vm.CamouflageVM.SecondaryShiftVM }, vm.CamouflageRolesVM));
-            tree.Add(new RoleNode(Loc.T("rest.role.divine"), CampingRoleType.DivineService,
-                () => new[] { vm.DivineServiceVM.PrimaryShiftVM, vm.DivineServiceVM.SecondaryShiftVM }, vm.DivineRolesVM));
-            tree.Add(new RoleNode(Loc.T("rest.role.alchemy"), CampingRoleType.Alchemist,
-                () => new[] { vm.AlchemyCraftVM.PrimaryShiftVM, vm.AlchemyCraftVM.SecondaryShiftVM }, vm.AlchemyRolesVM));
-            tree.Add(new RoleNode(Loc.T("rest.role.scribe"), CampingRoleType.ScrollScribe,
-                () => new[] { vm.ScribesCraftVM.PrimaryShiftVM, vm.ScribesCraftVM.SecondaryShiftVM }, vm.ScribeRolesVM));
+            // The shift VMs are fetched INSIDE the expanded branch only: the game's panel views dispose
+            // their VM whenever a panel hides, and the RestVM lazy properties recreate it on access —
+            // touching them for collapsed roles every render would fight that dispose cycle.
+            EmitRole(b, k, Loc.T("rest.role.guard_first"), CampingRoleType.GuardFirstWatch,
+                () => new[] { vm.GuardVM.FirstPrimaryShiftVM, vm.GuardVM.FirstSecondaryShiftVM }, () => vm.GuardRolesVM);
+            EmitRole(b, k, Loc.T("rest.role.guard_second"), CampingRoleType.GuardSecondWatch,
+                () => new[] { vm.GuardVM.SecondPrimaryShiftVM, vm.GuardVM.SecondSecondaryShiftVM }, () => vm.GuardRolesVM);
+            EmitRole(b, k, Loc.T("rest.role.camouflage"), CampingRoleType.Camouflage,
+                () => new[] { vm.CamouflageVM.PrimaryShiftVM, vm.CamouflageVM.SecondaryShiftVM }, () => vm.CamouflageRolesVM);
+            EmitRole(b, k, Loc.T("rest.role.divine"), CampingRoleType.DivineService,
+                () => new[] { vm.DivineServiceVM.PrimaryShiftVM, vm.DivineServiceVM.SecondaryShiftVM }, () => vm.DivineRolesVM);
+            EmitRole(b, k, Loc.T("rest.role.alchemy"), CampingRoleType.Alchemist,
+                () => new[] { vm.AlchemyCraftVM.PrimaryShiftVM, vm.AlchemyCraftVM.SecondaryShiftVM }, () => vm.AlchemyRolesVM);
+            EmitRole(b, k, Loc.T("rest.role.scribe"), CampingRoleType.ScrollScribe,
+                () => new[] { vm.ScribesCraftVM.PrimaryShiftVM, vm.ScribesCraftVM.SecondaryShiftVM }, () => vm.ScribeRolesVM);
 
             // Number of rests: a dropdown over the game's iteration radios — selecting one drives the
-            // game's selector, whose bound view writes RestIterationsCount.
-            tree.Add(new ProxyChoiceDropdown(Loc.T("rest.iterations"), new List<string> { "1", "2", "3" },
-                () => Game.Instance.Player.Camping.RestIterationsCount - 1,
-                idx =>
-                {
-                    foreach (var b in IterationButtons(vm))
-                        if (b.IterationNumber == idx + 1) b.SetSelectedFromView(true);
-                }));
+            // game's selector, whose bound view writes RestIterationsCount. The value part is live, so
+            // the autotune toggle changing the count under focus announces itself.
+            b.AddItem(ControlId.Structural(k + "iterations"), GraphNodes.Dropdown(
+                () => Loc.T("rest.iterations"),
+                () => Game.Instance.Player.Camping.RestIterationsCount.ToString(),
+                () => ChoiceSubmenuScreen.Open(Loc.T("rest.iterations"), new List<string> { "1", "2", "3" },
+                    Game.Instance.Player.Camping.RestIterationsCount - 1,
+                    idx =>
+                    {
+                        foreach (var btn in IterationButtons(vm))
+                            if (btn.IterationNumber == idx + 1) btn.SetSelectedFromView(true);
+                    })));
+
             // The autotune/healing toggles are written by the game's VIEW straight into CampingState
             // (SetAutotuneIterationsState / SetHealingState) — mirror those one-line writes. The
             // iteration radios update themselves off the autotune event.
-            tree.Add(new ProxyBoolToggle(TextUtil.StripRichText(UIStrings.Instance.Rest.RecommendedIterationsNumber),
+            b.AddItem(ControlId.Structural(k + "autotune"), GraphNodes.Toggle(
+                () => TextUtil.StripRichText(UIStrings.Instance.Rest.RecommendedIterationsNumber),
                 () => Game.Instance.Player.Camping.AutotuneRestIterations,
                 () => { var c = Game.Instance.Player.Camping; c.AutotuneRestIterations = !c.AutotuneRestIterations; }));
-            tree.Add(new ProxyBoolToggle(TextUtil.StripRichText(UIStrings.Instance.Rest.HealingUseSpells),
+            b.AddItem(ControlId.Structural(k + "healing"), GraphNodes.Toggle(
+                () => TextUtil.StripRichText(UIStrings.Instance.Rest.HealingUseSpells),
                 () => Game.Instance.Player.Camping.UseSpells,
                 () => { var c = Game.Instance.Player.Camping; c.UseSpells = !c.UseSpells; }));
 
-            tree.Add(new ProxyActionButton(
-                () => TextUtil.StripRichText(UIStrings.Instance.Rest.AutoGroupTooltipHeader),
-                () => true, vm.AutoGroup));
-            tree.Add(new ProxyActionButton(
+            b.AddItem(ControlId.Structural(k + "autogroup"), GraphNodes.Button(
+                () => TextUtil.StripRichText(UIStrings.Instance.Rest.AutoGroupTooltipHeader), vm.AutoGroup));
+            b.AddItem(ControlId.Structural(k + "start"), GraphNodes.Button(
                 () => TextUtil.StripRichText(UIStrings.Instance.Rest.StartButton),
-                () => true, vm.StartRest)); // -> the game's view: fade out + RestController.StartCamp
-
-            Add(tree);
+                vm.StartRest)); // -> the game's view: fade out + RestController.StartCamp
         }
 
-        // A role node: collapsed it reads the live assignment ("Guards, first watch: Seelah").
-        // Expanding builds its content from FRESH game VMs and raises the game's stage-open event so
-        // the real role panel shows on screen; collapsing (incl. the accordion collapse when another
-        // role expands) raises stage-close, hiding the panel — the sighted panel swap, mirrored.
-        private sealed class RoleNode : Container
+        // A role as an expandable group: collapsed it reads the live assignment; expanding sets it as THE
+        // open role (closing the previous — accordion) and raises the game's stage-open event so the real
+        // role panel shows on screen; collapsing raises stage-close — the sighted panel swap, mirrored.
+        private void EmitRole(GraphBuilder b, string k, string label, CampingRoleType type,
+            Func<RestShiftVM[]> shifts, Func<RestRolesVM> roles)
         {
-            private readonly CampingRoleType _type;
-            private readonly Func<RestShiftVM[]> _shifts; // [primary, assistant], fetched fresh per expand
-            private readonly RestRolesVM _roles;
-
-            public RoleNode(string label, CampingRoleType type, Func<RestShiftVM[]> shifts, RestRolesVM roles)
-                : base(ContainerShape.Tree, label)
+            bool open = _openRole == type;
+            var vt = GraphNodes.Group(() =>
             {
-                _type = type;
-                _shifts = shifts;
-                _roles = roles;
-                LabelProvider = () =>
-                {
-                    var unit = Game.Instance?.Player?.Camping?.GetCharacterByRoleType(type, true);
-                    return label + ": " + (unit != null ? unit.CharacterName : Loc.T("rest.nobody"));
-                };
-            }
-
-            public override bool Expandable => true; // children build lazily on expand
-
-            public override void Expand()
+                var unit = Game.Instance?.Player?.Camping?.GetCharacterByRoleType(type, true);
+                return label + ": " + (unit != null ? unit.CharacterName : Loc.T("rest.nobody"));
+            });
+            vt.OnExpand = () => OpenRole(type);
+            vt.OnCollapse = () => CloseRole(type);
+            b.BeginGroup(ControlId.Structural(k + "role:" + type), vt, expanded: open);
+            if (open)
             {
-                base.Expand(); // accordion: the open sibling collapses (closing its panel) first
-                Clear();
-                var shifts = _shifts();
-                if (_roles != null)
-                {
-                    var roles = _roles;
-                    Add(new TextElement(() => Loc.T("rest.dc", new { value = roles.CalculateDCValue() }),
-                        tooltip: () => roles.DCTooltipTemplate));
-                }
-                Add(new RestSlotDropdown(Loc.T("rest.primary"), shifts[0]));
-                Add(new RestSlotDropdown(Loc.T("rest.assistant"), shifts[1]));
-                EventBus.RaiseEvent(delegate(IRestRoleUIStageEvents h) { h.RestStageOpened(_type, CraftStage.UnitSelection); });
+                var rolesVm = roles();
+                if (rolesVm != null)
+                    b.AddItem(ControlId.Structural(k + "role:" + type + ":dc"), GraphNodes.Text(
+                        () => Loc.T("rest.dc", new { value = rolesVm.CalculateDCValue() }),
+                        () => rolesVm.DCTooltipTemplate));
+                var shiftVms = shifts();
+                b.AddItem(ControlId.Structural(k + "role:" + type + ":primary"),
+                    SlotDropdown(Loc.T("rest.primary"), shiftVms[0]));
+                b.AddItem(ControlId.Structural(k + "role:" + type + ":assistant"),
+                    SlotDropdown(Loc.T("rest.assistant"), shiftVms[1]));
             }
+            b.EndGroup();
+        }
 
-            public override void Collapse()
-            {
-                base.Collapse();
-                EventBus.RaiseEvent(delegate(IRestRoleUIStageEvents h) { h.RestStageClosed(_type, CraftStage.UnitSelection, fromCloseButton: true); });
-            }
+        private void OpenRole(CampingRoleType type)
+        {
+            if (_openRole.HasValue && _openRole.Value != type) CloseRole(_openRole.Value); // accordion
+            _openRole = type;
+            EventBus.RaiseEvent(delegate(IRestRoleUIStageEvents h) { h.RestStageOpened(type, CraftStage.UnitSelection); });
+        }
+
+        private void CloseRole(CampingRoleType type)
+        {
+            if (_openRole == type) _openRole = null;
+            EventBus.RaiseEvent(delegate(IRestRoleUIStageEvents h) { h.RestStageClosed(type, CraftStage.UnitSelection, fromCloseButton: true); });
         }
 
         // A camp-slot dropdown ("Primary, combo box, Seelah, +12"). Enter opens the shared chooser
         // with LIVE options — availability shifts as other roles claim people — "None" first, the
         // assigned person always listed. Selecting drives the game's own radio contract
         // (SetSelectedFromView -> AddUnitToRole / RemoveUnitFromRole, with the game's select sound).
-        private sealed class RestSlotDropdown : UIElement
+        // The value part is live, so an assignment settling under focus announces itself.
+        private static NodeVtable SlotDropdown(string label, RestShiftVM shift)
         {
-            public override Type AnnouncementOrderType => typeof(ProxyDropdown);
+            Func<RestShiftUnitVM> selected = () => shift != null ? shift.SelectedUnit.Value : null;
+            return GraphNodes.Dropdown(
+                () => label,
+                () => { var sel = selected(); return sel != null ? UnitLabel(sel) : Loc.T("rest.nobody"); },
+                () => OpenChooser(label, shift, selected()));
+        }
 
-            private readonly string _label;
-            private readonly RestShiftVM _shift;
-
-            public RestSlotDropdown(string label, RestShiftVM shift) { _label = label; _shift = shift; }
-
-            private RestShiftUnitVM Selected => _shift != null ? _shift.SelectedUnit.Value : null;
-
-            public override IEnumerable<Announcement> GetFocusAnnouncements()
+        private static void OpenChooser(string label, RestShiftVM shift, RestShiftUnitVM sel)
+        {
+            if (shift == null) return;
+            // The VM's public Units collection is PAGED (6 portraits per prefab row); list everyone.
+            var all = AllUnitsField?.GetValue(shift) as List<RestShiftUnitVM>;
+            if (all == null) all = new List<RestShiftUnitVM>(shift.Units);
+            var options = new List<string> { Loc.T("rest.nobody") };
+            var units = new List<RestShiftUnitVM> { null };
+            foreach (var u in all)
             {
-                yield return new LabelAnnouncement(Message.Raw(_label));
-                yield return new RoleAnnouncement("combo box");
-                var sel = Selected;
-                yield return new ValueAnnouncement(Message.Raw(sel != null ? UnitLabel(sel) : Loc.T("rest.nobody")));
+                if (u == null) continue;
+                if (u != sel && !u.IsAvailable.Value) continue; // dead / primary elsewhere — the game greys them
+                options.Add(UnitLabel(u));
+                units.Add(u);
             }
-
-            public override IEnumerable<ElementAction> GetActions()
+            int current = sel != null ? units.IndexOf(sel) : 0;
+            ChoiceSubmenuScreen.Open(label, options, current, idx =>
             {
-                yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "action.open"), _ => OpenChooser());
-            }
-
-            private void OpenChooser()
-            {
-                if (_shift == null) return;
-                // The VM's public Units collection is PAGED (6 portraits per prefab row); list everyone.
-                var all = AllUnitsField?.GetValue(_shift) as List<RestShiftUnitVM>;
-                if (all == null) all = new List<RestShiftUnitVM>(_shift.Units);
-                var sel = Selected;
-                var options = new List<string> { Loc.T("rest.nobody") };
-                var units = new List<RestShiftUnitVM> { null };
-                foreach (var u in all)
-                {
-                    if (u == null) continue;
-                    if (u != sel && !u.IsAvailable.Value) continue; // dead / primary elsewhere — the game greys them
-                    options.Add(UnitLabel(u));
-                    units.Add(u);
-                }
-                int current = sel != null ? units.IndexOf(sel) : 0;
-                var label = _label;
-                ChoiceSubmenuScreen.Open(label, options, current, idx =>
-                {
-                    if (idx <= 0) Selected?.SetSelectedFromView(false); // None -> unassign
-                    else if (idx < units.Count) units[idx].SetSelectedFromView(true);
-                });
-            }
+                if (idx <= 0) sel?.SetSelectedFromView(false); // None -> unassign
+                else if (idx < units.Count) units[idx].SetSelectedFromView(true);
+            });
         }
 
         private static readonly FieldInfo AllUnitsField =
@@ -270,29 +239,30 @@ namespace WrathAccess.Screens
 
         // ---- in process (the night plays out) ----
 
-        private void BuildInProcess(RestVM vm)
+        private static void BuildInProcess(GraphBuilder b, RestVM vm, string k)
         {
-            var list = new ListContainer(Loc.T("rest.in_process"));
-            list.Add(new TextElement(() => Loc.T("rest.in_process")));
-            list.Add(new ProxyActionButton(
+            b.BeginStop(k + "list").PushContext(Loc.T("rest.in_process"));
+            b.AddItem(ControlId.Structural(k + "continue"), GraphNodes.Button(
                 () => TextUtil.StripRichText(UIStrings.Instance.Rest.ContinueButton),
-                () => true, vm.StartRest)); // → the game's view: RestController.SkipPhase
-            Add(list);
+                vm.StartRest)); // → the game's view: RestController.SkipPhase
+            b.PopContext();
         }
 
         // ---- results ----
 
-        private void BuildResults(RestVM vm)
+        private static void BuildResults(GraphBuilder b, RestVM vm, string k)
         {
-            var list = new ListContainer(Loc.T("rest.results"));
+            b.BeginStop(k + "list").PushContext(Loc.T("rest.results"));
             var status = RestController.Instance != null ? RestController.Instance.Status : null;
             if (status != null)
             {
-                list.Add(new TextElement(() => Loc.T("rest.total_time", new { time = TimeText(status.TotalTime) })));
+                b.AddItem(ControlId.Structural(k + "time"), GraphNodes.Text(
+                    () => Loc.T("rest.total_time", new { time = TimeText(status.TotalTime) })));
                 if (status.WasNightRandomEncounter)
                 {
                     var watch = Loc.T(status.WakeUpGuardsSlot == 1 ? "rest.role.guard_second" : "rest.role.guard_first");
-                    list.Add(new TextElement(() => TextUtil.StripRichText(UIStrings.Instance.Rest.NightEncounter) + ", " + watch));
+                    b.AddItem(ControlId.Structural(k + "encounter"), GraphNodes.Text(
+                        () => TextUtil.StripRichText(UIStrings.Instance.Rest.NightEncounter) + ", " + watch));
                 }
                 var iters = status.Iterations;
                 if (iters != null && iters.Count > 0)
@@ -300,19 +270,19 @@ namespace WrathAccess.Screens
                     // Mirror RestPCView.ShowResults: camp checks from the current iteration, craft
                     // checks from whichever iteration last rolled them.
                     var cur = iters[Math.Min(status.IterationNumber, iters.Count - 1)];
-                    AddCheck(list, Loc.T("rest.role.divine"), cur.DivineService);
-                    AddCheck(list, Loc.T("rest.role.camouflage"), cur.Camouflage);
-                    AddCheck(list, Loc.T("rest.role.guard_first"), cur.GuardFirst);
-                    AddCheck(list, Loc.T("rest.role.guard_second"), cur.GuardSecond);
-                    AddCheck(list, Loc.T("rest.role.alchemy"), LastCheck(iters, s => s.AlchemyPotions));
-                    AddCheck(list, Loc.T("rest.role.cooking"), LastCheck(iters, s => s.AlchemyCooking));
-                    AddCheck(list, Loc.T("rest.role.scribe"), LastCheck(iters, s => s.ScrollScribing));
+                    EmitCheck(b, k, Loc.T("rest.role.divine"), cur.DivineService);
+                    EmitCheck(b, k, Loc.T("rest.role.camouflage"), cur.Camouflage);
+                    EmitCheck(b, k, Loc.T("rest.role.guard_first"), cur.GuardFirst);
+                    EmitCheck(b, k, Loc.T("rest.role.guard_second"), cur.GuardSecond);
+                    EmitCheck(b, k, Loc.T("rest.role.alchemy"), LastCheck(iters, s => s.AlchemyPotions));
+                    EmitCheck(b, k, Loc.T("rest.role.cooking"), LastCheck(iters, s => s.AlchemyCooking));
+                    EmitCheck(b, k, Loc.T("rest.role.scribe"), LastCheck(iters, s => s.ScrollScribing));
                 }
             }
-            list.Add(new ProxyActionButton(
+            b.AddItem(ControlId.Structural(k + "continue"), GraphNodes.Button(
                 () => TextUtil.StripRichText(UIStrings.Instance.Rest.ContinueButton),
-                () => true, vm.StartRest)); // → the game's view: RestController.FinishRest
-            Add(list);
+                vm.StartRest)); // → the game's view: RestController.FinishRest
+            b.PopContext();
         }
 
         private static CheckStatus LastCheck(List<RestIterationStatus> iters, Func<RestIterationStatus, CheckStatus> get)
@@ -325,12 +295,12 @@ namespace WrathAccess.Screens
             return null;
         }
 
-        private static void AddCheck(ListContainer list, string role, CheckStatus check)
+        private static void EmitCheck(GraphBuilder b, string k, string role, CheckStatus check)
         {
             if (check == null || check.Check == null) return;
             var c = check;
             var r = role;
-            list.Add(new TextElement(() => Loc.T("rest.check", new
+            b.AddItem(ControlId.Structural(k + "check:" + role), GraphNodes.Text(() => Loc.T("rest.check", new
             {
                 role = r,
                 unit = c.Check.Initiator != null ? c.Check.Initiator.CharacterName : "",

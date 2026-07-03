@@ -59,6 +59,40 @@ namespace WrathAccess.UI
             Common = () => RoleWord("radio button"),
         };
 
+        /// <summary>A dropdown (the game's term is combo box): value = the current option; activation
+        /// opens the option submenu. Key matches the legacy collapsed element key.</summary>
+        public static readonly ControlType ComboBox = new ControlType
+        {
+            Key = "combo_box",
+            Order = StandardOrder,
+            Common = () => RoleWord("combo box"),
+        };
+
+        /// <summary>A tab in a tab strip (settings pages, service-window pages).</summary>
+        public static readonly ControlType Tab = new ControlType
+        {
+            Key = "tab",
+            Order = StandardOrder,
+            Common = () => RoleWord("tab"),
+        };
+
+        /// <summary>One binding slot of a key-binding row (label + current combo; rebind/clear). Key
+        /// matches the legacy collapsed element key.</summary>
+        public static readonly ControlType KeyBinding = new ControlType
+        {
+            Key = "key_binding",
+            Order = StandardOrder,
+            Common = () => RoleWord("key binding"),
+        };
+
+        /// <summary>An expandable group header (a tree section). No role word of its own — the announcer
+        /// appends the expanded/collapsed state word.</summary>
+        public static readonly ControlType Group = new ControlType
+        {
+            Key = "group",
+            Order = StandardOrder,
+        };
+
         /// <summary>A read-only text line — no role word; typed so its parts are still user-configurable.</summary>
         public static readonly ControlType Text = new ControlType
         {
@@ -67,6 +101,6 @@ namespace WrathAccess.UI
         };
 
         /// <summary>Every registered type, for settings registration. New types are added here.</summary>
-        public static readonly ControlType[] All = { Button, Toggle, Slider, RadioButton, Text };
+        public static readonly ControlType[] All = { Button, Toggle, Slider, RadioButton, ComboBox, Tab, KeyBinding, Group, Text };
     }
 }

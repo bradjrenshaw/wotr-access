@@ -4,7 +4,10 @@ using System.Reflection;
 using HarmonyLib;
 using Kingmaker.UI; // UISoundType
 using Kingmaker.UI.MVVM._VM.ContextMenu; // ContextMenuEntityVM / ContextMenuCollectionEntity
-using Kingmaker.UI.MVVM._VM.Settings.Entities; // SettingsEntitySliderVM
+using Kingmaker.UI.MVVM._VM.Settings; // SettingsVM
+using Kingmaker.UI.MVVM._VM.Settings.Entities; // SettingsEntity*VM
+using Kingmaker.UI.MVVM._VM.Settings.KeyBindSetupDialog; // GetPrettyString
+using Kingmaker.UI.MVVM._VM.Settings.Menu; // SettingsMenuEntityVM
 using WrathAccess.UI.Graph;
 
 namespace WrathAccess.UI
@@ -182,6 +185,186 @@ namespace WrathAccess.UI
                     if (tpl != null) Screens.TooltipScreen.Open(tpl);
                 },
             };
+        }
+
+        /// <summary>An expandable group header (a tree section): label only — the announcer appends the
+        /// expanded/collapsed state word. Use with <see cref="GraphBuilder.BeginGroup"/>.</summary>
+        public static NodeVtable Group(Func<string> label) => new NodeVtable
+        {
+            ControlType = ControlTypes.Group,
+            Announcements = new[] { LabelPart(label) },
+            SearchText = label,
+        };
+
+        /// <summary>A boolean GAME setting (<see cref="SettingsEntityBoolVM"/>): toggles via the VM's own
+        /// ChangeValue (the click path), value read live from GetTempValue; Space reads its description.
+        /// (ModificationAllowed is a snapshot taken at VM construction — fine where settings aren't locked.)</summary>
+        public static NodeVtable GameToggle(SettingsEntityBoolVM vm, NodeAnnouncement position = null)
+        {
+            var vt = Toggle(
+                () => vm?.Title ?? "",
+                () => vm != null && vm.GetTempValue(),
+                () => vm?.ChangeValue(),
+                () => vm != null && vm.ModificationAllowed.Value,
+                position);
+            vt.OnTooltip = () => OpenSimpleTooltip(vm?.Title, vm?.Description);
+            return vt;
+        }
+
+        /// <summary>A dropdown ("label, combo box, current option[, disabled]"): activation opens the
+        /// option submenu — deliberately NOT Left/Right adjust (in a tree those are collapse/ascend).
+        /// The value part is LIVE, so returning from the submenu with a new pick announces it.</summary>
+        public static NodeVtable Dropdown(Func<string> label, Func<string> value, Action openSubmenu,
+            Func<bool> enabled = null, Func<string> description = null, NodeAnnouncement position = null)
+        {
+            var anns = new List<NodeAnnouncement>
+            {
+                LabelPart(label),
+                new NodeAnnouncement(value, live: true, kind: AnnouncementKinds.Value),
+                DisabledPart(enabled),
+            };
+            if (position != null) anns.Add(position);
+            Action tooltip = null;
+            if (description != null)
+                tooltip = () => OpenSimpleTooltip(label != null ? label() : null, description());
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.ComboBox,
+                Announcements = anns,
+                SearchText = label,
+                OnActivate = () =>
+                {
+                    if (enabled != null && !enabled()) return;
+                    openSubmenu?.Invoke();
+                },
+                OnTooltip = tooltip,
+            };
+        }
+
+        /// <summary>A plain dropdown GAME setting (<see cref="SettingsEntityDropdownVM"/>).</summary>
+        public static NodeVtable GameDropdown(SettingsEntityDropdownVM vm, NodeAnnouncement position = null)
+        {
+            Func<string> value = () =>
+            {
+                if (vm == null) return "";
+                var vals = vm.LocalizedValues;
+                int i = vm.GetTempValue();
+                return (vals != null && i >= 0 && i < vals.Count) ? vals[i] : "";
+            };
+            return Dropdown(() => vm?.Title ?? "", value,
+                () => Screens.ChoiceSubmenuScreen.Open(vm.Title, vm.LocalizedValues, vm.GetTempValue(), i => vm.SetTempValue(i)),
+                () => vm != null && vm.ModificationAllowed.Value,
+                () => vm?.Description, position);
+        }
+
+        /// <summary>The game-difficulty picker: a dropdown whose submenu options read
+        /// "Title. Description" (each difficulty explains itself).</summary>
+        public static NodeVtable GameDifficulty(Kingmaker.UI.MVVM._VM.Settings.Entities.Difficulty.SettingsEntityDropdownGameDifficultyVM vm,
+            NodeAnnouncement position = null)
+        {
+            Func<string> value = () =>
+            {
+                if (vm == null) return "";
+                int i = vm.GetTempValue();
+                var items = vm.Items;
+                return (items != null && i >= 0 && i < items.Count) ? items[i].Title : "";
+            };
+            return Dropdown(() => vm?.Title ?? "", value, () =>
+                {
+                    var items = vm?.Items;
+                    if (items == null || items.Count == 0) return;
+                    var options = new List<string>(items.Count);
+                    foreach (var it in items)
+                        options.Add(it.Title + (string.IsNullOrEmpty(it.Description) ? "" : ". " + it.Description));
+                    Screens.ChoiceSubmenuScreen.Open(vm.Title, options, vm.GetTempValue(), i => vm.SetTempValue(i));
+                },
+                () => vm != null && vm.ModificationAllowed.Value,
+                () => vm?.Description, position);
+        }
+
+        /// <summary>A settings tab (Game / Controls / …): activation replicates the game's own click flow
+        /// (SetSelectedFromView → group updates SelectedEntity → SetSettingsList) and announces "selected".</summary>
+        public static NodeVtable SettingsTab(SettingsMenuEntityVM tab, SettingsVM settings,
+            NodeAnnouncement position = null)
+        {
+            Func<bool> selected = () => settings != null && ReferenceEquals(settings.SelectedMenuEntity.Value, tab);
+            var anns = new List<NodeAnnouncement>
+            {
+                LabelPart(() => tab?.Title ?? ""),
+                SelectedPart(selected),
+            };
+            if (position != null) anns.Add(position);
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Tab,
+                Announcements = anns,
+                SearchText = () => tab?.Title ?? "",
+                StateText = () => selected() ? Loc.T("state.selected") : null,
+                OnActivate = () =>
+                {
+                    UiSound.Play(UISoundType.ButtonClick);
+                    tab?.SetSelectedFromView(true);
+                },
+            };
+        }
+
+        /// <summary>One binding slot of a game key-binding row (index 0 = primary, 1 = secondary):
+        /// value = the bound combo (LIVE — the capture dialog or a clear changes it under focus and it
+        /// announces itself); Enter rebinds (opens the game's capture dialog), Backspace clears.</summary>
+        public static NodeVtable KeyBindingSlot(SettingEntityKeyBindingVM vm, int index, string label)
+        {
+            Func<bool> enabled = () => vm != null && vm.ModificationAllowed.Value;
+            Func<string> value = () =>
+            {
+                if (vm == null) return null;
+                var data = index == 0 ? vm.TempBindingValue1.Value : vm.TempBindingValue2.Value;
+                string p = data.GetPrettyString(); // empty for an unbound slot (mirrors the row view)
+                return string.IsNullOrEmpty(p) ? Loc.T("value.not_bound") : p;
+            };
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.KeyBinding,
+                Announcements = new[]
+                {
+                    LabelPart(() => label),
+                    new NodeAnnouncement(value, live: true, kind: AnnouncementKinds.Value),
+                    DisabledPart(enabled),
+                },
+                SearchText = () => vm?.Title ?? label,
+                OnActivate = () =>
+                {
+                    if (!enabled()) return;
+                    Screens.KeyBindCaptureScreen.PendingLabel = (vm?.Title ?? "") + ", " + label;
+                    vm.OpenBindingDialogVM(index);
+                },
+                OnSecondary = () =>
+                {
+                    if (!enabled()) return;
+                    // Open the dialog and immediately unbind via its VM — clears the slot without ever
+                    // surfacing the capture screen (created and closed within this frame).
+                    vm.OpenBindingDialogVM(index);
+                    Screens.KeyBindCaptureScreen.Dialog()?.Unbind();
+                },
+            };
+        }
+
+        /// <summary>Placeholder for setting kinds without a factory yet: "label, setting, not accessible yet".</summary>
+        public static NodeVtable UnsupportedSetting(Func<string> label) => new NodeVtable
+        {
+            ControlType = ControlTypes.Text,
+            Announcements = new[]
+            {
+                LabelPart(label),
+                new NodeAnnouncement(() => Loc.T("role.setting"), kind: AnnouncementKinds.Role),
+                new NodeAnnouncement(() => Loc.T("value.not_accessible"), kind: AnnouncementKinds.Value),
+            },
+            SearchText = label,
+        };
+
+        private static void OpenSimpleTooltip(string title, string description)
+        {
+            var tpl = WrathAccess.UI.Tooltips.SimpleTooltip.Make(title, description);
+            if (tpl != null) Screens.TooltipScreen.Open(tpl);
         }
     }
 }

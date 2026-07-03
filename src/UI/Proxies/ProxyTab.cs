@@ -6,12 +6,12 @@ namespace WrathAccess.UI.Proxies
 {
     /// <summary>
     /// A reusable tab for mod-built screens (delegate-driven, unlike the game-bound
-    /// <c>ProxySettingsTab</c>). Announces its label, the "tab" role, and "selected" only when it's the
+    /// <c>the settings-tab node factory</c>). Announces its label, the "tab" role, and "selected" only when it's the
     /// active one; Activate selects it. Selecting re-announces in place (so the new "selected" is spoken),
     /// which is the feedback — the screen swaps the detail content on the next tick. Mirrors how the game's
     /// settings tabs read. Pattern: a list of these + a separate content region the active tab fills.
     /// </summary>
-    // Canonical "tab": ProxySettingsTab / ProxyRoadmapEntry share this settings category +
+    // Canonical "tab": the settings-tab node factory / ProxyRoadmapEntry share this settings category +
     // announcement order (this is the union across the three — Value/Enabled come from those two).
     [AnnouncementOrder(typeof(LabelAnnouncement), typeof(RoleAnnouncement), typeof(ValueAnnouncement),
         typeof(SelectedAnnouncement), typeof(EnabledAnnouncement), typeof(PositionAnnouncement))]

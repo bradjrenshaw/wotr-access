@@ -1,21 +1,19 @@
 using Kingmaker;
 using Kingmaker.Settings;
 using Kingmaker.UI.MVVM._VM.Settings;
-using Kingmaker.UI.MVVM._VM.Settings.Entities;
-using Kingmaker.UI.MVVM._VM.Settings.Entities.Decorative;
-using Kingmaker.UI.MVVM._VM.Settings.Entities.Difficulty;
-using Owlcat.Runtime.UI.MVVM;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The settings window (shared CommonVM screen — also covers the in-game pause
-    /// menu's options). Tree: root Panel = [tabs List, CurrentTab Panel of per-header
-    /// section sub-panels, action buttons]. The CurrentTab content is rebuilt when the
-    /// tab changes (poll-detected); the tabs/actions stay stable so tab-list focus
-    /// survives the rebuild.
+    /// The settings window (shared CommonVM screen — also covers the in-game pause menu's options).
+    /// Tab-stops: the tab strip (Game / Controls / Graphics / Sound…), then the current tab's settings as
+    /// a tree of collapsible header sections (one stop you arrow through), then Apply and Close buttons.
+    ///
+    /// Graph-native: declared fresh from the live VM every render. The graph starts on the SELECTED tab;
+    /// content node keys carry the selected tab's identity, so switching tabs re-keys only the content
+    /// (focus on the tab strip is untouched) and section expansion is remembered per tab by key.
     /// </summary>
     public sealed class SettingsScreen : Screen
     {
@@ -27,10 +25,6 @@ namespace WrathAccess.Screens
 
         public override bool IsActive() => Vm() != null;
 
-        private SettingsVM _builtFrom;
-        private object _lastTab;
-        private TreeGroup _content;
-
         private static SettingsVM Vm()
         {
             var g = Game.Instance;
@@ -39,11 +33,8 @@ namespace WrathAccess.Screens
                 : null;
         }
 
-        public override void OnPush() { _builtFrom = null; _lastTab = null; Rebuild(); }
-        public override void OnPop() { Clear(); _builtFrom = null; _content = null; }
-
-        // Back (Escape) closes the settings window. (Close prompts a save dialog if there
-        // are unconfirmed changes — that modal isn't navigable yet.)
+        // Back (Escape) closes the settings window. (Close prompts the save-changes modal when there are
+        // unconfirmed changes — MessageModalScreen handles it.)
         public override System.Collections.Generic.IEnumerable<ElementAction> GetActions()
         {
             var vm = Vm();
@@ -51,55 +42,38 @@ namespace WrathAccess.Screens
                 yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ => vm.Close());
         }
 
-        public override void OnUpdate()
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
             var vm = Vm();
             if (vm == null) return;
-            if (vm != _builtFrom)
+            string k = "settings:" + vm.GetHashCode() + ":";
+
+            // The tab strip: one stop, arrows between tabs; the graph STARTS on the selected tab.
+            b.BeginStop("tabs").PushContext(Loc.T("label.tabs"), "list");
+            var tabs = vm.SelectionGroup.EntitiesCollection;
+            for (int i = 0; i < tabs.Count; i++)
             {
-                // Rare: settings VM swapped while open (e.g. locale/font apply). Re-home focus.
-                Rebuild();
-                Navigation.Attach(this);
-                return;
+                var id = ControlId.Referenced(tabs[i], k + "tab:" + i);
+                b.AddItem(id, GraphNodes.SettingsTab(tabs[i], vm, GraphNodes.Position(i + 1, tabs.Count)));
+                if (ReferenceEquals(vm.SelectedMenuEntity.Value, tabs[i])) b.SetStart(id);
             }
-            if (!ReferenceEquals(vm.SelectedMenuEntity.Value, _lastTab))
-                RebuildContent(vm);
-        }
+            b.PopContext();
 
-        private void Rebuild()
-        {
-            Clear();
-            _content = null;
-            var vm = Vm();
-            _builtFrom = vm;
-            if (vm == null) return;
+            // The current tab's settings: header sections as collapsible groups in one stop. Keys carry
+            // the selected tab, so a tab switch re-keys the content and expansion is remembered per tab.
+            var selected = vm.SelectedMenuEntity.Value;
+            string contentKey = k + "tab" + (selected != null ? selected.GetHashCode().ToString() : "?") + ":";
+            b.BeginStop("content");
+            SettingsEntityGraph.Emit(b, vm.SettingEntities, contentKey);
 
-            var tabs = new ListContainer(Loc.T("label.tabs"));
-            foreach (var tab in vm.SelectionGroup.EntitiesCollection)
-                tabs.Add(new ProxySettingsTab(tab, vm));
-            Add(tabs);
-
-            // The current tab's settings as a treeview: each header group is one collapsible node, so
-            // it's a single Tab-stop you arrow through (and can collapse to skip), not dozens of stops.
-            _content = new TreeGroup();
-            Add(_content);
-            RebuildContent(vm);
-
-            // Action buttons are direct children of the root panel, so they're individual
-            // Tab-stops you tab through (like a Windows dialog), not an arrow-list.
-            Add(new ProxyActionButton(() => Loc.T("settings.apply"), SettingsController.HasUnconfirmedSettings, () => vm.ApplyAndClose()));
-            Add(new ProxyActionButton(() => Loc.T("action.close"), () => true, () => vm.Close()));
-        }
-
-        // Refills only the content panel (tabs/actions stay put), so focus on the tab
-        // list survives a tab switch. The entity→proxy mapping is shared with the New Game
-        // difficulty phase via SettingsEntityBuilder.
-        private void RebuildContent(SettingsVM vm)
-        {
-            _lastTab = vm.SelectedMenuEntity.Value;
-            if (_content == null) return;
-            _content.Clear();
-            SettingsEntityBuilder.BuildInto(_content, vm.SettingEntities, tree: true);
+            // Action buttons: individual stops, like a Windows dialog.
+            b.BeginStop("apply").AddItem(ControlId.Structural(k + "apply"),
+                GraphNodes.Button(() => Loc.T("settings.apply"), () => vm.ApplyAndClose(),
+                    SettingsController.HasUnconfirmedSettings));
+            b.BeginStop("close").AddItem(ControlId.Structural(k + "close"),
+                GraphNodes.Button(() => Loc.T("action.close"), () => vm.Close()));
         }
     }
 }

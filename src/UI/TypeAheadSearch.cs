@@ -15,8 +15,9 @@ namespace WrathAccess.UI
     /// tier, items keep their LIST ORDER (the screen's element order — WotR change from OniAccess's
     /// shortest-name ranking: "l" must land on Load Game by menu position, not License by length), and
     /// matches in the item's NAME (before the first comma) rank ahead of matches in its appended
-    /// metadata. Diacritics are ignored. Typing the same letter repeatedly cycles the starts-with
-    /// results.
+    /// metadata. Diacritics are ignored. Typing the same letter repeatedly cycles ALL of that
+    /// letter's matches in list order (starts-with first, then the weaker tiers — so "l" reaches
+    /// Load Game, License, then DLC).
     /// </summary>
     public class TypeAheadSearch
     {
@@ -86,14 +87,14 @@ namespace WrathAccess.UI
         /// <summary>Run the tiered search over the items and move/announce the best result.</summary>
         public void Search(int itemCount, System.Func<int, string> nameByIndex, System.Action<int> announceResult)
         {
-            // Repeat single-letter: typing the same letter again cycles the starts-with results
-            // (b -> Beaver, b -> Bat, b -> Brewery).
+            // Repeat single-letter: typing the same letter again cycles ALL its matches in list
+            // order (l -> Load Game, l -> License, l -> DLC), wrapping.
             string bufferStr = _buffer.ToString();
             if (_isSearchActive && _resultIndices.Count > 0 && _buffer.Length > 1 && IsAllSameChar(bufferStr))
             {
                 _buffer.Length = 1;
                 if (announceResult != null) _announceResult = announceResult;
-                CycleStartsWithResults();
+                NavigateResults(1);
                 return;
             }
 
@@ -172,23 +173,6 @@ namespace WrathAccess.UI
                 _isSearchActive = true;
                 AnnounceCurrentResult();
             }
-        }
-
-        // Cycle forward within starts-with results only, so single-letter repeat doesn't wrap into
-        // mid-string or substring matches.
-        private void CycleStartsWithResults()
-        {
-            if (_resultIndices.Count == 0) return;
-            char letter = char.ToLowerInvariant(_buffer[0]);
-            int count = 0;
-            for (int i = 0; i < _resultNames.Count; i++)
-            {
-                if (_resultNames[i].Length > 0 && char.ToLowerInvariant(_resultNames[i][0]) == letter) count++;
-                else break;
-            }
-            if (count == 0) return;
-            _resultCursor = (_resultCursor + 1) % count;
-            AnnounceCurrentResult();
         }
 
         /// <summary>Step within the filtered results (wrapping). +1 next, -1 previous.</summary>

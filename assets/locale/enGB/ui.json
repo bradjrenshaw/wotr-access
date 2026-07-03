@@ -689,5 +689,8 @@
   "slot.empty": "empty",
   "inv.weapon_set": "Weapon set {index}",
   "grip.one_handed": "one-handed",
-  "grip.two_handed": "two-handed"
+  "grip.two_handed": "two-handed",
+  "spell.domain": "domain",
+  "spell.mythic": "mythic",
+  "spell.opposition": "opposition"
 }

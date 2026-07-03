@@ -85,6 +85,14 @@ namespace WrathAccess.UI
             Common = () => RoleWord("key binding"),
         };
 
+        /// <summary>A spell (known list, memorize slots): "label, spell[, state]".</summary>
+        public static readonly ControlType Spell = new ControlType
+        {
+            Key = "spell",
+            Order = StandardOrder,
+            Common = () => RoleWord("spell"),
+        };
+
         /// <summary>An inventory/loot/vendor item ("label, item[, state]").</summary>
         public static readonly ControlType Item = new ControlType
         {
@@ -109,6 +117,6 @@ namespace WrathAccess.UI
         };
 
         /// <summary>Every registered type, for settings registration. New types are added here.</summary>
-        public static readonly ControlType[] All = { Button, Toggle, Slider, RadioButton, ComboBox, Tab, KeyBinding, Item, Group, Text };
+        public static readonly ControlType[] All = { Button, Toggle, Slider, RadioButton, ComboBox, Tab, KeyBinding, Item, Spell, Group, Text };
     }
 }

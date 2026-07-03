@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using Kingmaker;
 using Kingmaker.Blueprints.Classes.Spells; // CantripsType
 using Kingmaker.Blueprints.Root.Strings; // UIStrings (spellbook labels)
@@ -9,18 +8,20 @@ using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.KnownSpells; // AbilityData
 using Kingmaker.UI.MVVM._VM.ServiceWindows.Spellbook.MemorizingPanel; // SpellbookMemorizingPanelVM, SpellbookMemorizeSlotVM
 using WrathAccess.UI;
 using WrathAccess.UI.CharSheet;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The spellbook service window (<see cref="SpellbookVM"/>). Page-like content: a character switcher,
-    /// the caster characteristics (caster level / concentration / penetration / failure), the spellbook
-    /// switcher (multiclass casters), the spell-level switcher, and the known spells for the current level
-    /// as an associated-element table (the spell is the row's element; School is a column; Enter adds it to
-    /// the action bar). Content refills when the unit / spellbook / level / spell set changes, restoring the
-    /// cursor by grid position. Memorizing (prepared casters), casting from the book, and the metamagic /
-    /// magic-hack builders are later slices. Escape closes.
+    /// The spellbook service window (<see cref="SpellbookVM"/>), graph-native: a character switcher, the
+    /// spellbook switcher (multiclass casters), the caster characteristics, the spell-level switcher, the
+    /// known spells for the current level (a table with the School column; Enter memorizes, Backspace =
+    /// Cast / Add to action bar / Apply metamagic), and the memorizing panel (prepared casters: forget on
+    /// Enter, "needs rest" state, the spontaneous/cantrip substitute line). The METAMAGIC BUILDER is a
+    /// wholly different content set on the same screen: entering it (via a spell's menu) swaps the content
+    /// stops and lands focus on the builder (<c>FocusStop("mixer")</c>); Back leaves the builder first,
+    /// then closes the window. Everything renders live; level-dependent sections key by unit + book +
+    /// level, so switching re-keys them while the switchers keep focus. Escape closes.
     /// </summary>
     public sealed class SpellbookScreen : Screen
     {
@@ -30,32 +31,17 @@ namespace WrathAccess.Screens
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Spellbook;
 
-        private Container _content;
-        private bool _built;
-        private bool _wasMixer;
-        private string _sig;
-        private string _lastRestoreLabel;
-
-        public override void OnPush() { _built = false; _wasMixer = false; _sig = null; _lastRestoreLabel = null; }
-        public override void OnPop() { Clear(); _content = null; _built = false; }
-
-        public override void OnUpdate()
-        {
-            var vm = Vm();
-            if (vm == null) return;
-            if (!_built) BuildShell(vm);
-            var sig = Sig(vm);
-            if (sig != _sig) { _sig = sig; RefillContent(vm); }
-            else _lastRestoreLabel = null;
-        }
-
         public override IEnumerable<ElementAction> GetActions()
         {
             // In the metamagic builder, Back leaves the builder (not the whole window).
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ =>
             {
                 var vm = Vm();
-                if (vm != null && vm.MetamagicBuilderMode.Value) vm.MetamagicBuilderMode.Value = false;
+                if (vm != null && vm.MetamagicBuilderMode.Value)
+                {
+                    vm.MetamagicBuilderMode.Value = false;
+                    Navigation.FocusStop("known"); // back to the spell list you built from
+                }
                 else ServiceWindows()?.HandleCloseAll();
             });
         }
@@ -69,161 +55,137 @@ namespace WrathAccess.Screens
         private static ServiceWindowsVM ServiceWindows()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
-        // Refills when the viewed unit, the active spellbook, the selected level, or the known-spell set changes.
-        private static string Sig(SpellbookVM vm)
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            var sb = new StringBuilder();
-            sb.Append(Game.Instance?.SelectionCharacter?.SelectedUnit?.Value.Value?.CharacterName).Append('|');
+            var vm = Vm();
+            if (vm == null) return;
+            var unit = Game.Instance?.SelectionCharacter?.SelectedUnit?.Value.Value;
+            string k = "spellbook:" + vm.GetHashCode() + ":";
+            string uk = k + (unit != null ? unit.CharacterName : "?") + ":";
 
-            // Metamagic builder mode: a wholly different content set. Refresh on the applied set / result level.
-            if (MixerActive(vm))
-            {
-                sb.Append("MIX|").Append(vm.CurrentSelectedSpell?.Value?.DisplayName).Append('|');
-                var sel = vm.SpellbookMetamagicMixerVM.SpellbookMetamagicSelector;
-                if (sel?.MetamagicItems != null)
-                    foreach (var i in sel.MetamagicItems) if (i != null) sb.Append(i.Feature?.Name).Append(i.IsSelected ? '+' : '-').Append(',');
-                sb.Append('|').Append(sel?.SpellbookSpellLevelSelector?.ResultSpellLevel.Value ?? -1);
-                sb.Append('|').Append(vm.SpellbookMetamagicMixerVM.CanWriteSpell.Value);
-                return sb.ToString();
-            }
-
-            sb.Append(vm.CurrentSpellbook?.Value?.Blueprint?.name).Append('|');
-            sb.Append(vm.CurrentSpellbookLevel?.Value?.Level ?? -1).Append('|');
-            var known = vm.SpellbookKnownSpellsVM?.KnownSpells;
-            if (known != null) foreach (var s in known) if (s != null) sb.Append(s.DisplayName).Append(',');
-            // Memorized slots fill/empty as you memorize/forget — fold them in so that triggers a refresh.
-            var panel = vm.SpellbookMemorizingPanelVM;
-            if (panel != null) { AppendMem(sb, panel.CommonMemorizedSpells); AppendMem(sb, panel.SpecialMemorizedSpells); }
-            return sb.ToString();
-        }
-
-        private static void AppendMem(StringBuilder sb, List<SpellbookMemorizeSlotVM> slots)
-        {
-            sb.Append('|');
-            if (slots == null) return;
-            foreach (var s in slots) sb.Append(s?.SpellData != null ? s.DisplayName : "-").Append(',');
-        }
-
-        private void BuildShell(SpellbookVM vm)
-        {
-            _built = true;
-            Clear();
-
+            // Character switcher — switching the selected unit re-keys everything below it.
             var party = Game.Instance?.Player?.Party;
             if (party != null && party.Count > 0)
             {
-                var sw = new ListContainer(Loc.T("label.characters"));
+                b.BeginStop("chars").PushContext(Loc.T("label.characters"), "list");
+                int ci = 0;
                 foreach (var u in party)
                 {
-                    var unit = u;
-                    sw.Add(new ProxyActionButton(() => unit.CharacterName, () => true,
-                        () => Game.Instance.SelectionCharacter.SetSelected(unit), actionVerb: "select"));
+                    var un = u;
+                    b.AddItem(ControlId.Referenced(un, k + "char:" + ci),
+                        GraphNodes.Button(() => un.CharacterName,
+                            () => Game.Instance.SelectionCharacter.SetSelected(un), sound: null));
+                    ci++;
                 }
-                Add(sw);
+                b.PopContext();
             }
-
-            _content = new Panel();
-            Add(_content);
-            Navigation.Attach(this);
-        }
-
-        private void RefillContent(SpellbookVM vm)
-        {
-            if (_content == null) return;
-            var cap = CaptureFocus();
-            // Entering/leaving the metamagic builder is a full content swap (and the context menu intervened),
-            // so a position restore is meaningless — drop focus onto the first cell instead.
-            bool mixer = MixerActive(vm);
-            bool modeChanged = mixer != _wasMixer;
-            _wasMixer = mixer;
-            _content.Clear();
 
             if (!vm.HasSpellbooks.Value)
             {
-                _content.Add(new TextElement(() => Loc.T("spell.none")));
-                Settle(cap, modeChanged);
+                b.BeginStop("none").AddItem(ControlId.Structural(uk + "none"),
+                    GraphNodes.Text(() => Loc.T("spell.none")));
                 return;
             }
 
-            if (mixer) { BuildMixer(vm); Settle(cap, modeChanged); return; }
+            if (MixerActive(vm)) { BuildMixer(b, vm, uk); return; }
 
             // Spellbook (caster) switcher — only when there's more than one.
             var books = vm.SpellbookSwitcherVM;
             if (books != null && books.HasMoreThanOneSpellbooks.Value && books.SelectionGroup?.EntitiesCollection != null)
             {
-                var sheet = new FlowSheet();
-                var bar = sheet.Bar(Loc.T("spell.spellbooks"));
-                foreach (var e in books.SelectionGroup.EntitiesCollection) { var ent = e; bar.Cell(new ProxySelectionItem(ent, () => ent.BookName)); }
-                sheet.Reflow();
-                _content.Add(sheet);
+                b.BeginStop("books").PushContext(Loc.T("spell.spellbooks"), "list");
+                b.StartRow();
+                int bi = 0;
+                foreach (var e in books.SelectionGroup.EntitiesCollection)
+                {
+                    if (e == null) continue;
+                    var ent = e;
+                    b.AddItem(ControlId.Referenced(ent, uk + "book:" + bi),
+                        GraphNodes.SelectionItem(ent, () => ent.BookName, sound: null));
+                    bi++;
+                }
+                b.EndRow();
+                b.PopContext();
             }
+
+            string bk = uk + (vm.CurrentSpellbook?.Value?.Blueprint?.name ?? "?") + ":";
 
             // Caster characteristics.
             var ch = vm.SpellbookCharacteristicsVM;
             if (ch != null)
             {
-                var sink = new FlowSheetCharSheetSink();
+                b.BeginStop("caster");
+                var sink = new GraphCharSheetSink(b, bk + "caster:");
                 var g = new StatGroup(Loc.T("spell.caster"));
                 g.Row(CharInfoStatRows.Value(ch.CasterLevel, signed: false));
                 g.Row(CharInfoStatRows.Value(ch.Concentration, signed: true));
                 g.Row(CharInfoStatRows.Value(ch.SpellPenetration, signed: true));
                 g.Row(CharInfoStatRows.Value(ch.SpellFailureChance, signed: false));
                 sink.StatGroup(g);
-                if (sink.Build() is FlowSheet cs && cs.RowCount > 0) _content.Add(cs);
+                sink.Build();
             }
 
             // Spell-level switcher (only levels that have spells).
             var levels = vm.SpellbookLevelSwitcherVM?.SelectionGroup?.EntitiesCollection;
             if (levels != null)
             {
-                var sheet = new FlowSheet();
-                var bar = sheet.Bar(Loc.T("metamagic.spell_level"));
+                b.BeginStop("levels").PushContext(Loc.T("metamagic.spell_level"), "list");
+                b.StartRow();
+                int li = 0;
                 foreach (var e in levels)
                 {
-                    if (e == null || !e.IsAvailable.Value) continue;
+                    if (e == null || !e.IsAvailable.Value) { li++; continue; }
                     var ent = e;
-                    bar.Cell(new ProxySelectionItem(ent, () => LevelName(ent.SpellbookLevel.Level)));
+                    b.AddItem(ControlId.Referenced(ent, bk + "lvl:" + li),
+                        GraphNodes.SelectionItem(ent, () => LevelName(ent.SpellbookLevel.Level), sound: null));
+                    li++;
                 }
-                sheet.Reflow();
-                _content.Add(sheet);
+                b.EndRow();
+                b.PopContext();
             }
 
-            BuildKnownSpells(vm);
-            BuildMemorize(vm);
-            Settle(cap, modeChanged);
+            string lk = bk + (vm.CurrentSpellbookLevel?.Value?.Level ?? -1) + ":";
+            BuildKnownSpells(b, vm, lk);
+            BuildMemorize(b, vm, lk);
         }
 
-        private void Settle((int child, int row, int col) cap, bool modeChanged)
+        // The known spells at the current level: a table whose rows key by spell VM (memorizing/forgetting
+        // re-deals cleanly); School is a value column carried as a part too.
+        private static void BuildKnownSpells(GraphBuilder b, SpellbookVM vm, string lk)
         {
-            if (modeChanged) FocusFirstCell();
-            else RestoreFocus(cap);
-        }
-
-        // Drop focus onto the first cell of the first non-empty FlowSheet (used when the content mode flips so
-        // there's no meaningful prior position to restore) — so the grid is entered, not just labelled.
-        private void FocusFirstCell()
-        {
-            foreach (var ch in _content.Children)
-            {
-                if (ch is FlowSheet fs && fs.RowCount > 0)
+            var known = vm.SpellbookKnownSpellsVM?.KnownSpells;
+            var unit = vm.UnitDescriptor?.Value;
+            b.BeginStop("known");
+            var sheet = new GraphSheet(b, lk + "known:");
+            sheet.Region(WithLevel(Loc.T("spell.spells"), vm), new[] { Loc.T("col.school") });
+            bool any = false;
+            if (known != null)
+                foreach (var spell in known)
                 {
-                    int c = fs.LeftmostVisitable(0);
-                    var cell = c >= 0 ? fs.CellAt(0, c) : null;
-                    if (cell != null) { _lastRestoreLabel = cell.GetLabelText(); Navigation.Focus(cell, announce: true); return; }
+                    if (spell == null) continue;
+                    any = true;
+                    var s = spell;
+                    var vt = SpellNodes.KnownSpell(s, unit);
+                    var anns = new List<NodeAnnouncement>(vt.Announcements)
+                    {
+                        new NodeAnnouncement(() => s.SchoolName), // the school reads with the row
+                    };
+                    vt.Announcements = anns;
+                    sheet.Row(vt, s, () => s.SchoolName);
                 }
-            }
-            var f = _content.FirstFocusable();
-            if (f != null) { _lastRestoreLabel = f.GetLabelText(); Navigation.Focus(f, announce: true); }
+            if (!any) sheet.Line(GraphNodes.Text(() => Loc.T("spell.none_at_level")));
+            sheet.Finish();
         }
 
-        // The memorizing panel (prepared casters): the special (domain/favorite) and common memorized slots
-        // for the current level — Enter on a filled slot forgets it; empty slots are filled from the known
-        // list — plus a spells-per-day / status readout.
-        private void BuildMemorize(SpellbookVM vm)
+        // The memorizing panel (prepared casters): the special (domain/favorite) and common memorized
+        // slots for the current level, plus a spells-per-day / status readout.
+        private static void BuildMemorize(GraphBuilder b, SpellbookVM vm, string lk)
         {
             var panel = vm.SpellbookMemorizingPanelVM;
             if (panel == null) return;
-            var sheet = new FlowSheet(WithLevel(Loc.T("spell.memorize"), vm));
+            b.BeginStop("memorize").PushContext(WithLevel(Loc.T("spell.memorize"), vm), "list", positions: false);
 
             // Like the game: show the memorize slots when there are any at this level, else a substitute
             // line (spontaneous spells-per-day, cantrips "cast at will", not-enough-stat/level, …).
@@ -231,24 +193,33 @@ namespace WrathAccess.Screens
             if (hasSlots)
             {
                 if (panel.HasSpecialSlots && panel.SpecialMemorizedSpells != null)
-                {
-                    var r = sheet.List(SpecialLabel(panel));
-                    foreach (var s in panel.SpecialMemorizedSpells) if (s != null) r.Item(new ProxyMemorizeSlot(s));
-                }
+                    EmitSlots(b, panel.SpecialMemorizedSpells, SpecialLabel(panel), lk + "special:");
                 if (panel.HasCommonSlots && panel.CommonMemorizedSpells != null)
-                {
-                    var r = sheet.List((string)UIStrings.Instance.SpellBookTexts.MemorizedSpells);
-                    foreach (var s in panel.CommonMemorizedSpells) if (s != null) r.Item(new ProxyMemorizeSlot(s));
-                }
+                    EmitSlots(b, panel.CommonMemorizedSpells,
+                        (string)UIStrings.Instance.SpellBookTexts.MemorizedSpells, lk + "common:");
             }
+            else
+            {
+                // Live: the spontaneous count changes on cast.
+                b.AddItem(ControlId.Structural(lk + "substitute"), GraphNodes.Text(() => SubstituteText(panel)));
+            }
+            if (panel.NeedToSleep)
+                b.AddItem(ControlId.Structural(lk + "needsleep"),
+                    GraphNodes.Text(() => (string)UIStrings.Instance.SpellBookTexts.NeedToSleep));
+            b.PopContext();
+        }
 
-            var info = new List<UIElement>();
-            if (!hasSlots) info.Add(new TextElement(() => SubstituteText(panel))); // live (spontaneous count changes on cast)
-            if (panel.NeedToSleep) info.Add(new TextElement((string)UIStrings.Instance.SpellBookTexts.NeedToSleep));
-            if (info.Count > 0) { var r = sheet.List(Loc.T("spell.slots")); foreach (var e in info) r.Item(e); }
-
-            sheet.Reflow();
-            if (sheet.RowCount > 0) _content.Add(sheet);
+        private static void EmitSlots(GraphBuilder b, List<SpellbookMemorizeSlotVM> slots, string label, string key)
+        {
+            b.PushContext(label);
+            int i = 0;
+            foreach (var s in slots)
+            {
+                if (s != null)
+                    b.AddItem(ControlId.Referenced(s, key + i), SpellNodes.MemorizeSlot(s));
+                i++;
+            }
+            b.PopContext();
         }
 
         // Mirrors SpellbookMemorizingPanelView.SetupSubstituteText: the line shown in place of slots — the
@@ -283,47 +254,54 @@ namespace WrathAccess.Screens
         // The metamagic builder (entered via a known spell's "Apply metamagic"): the base spell, the known
         // metamagic feats as toggles, the Heighten level stepper (when applicable), the resulting spell
         // (name + level + whether it's castable), and "Write spell" — which creates the metamagic'd custom
-        // spell and leaves the builder. Back leaves the builder.
-        private void BuildMixer(SpellbookVM vm)
+        // spell and leaves the builder. Back leaves the builder. Keys carry the base spell, so building a
+        // different spell re-keys the builder.
+        private static void BuildMixer(GraphBuilder b, SpellbookVM vm, string uk)
         {
             var mixer = vm.SpellbookMetamagicMixerVM;
             var sel = mixer.SpellbookMetamagicSelector;
             var baseSpell = vm.CurrentSelectedSpell?.Value;
-            var sheet = new FlowSheet(Loc.T("spell.metamagic"));
+            string mk = uk + "mix:" + (baseSpell != null ? baseSpell.GetHashCode().ToString() : "?") + ":";
+
+            b.BeginStop("mixer").PushContext(Loc.T("spell.metamagic"), role: null, positions: false);
 
             if (baseSpell != null)
             {
                 var bs = baseSpell;
-                sheet.List(Loc.T("spell.spell")).Item(new TextElement(() => bs.DisplayName, null, () => bs.Tooltip));
+                b.AddItem(ControlId.Structural(mk + "base"), GraphNodes.Text(
+                    () => Loc.T("spell.spell") + ", " + bs.DisplayName, () => bs.Tooltip));
             }
 
             var feats = sel?.MetamagicItems;
             if (feats != null && feats.Count > 0)
             {
-                var r = sheet.List(Loc.T("spell.metamagic"));
-                foreach (var item in feats) if (item != null) r.Item(new ProxyMetamagicToggle(item));
+                int fi = 0;
+                foreach (var item in feats)
+                {
+                    if (item != null)
+                        b.AddItem(ControlId.Referenced(item, mk + "feat:" + fi), SpellNodes.MetamagicToggle(item));
+                    fi++;
+                }
             }
             else
             {
-                sheet.List(Loc.T("spell.metamagic")).Item(new TextElement(() => Loc.T("spell.no_metamagic")));
+                b.AddItem(ControlId.Structural(mk + "nofeats"), GraphNodes.Text(() => Loc.T("spell.no_metamagic")));
             }
 
             var lvl = sel?.SpellbookSpellLevelSelector;
             if (lvl != null && lvl.CanChangeLevel.Value)
-                sheet.List(Loc.T("spell.heighten")).Item(new ProxyMetamagicLevel(lvl));
+                b.AddItem(ControlId.Structural(mk + "heighten"), SpellNodes.MetamagicLevel(lvl));
 
-            var result = sheet.List(Loc.T("metamagic.result"));
-            // Live closure: the result level/castability change as metamagics toggle, and re-resolving
-            // per read keeps the line current across a language swap (no frozen build-time string).
-            result.Item(new TextElement(() => ResultLine(baseSpell,
-                lvl?.ResultSpellLevel.Value ?? 0, lvl?.CanUseSpell ?? true)));
-            // Always show Write (greyed when you can't write yet — no metamagic applied, or the result level
-            // exceeds your castable slots), mirroring the game's Interactable = CanWriteSpell button.
-            result.Item(new ProxyActionButton(() => Message.Localized("ui", "metamagic.write").Resolve(),
-                () => mixer.CanWriteSpell.Value, () => mixer.TryWriteNewSpell()));
-
-            sheet.Reflow();
-            _content.Add(sheet);
+            // Live: the result level/castability change as metamagics toggle.
+            b.AddItem(ControlId.Structural(mk + "result"), GraphNodes.Text(
+                () => ResultLine(baseSpell, lvl?.ResultSpellLevel.Value ?? 0, lvl?.CanUseSpell ?? true)));
+            // Always show Write (greyed when you can't write yet — no metamagic applied, or the result
+            // level exceeds your castable slots), mirroring the game's Interactable = CanWriteSpell.
+            b.AddItem(ControlId.Structural(mk + "write"), GraphNodes.Button(
+                () => Loc.T("metamagic.write"),
+                () => mixer.TryWriteNewSpell(),
+                () => mixer.CanWriteSpell.Value));
+            b.PopContext();
         }
 
         private static string ResultLine(AbilityDataVM baseSpell, int level, bool castable)
@@ -342,67 +320,15 @@ namespace WrathAccess.Screens
                 : (string)UIStrings.Instance.SpellBookTexts.FavoriteSchoolSlots;
         }
 
-        // The known spells at the current level as an associated-element table: column 0 is the spell (name +
-        // tooltip + add-to-bar), School is a value column.
-        private void BuildKnownSpells(SpellbookVM vm)
-        {
-            var known = vm.SpellbookKnownSpellsVM?.KnownSpells;
-            var unit = vm.UnitDescriptor?.Value;
-            var sheet = new FlowSheet(WithLevel(Loc.T("spell.spells"), vm));
-            var t = sheet.Table(Loc.T("spell.spells"), Loc.T("col.school"));
-            bool any = false;
-            if (known != null)
-                foreach (var spell in known)
-                {
-                    if (spell == null) continue;
-                    any = true;
-                    var s = spell;
-                    t.Row(new ProxyKnownSpell(s, unit), new UIElement[] { new TextElement(() => s.SchoolName) });
-                }
-            if (!any) t.Row(new TextElement(() => Loc.T("spell.none_at_level")), new UIElement[0]);
-            t.Associate(0);
-            sheet.Reflow();
-            _content.Add(sheet);
-        }
-
         private static string LevelName(int level)
             => level == 0 ? Loc.T("spell.cantrips") : Loc.T("spell.level", new { level });
 
-        // The memorize/known sections are filtered to the current spell level (the level switcher drives both),
-        // so put the level in their headers — otherwise it's only known from the switcher region.
+        // The memorize/known sections are filtered to the current spell level (the level switcher drives
+        // both), so put the level in their headers — otherwise it's only known from the switcher.
         private static string WithLevel(string label, SpellbookVM vm)
         {
             int lvl = vm.CurrentSpellbookLevel?.Value?.Level ?? -1;
             return lvl < 0 ? label : label + ", " + LevelName(lvl);
-        }
-
-        // (contentChildIndex, row, col) of the focused cell, or child = -1 when focus is outside the content.
-        private (int child, int row, int col) CaptureFocus()
-        {
-            var cur = Navigation.Active?.Current;
-            if (cur != null)
-                for (int i = 0; i < _content.Children.Count; i++)
-                    if (_content.Children[i] is FlowSheet fs && fs.TryCoords(cur, out int r, out int c))
-                        return (i, r, c);
-            return (-1, 0, 0);
-        }
-
-        private void RestoreFocus((int child, int row, int col) cap)
-        {
-            if (cap.child < 0) return;
-            UIElement cell = null;
-            if (cap.child < _content.Children.Count && _content.Children[cap.child] is FlowSheet fs && fs.RowCount > 0)
-            {
-                int r = System.Math.Min(cap.row, fs.RowCount - 1);
-                int c = fs.Visitable(r, cap.col) ? cap.col : fs.LeftmostVisitable(r);
-                if (c >= 0) cell = fs.CellAt(r, c);
-            }
-            cell = cell ?? _content.FirstFocusable();
-            if (cell == null) return;
-            var label = cell.GetLabelText();
-            bool announce = label != _lastRestoreLabel;
-            _lastRestoreLabel = label;
-            Navigation.Focus(cell, announce);
         }
     }
 }

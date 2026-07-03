@@ -291,6 +291,28 @@ namespace WrathAccess.UI
                 () => vm?.Description, position);
         }
 
+        /// <summary>A generic tab ("label, tab[, selected][, n of m]"): activation selects it and
+        /// announces "selected" synchronously.</summary>
+        public static NodeVtable Tab(Func<string> label, Func<bool> selected, Action select)
+        {
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Tab,
+                Announcements = new List<NodeAnnouncement>
+                {
+                    LabelPart(label),
+                    SelectedPart(selected),
+                },
+                SearchText = label,
+                StateText = () => selected != null && selected() ? Loc.T("state.selected") : null,
+                OnActivate = () =>
+                {
+                    UiSound.Play(UISoundType.ButtonClick);
+                    select?.Invoke();
+                },
+            };
+        }
+
         /// <summary>A settings tab (Game / Controls / …): activation replicates the game's own click flow
         /// (SetSelectedFromView → group updates SelectedEntity → SetSettingsList) and announces "selected".</summary>
         public static NodeVtable SettingsTab(SettingsMenuEntityVM tab, SettingsVM settings,
@@ -369,6 +391,48 @@ namespace WrathAccess.UI
             },
             SearchText = label,
         };
+
+        /// <summary>One lootable item in a loot window (<see cref="Kingmaker.UI.MVVM._VM.Slots.ItemSlotVM"/>):
+        /// name (+ count for stacks/gold), the trophy needs-skinning state, the item's tooltip on Space
+        /// (resolved live per press; LAST of the slot's templates — comparisons come first, the item's own
+        /// last). Enter takes it via the VM contract (HandleTryCollectLootSlot: collects, plays the loot
+        /// sound, auto-closes quick-loot windows on the last item). An unskinned trophy refuses in the VM
+        /// silently — we say why instead.</summary>
+        public static NodeVtable LootItem(Kingmaker.UI.MVVM._VM.Loot.LootVM loot,
+            Kingmaker.UI.MVVM._VM.Slots.ItemSlotVM slot)
+        {
+            Func<string> label = () =>
+            {
+                var name = slot.DisplayName.Value;
+                if (string.IsNullOrEmpty(name)) name = slot.Item.Value?.Name ?? "item";
+                int count = slot.Count.Value;
+                return count > 1 ? name + ", " + count : name;
+            };
+            Func<bool> needsSkinning = () => slot.NeedSkinningToCollect && !slot.SkinningResult;
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Item,
+                Announcements = new[]
+                {
+                    LabelPart(label),
+                    // Live: a successful Skin flips the state under focus and it announces itself.
+                    new NodeAnnouncement(() => needsSkinning() ? Loc.T("loot.needs_skinning") : null,
+                        live: true, kind: AnnouncementKinds.Value),
+                },
+                SearchText = label,
+                OnActivate = () =>
+                {
+                    if (needsSkinning()) { Tts.Speak(Loc.T("loot.needs_skinning"), interrupt: true); return; }
+                    loot.HandleTryCollectLootSlot(slot); // plays its own LootCollectOne/LootCollectGold
+                },
+                OnTooltip = () =>
+                {
+                    var t = slot.Tooltip.Value;
+                    var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
+                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
+                },
+            };
+        }
 
         private static void OpenSimpleTooltip(string title, string description)
         {

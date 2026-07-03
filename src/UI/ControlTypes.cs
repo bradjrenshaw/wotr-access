@@ -85,6 +85,14 @@ namespace WrathAccess.UI
             Common = () => RoleWord("key binding"),
         };
 
+        /// <summary>An inventory/loot/vendor item ("label, item[, state]").</summary>
+        public static readonly ControlType Item = new ControlType
+        {
+            Key = "item",
+            Order = StandardOrder,
+            Common = () => RoleWord("item"),
+        };
+
         /// <summary>An expandable group header (a tree section). No role word of its own — the announcer
         /// appends the expanded/collapsed state word.</summary>
         public static readonly ControlType Group = new ControlType
@@ -101,6 +109,6 @@ namespace WrathAccess.UI
         };
 
         /// <summary>Every registered type, for settings registration. New types are added here.</summary>
-        public static readonly ControlType[] All = { Button, Toggle, Slider, RadioButton, ComboBox, Tab, KeyBinding, Group, Text };
+        public static readonly ControlType[] All = { Button, Toggle, Slider, RadioButton, ComboBox, Tab, KeyBinding, Item, Group, Text };
     }
 }

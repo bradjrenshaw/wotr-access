@@ -196,6 +196,10 @@ namespace WrathAccess.UI.Graph
         /// (single sibling, raw/grid nodes, or a multi-item row member positioned within its row).</summary>
         public int PositionIndex;
         public int PositionCount;
+
+        /// <summary>On a parent (context/group) node: its direct children get NO auto position — for
+        /// log-like streams where "37 of 200" is noise (the old FlowSheet's AnnouncePosition=false).</summary>
+        public bool SuppressChildPositions;
     }
 
     /// <summary>

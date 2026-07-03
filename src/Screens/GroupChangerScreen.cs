@@ -3,7 +3,7 @@ using Kingmaker;
 using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized Accept label)
 using Kingmaker.UI.MVVM._VM.GroupChanger;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -12,9 +12,11 @@ namespace WrathAccess.Screens
     /// area for the world map, but also on recruit, capital management, scripted ShowPartySelection, a party
     /// split (the Detach subclass), and from the world map itself. Two arrow-navigated lists (Current Party /
     /// Companions); Enter on a character moves it between them (<c>MoveCharacter</c>, mirroring the portrait
-    /// click), respecting the locked main character and the slot cap. An Accept stop commits the party and
-    /// leaves (<c>Go</c>); Escape cancels and stays (<c>Close</c>, only when the party is already valid — like
-    /// the game's X, which hides otherwise; the Detach variant never allows cancel). Driven, like the loot
+    /// click), respecting the locked main character and the slot cap. Character nodes key by LIST + SLOT
+    /// (not by unit), so after a move focus stays in the list you were working in, on the row the character
+    /// vacated — the old hand-written FocusAfterMove, emergent. An Accept stop commits the party and leaves
+    /// (<c>Go</c>); Escape cancels and stays (<c>Close</c>, only when the party is already valid — like the
+    /// game's X, which hides otherwise; the Detach variant never allows cancel). Driven, like the loot
     /// window, off a <c>GroupChangerContextVM</c> — the in-game static HUD's, or the global map's (see
     /// <see cref="Vm"/>) — not a RootUIContext service window.
     /// </summary>
@@ -28,11 +30,6 @@ namespace WrathAccess.Screens
         // Exploration/InGame categories), the group changer keeps control — so block the categories below
         // it explicitly, or exploration hotkeys would still fire under the modal.
         public override bool Exclusive => true;
-
-        private GroupChangerVM _builtVm;
-        private ListContainer _party;
-        private ListContainer _remote;
-        private ProxyActionButton _accept;
 
         private static GroupChangerVM Vm()
         {
@@ -48,45 +45,41 @@ namespace WrathAccess.Screens
 
         public override bool IsActive() => Vm() != null;
 
-        public override void OnPush() { _builtVm = null; }
-        public override void OnPop() { Clear(); _builtVm = null; _party = _remote = null; _accept = null; }
+        public override bool BuildsGraph => true;
 
-        public override void OnUpdate()
+        public override void Build(GraphBuilder b)
         {
             var vm = Vm();
             if (vm == null) return;
-            // A new GroupChangerVM instance = a fresh window. Within one window the lists only change via our
-            // own moves (handled in Activate), so no per-frame resync is needed.
-            if (vm != _builtVm) { _builtVm = vm; Rebuild(vm); }
-        }
+            string k = "group:" + vm.GetHashCode() + ":"; // a new VM = a fresh window = fresh keys
 
-        private void Rebuild(GroupChangerVM vm)
-        {
-            Clear();
-            _party = new ListContainer(vm.PartyHeader);   // "Current Party"  (game-localized)
-            _remote = new ListContainer(vm.RemoteHeader);  // "Companions"
-            Populate(vm);
-            Add(_party);
-            Add(_remote);
+            EmitList(b, vm, vm.PartyCharacter, vm.PartyHeader, k + "party");
+            EmitList(b, vm, vm.RemoteCharacter, vm.RemoteHeader, k + "remote");
+
             // Accept = commit the chosen party and leave (Go); greys out until the selection is valid.
-            _accept = new ProxyActionButton(
-                () => TextUtil.StripRichText((string)UIStrings.Instance.CommonTexts.Accept),
-                () => vm.AcceptEnabled.Value,
-                () => vm.Go());
-            Add(_accept);
-            Navigation.Attach(this);
+            b.BeginStop(k + "accept").AddItem(ControlId.Structural(k + "accept"),
+                GraphNodes.Button(
+                    () => TextUtil.StripRichText((string)UIStrings.Instance.CommonTexts.Accept),
+                    () => vm.Go(),
+                    () => vm.AcceptEnabled.Value));
         }
 
-        private void Populate(GroupChangerVM vm)
+        // One list as a Tab-stop. Keys are LIST + SLOT INDEX (structural, not the unit): a move re-deals
+        // the lists and focus stays on the same slot — now the next character — which the differ reads.
+        private static void EmitList(GraphBuilder b, GroupChangerVM vm,
+            IEnumerable<GroupChangerCharacterVM> chars, string header, string key)
         {
-            _party.Clear();
-            foreach (var ch in vm.PartyCharacter) _party.Add(CharButton(vm, ch, _party));
-            _remote.Clear();
-            foreach (var ch in vm.RemoteCharacter) _remote.Add(CharButton(vm, ch, _remote));
+            b.BeginStop(key).PushContext(header, "list");
+            int i = 0;
+            foreach (var ch in chars)
+            {
+                var c = ch;
+                b.AddItem(ControlId.Structural(key + ":" + i),
+                    GraphNodes.Button(() => CharLabel(c), () => Activate(vm, c), sound: null));
+                i++;
+            }
+            b.PopContext();
         }
-
-        private ProxyActionButton CharButton(GroupChangerVM vm, GroupChangerCharacterVM ch, ListContainer list)
-            => new ProxyActionButton(() => CharLabel(ch), () => true, () => Activate(vm, ch, list));
 
         // Name plus the badges the portrait shows (lock / level-up / mythic level-up / overload).
         private static string CharLabel(GroupChangerCharacterVM ch)
@@ -99,34 +92,19 @@ namespace WrathAccess.Screens
             return string.Join(", ", parts);
         }
 
-        private void Activate(GroupChangerVM vm, GroupChangerCharacterVM ch, ListContainer fromList)
+        private static void Activate(GroupChangerVM vm, GroupChangerCharacterVM ch)
         {
-            if (ch.IsLock) { Tts.Speak(Loc.T("group.cant_move")); return; } // main / required / pinned: pinned in party
-            bool inParty = fromList == _party;
+            if (ch.IsLock) { Tts.Speak(Loc.T("group.cant_move")); return; } // main / required: pinned in party
+            bool inParty = false;
+            foreach (var p in vm.PartyCharacter)
+                if (ReferenceEquals(p, ch)) { inParty = true; break; }
             if (!inParty && vm.PartyCharacter.Count >= 6) { Tts.Speak(Loc.T("group.party_full")); return; }
 
-            int idx = fromList.IndexOf(Navigation.Current); // the activated row, so we can stay near it after
-            vm.MoveCharacter(ch.UnitRef);                   // Party <-> Companions (mirrors the portrait click)
-            Populate(vm);
+            vm.MoveCharacter(ch.UnitRef); // Party <-> Companions (mirrors the portrait click)
             Tts.Speak(Loc.T("group.moved", new { name = ch.UnitRef.Value.CharacterName,
                 dest = inParty ? vm.RemoteHeader : vm.PartyHeader }));
-            FocusAfterMove(fromList, idx);
-        }
-
-        // Stay in the list the player was working in, on the row the moved character vacated (now the next
-        // one), clamped. If that list emptied (all companions added), fall through to the other list / Accept.
-        private void FocusAfterMove(ListContainer fromList, int idx)
-        {
-            if (fromList.Children.Count > 0)
-            {
-                if (idx < 0) idx = 0;
-                else if (idx >= fromList.Children.Count) idx = fromList.Children.Count - 1;
-                Navigation.Focus(fromList.Children[idx]);
-                return;
-            }
-            var other = fromList == _party ? _remote : _party;
-            if (other != null && other.Children.Count > 0) Navigation.Focus(other.Children[0]);
-            else if (_accept != null) Navigation.Focus(_accept);
+            // The next render re-deals the slot keys; focus stays on the vacated slot (the next
+            // character), or slides to the nearest survivor if the list shrank at the end.
         }
 
         // Escape = cancel and stay in the area (Close), but only when the current party is valid — mirroring

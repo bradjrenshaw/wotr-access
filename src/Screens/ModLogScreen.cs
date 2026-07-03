@@ -6,17 +6,18 @@ using Kingmaker.UI.Models.Log.CombatLog_ThreadSystem; // CombatLogChannel
 using Kingmaker.UI.MVVM._VM.CombatLog; // CombatLogVM
 using WrathAccess.Localization;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
     /// The mod's log review screen, opened from the in-game HUD's Log button. Mirrors the game's on-screen
-    /// combat log: a tabs list of its CHANNELS (All / Events / Combat / Dialogue) + a <see cref="FlowSheet"/>
-    /// of the selected channel's messages, chronological (newest at the bottom). Reads the game's own
-    /// history — <c>CombatLogChannel.Messages</c> (public) off <c>CombatLogVM.m_Channels</c> (reflected) —
-    /// so switching our tab doesn't disturb the game's panel. A snapshot taken on open / tab switch (reopen
-    /// to refresh). Mod-pushed; engages focus mode so nav works, restores on close. Escape closes.
+    /// combat log: a tabs list of its CHANNELS (All / Events / Combat / Dialogue) + the selected channel's
+    /// messages, chronological (newest at the bottom). Reads the game's own history —
+    /// <c>CombatLogChannel.Messages</c> (public) off <c>CombatLogVM.m_Channels</c> (reflected) — so
+    /// switching our tab doesn't disturb the game's panel. Graph-native and immediate-mode, so the list is
+    /// LIVE: new messages appear at the bottom as they arrive (message keys are absolute indices, so focus
+    /// stays put while they do). Mod-pushed; engages focus mode so nav works, restores on close. Escape closes.
     /// </summary>
     public sealed class ModLogScreen : Screen
     {
@@ -25,6 +26,7 @@ namespace WrathAccess.Screens
         public static void Close() => s_open = false;
 
         public override string Key => "overlay.modlog";
+        public override string ScreenName => L("log.title", "Log");
         public override int Layer => 22; // above exploration / dialogue / loot / saveload; below settings (25)
         public override bool IsActive() => s_open;
 
@@ -32,19 +34,10 @@ namespace WrathAccess.Screens
         private static readonly FieldInfo ChannelsField = AccessTools.Field(typeof(CombatLogVM), "m_Channels");
 
         private bool _priorFocus;
-        private int _active;
-        private int _builtActive;
-        private bool _built;
-        private Container _content; // wraps the active channel's log; refilled on tab switch
+        private int _active; // the selected channel tab (our view state, not tree state)
 
-        public override void OnPush() { _priorFocus = FocusMode.Active; FocusMode.Set(true); _active = 0; _built = false; }
-        public override void OnPop() { Clear(); _content = null; FocusMode.Set(_priorFocus); }
-
-        public override void OnUpdate()
-        {
-            if (!_built) { Build(); return; }
-            if (_active != _builtActive) RebuildContent(); // channel changed → refill content only
-        }
+        public override void OnPush() { _priorFocus = FocusMode.Active; FocusMode.Set(true); _active = 0; }
+        public override void OnPop() { FocusMode.Set(_priorFocus); }
 
         public override IEnumerable<ElementAction> GetActions()
         {
@@ -57,7 +50,7 @@ namespace WrathAccess.Screens
             return clog != null ? ChannelsField?.GetValue(clog) as List<CombatLogChannel> : null;
         }
 
-        private static string Loc(string key, string fallback) => LocalizationManager.GetOrDefault("ui", key, fallback);
+        private static string L(string key, string fallback) => LocalizationManager.GetOrDefault("ui", key, fallback);
 
         // The game localizes the channel labels only inside the combat-log prefab (each toggle's
         // LocalizedUIText → SharedStringAsset → LocalizedString); the strings aren't in any blueprint/VM, and
@@ -75,7 +68,7 @@ namespace WrathAccess.Screens
 
         private static string ChannelLabel(CombatLogChannel ch)
         {
-            if (ch == null) return Loc("log.title", "Log");
+            if (ch == null) return L("log.title", "Log");
             if (ChannelKeys.TryGetValue(ch.ChannelName, out var key))
             {
                 var pack = Kingmaker.Localization.LocalizationManager.CurrentPack;
@@ -85,59 +78,51 @@ namespace WrathAccess.Screens
             return ch.ChannelName; // fallback to the game's English id
         }
 
-        private void Build()
-        {
-            _built = true;
-            Clear();
+        public override bool BuildsGraph => true;
 
+        public override void Build(GraphBuilder b)
+        {
             var channels = Channels();
-            var tabs = new ListContainer(Loc("log.channels", "Channels"));
+
+            // The channel tabs.
+            b.BeginStop("tabs").PushContext(L("log.channels", "Channels"), "list");
             if (channels != null)
                 for (int i = 0; i < channels.Count; i++)
                 {
                     int idx = i;
-                    var ch = channels[i];
-                    tabs.Add(new ProxyTab(ChannelLabel(ch), () => _active == idx, () => _active = idx));
+                    b.AddItem(ControlId.Structural("modlog:tab:" + i),
+                        GraphNodes.Tab(Label(channels, i), () => _active == idx, () => _active = idx));
                 }
-            Add(tabs);
+            b.PopContext();
 
-            _content = new Panel(); // wrapper; the log FlowSheet inside is the second Tab-stop
-            Add(_content);
-            RebuildContent();
-
-            Navigation.Attach(this);
-            Tts.Speak(Loc("log.title", "Log"));
-            Navigation.AnnounceCurrent();
-        }
-
-        // Refill only the content wrapper (tabs untouched) so tab focus survives a channel switch.
-        private void RebuildContent()
-        {
-            _builtActive = _active;
-            if (_content == null) return;
-            _content.Clear();
-
-            var channels = Channels();
+            // The selected channel's messages — keys carry the channel, so a tab switch re-keys the
+            // content only (tab focus survives); message keys are absolute indices, stable as new lines
+            // append. No positions: "37 of 200" per line is noise.
             var ch = channels != null && _active >= 0 && _active < channels.Count ? channels[_active] : null;
-
-            var sheet = new FlowSheet();
-            var list = sheet.List(ChannelLabel(ch));
-            var msgs = ch != null ? ch.Messages : null;
+            b.BeginStop("content").PushContext(ChannelLabel(ch), role: null, positions: false);
+            var msgs = ch?.Messages;
             if (msgs != null && msgs.Count > 0)
             {
                 int start = msgs.Count > MaxLines ? msgs.Count - MaxLines : 0;
                 for (int i = start; i < msgs.Count; i++) // chronological: oldest first, newest at the bottom
                 {
                     var msg = msgs[i]; // capture for the live read
-                    list.Item(new TextElement(() => msg.Message));
+                    b.AddItem(ControlId.Structural("modlog:ch" + _active + ":msg" + i),
+                        GraphNodes.Text(() => msg.Message));
                 }
             }
             else
             {
-                list.Item(new TextElement(Loc("log.empty", "No messages.")));
+                b.AddItem(ControlId.Structural("modlog:ch" + _active + ":empty"),
+                    GraphNodes.Text(() => L("log.empty", "No messages.")));
             }
-            sheet.Reflow();
-            _content.Add(sheet);
+            b.PopContext();
+        }
+
+        private static System.Func<string> Label(List<CombatLogChannel> channels, int i)
+        {
+            var ch = channels[i];
+            return () => ChannelLabel(ch);
         }
     }
 }

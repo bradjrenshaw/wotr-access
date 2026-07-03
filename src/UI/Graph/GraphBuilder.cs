@@ -103,7 +103,7 @@ namespace WrathAccess.UI.Graph
         /// <summary>Push one NON-FOCUSABLE level of presentation hierarchy ("Difficulty settings",
         /// "list") onto nodes added from here — pure structure: never navigable, announced when focus
         /// enters from outside. Close with <see cref="PopContext"/>.</summary>
-        public GraphBuilder PushContext(string label, string role = null)
+        public GraphBuilder PushContext(string label, string role = null, bool positions = true)
         {
             var parent = CurrentParent;
             var anns = new List<NodeAnnouncement> { NodeAnnouncement.Static(label) };
@@ -115,6 +115,7 @@ namespace WrathAccess.UI.Graph
                 Vtable = new NodeVtable { Announcements = anns },
                 Parent = parent,
                 Focusable = false,
+                SuppressChildPositions = !positions,
             };
             _parents.Add(new ParentFrame { Node = node, Suppressed = Suppressed });
             return this;
@@ -296,6 +297,7 @@ namespace WrathAccess.UI.Graph
                     continue;
                 }
                 var node = row.Items[0];
+                if (node.Parent != null && node.Parent.SuppressChildPositions) continue;
                 var key = new KeyValuePair<GraphNode, object>(node.Parent, node.StopKey);
                 if (!groups.TryGetValue(key, out var list))
                 {

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace WrathAccess.UI.Graph
 {
     /// <summary>
-    /// Builds a <see cref="GraphRender"/>. Two construction styles (mixing them is an error):
+    /// Builds a <see cref="GraphRender"/>. Two construction styles, freely mixable in one build:
     ///
     /// <para><b>Menu mode</b> — rows of controls, wired automatically: left/right within a row, up/down
     /// between consecutive rows (two rows sharing a non-null row key get column navigation — up/down
@@ -49,7 +49,7 @@ namespace WrathAccess.UI.Graph
         private readonly List<Row> _rows = new List<Row>();
         private Row _currentRow;
 
-        // Raw mode (mutually exclusive with menu mode).
+        // Raw mode.
         private readonly List<Entry> _rawNodes = new List<Entry>();
         private readonly List<RawEdge> _rawEdges = new List<RawEdge>();
 
@@ -158,7 +158,7 @@ namespace WrathAccess.UI.Graph
 
         /// <summary>Add a read-only line (label only; no actions).</summary>
         public GraphBuilder AddLabel(ControlId id, Func<string> label)
-            => AddItem(id, new NodeVtable { Label = label });
+            => AddItem(id, new NodeVtable { Announcements = new[] { new NodeAnnouncement(label) } });
 
         // ---- raw mode ----
 
@@ -182,8 +182,8 @@ namespace WrathAccess.UI.Graph
         private Entry MakeEntry(ControlId id, NodeVtable vtable)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
-            if (vtable == null || vtable.Label == null)
-                throw new ArgumentException("A control must have a Label", nameof(vtable));
+            if (vtable == null || vtable.Announcements == null || vtable.Announcements.Count == 0)
+                throw new ArgumentException("A control must have at least one announcement", nameof(vtable));
             if (!_ids.Add(id)) throw new InvalidOperationException("Duplicate control id: " + id);
             return new Entry
             {

@@ -48,6 +48,7 @@ namespace WrathAccess.UI
                 _lastSpokenKey = null;
                 _lastSpokenNode = null;
                 _pendingFocus = null;
+                _liveKey = null;
             }
             _graph = screen != null ? new KeyGraph(() => TreeGraphAdapter.Build(screen), _state) : null;
         }
@@ -58,6 +59,7 @@ namespace WrathAccess.UI
             _lastSpokenKey = null;
             _lastSpokenNode = null;
             _pendingFocus = null;
+            _liveKey = null;
             Screen?.SetFocusedChild(null);
         }
 
@@ -103,6 +105,40 @@ namespace WrathAccess.UI
                 if (FocusMode.Active) Speak(ComposeMove(_lastSpokenNode, node, entry: _lastSpokenNode == null));
                 _lastSpokenKey = node.Id;
                 _lastSpokenNode = node;
+            }
+
+            WatchLive(node);
+        }
+
+        // ---- live announcements: watch the FOCUSED node's Live parts and speak a part when its value
+        // changes (an async toggle settling, the game flipping a state) — state feedback in the
+        // architecture instead of per-element watcher machinery. Baselines silently whenever focus lands
+        // on a new identity (the focus announcement already spoke the initial state).
+        private ControlId _liveKey;
+        private readonly List<string> _liveValues = new List<string>();
+
+        private void WatchLive(GraphNode node)
+        {
+            var anns = node.Vtable?.Announcements;
+            if (anns == null) return;
+            bool baseline = _liveKey == null || !_liveKey.Equals(node.Id) || _liveValues.Count != anns.Count;
+            if (baseline) { _liveKey = node.Id; _liveValues.Clear(); }
+
+            for (int i = 0; i < anns.Count; i++)
+            {
+                if (anns[i] == null || !anns[i].Live)
+                {
+                    if (baseline) _liveValues.Add(null);
+                    continue;
+                }
+                string v = null;
+                try { v = anns[i].Text?.Invoke(); } catch { }
+                if (baseline) { _liveValues.Add(v); continue; }
+                if (!string.Equals(_liveValues[i], v))
+                {
+                    _liveValues[i] = v;
+                    if (!string.IsNullOrEmpty(v) && FocusMode.Active) Speak(v, interrupt: false);
+                }
             }
         }
 

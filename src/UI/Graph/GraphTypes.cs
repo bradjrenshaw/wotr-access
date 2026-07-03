@@ -27,14 +27,36 @@ namespace WrathAccess.UI.Graph
     }
 
     /// <summary>
-    /// The behaviors of a control, as data. <see cref="Label"/> is required (it produces the spoken focus
-    /// announcement); the rest are optional — a null slot means the control doesn't have that behavior and
-    /// the navigator speaks its "nothing there" feedback instead.
+    /// One part of a control's spoken focus readout ("Hold position" / "toggle" / "on"), resolved live at
+    /// speak time. A LIVE part is additionally watched while its node is focused: when its resolved text
+    /// changes (an async toggle settling, a value the game flips), the navigator speaks just that part
+    /// immediately — state feedback without re-reading the whole control, and without per-element watcher
+    /// machinery.
+    /// </summary>
+    public sealed class NodeAnnouncement
+    {
+        /// <summary>The part's text, resolved live. Null/empty at speak time = the part stays silent.</summary>
+        public Func<string> Text;
+
+        /// <summary>Watch this part while the node is focused and speak it when its value changes.</summary>
+        public bool Live;
+
+        public NodeAnnouncement(Func<string> text, bool live = false) { Text = text; Live = live; }
+
+        public static NodeAnnouncement Static(string text) => new NodeAnnouncement(() => text);
+    }
+
+    /// <summary>
+    /// The behaviors of a control, as data. <see cref="Announcements"/> is required (its parts compose the
+    /// spoken focus readout; the first part is the control's label for search/dedupe purposes); the rest
+    /// are optional — a null slot means the control doesn't have that behavior and the navigator speaks
+    /// its "nothing there" feedback instead.
     /// </summary>
     public sealed class NodeVtable
     {
-        /// <summary>Required. The control's full spoken focus announcement, resolved live.</summary>
-        public Func<string> Label;
+        /// <summary>Required, at least one part. The control's spoken focus readout, in speak order.
+        /// Parts marked <see cref="NodeAnnouncement.Live"/> re-speak on change while focused.</summary>
+        public IReadOnlyList<NodeAnnouncement> Announcements;
 
         /// <summary>Optional. Primary activation — the left-click equivalent (Enter).</summary>
         public Action OnActivate;
@@ -50,12 +72,13 @@ namespace WrathAccess.UI.Graph
         /// large requests a coarse step. When set, left/right do NOT navigate.</summary>
         public Action<int, bool> OnAdjust;
 
-        /// <summary>Optional. The control's state line, spoken in place after an activation that changes
-        /// state (a toggle's new value) instead of repeating the whole label.</summary>
+        /// <summary>Optional. The control's state line, spoken IMMEDIATELY (interrupting) after an
+        /// activation/adjust that changes state — the synchronous feedback path for rapid key repeats.
+        /// Asynchronous/game-driven changes ride the Live announcement watch instead.</summary>
         public Func<string> StateText;
 
-        /// <summary>Optional. The text type-ahead matches against; null = derive from <see cref="Label"/>.
-        /// (A cell whose label is a bare number can search as its row's name, etc.)</summary>
+        /// <summary>Optional. The text type-ahead matches against; null = the first announcement part
+        /// (the label). (A cell whose label is a bare number can search as its row's name, etc.)</summary>
         public Func<string> SearchText;
 
         /// <summary>If true, type-ahead never matches this control.</summary>

@@ -8,7 +8,7 @@ namespace WrathAccess.Tests
         private static GraphNode Node(string label, params ContextEntry[] context) => new GraphNode
         {
             Id = ControlId.Structural(label),
-            Vtable = new NodeVtable { Label = () => label },
+            Vtable = new NodeVtable { Announcements = new[] { NodeAnnouncement.Static(label) } },
             Context = context,
         };
 
@@ -63,6 +63,26 @@ namespace WrathAccess.Tests
             var other = Node("Game difficulty presets, menu button", new ContextEntry("Game difficulty", "group"));
             Assert.Equal("Game difficulty, group, Game difficulty presets, menu button",
                 GraphAnnouncer.ComposeFull(other));
+        }
+
+        [Fact]
+        public void LeafTextJoinsAnnouncementParts()
+        {
+            var node = new GraphNode
+            {
+                Id = ControlId.Structural("x"),
+                Vtable = new NodeVtable
+                {
+                    Announcements = new[]
+                    {
+                        NodeAnnouncement.Static("Hold position"),
+                        NodeAnnouncement.Static("toggle"),
+                        new NodeAnnouncement(() => "on", live: true),
+                        new NodeAnnouncement(() => null), // empty at speak time — silent
+                    },
+                },
+            };
+            Assert.Equal("Hold position, toggle, on", GraphAnnouncer.ComposeFull(node));
         }
 
         [Fact]

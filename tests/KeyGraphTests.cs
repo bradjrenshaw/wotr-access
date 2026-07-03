@@ -7,7 +7,7 @@ namespace WrathAccess.Tests
 {
     public class KeyGraphTests
     {
-        private static NodeVtable Vt(string label) => new NodeVtable { Label = () => label };
+        private static NodeVtable Vt(string label) => new NodeVtable { Announcements = new[] { NodeAnnouncement.Static(label) } };
         private static ControlId Id(string key) => ControlId.Structural(key);
 
         private static KeyGraph Menu(GraphState state, params string[] items)
@@ -206,7 +206,7 @@ namespace WrathAccess.Tests
             var g = new KeyGraph(() => new GraphBuilder()
                 .AddItem(Id("a"), new NodeVtable
                 {
-                    Label = () => "A",
+                    Announcements = new[] { NodeAnnouncement.Static("A") },
                     OnActivate = () => clicked = true,
                     OnAdjust = (sign, large) => adjusted = sign > 0,
                 })

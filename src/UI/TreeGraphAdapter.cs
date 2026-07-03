@@ -35,9 +35,12 @@ namespace WrathAccess.UI
             return b.Build();
         }
 
+        // One composed announcement per element (its GetFocusMessage, resolved live) — the adapter keeps
+        // today's readouts verbatim; graph-native screens supply structured per-part lists (with Live
+        // flags) instead.
         private static NodeVtable Vt(UIElement e) => new NodeVtable
         {
-            Label = () => e.GetFocusMessage().Resolve(),
+            Announcements = new[] { new NodeAnnouncement(() => e.GetFocusMessage().Resolve()) },
             SearchText = e.GetLabelText,
         };
 

@@ -30,7 +30,7 @@ namespace WrathAccess.UI.Graph
             int i = 0;
             while (i < oldCtx.Count && i < newCtx.Count && SameLevel(oldCtx[i], newCtx[i])) i++;
 
-            string leaf = to.Vtable?.Label?.Invoke();
+            string leaf = LeafText(to);
 
             for (int j = i; j < newCtx.Count; j++)
             {
@@ -57,6 +57,24 @@ namespace WrathAccess.UI.Graph
 
         /// <summary>The full readout for a landing with no prior focus (screen entry, focus restore).</summary>
         public static string ComposeFull(GraphNode to) => Compose(null, to);
+
+        /// <summary>A node's own readout: its announcement parts, resolved live, non-empty ones joined.
+        /// The first part is the control's label, so context dedupe's prefix check still applies.</summary>
+        public static string LeafText(GraphNode node)
+        {
+            var anns = node?.Vtable?.Announcements;
+            if (anns == null || anns.Count == 0) return null;
+            var sb = new StringBuilder();
+            for (int i = 0; i < anns.Count; i++)
+            {
+                string t = null;
+                if (anns[i]?.Text != null) t = anns[i].Text();
+                if (string.IsNullOrEmpty(t)) continue;
+                if (sb.Length > 0) sb.Append(", ");
+                sb.Append(t);
+            }
+            return sb.Length > 0 ? sb.ToString() : null;
+        }
 
         private static bool SameLevel(ContextEntry a, ContextEntry b)
             => string.Equals(a.Label, b.Label) && string.Equals(a.Role, b.Role);

@@ -22,23 +22,20 @@ namespace WrathAccess.UI.Proxies
         private readonly Action _onToggle;
         private readonly Func<bool> _isEnabled;
         private readonly bool _hideWhenDisabled;
-        private readonly Func<bool, string> _announceChange; // self-announce mode (poll + speak on change) if set
-        private readonly Func<int> _announceContext;         // optional: rebaseline silently when this changes
+        private readonly bool _reannounceOnActivate;
         private readonly Func<TooltipBaseTemplate> _tooltip; // optional tooltip (Space), resolved live
 
         public ProxyBoolToggle(string label, Func<bool> isChecked, Action onToggle,
             Func<bool> isEnabled = null, bool hideWhenDisabled = false,
-            Func<bool, string> announceChange = null, Func<int> announceContext = null,
-            Func<TooltipBaseTemplate> tooltip = null)
+            Func<TooltipBaseTemplate> tooltip = null, bool reannounceOnActivate = true)
         {
             _label = label;
             _isChecked = isChecked;
             _onToggle = onToggle;
             _isEnabled = isEnabled;
             _hideWhenDisabled = hideWhenDisabled;
-            _announceChange = announceChange;
-            _announceContext = announceContext;
             _tooltip = tooltip;
+            _reannounceOnActivate = reannounceOnActivate;
         }
 
         public override TooltipBaseTemplate GetTooltipTemplate() => _tooltip != null ? _tooltip() : null;
@@ -50,32 +47,11 @@ namespace WrathAccess.UI.Proxies
         // appears/disappears as the dependency changes without a rebuild.
         public override bool CanFocus => !_hideWhenDisabled || Enabled;
 
-        // Self-announce mode is the single source of truth for the value readout, so don't ALSO re-read on
-        // activate (which would catch the optimistic pre-settle value). Plain toggles re-announce as before.
-        public override bool ReannounceOnActivate => _announceChange == null;
+        // False for toggles whose activation settles ASYNCHRONOUSLY in the game (Hold/Stop/etc.): an
+        // instant re-read would speak the optimistic pre-settle value; a state watcher (e.g.
+        // PartyStateWatch) speaks the settled truth instead.
+        public override bool ReannounceOnActivate => _reannounceOnActivate;
 
-        // Self-announce: poll the bound state and speak when it CHANGES — so the element naturally reflects the
-        // game state it's tied to (e.g. Hold), no matter how the change was caused (our hotkey, the HUD button,
-        // or the game) and regardless of whether anything is focused. The screen ticks this every frame; the
-        // navigator also ticks it while focused (the second tick is a no-op — the value already matches).
-        // announceContext guards the all-or-nothing aggregates (Hold/Stop = "all selected …", which flip on
-        // every character swap): when it changes, rebaseline silently rather than announce a non-toggle flip.
-        private bool _selfArmed;
-        private bool _selfLast;
-        private int _selfCtx;
-
-        public override void OnUpdate()
-        {
-            if (_announceChange == null || _isChecked == null) return;
-            bool now = _isChecked();
-            int ctx = _announceContext != null ? _announceContext() : 0;
-            if (!_selfArmed) { _selfArmed = true; _selfLast = now; _selfCtx = ctx; return; } // baseline, silent
-            if (ctx != _selfCtx) { _selfCtx = ctx; _selfLast = now; return; }                // context changed → rebaseline
-            if (now == _selfLast) return;
-            _selfLast = now;
-            var line = _announceChange(now);
-            if (!string.IsNullOrEmpty(line)) Tts.Speak(line, interrupt: false);
-        }
         public override Kingmaker.UI.UISoundType? ActivateSound => Kingmaker.UI.UISoundType.SettingsSwitchToggle;
 
         public override IEnumerable<Announcement> GetFocusAnnouncements()

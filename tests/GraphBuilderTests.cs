@@ -6,7 +6,7 @@ namespace WrathAccess.Tests
 {
     public class GraphBuilderTests
     {
-        private static NodeVtable Vt(string label) => new NodeVtable { Label = () => label };
+        private static NodeVtable Vt(string label) => new NodeVtable { Announcements = new[] { NodeAnnouncement.Static(label) } };
         private static ControlId Id(string key) => ControlId.Structural(key);
 
         [Fact]

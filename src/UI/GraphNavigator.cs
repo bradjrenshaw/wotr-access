@@ -316,8 +316,10 @@ namespace WrathAccess.UI
                 case "ui.prev": return Tab(-1);
                 case "ui.home": return JumpEdge(first: true);
                 case "ui.end": return JumpEdge(first: false);
-                case "ui.regionPrev": return Current?.Parent is FlowSheet && RegionJump(-1);
-                case "ui.regionNext": return Current?.Parent is FlowSheet && RegionJump(1);
+                // Region jumps consume only when the focused node is IN a region (adapter FlowSheets
+                // stamp regions too) — elsewhere Ctrl+arrows bubble (the scanner's category cycle).
+                case "ui.regionPrev": return _graph?.CurrentNode?.RegionKey != null && RegionJump(-1);
+                case "ui.regionNext": return _graph?.CurrentNode?.RegionKey != null && RegionJump(1);
                 case "ui.activate":
                 {
                     if (_graph?.CurrentNode == null) return false;

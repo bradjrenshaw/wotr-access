@@ -52,6 +52,11 @@ namespace WrathAccess.UI.Graph
         private readonly List<GraphNode> _rawNodes = new List<GraphNode>();
         private readonly List<RawEdge> _rawEdges = new List<RawEdge>();
 
+        // Every node in DECLARATION order regardless of mode — the render's node order (and so the
+        // Tab-stop cycle) must interleave menu rows and raw nodes as the screen declared them, not
+        // rows-then-raw (which shoved FlowSheet stops behind later buttons).
+        private readonly List<GraphNode> _declared = new List<GraphNode>();
+
         // Shared.
         private readonly HashSet<ControlId> _ids = new HashSet<ControlId>();
         private ControlId _start;
@@ -243,7 +248,7 @@ namespace WrathAccess.UI.Graph
             if (vtable == null || vtable.Announcements == null || vtable.Announcements.Count == 0)
                 throw new ArgumentException("A control must have at least one announcement", nameof(vtable));
             if (!_ids.Add(id)) throw new InvalidOperationException("Duplicate control id: " + id);
-            return new GraphNode
+            var node = new GraphNode
             {
                 Id = id,
                 Vtable = vtable,
@@ -251,6 +256,8 @@ namespace WrathAccess.UI.Graph
                 StopKey = _stopKey,
                 RegionKey = _regionKey,
             };
+            _declared.Add(node);
+            return node;
         }
 
         // ---- build ----
@@ -264,10 +271,7 @@ namespace WrathAccess.UI.Graph
             if (_rawNodes.Count == 0 && _rows.Count == 0) return null;
 
             var render = new GraphRender();
-            foreach (var row in _rows)
-                foreach (var node in row.Items)
-                    AddNodeTo(render, node);
-            foreach (var node in _rawNodes) AddNodeTo(render, node);
+            foreach (var node in _declared) AddNodeTo(render, node);
 
             WireMenuEdges(render);
             foreach (var e in _rawEdges)

@@ -15,7 +15,9 @@ namespace WrathAccess.Screens
     /// the single source of truth. Graph-native (no longer on the <see cref="WizardScreen"/> shell, which
     /// remains for the game-VM wizards): a roadmap stop (one jump-target per active phase, each with a
     /// LIVE one-line summary of its current choice), the current step's content under the step title as
-    /// context (content keys carry the step, so a page turn re-keys the page), and Back/Next stops.
+    /// context — each chunk (help text, option list, settings tree, test button) its OWN Tab-stop, like
+    /// the old loose-element layout; content keys carry the step so a page turn re-keys the page — and
+    /// Back/Next stops.
     /// Advancing plays the page-turn and lands focus on the new page's content (<c>FocusStop</c>). The
     /// phase set is dynamic — the engine-settings step drops out for a paramless engine, the voice steps
     /// appear only in positional mode. Mod-pushed (static open flag); Escape closes.
@@ -139,7 +141,7 @@ namespace WrathAccess.Screens
         private static void BuildBackendStep(GraphBuilder b, string k)
         {
             b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.speech.backend_help")));
-            int i = 0;
+            b.BeginStop(k + "options"); // the engine list is its own Tab-stop after the help text
             foreach (var h in SpeechManager.Handlers)
             {
                 if (!CanUse(h)) continue; // only engines that actually load on this machine
@@ -149,7 +151,6 @@ namespace WrathAccess.Screens
                         () => handler.Label,
                         () => HandlerChoice()?.ValueId == handler.Key,
                         () => SelectBackend(handler.Key)));
-                i++;
             }
         }
 
@@ -181,6 +182,7 @@ namespace WrathAccess.Screens
         private static void BuildNavigationStep(GraphBuilder b, string k)
         {
             b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.nav.help")));
+            b.BeginStop(k + "options");
             b.AddItem(ControlId.Structural(k + "continuous"), GraphNodes.ChoiceOption(
                 () => Loc.T("wizard.nav.continuous"), () => PrimaryMode() == "continuous", ApplyContinuous));
             b.AddItem(ControlId.Structural(k + "tiled"), GraphNodes.ChoiceOption(
@@ -239,6 +241,7 @@ namespace WrathAccess.Screens
         private static void BuildWallTonesStep(GraphBuilder b, string k)
         {
             b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.walltones.help")));
+            b.BeginStop(k + "options");
             var mode = ModSettings.GetSetting<ChoiceSetting>("defaults.walltones.mode");
             var range = ModSettings.GetSetting<IntSetting>("defaults.walltones.range");
             if (mode != null) ModSettingNodes.Emit(b, mode, k);
@@ -255,6 +258,7 @@ namespace WrathAccess.Screens
         {
             if (!s_sonarInit) { ApplySonarDefaults(); s_sonarInit = true; }
             b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.sonar.help")));
+            b.BeginStop(k + "options");
             b.AddItem(ControlId.Structural(k + "enabled"), SonarFlagToggle("wizard.sonar.enabled", "defaults.sonar.mode"));
             b.AddItem(ControlId.Structural(k + "enemy"), SonarIncludeToggle("wizard.sonar.enemy", ScanTaxonomy.UnitsEnemies));
             b.AddItem(ControlId.Structural(k + "neutral"), SonarIncludeToggle("wizard.sonar.neutral", ScanTaxonomy.UnitsNeutrals));
@@ -312,6 +316,7 @@ namespace WrathAccess.Screens
         private static void BuildEventFeedbackStep(GraphBuilder b, string k)
         {
             b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.events.help")));
+            b.BeginStop(k + "options");
             b.AddItem(ControlId.Structural(k + "positional"), GraphNodes.ChoiceOption(
                 () => Loc.T("wizard.events.positional"), () => CurrentMode() == "positional", ApplyPositional));
             b.AddItem(ControlId.Structural(k + "screen_reader"), GraphNodes.ChoiceOption(
@@ -409,8 +414,11 @@ namespace WrathAccess.Screens
             b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T(helpKey)));
             var sapi = ConfigParams(slotPath);
             if (sapi != null)
+            {
+                b.BeginStop(k + "settings");
                 foreach (var s in sapi.Children) ModSettingNodes.Emit(b, s, k);
-            b.AddItem(ControlId.Structural(k + "test"),
+            }
+            b.BeginStop(k + "test").AddItem(ControlId.Structural(k + "test"),
                 GraphNodes.Button(() => Loc.T("wizard.events.test"), () => TestVoice(slotPath), sound: null));
         }
 

@@ -187,6 +187,24 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
+        public void MixedModesKeepDeclarationOrder()
+        {
+            // A screen declaring list → raw grid → button must keep that Tab-stop order (raw nodes must
+            // NOT be appended after all menu rows — that displaced FlowSheet stops behind later buttons).
+            var render = new GraphBuilder()
+                .AddItem(Id("list1"), Vt("L1"))
+                .BeginStop()
+                .AddNode(Id("cell1"), Vt("C1"))
+                .BeginStop()
+                .AddItem(Id("button"), Vt("B"))
+                .Build();
+
+            Assert.Equal(Id("list1"), render.Order[0].Id);
+            Assert.Equal(Id("cell1"), render.Order[1].Id);
+            Assert.Equal(Id("button"), render.Order[2].Id);
+        }
+
+        [Fact]
         public void RawModeWiresExplicitEdges()
         {
             var render = new GraphBuilder()

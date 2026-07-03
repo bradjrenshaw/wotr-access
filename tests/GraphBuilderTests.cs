@@ -141,10 +141,25 @@ namespace WrathAccess.Tests
             var dup = new GraphBuilder().AddItem(Id("a"), Vt("A"));
             Assert.Throws<InvalidOperationException>(() => dup.AddItem(Id("a"), Vt("A2")));
 
-            var mixed = new GraphBuilder().AddItem(Id("a"), Vt("A")).AddNode(Id("b"), Vt("B"));
-            Assert.Throws<InvalidOperationException>(() => mixed.Build());
-
             Assert.Throws<ArgumentException>(() => new GraphBuilder().AddItem(Id("x"), new NodeVtable()));
+        }
+
+        [Fact]
+        public void MenuRowsAndRawNodesMix()
+        {
+            // A screen mixing an auto-wired list with a computed-topology grid: raw edges may
+            // reference menu nodes.
+            var render = new GraphBuilder()
+                .AddItem(Id("list1"), Vt("List1"))
+                .AddNode(Id("cell1"), Vt("Cell1"))
+                .AddNode(Id("cell2"), Vt("Cell2"))
+                .Connect(Id("cell1"), GraphDir.Right, Id("cell2"))
+                .Connect(Id("cell1"), GraphDir.Up, Id("list1"))
+                .Build();
+
+            Assert.Equal(3, render.Order.Count);
+            Assert.Equal(Id("cell2"), render.Nodes[Id("cell1")].Transitions[GraphDir.Right].Destination);
+            Assert.Equal(Id("list1"), render.Nodes[Id("cell1")].Transitions[GraphDir.Up].Destination);
         }
     }
 }

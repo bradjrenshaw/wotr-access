@@ -9,7 +9,9 @@ namespace WrathAccess.UI
     /// </summary>
     public static class Navigation
     {
-        public static Navigator Active = new TraditionalNavigator();
+        // The graph navigator is the default on this branch; the classic navigator remains for A/B
+        // regression comparison (DEBUG F7 swaps live) until the by-ear pass signs the graph off.
+        public static Navigator Active = new GraphNavigator();
 
         public static void Attach(Screen screen) => Active?.Attach(screen);
 

@@ -197,31 +197,24 @@ namespace WrathAccess.UI.Graph
 
         // ---- build ----
 
-        /// <summary>Finalize into a render, or null when nothing was declared (treat as "closed").</summary>
+        /// <summary>Finalize into a render, or null when nothing was declared (treat as "closed").
+        /// Menu rows and raw nodes/edges may coexist in one build (a screen mixing lists with a grid
+        /// whose topology is computed): rows wire themselves; raw edges may reference any node.</summary>
         public GraphRender Build()
         {
             if (_currentRow != null) throw new InvalidOperationException("Unclosed row - call EndRow()");
-            bool hasRaw = _rawNodes.Count > 0;
-            bool hasMenu = _rows.Count > 0;
-            if (hasRaw && hasMenu)
-                throw new InvalidOperationException("Cannot mix raw graph (AddNode/Connect) with menu rows in one build");
-            if (!hasRaw && !hasMenu) return null;
+            if (_rawNodes.Count == 0 && _rows.Count == 0) return null;
 
             var render = new GraphRender();
-            if (hasRaw)
-            {
-                foreach (var e in _rawNodes) AddNodeTo(render, e);
-                foreach (var e in _rawEdges)
-                    if (render.Nodes.ContainsKey(e.From) && render.Nodes.ContainsKey(e.To))
-                        render.Nodes[e.From].Transitions[e.Dir] = new Transition(e.To, e.Label);
-            }
-            else
-            {
-                foreach (var row in _rows)
-                    foreach (var e in row.Items)
-                        AddNodeTo(render, e);
-                WireMenuEdges(render);
-            }
+            foreach (var row in _rows)
+                foreach (var e in row.Items)
+                    AddNodeTo(render, e);
+            foreach (var e in _rawNodes) AddNodeTo(render, e);
+
+            WireMenuEdges(render);
+            foreach (var e in _rawEdges)
+                if (render.Nodes.ContainsKey(e.From) && render.Nodes.ContainsKey(e.To))
+                    render.Nodes[e.From].Transitions[e.Dir] = new Transition(e.To, e.Label);
 
             render.StartKey = _start != null && render.Nodes.ContainsKey(_start)
                 ? _start

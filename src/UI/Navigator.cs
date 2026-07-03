@@ -18,7 +18,7 @@ namespace WrathAccess.UI
     public abstract class Navigator
     {
         protected readonly List<UIElement> Path = new List<UIElement>();
-        protected Screen Screen { get; private set; }
+        protected Screen Screen { get; set; }
 
         // The screen we still owe an INITIAL-focus announcement for (set on screen entry, cleared once the
         // landing is announced or a screen takes over via Focus). Lets EnsureFocus deliver the landing even
@@ -26,12 +26,12 @@ namespace WrathAccess.UI
         // on" after the screen name.
         private Screen _awaitingAnnounce;
 
-        public UIElement Current => Path.Count > 0 ? Path[Path.Count - 1] : null;
+        public virtual UIElement Current => Path.Count > 0 ? Path[Path.Count - 1] : null;
 
         /// <summary>Bind to a screen and set initial focus (silently). Subclass decides how. A NEW screen
         /// entry arms the initial-focus announcement (delivered by EnsureFocus once focus exists); a
         /// re-attach to the SAME screen (e.g. a content rebuild) doesn't re-arm it, so rebuilds stay quiet.</summary>
-        public void Attach(Screen screen)
+        public virtual void Attach(Screen screen)
         {
             if (!ReferenceEquals(screen, Screen)) _awaitingAnnounce = screen;
             Screen = screen;
@@ -43,7 +43,7 @@ namespace WrathAccess.UI
         /// Silent. On a <see cref="Screen.StartUnfocused"/> screen the keyboard returns to exploration and
         /// stays there (EnsureFocus won't re-seat it); on other screens EnsureFocus re-focuses next frame, so
         /// callers should only blur exploration-capable screens.</summary>
-        public void Blur()
+        public virtual void Blur()
         {
             Path.Clear();
             Screen?.SetFocusedChild(null);
@@ -59,7 +59,7 @@ namespace WrathAccess.UI
         /// (exploration), so they stay unfocused. Called once per frame after the screen updates; announces
         /// the landing when focus mode owns the keyboard. A no-op once something is focused.
         /// </summary>
-        public void EnsureFocus()
+        public virtual void EnsureFocus()
         {
             if (Screen == null) return;
             // "No real focus" = nothing focused, OR focus stranded on a transparent Panel — which happens when
@@ -101,7 +101,7 @@ namespace WrathAccess.UI
         /// changes) — diff from empty, so container labels + the focused leaf are read,
         /// e.g. "Main Menu, Continue".
         /// </summary>
-        public void AnnounceCurrent()
+        public virtual void AnnounceCurrent()
         {
             _awaitingAnnounce = null; // announcing settles the initial-focus debt
             AnnounceDelta(EmptyPath);
@@ -109,7 +109,7 @@ namespace WrathAccess.UI
 
         /// <summary>Move focus to a specific element (e.g. a node just inserted into the tree) and announce
         /// the change. Queues (doesn't interrupt) so a preceding feedback line still plays.</summary>
-        public void Focus(UIElement target, bool announce = true)
+        public virtual void Focus(UIElement target, bool announce = true)
         {
             if (target == null) return;
             _awaitingAnnounce = null; // the screen set focus itself — it owns the initial announce (or its silence)
@@ -163,7 +163,7 @@ namespace WrathAccess.UI
 
         /// <summary>A container's remembered focus, else its selected child — WITHOUT the
         /// first-focusable fallback (used to decide whether descending deeper is justified).</summary>
-        private static UIElement RememberedOrSelected(Container c)
+        protected static UIElement RememberedOrSelected(Container c)
         {
             if (c.FocusedChild != null && c.FocusedChild.CanFocus && !IsEmptyPanel(c.FocusedChild))
                 return c.FocusedChild;

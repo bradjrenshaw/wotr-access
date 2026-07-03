@@ -606,6 +606,19 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.DumpObjectNames).AddBinding(KeyCode.F10).Grouped("scanner");
             InputManager.Register("scan.debugAreaParts", "Read area parts (debug)", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.DebugDumpAreaParts).AddBinding(KeyCode.F9).Grouped("scanner");
+#if DEBUG
+            // F7: swap navigators live (graph vs classic) for by-ear A/B regression on the graph-nav
+            // branch. Debug-only tooling — not localized, gone in Release.
+            InputManager.Register("dev.navSwap", "Swap navigator (debug)", InputCategory.Global, () =>
+            {
+                bool toGraph = !(WrathAccess.UI.Navigation.Active is WrathAccess.UI.GraphNavigator);
+                WrathAccess.UI.Navigation.Active = toGraph
+                    ? (WrathAccess.UI.Navigator)new WrathAccess.UI.GraphNavigator()
+                    : new WrathAccess.UI.TraditionalNavigator();
+                WrathAccess.UI.Navigation.Attach(WrathAccess.Screens.ScreenManager.Current);
+                Tts.Speak(toGraph ? "graph navigator" : "classic navigator", interrupt: true);
+            }).AddBinding(KeyCode.F7);
+#endif
 
             // Buffers (review channels — see WrathAccess.Buffers): Alt+Left/Right cycle between buffers,
             // Alt+Up/Down move through the current buffer's lines. Alt+arrows are otherwise unused; live in

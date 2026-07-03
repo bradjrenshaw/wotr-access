@@ -33,6 +33,7 @@ namespace WrathAccess.UI
         private List<ControlId> _rowIds;
         private Func<string> _rowName; // the current row's primary label (for vertical edge labels)
         private Func<string> _prevRowName;
+        private object _rowRef;        // the current row's domain object (identity keys), or null
 
         public GraphSheet(GraphBuilder b, string keyPrefix)
         {
@@ -59,9 +60,15 @@ namespace WrathAccess.UI
         }
 
         /// <summary>One row: the interactive/primary cell's vtable plus the metadata cell values (their
-        /// count should match the region's columns). Metadata cells are read-only text.</summary>
-        public GraphSheet Row(NodeVtable primary, params Func<string>[] cells)
+        /// count should match the region's columns). Metadata cells are read-only text.
+        /// <paramref name="rowRef"/> is the row's DOMAIN OBJECT (the item slot, the save VM) and should
+        /// be passed whenever rows can appear/vanish/reorder: keys derive from it, so a removed row's
+        /// focus slides to a genuinely different identity and the differ announces the landing — index
+        /// keys would silently rebadge the next row as "the same control". The primary additionally
+        /// carries it as its reference (tier-1 follow when the row moves).</summary>
+        public GraphSheet Row(NodeVtable primary, object rowRef, params Func<string>[] cells)
         {
+            _rowRef = rowRef;
             _row++;
             _prevRowIds = _rowIds;
             _prevRowName = _rowName;
@@ -91,6 +98,7 @@ namespace WrathAccess.UI
         /// <summary>A single full-width line (a lead row like "Your gold", a section note).</summary>
         public GraphSheet Line(NodeVtable vt)
         {
+            _rowRef = null;
             _row++;
             _prevRowIds = _rowIds;
             _prevRowName = _rowName;
@@ -114,7 +122,12 @@ namespace WrathAccess.UI
 
         private void EmitCell(NodeVtable vt, int col)
         {
-            var id = ControlId.Structural(_key + "r" + _row + "c" + col);
+            // Identity keys when the row has a domain object: stable across reorders/removals (the
+            // primary also carries the reference for tier-1 follow); positional only for static lines.
+            string skey = _rowRef != null
+                ? _key + "row" + _rowRef.GetHashCode() + "c" + col
+                : _key + "r" + _row + "c" + col;
+            var id = _rowRef != null && col == 0 ? ControlId.Referenced(_rowRef, skey) : ControlId.Structural(skey);
             _b.AddNode(id, vt);
             _rowIds.Add(id);
 

@@ -95,6 +95,7 @@ namespace WrathAccess.Screens
                                 new NodeAnnouncement(() => s.SaveTime.Value),
                                 new NodeAnnouncement(() => SlotType(s)),
                             }),
+                            s, // identity keys: deleting a save announces the row focus lands on
                             () => s.CharacterName.Value,
                             () => s.LocationName.Value,
                             () => s.SaveTime.Value,

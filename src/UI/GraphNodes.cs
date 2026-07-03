@@ -509,6 +509,12 @@ namespace WrathAccess.UI
                 ControlType = ControlTypes.Item,
                 Announcements = anns,
                 SearchText = label,
+                // Synchronous feedback after Enter: the row with its REMAINING quantity ("Longsword, 4").
+                // Null once the slot empties — the row vanishes and the differ announces the item focus
+                // lands on instead.
+                StateText = () => slot.HasItem
+                    ? label() + ", " + (slot.Count.Value > 1 ? slot.Count.Value.ToString() : "1")
+                    : null,
                 // Enter = move ONE (the slot routes by its collection); it plays the game's own sound.
                 OnActivate = () => slot.VendorTryMove(state: false, all: false),
                 // Backspace = the per-item menu (move the whole stack / information).

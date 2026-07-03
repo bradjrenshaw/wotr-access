@@ -129,6 +129,7 @@ namespace WrathAccess.Screens
                             new NodeAnnouncement(qty),
                             new NodeAnnouncement(price),
                         }),
+                        s, // identity keys: selling out a stack lands on a NEW identity → announced
                         type, qty, price);
                 }
             if (!any) sheet.Line(GraphNodes.Text(() => Loc.T("vendor.empty")));

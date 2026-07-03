@@ -43,6 +43,15 @@ namespace WrathAccess.Screens
             AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.Phases.FeatureSelector.CharGenFeatureSearchPCView");
         private static readonly System.Reflection.FieldInfo SearchRequestField =
             SearchViewType != null ? AccessTools.Field(SearchViewType, "SearchRequest") : null;
+        // The selector list view: its VisibleCollection is the EXACT on-screen order (the game sorts
+        // per nesting level at bind/expand/search time, then splices — it does NOT re-sort on live
+        // reactive flips, so recomputing the comparer per frame drifts from the screen).
+        private static readonly System.Reflection.FieldInfo SelectorViewField =
+            DetailViewType != null ? AccessTools.Field(DetailViewType, "m_Selector") : null;
+        private static readonly System.Type SelectorViewType =
+            AccessTools.TypeByName("Kingmaker.UI.MVVM._PCView.CharGen.Phases.FeatureSelector.CharGenFeatureSelectorPCView");
+        private static readonly System.Reflection.FieldInfo VisibleCollectionField =
+            SelectorViewType != null ? AccessTools.Field(SelectorViewType, "VisibleCollection") : null;
 
         public FeatureSelectorPhaseContent(CharGenFeatureSelectorPhaseVM phase) : base(phase) { }
 
@@ -55,6 +64,39 @@ namespace WrathAccess.Screens
             if (view == null || DetailViewType == null || !DetailViewType.IsInstanceOfType(view)) return null;
             var search = SearchViewField?.GetValue(view);
             return search != null ? SearchRequestField?.GetValue(search) : null;
+        }
+
+        // The on-screen order as a rank map (VM → index in the game view's VisibleCollection), or null
+        // when the selector view isn't reachable (fall back to the comparer). Read live each render.
+        private static Dictionary<object, int> ScreenOrder()
+        {
+            var cgv = InstanceField?.GetValue(null);
+            if (cgv == null) return null;
+            var view = SelectedDetailField?.GetValue(cgv);
+            if (view == null || DetailViewType == null || !DetailViewType.IsInstanceOfType(view)) return null;
+            var selector = SelectorViewField?.GetValue(view);
+            var visible = selector != null ? VisibleCollectionField?.GetValue(selector) : null;
+            if (!(visible is System.Collections.IEnumerable seq)) return null;
+            var rank = new Dictionary<object, int>();
+            int i = 0;
+            foreach (var vm in seq) { if (vm != null && !rank.ContainsKey(vm)) rank.Add(vm, i); i++; }
+            return rank.Count > 0 ? rank : null;
+        }
+
+        // Order a nesting level the way the SCREEN shows it: by VisibleCollection rank when the view is
+        // up (exact, including the game's sort-at-bind timing), else the game's comparer as fallback.
+        private static void SortLevel(List<CharGenFeatureSelectorItemVM> items, Dictionary<object, int> rank)
+        {
+            if (rank != null)
+                items.Sort((a, b) =>
+                {
+                    bool ha = rank.TryGetValue(a, out int ra), hb = rank.TryGetValue(b, out int rb);
+                    if (ha && hb) return ra.CompareTo(rb);
+                    if (ha != hb) return ha ? -1 : 1; // off-screen (shouldn't happen) sinks to the end
+                    return CompareItems(a, b);
+                });
+            else
+                items.Sort(CompareItems);
         }
 
         private static string SearchRequest()
@@ -86,11 +128,12 @@ namespace WrathAccess.Screens
                 b.AddItem(ControlId.Structural(k + "prohibited"),
                     GraphNodes.Text(() => Loc.T("chargen.nothing_to_select")));
 
-            // The tag filter, reflecting the live SearchRequest — shown when the search view is up and the
-            // selection actually has tags (mirroring the game's SetupDropdown gate).
+            // The tag filter, reflecting the live SearchRequest — ONLY on selections whose items carry
+            // feature tags (Phase.HasFeatureTags — feats yes, backgrounds/deities/heritages no; the
+            // game gates its search widget the same way).
             var tags = Phase.CharGenFeatureSearchVM?.LocalizedValues;
             string search = SearchRequest();
-            if (search != null && tags != null && tags.Count > 0)
+            if (Phase.HasFeatureTags && search != null && tags != null && tags.Count > 0)
             {
                 var options = new List<string> { Loc.T("filter.all") };
                 options.AddRange(tags);
@@ -107,17 +150,19 @@ namespace WrathAccess.Screens
             var req = SearchRequest();
             if (!string.IsNullOrEmpty(req))
                 top.RemoveAll(it => !it.HasText(req));
-            top.Sort(CompareItems); // the game's order (selectable → recommended → name)
+            var rank = ScreenOrder();
+            SortLevel(top, rank); // the SCREEN's order (VisibleCollection), comparer fallback
 
             b.BeginStop("features");
-            foreach (var it in top) EmitFeature(b, it, k + "f:");
+            foreach (var it in top) EmitFeature(b, it, k + "f:", rank);
             // (the wizard shell's phase-name context announces "Background" / "Feat")
         }
 
         // One feature as a radio item. When it's selected AND opens sub-choices, its children are
         // revealed beneath it under its name as context (the game's "select = reveal"); selecting a
         // sibling deselects this one, so its children simply vanish from the next render.
-        private void EmitFeature(GraphBuilder b, CharGenFeatureSelectorItemVM vm, string prefix)
+        private void EmitFeature(GraphBuilder b, CharGenFeatureSelectorItemVM vm, string prefix,
+            Dictionary<object, int> rank)
         {
             Func<bool> canSelect = () => vm.SelectState == FeatureSelectionViewState.SelectState.CanSelect;
             Func<bool> isSelected = () => vm.IsSelected.Value;
@@ -156,9 +201,9 @@ namespace WrathAccess.Screens
                 var kids = Children(vm);
                 if (kids.Count > 0)
                 {
-                    kids.Sort(CompareItems);
+                    SortLevel(kids, rank);
                     b.PushContext(vm.FeatureName ?? "");
-                    foreach (var kid in kids) EmitFeature(b, kid, key + "/");
+                    foreach (var kid in kids) EmitFeature(b, kid, key + "/", rank);
                     b.PopContext();
                 }
             }

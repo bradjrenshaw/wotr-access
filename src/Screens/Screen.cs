@@ -132,6 +132,7 @@ namespace WrathAccess.Screens
             if (child == null || ActiveChild != child) return;
             if (child.ActiveChild != null) child.RemoveChild(child.ActiveChild); // recurse: grandchildren first
             child.OnPop();
+            WrathAccess.UI.Navigation.ScreenClosed(child);
             child.ParentScreen = null;
             ActiveChild = null;
         }

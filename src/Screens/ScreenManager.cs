@@ -90,6 +90,7 @@ namespace WrathAccess.Screens
         {
             if (s.ActiveChild != null) s.RemoveChild(s.ActiveChild);
             Safe(() => s.OnPop(), s, "OnPop");
+            WrathAccess.UI.Navigation.ScreenClosed(s);
         }
 
         // Re-attach the navigator whenever the deepest (focused) screen changes — from an outer push/pop

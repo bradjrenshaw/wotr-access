@@ -49,6 +49,10 @@ namespace WrathAccess.UI
         /// (the screen owns whatever is spoken instead).</summary>
         public abstract void Focus(UIElement target, bool announce = true);
 
+        /// <summary>A screen left the stack (popped / child removed): drop any per-screen state so a
+        /// reopened instance starts fresh. Covered-but-alive screens keep theirs.</summary>
+        public virtual void ScreenClosed(Screen screen) { }
+
         // ---- shared focus-restore rules ----
 
         /// <summary>The child to land on when first focusing a container: the remembered focus, else —

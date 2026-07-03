@@ -16,7 +16,13 @@ namespace WrathAccess.UI
     /// </summary>
     public sealed class GraphNavigator : Navigator
     {
-        private readonly GraphState _state = new GraphState();
+        // One GraphState per LIVE screen (focus cursor, per-stop memory, tree expansion): a screen
+        // covered by another (a tooltip reader, a dropdown submenu, any higher layer) keeps its state
+        // and restores exactly where you were when focus returns; a POPPED screen's state is dropped
+        // (ScreenClosed), so reopening starts fresh — matching the old retained-tree lifecycle.
+        private readonly Dictionary<Screens.Screen, GraphState> _states =
+            new Dictionary<Screens.Screen, GraphState>();
+        private GraphState _state = new GraphState();
         private KeyGraph _graph;
 
         // The differ's memory: the node identity (and its render node, for context diffing) last spoken.
@@ -41,16 +47,31 @@ namespace WrathAccess.UI
             ClearSearch(announce: false);
             if (!same)
             {
-                _state.CurKey = null;
-                _state.KeyOrder = null;
-                _state.NextSuggestedMove = null;
-                _state.StopMemory.Clear();
+                // Swap to this screen's own state (creating it on first attach). The differ memory
+                // resets so the (possibly restored) landing announces itself on return.
+                if (screen != null)
+                {
+                    if (!_states.TryGetValue(screen, out _state))
+                    {
+                        _state = new GraphState();
+                        _states[screen] = _state;
+                    }
+                }
+                else
+                {
+                    _state = new GraphState();
+                }
                 _lastSpokenKey = null;
                 _lastSpokenNode = null;
                 _pendingFocus = null;
                 _liveKey = null;
             }
             _graph = screen != null ? new KeyGraph(() => BuildRender(screen), _state) : null;
+        }
+
+        public override void ScreenClosed(Screens.Screen screen)
+        {
+            if (screen != null) _states.Remove(screen);
         }
 
         // Graph-native screens declare fresh from live game state on every render (immediate mode);

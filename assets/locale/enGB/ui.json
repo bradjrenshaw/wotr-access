@@ -18,12 +18,10 @@
   "role.key binding": "key binding",
   "role.expanded": "expanded",
   "role.collapsed": "collapsed",
-
   "state.disabled": "disabled",
   "state.prerequisites_not_met": "prerequisites not met",
   "state.enabled": "enabled",
   "state.selected": "selected",
-
   "action.select": "Select",
   "action.toggle": "Toggle",
   "action.open": "Open",
@@ -46,7 +44,6 @@
   "action.menu": "Actions",
   "action.edit": "Edit",
   "action.delete": "Delete",
-
   "value.on": "on",
   "value.off": "off",
   "value.not_bound": "not bound",
@@ -96,24 +93,18 @@
   "unit.casts": "casts",
   "unit.charge": "charge",
   "unit.charges": "charges",
-
   "label.custom_character": "Custom Character",
   "label.continue": "Continue",
-
   "nav.position": "{index} of {count}",
   "count.items": "{count} items",
-
   "encyclopedia.topics": "Topics",
-
   "journal.active": "active",
   "journal.completed": "completed",
   "journal.failed": "failed",
   "journal.updated": "updated",
-
   "log.title": "Log",
   "log.channels": "Channels",
   "log.empty": "No messages.",
-
   "combat.mode_turn_based": "Turn-based mode",
   "combat.mode_real_time": "Real-time mode",
   "combat.turn": "{name}'s turn",
@@ -136,7 +127,6 @@
   "path.distance": "Path, {feet} feet",
   "path.uses_standard": "uses standard action",
   "path.beyond": "beyond remaining movement",
-
   "geo.feet": "{feet} ft",
   "geo.miles": "{miles} miles",
   "geo.here": "here",
@@ -346,7 +336,6 @@
   "rest.success": "success",
   "rest.failure": "failure",
   "hud.no_actions": "No actions.",
-
   "hud.turn": "Turn",
   "turn.end": "End turn",
   "turn.five_foot_on": "Five foot step on",
@@ -354,17 +343,13 @@
   "turn.cant_delay": "Can't delay the turn right now",
   "turn.delay_self": "That's the acting unit",
   "turn.delayed": "Turn delayed until after {name}",
-
   "speech.handler_changed": "Speech handler changed to {handler}",
   "speech.reset_prism": "Speech reset to {handler}",
-
   "overlay.default_name": "Default",
   "bind.option_add": "Add binding",
   "bind.option_clear": "Clear bindings",
-
   "search.no_match": "{text}, no match",
   "search.cleared": "Search cleared",
-
   "screen.main_menu": "Main Menu",
   "screen.game": "Game",
   "screen.new_game": "New Game",
@@ -657,12 +642,9 @@
   "text.help": "Type to edit, Backspace to delete, Enter to confirm, Escape to cancel.",
   "text.cancelled": "Cancelled",
   "text.space": "space",
-
   "scan.singular.trap": "Trap",
-
   "review.others": "Objects",
   "exit.to_room": "Exit to {room}",
-
   "where.indoors": "indoors",
   "where.unexplored": "unexplored",
   "desc.none": "Nothing described here.",
@@ -677,7 +659,6 @@
   "where.unknown": "Unknown location",
   "ency.untitled": "Untitled entry",
   "loot.needs_skinning": "needs skinning",
-
   "detail.painting_01": "A painting of a woman lying in repose",
   "detail.painting_02": "A painting: portrait of a young woman with long golden hair",
   "detail.painting_03": "A painting dominated by blue: a woman in deep blue robes, head bowed",
@@ -695,12 +676,18 @@
   "detail.button_green": "Green button",
   "detail.button_red": "Red button",
   "detail.button_yellow": "Yellow button",
-
   "where.room": "Room {id}",
   "room.class.room": "room",
   "room.class.passage": "narrow passage",
   "room.class.corridor": "corridor",
   "room.class.small": "small room",
   "room.class.hall": "large hall",
-  "room.class.stairs": "stairs"
+  "room.class.stairs": "stairs",
+  "item.unusable": "unusable",
+  "item.new": "new",
+  "item.cant_remove": "can't remove",
+  "slot.empty": "empty",
+  "inv.weapon_set": "Weapon set {index}",
+  "grip.one_handed": "one-handed",
+  "grip.two_handed": "two-handed"
 }

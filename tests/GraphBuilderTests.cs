@@ -88,21 +88,61 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
-        public void ContextChainIsCapturedPerNode()
+        public void ContextBuildsNonFocusableParentChain()
         {
             var render = new GraphBuilder()
                 .PushContext("Settings", "list")
                 .AddItem(Id("a"), Vt("A"))
-                .PushContext("Advanced", "group")
+                .PushContext("Advanced")
                 .AddItem(Id("b"), Vt("B"))
                 .PopContext()
                 .AddItem(Id("c"), Vt("C"))
                 .Build();
 
-            Assert.Single(render.Nodes[Id("a")].Context);
-            Assert.Equal(2, render.Nodes[Id("b")].Context.Count);
-            Assert.Equal("Advanced", render.Nodes[Id("b")].Context[1].Label);
-            Assert.Single(render.Nodes[Id("c")].Context);
+            var a = render.Nodes[Id("a")];
+            var b2 = render.Nodes[Id("b")];
+            var c2 = render.Nodes[Id("c")];
+            Assert.NotNull(a.Parent);
+            Assert.False(a.Parent.Focusable);
+            Assert.Null(a.Parent.Parent);
+            Assert.Same(a.Parent, b2.Parent.Parent);   // Advanced nests under Settings
+            Assert.Same(a.Parent, c2.Parent);          // c popped back out to Settings
+            Assert.False(render.Nodes.ContainsKey(a.Parent.Id)); // context nodes are never navigable
+        }
+
+        [Fact]
+        public void GroupsEmitHeadersAndSuppressCollapsedSubtrees()
+        {
+            var expansion = new System.Collections.Generic.HashSet<ControlId>();
+            GraphRender Build() => new GraphBuilder(expansion)
+                .BeginGroup(Id("combat"), Vt("Combat"))
+                    .AddItem(Id("pause"), Vt("Auto pause"))
+                    .BeginGroup(Id("nested"), Vt("Nested"))
+                        .AddItem(Id("deep"), Vt("Deep"))
+                    .EndGroup()
+                .EndGroup()
+                .AddItem(Id("after"), Vt("After"))
+                .Build();
+
+            var collapsed = Build();
+            Assert.True(collapsed.Nodes.ContainsKey(Id("combat")));
+            Assert.True(collapsed.Nodes[Id("combat")].Expandable);
+            Assert.False(collapsed.Nodes[Id("combat")].Expanded);
+            Assert.False(collapsed.Nodes.ContainsKey(Id("pause")));  // collapsed → children swallowed
+            Assert.False(collapsed.Nodes.ContainsKey(Id("nested")));
+            Assert.True(collapsed.Nodes.ContainsKey(Id("after")));
+
+            expansion.Add(Id("combat"));
+            var expanded = Build();
+            Assert.True(expanded.Nodes.ContainsKey(Id("pause")));
+            Assert.Same(expanded.Nodes[Id("combat")], expanded.Nodes[Id("pause")].Parent);
+            Assert.True(expanded.Nodes.ContainsKey(Id("nested"))); // nested header visible…
+            Assert.False(expanded.Nodes.ContainsKey(Id("deep")));  // …but its own subtree still collapsed
+
+            expansion.Add(Id("nested"));
+            var deep = Build();
+            Assert.True(deep.Nodes.ContainsKey(Id("deep")));
+            Assert.Same(deep.Nodes[Id("nested")], deep.Nodes[Id("deep")].Parent);
         }
 
         [Fact]

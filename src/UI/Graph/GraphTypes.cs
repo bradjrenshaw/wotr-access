@@ -15,17 +15,6 @@ namespace WrathAccess.UI.Graph
         Left,
     }
 
-    /// <summary>One level of a node's presentation hierarchy — "Difficulty settings" (list), "Abilities"
-    /// (table)… The announcer prefix-diffs these chains between focus moves so entering a container reads
-    /// its labels outermost-first, exactly like the old path-diff announcements.</summary>
-    public struct ContextEntry
-    {
-        public string Label;
-        public string Role; // spoken after the label ("list", "table", "group"); null/empty = label only
-
-        public ContextEntry(string label, string role = null) { Label = label; Role = role; }
-    }
-
     /// <summary>The well-known announcement-part kinds. A part's kind is its identity for control-type
     /// ordering, node-over-type overriding, and the user's per-kind announcement settings — the same keys
     /// the legacy per-announcement settings used, so the global toggles cover both systems.</summary>
@@ -135,6 +124,16 @@ namespace WrathAccess.UI.Graph
 
         /// <summary>If true, type-ahead never matches this control.</summary>
         public bool ExcludeFromSearch;
+
+        /// <summary>Optional (Expandable groups): override HOW expansion state changes. When null the
+        /// engine mutates the persistent expansion set (<see cref="GraphState.Expanded"/>); the adapter
+        /// wires these to the retained Container's Expand/Collapse instead.</summary>
+        public Action OnExpand;
+        public Action OnCollapse;
+
+        /// <summary>Set when this group's own announcements already include its expanded/collapsed state
+        /// (the adapter's composed element messages do), so the announcer doesn't append it again.</summary>
+        public bool SpeaksOwnExpansion;
     }
 
     /// <summary>A directed edge to another node, with an optional spoken transition line (a "lane
@@ -152,17 +151,33 @@ namespace WrathAccess.UI.Graph
         }
     }
 
-    /// <summary>A control: identity, behaviors, directional transitions, and presentation metadata (its
-    /// context chain, tab-stop and region membership).</summary>
+    /// <summary>A control: identity, behaviors, directional transitions, and structural metadata (its
+    /// parent chain, tab-stop and region membership, expandability).</summary>
     public sealed class GraphNode
     {
         public ControlId Id;
         public NodeVtable Vtable;
         public readonly Dictionary<GraphDir, Transition> Transitions = new Dictionary<GraphDir, Transition>();
 
-        /// <summary>The presentation hierarchy this node sits in, outermost first. Never null (empty when
-        /// the node is at screen level).</summary>
-        public IReadOnlyList<ContextEntry> Context = EmptyContext;
+        /// <summary>The node's structural parent within THIS render, or null at screen level. The parent
+        /// chain IS the presentation hierarchy: the announcer prefix-diffs old/new chains by identity, so
+        /// entering a group reads its levels outermost-first and descending from a group onto its own
+        /// child re-announces nothing (the group is on the chain and is the from-node). A parent may be
+        /// non-focusable pure structure (a labeled panel — <see cref="Focusable"/> false, never in
+        /// Nodes/Order) or a real control (a tree group header).</summary>
+        public GraphNode Parent;
+
+        /// <summary>False for a pure-structure parent node (a labeled panel): it exists only on
+        /// <see cref="Parent"/> chains for announcements — never navigable, never in Nodes/Order.</summary>
+        public bool Focusable = true;
+
+        /// <summary>This node is a group that can expand/collapse (a tree section header). The engine's
+        /// tree operations (expand/collapse/descend/ascend) key off this.</summary>
+        public bool Expandable;
+
+        /// <summary>An <see cref="Expandable"/> group's state AT THIS RENDER (stamped by the builder from
+        /// the persistent expansion set, or the explicit value the declarer passed).</summary>
+        public bool Expanded;
 
         /// <summary>The Tab-stop this node belongs to. Nodes sharing a StopKey form one stop; Tab cycles
         /// stops in first-appearance order, landing on the stop's remembered position.</summary>
@@ -171,8 +186,6 @@ namespace WrathAccess.UI.Graph
         /// <summary>The region (within a stop) this node belongs to, or null. Ctrl+Up/Down jumps between
         /// regions in first-appearance order.</summary>
         public object RegionKey;
-
-        internal static readonly ContextEntry[] EmptyContext = new ContextEntry[0];
     }
 
     /// <summary>
@@ -214,5 +227,10 @@ namespace WrathAccess.UI.Graph
 
         /// <summary>Remembered position per Tab-stop: where Tab lands when cycling back into a stop.</summary>
         public readonly Dictionary<object, ControlId> StopMemory = new Dictionary<object, ControlId>();
+
+        /// <summary>The expanded groups (by id). The builder consults this for groups declared without an
+        /// explicit state; the engine's expand/collapse operations mutate it. Screens hold NO expansion
+        /// state of their own.</summary>
+        public readonly HashSet<ControlId> Expanded = new HashSet<ControlId>();
     }
 }

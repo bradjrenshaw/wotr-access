@@ -5,48 +5,61 @@ using System.Text;
 namespace WrathAccess.UI.Graph
 {
     /// <summary>
-    /// Composes the spoken line for a focus change by diffing the presentation hierarchies
-    /// (<see cref="GraphNode.Context"/>) of the old and new focus: newly-entered levels are read
-    /// outermost-first, then the landing control — "Difficulty settings, list, Normal, radio button,
-    /// selected" — recursing as deep as the hierarchy goes. Moves within the same context (siblings) and
-    /// moves outward (ascends) read just the control. This reproduces the old path-diff announcements
-    /// from declarative metadata, with one composer for every way focus can change.
+    /// Composes the spoken line for a focus change by diffing the old and new focus PATHS — each node's
+    /// ancestor chain (<see cref="GraphNode.Parent"/>) plus the node itself, compared by identity. Newly-
+    /// entered levels read outermost-first, then the landing control: "Difficulty settings, list, Normal,
+    /// radio button, selected", recursing as deep as the hierarchy goes. Sibling moves share the whole
+    /// prefix and read just the control; ascends likewise; and descending from a group onto its own child
+    /// re-announces nothing but the child — the group is on the child's chain AND is the from-node, so the
+    /// prefix swallows it. This is the original retained-path diff, reconstructed per render from parent
+    /// pointers.
     /// </summary>
     public static class GraphAnnouncer
     {
         /// <summary>The line for landing on <paramref name="to"/> having come from <paramref name="from"/>
-        /// (null = from nothing: the full chain reads). <paramref name="transitionLabel"/> is the crossed
+        /// (null = from nothing: the full path reads). <paramref name="transitionLabel"/> is the crossed
         /// edge's spoken line, when it had one. Null when there is nothing to say.</summary>
         public static string Compose(GraphNode from, GraphNode to, string transitionLabel = null)
         {
             if (to == null) return null;
 
+            var toPath = PathOf(to);
+            var fromPath = from != null ? PathOf(from) : EmptyPath;
+
+            // Common prefix by identity — levels we were already inside (or ON: descending from a group
+            // onto its child keeps the group in the prefix) stay silent.
+            int i = 0;
+            while (i < fromPath.Count && i < toPath.Count && fromPath[i].Id.Equals(toPath[i].Id)) i++;
+
             var parts = new List<string>();
             if (!string.IsNullOrEmpty(transitionLabel)) parts.Add(transitionLabel);
 
-            var oldCtx = from != null ? from.Context : GraphNode.EmptyContext;
-            var newCtx = to.Context ?? (IReadOnlyList<ContextEntry>)GraphNode.EmptyContext;
-
-            // Common prefix of the two chains — levels we were already inside stay silent.
-            int i = 0;
-            while (i < oldCtx.Count && i < newCtx.Count && SameLevel(oldCtx[i], newCtx[i])) i++;
-
-            string leaf = LeafText(to);
-
-            for (int j = i; j < newCtx.Count; j++)
+            if (i >= toPath.Count)
             {
-                var entry = newCtx[j];
-                if (string.IsNullOrEmpty(entry.Label)) continue;
-                // Dedupe: a container whose label just duplicates the next level down (or the control
-                // itself — "a 'Game difficulty' section wrapping the 'Game difficulty' control").
-                string next = j + 1 < newCtx.Count ? newCtx[j + 1].Label : leaf;
-                if (!string.IsNullOrEmpty(next) && DuplicatesNext(entry.Label, next)) continue;
-                parts.Add(string.IsNullOrEmpty(entry.Role) ? entry.Label : entry.Label + ", " + entry.Role);
+                // Ascended (or same node): announce just the now-innermost focus.
+                var text = LeafText(to);
+                if (!string.IsNullOrEmpty(text)) parts.Add(text);
+            }
+            else
+            {
+                for (int j = i; j < toPath.Count; j++)
+                {
+                    var text = LeafText(toPath[j]);
+                    if (string.IsNullOrEmpty(text)) continue;
+                    // Dedupe: a level whose label just duplicates the next level down (or the control
+                    // itself — "a 'Game difficulty' section wrapping the 'Game difficulty' control").
+                    if (j + 1 < toPath.Count)
+                    {
+                        var label = FirstPartText(toPath[j]);
+                        var next = FirstPartText(toPath[j + 1]);
+                        if (!string.IsNullOrEmpty(label) && !string.IsNullOrEmpty(next)
+                            && DuplicatesNext(label, next)) continue;
+                    }
+                    parts.Add(text);
+                }
             }
 
-            if (!string.IsNullOrEmpty(leaf)) parts.Add(leaf);
             if (parts.Count == 0) return null;
-
             var sb = new StringBuilder();
             for (int p = 0; p < parts.Count; p++)
             {
@@ -58,6 +71,17 @@ namespace WrathAccess.UI.Graph
 
         /// <summary>The full readout for a landing with no prior focus (screen entry, focus restore).</summary>
         public static string ComposeFull(GraphNode to) => Compose(null, to);
+
+        private static readonly List<GraphNode> EmptyPath = new List<GraphNode>();
+
+        // The node's path: ancestors outermost-first, then the node itself.
+        private static List<GraphNode> PathOf(GraphNode node)
+        {
+            var path = new List<GraphNode>();
+            for (var n = node; n != null; n = n.Parent) path.Add(n);
+            path.Reverse();
+            return path;
+        }
 
         /// <summary>Pluggable per-part filter — installed by the host to consult the user's announcement
         /// settings (per control type + per kind); null (tests, boot) = everything speaks. Returning false
@@ -111,8 +135,8 @@ namespace WrathAccess.UI.Graph
             return false;
         }
 
-        // Stable sort key: declared kinds by their order index; everything else after, keeping declaration
-        // order (List.Sort is unstable, so unknown parts share one bucket — see the tie-break below).
+        // Sort key: declared kinds by their order index; everything else after (one shared bucket, with
+        // the declaration-index tie-break above keeping their relative order).
         private static int OrderIndex(string[] order, string kind)
         {
             if (kind != null)
@@ -122,11 +146,11 @@ namespace WrathAccess.UI.Graph
         }
 
         /// <summary>A node's own readout: its effective announcement parts, resolved live, non-empty ones
-        /// joined. The first part is the control's label, so context dedupe's prefix check still applies.</summary>
+        /// joined — plus, for an expandable group, its expanded/collapsed state word. The first part is
+        /// the control's label, so path dedupe's prefix check applies.</summary>
         public static string LeafText(GraphNode node)
         {
             var anns = EffectiveAnnouncements(node);
-            if (anns.Count == 0) return null;
             var sb = new StringBuilder();
             for (int i = 0; i < anns.Count; i++)
             {
@@ -136,14 +160,32 @@ namespace WrathAccess.UI.Graph
                 if (sb.Length > 0) sb.Append(", ");
                 sb.Append(t);
             }
+            if (node != null && node.Expandable && !node.Vtable.SpeaksOwnExpansion && ExpandedStateText != null)
+            {
+                var state = ExpandedStateText(node.Expanded);
+                if (!string.IsNullOrEmpty(state))
+                {
+                    if (sb.Length > 0) sb.Append(", ");
+                    sb.Append(state);
+                }
+            }
             return sb.Length > 0 ? sb.ToString() : null;
         }
 
-        private static bool SameLevel(ContextEntry a, ContextEntry b)
-            => string.Equals(a.Label, b.Label) && string.Equals(a.Role, b.Role);
+        /// <summary>Pluggable expanded/collapsed wording for group headers (localized by the host);
+        /// null = groups don't speak their state.</summary>
+        public static Func<bool, string> ExpandedStateText;
+
+        /// <summary>The first announcement part's text (the label) — for dedupe and search fallbacks.</summary>
+        public static string FirstPartText(GraphNode node)
+        {
+            var anns = node?.Vtable?.Announcements;
+            if (anns == null || anns.Count == 0) return null;
+            return anns[0]?.Text?.Invoke();
+        }
 
         // The next part "starts as" this label: equal, or its first comma-separated segment is the label
-        // (a control's focus message leads with its label: "Game difficulty, menu button").
+        // (a control's readout leads with its label: "Game difficulty, menu button").
         private static bool DuplicatesNext(string label, string next)
         {
             if (!next.StartsWith(label)) return false;

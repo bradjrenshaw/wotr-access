@@ -350,6 +350,9 @@ namespace WrathAccess
             // The graph announcer consults the same announcement settings (per control type + per kind).
             WrathAccess.UI.Graph.GraphAnnouncer.PartFilter = (type, part) =>
                 WrathAccess.UI.Announcements.AnnouncementRegistry.PartEnabled(type?.Key, part.Kind);
+            // Group headers speak their expanded/collapsed state (localized; same words the old tree used).
+            WrathAccess.UI.Graph.GraphAnnouncer.ExpandedStateText = expanded =>
+                Loc.T(expanded ? "role.expanded" : "role.collapsed");
 
             // Scan-item (proxy) announcements: their own parallel pipeline (NOT UI elements) — global
             // per-part toggles + per-proxy-type overrides. Creates "proxy_announce" + "proxy_elem".

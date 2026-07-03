@@ -55,10 +55,10 @@ namespace WrathAccess.UI
 
         // Graph-native screens declare fresh from live game state on every render (immediate mode);
         // legacy screens' retained Container trees are compiled by the adapter until they migrate.
-        private static GraphRender BuildRender(Screens.Screen screen)
+        private GraphRender BuildRender(Screens.Screen screen)
         {
             if (!screen.BuildsGraph) return TreeGraphAdapter.Build(screen);
-            var b = new GraphBuilder();
+            var b = new GraphBuilder(_state.Expanded); // groups consult the persistent expansion set
             screen.Build(b);
             return b.Build();
         }
@@ -331,72 +331,49 @@ namespace WrathAccess.UI
                 }
             }
 
-            if (cur == null)
+            // Edge-wired movement first (rows/grids/flattened tree rows all ride edges).
+            var move = _graph.Move(ToDir(dir));
+            if (move.Moved) { AnnounceMove(move); return true; }
+
+            // At an edge. Left/Right get tree semantics: expand/collapse a group, descend into an
+            // expanded one, ascend from a child — generic engine operations over Parent/Expandable.
+            if (dir == NavDirection.Left || dir == NavDirection.Right)
             {
-                // Graph-native: plain edge-wired movement; edges bubble like list edges did.
-                var move = _graph.Move(ToDir(dir));
-                if (!move.Moved) return false;
-                AnnounceMove(move);
-                return true;
+                var tr = dir == NavDirection.Right ? _graph.TreeRight() : _graph.TreeLeft();
+                switch (tr.Kind)
+                {
+                    case KeyGraph.TreeMove.Expanded:
+                    case KeyGraph.TreeMove.Collapsed:
+                        SpeakFocusedState();
+                        return true;
+                    case KeyGraph.TreeMove.EmptyGroup:
+                        Speak(Loc.T("nav.no_details"), interrupt: true);
+                        return true;
+                    case KeyGraph.TreeMove.Descended:
+                    case KeyGraph.TreeMove.Ascended:
+                        AnnounceMove(tr.Move);
+                        return true;
+                    case KeyGraph.TreeMove.Leaf:
+                        return true; // inside a tree; nothing that way — consume
+                }
             }
 
-            var treeRoot = TreeRootOf(cur);
-
-            // Left/Right inside a horizontal sub-list (a Bar): move within it; at its edge fall
-            // through to the tree side-policy (collapse/ascend) when the bar lives in a tree.
-            if ((dir == NavDirection.Left || dir == NavDirection.Right)
-                && cur.Parent != null && cur.Parent.Shape == ContainerShape.HorizontalList)
-            {
-                var move = _graph.Move(ToDir(dir));
-                if (move.Moved) { AnnounceMove(move); return true; }
-                if (treeRoot == null) return false;
-            }
-
-            // Tree Right/Left: expand/collapse/descend/ascend — actions on the retained node, then the
-            // graph rebuild reflects the new visible set (focus stays on the node by identity).
-            if (treeRoot != null && (dir == NavDirection.Left || dir == NavDirection.Right)
-                && !(cur.Parent is FlowSheet) && !(cur.Parent is Table))
-                return TreeSide(dir, treeRoot);
-
-            bool consumeEdges = treeRoot != null || cur.Parent is FlowSheet || cur.Parent is Table;
-            var result = _graph.Move(ToDir(dir));
-            if (!result.Moved) return consumeEdges; // grid/tree edges consume silently; list edges bubble
-            AnnounceMove(result);
-            return true;
+            // Nothing moved: consume edges inside trees/grids (old behavior); bubble from plain lists so
+            // an unfocused screen's arrows fall through to the overlay.
+            return KeyGraph.InTree(focusNode) || cur?.Parent is FlowSheet || cur?.Parent is Table;
         }
 
-        private bool TreeSide(NavDirection dir, Container root)
+        // Speak the focused group's post-toggle state (its full readout includes expanded/collapsed) and
+        // rebaseline the differ+live watch so the toggle isn't re-announced.
+        private void SpeakFocusedState()
         {
-            var node = TreeNodeOf(Current, root);
-            var group = node as Container;
-            bool isGroup = group != null && group.Shape == ContainerShape.Tree && group.Expandable;
-
-            if (dir == NavDirection.Right)
-            {
-                if (isGroup && !group.Expanded)
-                {
-                    group.Expand();
-                    if (group.Children.Count == 0) { group.Collapse(); Speak(Loc.T("nav.no_details"), interrupt: true); }
-                    else Speak(node.GetFocusMessage().Resolve(), interrupt: true);
-                    return true;
-                }
-                if (!(isGroup && group.Expanded)) return true; // leaf/empty → nothing to descend into
-                var down = _graph.Move(GraphDir.Down);         // descend = step to the first child row
-                if (down.Moved) AnnounceMove(down);
-                return true;
-            }
-
-            // Left: collapse an expanded group, else ascend to the enclosing group.
-            if (isGroup && group.Expanded)
-            {
-                group.Collapse();
-                Speak(node.GetFocusMessage().Resolve(), interrupt: true);
-                return true;
-            }
-            var parent = node.Parent;
-            if (parent != null && parent != root && parent.CanFocus)
-                FocusAndAnnounce(parent, interrupt: true);
-            return true;
+            var node = _graph.CurrentNode;
+            if (node == null) return;
+            SyncFocusedChildren(node);
+            Speak(GraphAnnouncer.LeafText(node), interrupt: true);
+            _lastSpokenKey = node.Id;
+            _lastSpokenNode = node;
+            _liveKey = null;
         }
 
         private bool Tab(int step)
@@ -478,7 +455,17 @@ namespace WrathAccess.UI
 
         private bool JumpEdge(bool first)
         {
-            if (_graph?.CurrentNode == null) return false;
+            var focusNode = _graph?.CurrentNode;
+            if (focusNode == null) return false;
+
+            // In a tree (adapter or native): first/last sibling at the current depth.
+            if (KeyGraph.InTree(focusNode))
+            {
+                var sib = _graph.MoveToSiblingEdge(first);
+                if (sib.Moved) AnnounceMove(sib);
+                return true;
+            }
+
             var cur = Current;
             if (cur == null)
             {
@@ -509,16 +496,6 @@ namespace WrathAccess.UI
                 if (nr < 0 || (nr == r && nc == c)) return true;
                 var cell = sheet.CellAt(nr, nc);
                 if (cell != null) FocusAndAnnounce(cell, interrupt: true);
-                return true;
-            }
-
-            var root = TreeRootOf(cur);
-            if (root != null)
-            {
-                var node = TreeNodeOf(cur, root);
-                var parent = node.Parent ?? root;
-                var target = first ? parent.FirstFocusable() : parent.LastFocusable();
-                if (target != null && target != node) FocusAndAnnounce(target, interrupt: true);
                 return true;
             }
 
@@ -688,26 +665,7 @@ namespace WrathAccess.UI
             return string.Join(", ", parts);
         }
 
-        // ---- element helpers (ported verbatim from TraditionalNavigator) ----
-
-        private static Container TreeRootOf(UIElement e)
-        {
-            Container root = null;
-            var c = (e as Container) ?? e?.Parent;
-            while (c != null) { if (c.Shape == ContainerShape.Tree) root = c; c = c.Parent; }
-            return root;
-        }
-
-        private static UIElement TreeNodeOf(UIElement e, Container root)
-        {
-            var cur = e;
-            while (cur != null && cur != root)
-            {
-                if (cur.Parent != null && cur.Parent.Shape == ContainerShape.Tree) return cur;
-                cur = cur.Parent;
-            }
-            return e;
-        }
+        // ---- element helpers (for adapter screens) ----
 
         private static void CollectVisible(Container c, List<UIElement> outList)
         {

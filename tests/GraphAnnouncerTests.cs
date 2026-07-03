@@ -5,18 +5,32 @@ namespace WrathAccess.Tests
 {
     public class GraphAnnouncerTests
     {
-        private static GraphNode Node(string label, params ContextEntry[] context) => new GraphNode
+        private static GraphNode Node(string label, GraphNode parent = null) => new GraphNode
         {
             Id = ControlId.Structural(label),
             Vtable = new NodeVtable { Announcements = new[] { NodeAnnouncement.Static(label) } },
-            Context = context,
+            Parent = parent,
+        };
+
+        private static GraphNode Context(string label, string role = null, GraphNode parent = null) => new GraphNode
+        {
+            Id = ControlId.Structural("ctx:" + label),
+            Vtable = new NodeVtable
+            {
+                Announcements = role == null
+                    ? new[] { NodeAnnouncement.Static(label) }
+                    : new[] { NodeAnnouncement.Static(label), NodeAnnouncement.Static(role) },
+            },
+            Parent = parent,
+            Focusable = false,
         };
 
         [Fact]
         public void EntryFromNothingReadsFullChain()
         {
-            var node = Node("Normal, radio button, selected",
-                new ContextEntry("Options"), new ContextEntry("Difficulty settings", "list"));
+            var options = Context("Options");
+            var list = Context("Difficulty settings", "list", options);
+            var node = Node("Normal, radio button, selected", list);
 
             Assert.Equal("Options, Difficulty settings, list, Normal, radio button, selected",
                 GraphAnnouncer.ComposeFull(node));
@@ -25,9 +39,9 @@ namespace WrathAccess.Tests
         [Fact]
         public void SiblingMoveReadsLeafOnly()
         {
-            var ctx = new ContextEntry("Difficulty settings", "list");
-            var from = Node("Easy", ctx);
-            var to = Node("Hard", ctx);
+            var list = Context("Difficulty settings", "list");
+            var from = Node("Easy", list);
+            var to = Node("Hard", list);
 
             Assert.Equal("Hard", GraphAnnouncer.Compose(from, to));
         }
@@ -35,9 +49,10 @@ namespace WrathAccess.Tests
         [Fact]
         public void EnteringNestedContextReadsEnteredLevels()
         {
-            var outer = new ContextEntry("Options");
+            var outer = Context("Options");
             var from = Node("Back", outer);
-            var to = Node("Normal", outer, new ContextEntry("Difficulty settings", "list"));
+            var list = Context("Difficulty settings", "list", outer);
+            var to = Node("Normal", list);
 
             Assert.Equal("Difficulty settings, list, Normal", GraphAnnouncer.Compose(from, to));
         }
@@ -45,44 +60,70 @@ namespace WrathAccess.Tests
         [Fact]
         public void AscendReadsLeafOnly()
         {
-            var outer = new ContextEntry("Options");
-            var from = Node("Normal", outer, new ContextEntry("Difficulty settings", "list"));
+            var outer = Context("Options");
+            var list = Context("Difficulty settings", "list", outer);
+            var from = Node("Normal", list);
             var to = Node("Back", outer);
 
             Assert.Equal("Back", GraphAnnouncer.Compose(from, to));
         }
 
         [Fact]
-        public void DuplicateContainerLabelIsSkipped()
+        public void DescendingFromGroupOntoItsChildReadsChildOnly()
         {
-            // A "Game difficulty" section wrapping the "Game difficulty" control: the section stays silent.
-            var to = Node("Game difficulty, menu button", new ContextEntry("Game difficulty", "group"));
-            Assert.Equal("Game difficulty, menu button", GraphAnnouncer.ComposeFull(to));
+            // The group is ON the child's chain AND is the from-node: the prefix swallows it — the old
+            // retained-path behavior (stepping into your own group never re-announces the group).
+            var group = Node("Combat");
+            group.Expandable = true;
+            group.Expanded = true;
+            var child = Node("Auto pause on combat start, toggle, on", group);
 
-            // But a control that merely STARTS with different text keeps its container.
-            var other = Node("Game difficulty presets, menu button", new ContextEntry("Game difficulty", "group"));
-            Assert.Equal("Game difficulty, group, Game difficulty presets, menu button",
-                GraphAnnouncer.ComposeFull(other));
+            Assert.Equal("Auto pause on combat start, toggle, on", GraphAnnouncer.Compose(group, child));
         }
 
         [Fact]
-        public void LeafTextJoinsAnnouncementParts()
+        public void EnteringAGroupFromOutsideReadsTheGroup()
         {
-            var node = new GraphNode
+            var group = Node("Combat");
+            group.Expandable = true;
+            group.Expanded = true;
+            var child = Node("Auto pause on combat start, toggle, on", group);
+            var elsewhere = Node("Tabs");
+
+            Assert.Equal("Combat, Auto pause on combat start, toggle, on",
+                GraphAnnouncer.Compose(elsewhere, child));
+        }
+
+        [Fact]
+        public void ExpandedStateWordAppendsToGroups()
+        {
+            var group = Node("Combat");
+            group.Expandable = true;
+            group.Expanded = false;
+            try
             {
-                Id = ControlId.Structural("x"),
-                Vtable = new NodeVtable
-                {
-                    Announcements = new[]
-                    {
-                        NodeAnnouncement.Static("Hold position"),
-                        NodeAnnouncement.Static("toggle"),
-                        new NodeAnnouncement(() => "on", live: true),
-                        new NodeAnnouncement(() => null), // empty at speak time — silent
-                    },
-                },
-            };
-            Assert.Equal("Hold position, toggle, on", GraphAnnouncer.ComposeFull(node));
+                GraphAnnouncer.ExpandedStateText = e => e ? "expanded" : "collapsed";
+                Assert.Equal("Combat, collapsed", GraphAnnouncer.ComposeFull(group));
+                group.Expanded = true;
+                Assert.Equal("Combat, expanded", GraphAnnouncer.ComposeFull(group));
+                group.Vtable.SpeaksOwnExpansion = true; // adapter nodes carry their own state word
+                Assert.Equal("Combat", GraphAnnouncer.ComposeFull(group));
+            }
+            finally { GraphAnnouncer.ExpandedStateText = null; }
+        }
+
+        [Fact]
+        public void DuplicateContainerLabelIsSkipped()
+        {
+            // A "Game difficulty" section wrapping the "Game difficulty" control: the section stays silent.
+            var section = Context("Game difficulty");
+            var to = Node("Game difficulty, menu button", section);
+            Assert.Equal("Game difficulty, menu button", GraphAnnouncer.ComposeFull(to));
+
+            // But a control that merely STARTS with different text keeps its container.
+            var other = Node("Game difficulty presets, menu button", Context("Game difficulty"));
+            Assert.Equal("Game difficulty, Game difficulty presets, menu button",
+                GraphAnnouncer.ComposeFull(other));
         }
 
         private static readonly ControlType TestButton = new ControlType
@@ -144,6 +185,26 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
+        public void LeafTextJoinsAnnouncementParts()
+        {
+            var node = new GraphNode
+            {
+                Id = ControlId.Structural("x"),
+                Vtable = new NodeVtable
+                {
+                    Announcements = new[]
+                    {
+                        NodeAnnouncement.Static("Hold position"),
+                        NodeAnnouncement.Static("toggle"),
+                        new NodeAnnouncement(() => "on", live: true),
+                        new NodeAnnouncement(() => null), // empty at speak time — silent
+                    },
+                },
+            };
+            Assert.Equal("Hold position, toggle, on", GraphAnnouncer.ComposeFull(node));
+        }
+
+        [Fact]
         public void TransitionLabelLeads()
         {
             var from = Node("A");
@@ -154,8 +215,8 @@ namespace WrathAccess.Tests
         [Fact]
         public void ContextChangeAtSameDepthReadsNewLevel()
         {
-            var from = Node("Fireball", new ContextEntry("Level 1 spells", "table"));
-            var to = Node("Haste", new ContextEntry("Level 2 spells", "table"));
+            var from = Node("Fireball", Context("Level 1 spells", "table"));
+            var to = Node("Haste", Context("Level 2 spells", "table"));
 
             Assert.Equal("Level 2 spells, table, Haste", GraphAnnouncer.Compose(from, to));
         }

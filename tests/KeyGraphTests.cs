@@ -221,6 +221,102 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
+        public void TreeOpsExpandCollapseDescendAscend()
+        {
+            var state = new GraphState();
+            var g = new KeyGraph(() => new GraphBuilder(state.Expanded)
+                .BeginGroup(Id("combat"), Vt("Combat"))
+                    .AddItem(Id("pause"), Vt("Auto pause"))
+                    .AddItem(Id("delay"), Vt("Delay"))
+                .EndGroup()
+                .Build(), state);
+
+            Assert.True(g.Rerender()); // focus lands on the collapsed header
+            Assert.Equal(Id("combat"), state.CurKey);
+            Assert.True(KeyGraph.InTree(g.CurrentNode));
+
+            var r = g.TreeRight(); // collapsed → expand
+            Assert.Equal(KeyGraph.TreeMove.Expanded, r.Kind);
+            Assert.Equal(Id("combat"), state.CurKey);      // focus stays on the header
+            Assert.True(g.CurrentNode.Expanded);
+            Assert.True(g.Current.Nodes.ContainsKey(Id("pause")));
+
+            r = g.TreeRight(); // expanded → descend to first child
+            Assert.Equal(KeyGraph.TreeMove.Descended, r.Kind);
+            Assert.Equal(Id("pause"), state.CurKey);
+
+            r = g.TreeRight(); // a leaf inside the tree — consume
+            Assert.Equal(KeyGraph.TreeMove.Leaf, r.Kind);
+
+            r = g.TreeLeft(); // child → ascend to the header
+            Assert.Equal(KeyGraph.TreeMove.Ascended, r.Kind);
+            Assert.Equal(Id("combat"), state.CurKey);
+
+            r = g.TreeLeft(); // expanded header → collapse
+            Assert.Equal(KeyGraph.TreeMove.Collapsed, r.Kind);
+            Assert.Equal(Id("combat"), state.CurKey);
+            Assert.False(g.Current.Nodes.ContainsKey(Id("pause")));
+        }
+
+        [Fact]
+        public void EmptyGroupRecollapsesOnExpand()
+        {
+            var state = new GraphState();
+            var g = new KeyGraph(() => new GraphBuilder(state.Expanded)
+                .BeginGroup(Id("dud"), Vt("Dud")) // no children declared
+                .EndGroup()
+                .Build(), state);
+
+            Assert.True(g.Rerender());
+            var r = g.TreeRight();
+            Assert.Equal(KeyGraph.TreeMove.EmptyGroup, r.Kind);
+            Assert.False(g.CurrentNode.Expanded); // auto-recollapsed
+            Assert.DoesNotContain(Id("dud"), state.Expanded);
+        }
+
+        [Fact]
+        public void CollapseWhileInsideLandsOnNearestSurvivor()
+        {
+            var state = new GraphState();
+            state.Expanded.Add(Id("combat"));
+            var g = new KeyGraph(() => new GraphBuilder(state.Expanded)
+                .BeginGroup(Id("combat"), Vt("Combat"))
+                    .AddItem(Id("pause"), Vt("Auto pause"))
+                .EndGroup()
+                .Build(), state);
+
+            g.Rerender();
+            g.Focus(Id("pause"));
+            state.Expanded.Remove(Id("combat")); // collapsed externally while focus was inside
+            Assert.True(g.Rerender());
+            Assert.Equal(Id("combat"), state.CurKey); // nearest survivor = the header
+        }
+
+        [Fact]
+        public void SiblingEdgeJumpStaysAtDepth()
+        {
+            var state = new GraphState();
+            state.Expanded.Add(Id("g"));
+            var g = new KeyGraph(() => new GraphBuilder(state.Expanded)
+                .AddItem(Id("top"), Vt("Top"))
+                .BeginGroup(Id("g"), Vt("Group"))
+                    .AddItem(Id("c1"), Vt("C1"))
+                    .AddItem(Id("c2"), Vt("C2"))
+                    .AddItem(Id("c3"), Vt("C3"))
+                .EndGroup()
+                .Build(), state);
+
+            g.Rerender();
+            g.Focus(Id("c2"));
+            var r = g.MoveToSiblingEdge(first: false);
+            Assert.True(r.Moved);
+            Assert.Equal(Id("c3"), state.CurKey); // last SIBLING, not the last visible row overall
+
+            r = g.MoveToSiblingEdge(first: true);
+            Assert.Equal(Id("c1"), state.CurKey);
+        }
+
+        [Fact]
         public void FocusAndFocusByReferenceWork()
         {
             var state = new GraphState();

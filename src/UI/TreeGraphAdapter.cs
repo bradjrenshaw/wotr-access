@@ -12,9 +12,9 @@ namespace WrathAccess.UI
     ///  - Panels are structure: recursed through, contributing a context level when labeled.
     ///  - A non-panel container (list/tree/grid) is ONE Tab-stop; loose focusable leaves are their own stops.
     ///  - Lists become menu rows (a horizontal list/Bar = one row; nested same-shape lists spill inline).
-    ///  - Trees flatten to their VISIBLE nodes (a collapsed branch contributes just its header), each row
-    ///    carrying its ancestor chain as context — expand/collapse rebuilds the graph and reconciliation
-    ///    keeps focus on the node (ids are the element instances).
+    ///  - Trees flatten to their VISIBLE nodes: a tree node is a builder GROUP (header = parent of its
+    ///    children) whose expansion is the retained Container's state, driven through OnExpand/OnCollapse —
+    ///    expand/collapse rebuilds the graph and reconciliation keeps focus on the header.
     ///  - FlowSheet / Table cells become raw nodes wired by the sheet's own Visitable/CellAt rules, so
     ///    cell topology matches the old FlowArrow/GridArrow scans exactly.
     ///
@@ -132,27 +132,26 @@ namespace WrathAccess.UI
             b.EndRow();
         }
 
-        // The visible tree rows (DFS pre-order over expanded branches), each carrying its ancestor
-        // chain as context — so stepping under a node announces the node first, exactly like the old
-        // path-diff. A non-tree container node (a Bar in the tree) contributes its cells as one row.
+        // The visible tree rows (DFS pre-order over expanded branches): a tree node becomes a GROUP —
+        // its header is the parent of its children, so the announcer's path diff matches the old
+        // retained-path behavior exactly (descending from a header re-announces nothing). Expansion is
+        // the retained Container's state, and the engine's tree operations drive it through the
+        // OnExpand/OnCollapse overrides. A non-tree container node (a Bar in the tree) is one row.
         private static void EmitTreeRows(GraphBuilder b, Container root)
         {
-            EmitTreeLevel(b, root, 0);
-        }
-
-        private static void EmitTreeLevel(GraphBuilder b, Container parent, int depth)
-        {
-            foreach (var child in parent.Children)
+            foreach (var child in root.Children)
             {
                 if (child is Container cc && cc.Shape == ContainerShape.Tree)
                 {
-                    if (child.CanFocus) b.AddItem(IdFor(child), Vt(child));
-                    if (cc.Expanded)
-                    {
-                        b.PushContext(cc.GetLabelText());
-                        EmitTreeLevel(b, cc, depth + 1);
-                        b.PopContext();
-                    }
+                    if (!child.CanFocus) continue;
+                    var vt = Vt(child);
+                    var container = cc;
+                    vt.OnExpand = () => container.Expand();
+                    vt.OnCollapse = () => container.Collapse();
+                    vt.SpeaksOwnExpansion = true; // GetFocusMessage already reads expanded/collapsed
+                    b.BeginGroup(IdFor(child), vt, expanded: cc.Expanded);
+                    EmitTreeRows(b, cc);
+                    b.EndGroup();
                 }
                 else if (child is Container bar && bar.Shape == ContainerShape.HorizontalList)
                 {

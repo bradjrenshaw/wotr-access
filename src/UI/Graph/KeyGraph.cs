@@ -344,6 +344,153 @@ namespace WrathAccess.UI.Graph
             return null;
         }
 
+        // ---- tree operations (Right/Left semantics for expandable groups) ----
+
+        /// <summary>What a tree side-step did (the caller composes the speech).</summary>
+        public enum TreeMove
+        {
+            None,       // not applicable here (not in a tree / nothing to do) — caller decides consume/bubble
+            Expanded,   // the focused group expanded (focus unchanged; speak its new state)
+            Collapsed,  // the focused group collapsed (focus unchanged; speak its new state)
+            EmptyGroup, // expanding found no children — auto-recollapsed (speak "no details")
+            Descended,  // moved to the group's first child (announce as a move)
+            Ascended,   // moved to the nearest focusable ancestor (announce as a move)
+            Leaf,       // Right on a non-group inside a tree — consumed, nothing to descend into
+        }
+
+        public struct TreeResult
+        {
+            public TreeMove Kind;
+            public MoveResult Move; // valid for Descended/Ascended
+        }
+
+        /// <summary>Is this node part of an expandable structure (itself a group, or under one)? The
+        /// navigator uses this to decide whether Left/Right get tree semantics.</summary>
+        public static bool InTree(GraphNode node)
+        {
+            for (var n = node; n != null; n = n.Parent)
+                if (n.Expandable) return true;
+            return false;
+        }
+
+        /// <summary>Right on a group: expand (auto-recollapse when it turns out empty), or descend into an
+        /// expanded one. Right elsewhere in a tree: Leaf (consume). Assumes a current render.</summary>
+        public TreeResult TreeRight()
+        {
+            var result = new TreeResult { Kind = TreeMove.None };
+            if (!Rerender()) return result;
+            var node = CurrentNode;
+            if (node == null) return result;
+
+            if (node.Expandable && !node.Expanded)
+            {
+                SetExpanded(node, true);
+                if (!Rerender()) return result;
+                var header = _current.NodeAt(node.Id);
+                if (header == null) return result;
+                if (FirstChildOf(header) == null)
+                {
+                    // A lazy drill-in that resolved to nothing: don't leave a silent empty-expanded node.
+                    SetExpanded(header, false);
+                    Rerender();
+                    result.Kind = TreeMove.EmptyGroup;
+                    return result;
+                }
+                result.Kind = TreeMove.Expanded;
+                return result;
+            }
+
+            if (node.Expandable && node.Expanded)
+            {
+                var child = FirstChildOf(node);
+                if (child == null) { result.Kind = TreeMove.Leaf; return result; }
+                result.Move.From = node;
+                SetCurrent(child);
+                result.Move.To = child;
+                result.Move.Moved = true;
+                result.Kind = TreeMove.Descended;
+                return result;
+            }
+
+            result.Kind = InTree(node) ? TreeMove.Leaf : TreeMove.None;
+            return result;
+        }
+
+        /// <summary>Left on an expanded group: collapse. Left elsewhere in a tree: ascend to the nearest
+        /// focusable ancestor. Assumes a current render.</summary>
+        public TreeResult TreeLeft()
+        {
+            var result = new TreeResult { Kind = TreeMove.None };
+            if (!Rerender()) return result;
+            var node = CurrentNode;
+            if (node == null) return result;
+
+            if (node.Expandable && node.Expanded)
+            {
+                SetExpanded(node, false);
+                Rerender(); // focus stays on the header by identity
+                result.Kind = TreeMove.Collapsed;
+                return result;
+            }
+
+            for (var p = node.Parent; p != null; p = p.Parent)
+            {
+                if (!p.Focusable || !_current.Nodes.ContainsKey(p.Id)) continue;
+                result.Move.From = node;
+                var target = _current.NodeAt(p.Id);
+                SetCurrent(target);
+                result.Move.To = target;
+                result.Move.Moved = true;
+                result.Kind = TreeMove.Ascended;
+                return result;
+            }
+
+            result.Kind = InTree(node) ? TreeMove.Leaf : TreeMove.None;
+            return result;
+        }
+
+        /// <summary>Home/End inside a tree: the first/last node sharing the focused node's parent (its
+        /// siblings at the current depth). Assumes a current render.</summary>
+        public MoveResult MoveToSiblingEdge(bool first)
+        {
+            var result = default(MoveResult);
+            if (!Rerender()) return result;
+            var node = CurrentNode;
+            result.From = node;
+            result.To = node;
+            if (node == null) return result;
+
+            GraphNode target = null;
+            foreach (var n in _current.Order)
+            {
+                if (!ReferenceEquals(n.Parent, node.Parent)) continue;
+                if (first) { target = n; break; }
+                target = n; // last match wins
+            }
+            if (target == null || target == node) return result;
+            SetCurrent(target);
+            result.To = target;
+            result.Moved = true;
+            return result;
+        }
+
+        // Change a group's expansion: through its vtable override when declared (the adapter driving a
+        // retained Container), else the persistent set.
+        private void SetExpanded(GraphNode group, bool expanded)
+        {
+            if (expanded && group.Vtable.OnExpand != null) { group.Vtable.OnExpand(); return; }
+            if (!expanded && group.Vtable.OnCollapse != null) { group.Vtable.OnCollapse(); return; }
+            if (expanded) _state.Expanded.Add(group.Id);
+            else _state.Expanded.Remove(group.Id);
+        }
+
+        private GraphNode FirstChildOf(GraphNode group)
+        {
+            foreach (var n in _current.Order)
+                if (ReferenceEquals(n.Parent, group)) return n;
+            return null;
+        }
+
         // ---- behavior invokers (the caller announces fallbacks / state) ----
 
         /// <summary>Run the focused control's primary activation. False = it has none.</summary>

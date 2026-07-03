@@ -15,24 +15,23 @@ namespace WrathAccess.UI.Graph
     /// <para><b>Raw mode</b> — <see cref="AddNode"/> + <see cref="Connect"/> for arbitrary topologies.</para>
     ///
     /// Orthogonal to both: <see cref="BeginStop"/> groups nodes into Tab-stops (arrows never cross a stop;
-    /// Tab cycles them), <see cref="SetRegion"/> tags nodes with a region for Ctrl+arrow jumps, and
-    /// <see cref="PushContext"/> stacks the presentation hierarchy spoken when focus enters from outside
-    /// ("Difficulty settings, list, …").
+    /// Tab cycles them), <see cref="SetRegion"/> tags nodes with a region for Ctrl+arrow jumps, and the
+    /// PARENT STACK builds the presentation hierarchy: <see cref="PushContext"/> pushes a non-focusable
+    /// structural level ("Difficulty settings, list" — announced when focus enters from outside), while
+    /// <see cref="BeginGroup"/> pushes a focusable, EXPANDABLE group header (a tree section) whose children
+    /// only emit while it's expanded — expansion state lives in the persistent set the builder is
+    /// constructed with (<see cref="GraphState.Expanded"/>), so screens hold no tree state of their own.
+    /// Nesting recurses; a collapsed ancestor suppresses everything beneath it.
     /// </summary>
     public sealed class GraphBuilder
     {
-        private sealed class Entry
-        {
-            public ControlId Id;
-            public NodeVtable Vtable;
-            public ContextEntry[] Context;
-            public object StopKey;
-            public object RegionKey;
-        }
+        private readonly HashSet<ControlId> _expansion; // persistent expanded-group set (null = all explicit)
+
+        public GraphBuilder(HashSet<ControlId> expansion = null) { _expansion = expansion; }
 
         private sealed class Row
         {
-            public readonly List<Entry> Items = new List<Entry>();
+            public readonly List<GraphNode> Items = new List<GraphNode>();
             public object Key;
             public object StopKey;
         }
@@ -50,23 +49,34 @@ namespace WrathAccess.UI.Graph
         private Row _currentRow;
 
         // Raw mode.
-        private readonly List<Entry> _rawNodes = new List<Entry>();
+        private readonly List<GraphNode> _rawNodes = new List<GraphNode>();
         private readonly List<RawEdge> _rawEdges = new List<RawEdge>();
 
         // Shared.
         private readonly HashSet<ControlId> _ids = new HashSet<ControlId>();
         private ControlId _start;
 
-        // Stop / region / context state applied to nodes as they are added.
+        // Stop / region / parent state applied to nodes as they are added.
         private object _stopKey = AutoStopKey(0);
         private int _stopAuto = 1;
         private object _regionKey;
-        private readonly List<ContextEntry> _contextStack = new List<ContextEntry>();
-        private ContextEntry[] _contextSnapshot = GraphNode.EmptyContext;
+
+        // The parent stack: structural levels (PushContext) and group headers (BeginGroup). A frame whose
+        // group is collapsed suppresses every declaration beneath it (the stack stays balanced regardless).
+        private sealed class ParentFrame
+        {
+            public GraphNode Node;      // the parent node (non-focusable context, or the group header)
+            public bool Suppressed;     // this frame's subtree is swallowed (collapsed, or under a collapsed ancestor)
+        }
+
+        private readonly List<ParentFrame> _parents = new List<ParentFrame>();
+
+        private GraphNode CurrentParent => _parents.Count > 0 ? _parents[_parents.Count - 1].Node : null;
+        private bool Suppressed => _parents.Count > 0 && _parents[_parents.Count - 1].Suppressed;
 
         private static object AutoStopKey(int index) => "stop#" + index;
 
-        // ---- stops / regions / contexts ----
+        // ---- stops / regions ----
 
         /// <summary>Start a new Tab-stop; nodes added from here belong to it. <paramref name="key"/> must be
         /// stable across rebuilds (it keys the stop's remembered position); null auto-assigns by index,
@@ -88,29 +98,71 @@ namespace WrathAccess.UI.Graph
             return this;
         }
 
-        /// <summary>Push one level of presentation hierarchy ("Difficulty settings", "list") onto nodes
-        /// added from here. The announcer reads newly-entered levels when focus comes in from outside.</summary>
+        // ---- the parent stack: contexts + groups ----
+
+        /// <summary>Push one NON-FOCUSABLE level of presentation hierarchy ("Difficulty settings",
+        /// "list") onto nodes added from here — pure structure: never navigable, announced when focus
+        /// enters from outside. Close with <see cref="PopContext"/>.</summary>
         public GraphBuilder PushContext(string label, string role = null)
         {
-            _contextStack.Add(new ContextEntry(label, role));
-            _contextSnapshot = null;
+            var parent = CurrentParent;
+            var anns = new List<NodeAnnouncement> { NodeAnnouncement.Static(label) };
+            if (!string.IsNullOrEmpty(role)) anns.Add(NodeAnnouncement.Static(role));
+            var node = new GraphNode
+            {
+                // Stable synthetic identity (label-pathed) so cross-render chain diffs match up.
+                Id = ControlId.Structural("ctx:" + (parent?.Id.StructuralKey ?? "") + "/" + label),
+                Vtable = new NodeVtable { Announcements = anns },
+                Parent = parent,
+                Focusable = false,
+            };
+            _parents.Add(new ParentFrame { Node = node, Suppressed = Suppressed });
             return this;
         }
 
         public GraphBuilder PopContext()
         {
-            if (_contextStack.Count == 0) throw new InvalidOperationException("No context to pop");
-            _contextStack.RemoveAt(_contextStack.Count - 1);
-            _contextSnapshot = null;
+            if (_parents.Count == 0) throw new InvalidOperationException("No context/group to pop");
+            _parents.RemoveAt(_parents.Count - 1);
             return this;
         }
 
-        private ContextEntry[] ContextSnapshot()
+        /// <summary>
+        /// Push a FOCUSABLE, expandable group header (a tree section): the header emits as a navigable
+        /// node here, and the children declared before <see cref="EndGroup"/> emit only while the group is
+        /// expanded (a collapsed ancestor suppresses the whole subtree — recursion just works). Expansion
+        /// state: <paramref name="expanded"/> when given (the adapter passes the retained Container's
+        /// state), else the persistent expansion set the builder was constructed with, else
+        /// <paramref name="defaultExpanded"/>. The engine's tree operations (Right/Left) expand/collapse
+        /// via the vtable's OnExpand/OnCollapse overrides when set, else by mutating the persistent set.
+        /// </summary>
+        public GraphBuilder BeginGroup(ControlId id, NodeVtable vtable, bool? expanded = null,
+            bool defaultExpanded = false)
         {
-            if (_contextSnapshot == null)
-                _contextSnapshot = _contextStack.Count == 0 ? GraphNode.EmptyContext : _contextStack.ToArray();
-            return _contextSnapshot;
+            if (id == null) throw new ArgumentNullException(nameof(id));
+            if (_currentRow != null) throw new InvalidOperationException("Cannot begin a group inside an open row");
+            bool isExpanded = expanded ?? (_expansion != null ? _expansion.Contains(id) : defaultExpanded);
+
+            GraphNode header = null;
+            if (!Suppressed)
+            {
+                header = MakeNode(id, vtable);
+                header.Expandable = true;
+                header.Expanded = isExpanded;
+                var row = new Row { StopKey = _stopKey };
+                row.Items.Add(header);
+                _rows.Add(row);
+            }
+            _parents.Add(new ParentFrame
+            {
+                // Suppressed subtree: keep chaining from the outer parent so the stack stays coherent.
+                Node = header ?? CurrentParent,
+                Suppressed = Suppressed || !isExpanded,
+            });
+            return this;
         }
+
+        public GraphBuilder EndGroup() => PopContext();
 
         /// <summary>Focus starts here when the graph has no prior position (defaults to the first node).</summary>
         public GraphBuilder SetStart(ControlId id)
@@ -133,24 +185,27 @@ namespace WrathAccess.UI.Graph
         public GraphBuilder EndRow()
         {
             if (_currentRow == null) throw new InvalidOperationException("No row to end");
-            if (_currentRow.Items.Count == 0) throw new InvalidOperationException("Row cannot be empty");
-            _rows.Add(_currentRow);
+            if (_currentRow.Items.Count == 0 && !Suppressed)
+                throw new InvalidOperationException("Row cannot be empty");
+            if (_currentRow.Items.Count > 0) _rows.Add(_currentRow);
             _currentRow = null;
             return this;
         }
 
-        /// <summary>Add a control — into the open row, or as its own single-item row.</summary>
+        /// <summary>Add a control — into the open row, or as its own single-item row. A no-op inside a
+        /// collapsed group's subtree.</summary>
         public GraphBuilder AddItem(ControlId id, NodeVtable vtable)
         {
-            var entry = MakeEntry(id, vtable);
+            if (Suppressed) return this;
+            var node = MakeNode(id, vtable);
             if (_currentRow != null)
             {
-                _currentRow.Items.Add(entry);
+                _currentRow.Items.Add(node);
             }
             else
             {
                 var row = new Row { StopKey = _stopKey };
-                row.Items.Add(entry);
+                row.Items.Add(node);
                 _rows.Add(row);
             }
             return this;
@@ -162,10 +217,12 @@ namespace WrathAccess.UI.Graph
 
         // ---- raw mode ----
 
-        /// <summary>Add a node with no automatic wiring (raw mode; wire with <see cref="Connect"/>).</summary>
+        /// <summary>Add a node with no automatic wiring (raw mode; wire with <see cref="Connect"/>).
+        /// A no-op inside a collapsed group's subtree.</summary>
         public GraphBuilder AddNode(ControlId id, NodeVtable vtable)
         {
-            _rawNodes.Add(MakeEntry(id, vtable));
+            if (Suppressed) return this;
+            _rawNodes.Add(MakeNode(id, vtable));
             return this;
         }
 
@@ -179,17 +236,17 @@ namespace WrathAccess.UI.Graph
             return this;
         }
 
-        private Entry MakeEntry(ControlId id, NodeVtable vtable)
+        private GraphNode MakeNode(ControlId id, NodeVtable vtable)
         {
             if (id == null) throw new ArgumentNullException(nameof(id));
             if (vtable == null || vtable.Announcements == null || vtable.Announcements.Count == 0)
                 throw new ArgumentException("A control must have at least one announcement", nameof(vtable));
             if (!_ids.Add(id)) throw new InvalidOperationException("Duplicate control id: " + id);
-            return new Entry
+            return new GraphNode
             {
                 Id = id,
                 Vtable = vtable,
-                Context = ContextSnapshot(),
+                Parent = CurrentParent,
                 StopKey = _stopKey,
                 RegionKey = _regionKey,
             };
@@ -207,9 +264,9 @@ namespace WrathAccess.UI.Graph
 
             var render = new GraphRender();
             foreach (var row in _rows)
-                foreach (var e in row.Items)
-                    AddNodeTo(render, e);
-            foreach (var e in _rawNodes) AddNodeTo(render, e);
+                foreach (var node in row.Items)
+                    AddNodeTo(render, node);
+            foreach (var node in _rawNodes) AddNodeTo(render, node);
 
             WireMenuEdges(render);
             foreach (var e in _rawEdges)
@@ -222,17 +279,9 @@ namespace WrathAccess.UI.Graph
             return render;
         }
 
-        private static void AddNodeTo(GraphRender render, Entry e)
+        private static void AddNodeTo(GraphRender render, GraphNode node)
         {
-            var node = new GraphNode
-            {
-                Id = e.Id,
-                Vtable = e.Vtable,
-                Context = e.Context,
-                StopKey = e.StopKey,
-                RegionKey = e.RegionKey,
-            };
-            render.Nodes.Add(e.Id, node);
+            render.Nodes.Add(node.Id, node);
             render.Order.Add(node);
         }
 
@@ -261,7 +310,7 @@ namespace WrathAccess.UI.Graph
                     var row = rows[r];
                     for (int pos = 0; pos < row.Items.Count; pos++)
                     {
-                        var node = render.Nodes[row.Items[pos].Id];
+                        var node = row.Items[pos];
                         if (r > 0)
                             node.Transitions[GraphDir.Up] = new Transition(VerticalTarget(row, rows[r - 1], pos));
                         if (r < rows.Count - 1)

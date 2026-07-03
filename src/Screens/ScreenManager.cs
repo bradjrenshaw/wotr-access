@@ -90,7 +90,11 @@ namespace WrathAccess.Screens
         {
             if (s.ActiveChild != null) s.RemoveChild(s.ActiveChild);
             Safe(() => s.OnPop(), s, "OnPop");
-            WrathAccess.UI.Navigation.ScreenClosed(s);
+            // Stack screens KEEP their per-screen nav state across pop/re-push (screens are singletons,
+            // and "popped" often means hidden — a dialogue during a cutscene gap, a window under the
+            // pause menu — not closed). Staleness is handled by key identity: same content restores
+            // focus, new content re-keys and lands fresh. Only CHILD pages drop state (RemoveChild) —
+            // they're one-shot instances that never return.
         }
 
         // Re-attach the navigator whenever the deepest (focused) screen changes — from an outer push/pop

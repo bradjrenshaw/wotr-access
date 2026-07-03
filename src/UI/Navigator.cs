@@ -49,8 +49,10 @@ namespace WrathAccess.UI
         /// (the screen owns whatever is spoken instead).</summary>
         public abstract void Focus(UIElement target, bool announce = true);
 
-        /// <summary>A screen left the stack (popped / child removed): drop any per-screen state so a
-        /// reopened instance starts fresh. Covered-but-alive screens keep theirs.</summary>
+        /// <summary>A CHILD page was removed (tooltip drill-ins, choice submenus — one-shot instances
+        /// that never return): drop its per-screen state so the map doesn't leak. Stack screens keep
+        /// their state across pop/re-push — "popped" often means hidden, not closed — and key identity
+        /// handles staleness (same content restores focus; new content re-keys and lands fresh).</summary>
         public virtual void ScreenClosed(Screen screen) { }
 
         /// <summary>Move focus to a graph node by id (graph-native screens' analog of

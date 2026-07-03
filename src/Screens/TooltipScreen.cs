@@ -90,7 +90,7 @@ namespace WrathAccess.Screens
                 var open = _opens[i]; // capture
                 var label = _labels[i];
                 b.AddItem(ControlId.Structural(k + "link:" + i),
-                    GraphNodes.Button(() => label, () => { var t = open(); if (t != null) Open(t); }, sound: null));
+                    GraphNodes.Button(() => label, () => { var t = open(); if (t != null) Open(t); }));
             }
             b.PopContext();
         }

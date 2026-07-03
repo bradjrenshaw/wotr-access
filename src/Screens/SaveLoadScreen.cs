@@ -88,7 +88,7 @@ namespace WrathAccess.Screens
                         // arrowing down the list reads the whole row); the cells repeat them
                         // individually under their column headers for Left/Right inspection.
                         sheet.Row(
-                            GraphNodes.SelectionItem(s, () => SlotName(s), sound: null, extraParts: new[]
+                            GraphNodes.SelectionItem(s, () => SlotName(s), extraParts: new[]
                             {
                                 new NodeAnnouncement(() => s.CharacterName.Value),
                                 new NodeAnnouncement(() => s.LocationName.Value),

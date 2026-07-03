@@ -75,7 +75,7 @@ namespace WrathAccess.Screens
             {
                 var c = ch;
                 b.AddItem(ControlId.Structural(key + ":" + i),
-                    GraphNodes.Button(() => CharLabel(c), () => Activate(vm, c), sound: null));
+                    GraphNodes.Button(() => CharLabel(c), () => Activate(vm, c)));
                 i++;
             }
             b.PopContext();

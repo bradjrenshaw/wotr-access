@@ -420,7 +420,7 @@ namespace WrathAccess.Screens
                 foreach (var s in sapi.Children) ModSettingNodes.Emit(b, s, k);
             }
             b.BeginStop(k + "test").AddItem(ControlId.Structural(k + "test"),
-                GraphNodes.Button(() => Loc.T("wizard.events.test"), () => TestVoice(slotPath), sound: null));
+                GraphNodes.Button(() => Loc.T("wizard.events.test"), () => TestVoice(slotPath)));
         }
 
         private static CategorySetting ConfigParams(string slotPath)

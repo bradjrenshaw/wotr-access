@@ -76,7 +76,7 @@ namespace WrathAccess.Screens
                     var un = u;
                     b.AddItem(ControlId.Referenced(un, k + "char:" + ci),
                         GraphNodes.Button(() => un.CharacterName,
-                            () => Game.Instance.SelectionCharacter.SetSelected(un), sound: null));
+                            () => Game.Instance.SelectionCharacter.SetSelected(un)));
                     ci++;
                 }
                 b.PopContext();
@@ -103,7 +103,7 @@ namespace WrathAccess.Screens
                     if (e == null) continue;
                     var ent = e;
                     b.AddItem(ControlId.Referenced(ent, uk + "book:" + bi),
-                        GraphNodes.SelectionItem(ent, () => ent.BookName, sound: null));
+                        GraphNodes.SelectionItem(ent, () => ent.BookName));
                     bi++;
                 }
                 b.EndRow();
@@ -131,18 +131,17 @@ namespace WrathAccess.Screens
             var levels = vm.SpellbookLevelSwitcherVM?.SelectionGroup?.EntitiesCollection;
             if (levels != null)
             {
+                // A vertical list (user preference): Down walks the levels like any other list.
                 b.BeginStop("levels").PushContext(Loc.T("metamagic.spell_level"), "list");
-                b.StartRow();
                 int li = 0;
                 foreach (var e in levels)
                 {
                     if (e == null || !e.IsAvailable.Value) { li++; continue; }
                     var ent = e;
                     b.AddItem(ControlId.Referenced(ent, bk + "lvl:" + li),
-                        GraphNodes.SelectionItem(ent, () => LevelName(ent.SpellbookLevel.Level), sound: null));
+                        GraphNodes.SelectionItem(ent, () => LevelName(ent.SpellbookLevel.Level)));
                     li++;
                 }
-                b.EndRow();
                 b.PopContext();
             }
 

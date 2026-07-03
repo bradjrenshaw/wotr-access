@@ -73,7 +73,7 @@ namespace WrathAccess.Screens
                     var un = u;
                     b.AddItem(ControlId.Referenced(un, k + "char:" + ci),
                         GraphNodes.Button(() => un.CharacterName,
-                            () => Game.Instance.SelectionCharacter.SetSelected(un), sound: null));
+                            () => Game.Instance.SelectionCharacter.SetSelected(un)));
                     ci++;
                 }
                 b.PopContext();
@@ -186,8 +186,7 @@ namespace WrathAccess.Screens
                     var e = FindFilter(filter, type);
                     if (e != null)
                         b.AddItem(ControlId.Referenced(e, k + "filter:" + type),
-                            GraphNodes.SelectionItem(e, () => LocalizedTexts.Instance.ItemsFilter.GetText(e.CurrentFilter),
-                                sound: null));
+                            GraphNodes.SelectionItem(e, () => LocalizedTexts.Instance.ItemsFilter.GetText(e.CurrentFilter)));
                 }
                 b.EndRow();
                 b.PopContext();

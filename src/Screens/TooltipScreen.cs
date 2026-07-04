@@ -28,31 +28,9 @@ namespace WrathAccess.Screens
         private TooltipScreen(string title, List<string> labels, List<Func<TooltipBaseTemplate>> opens)
         { _title = title; _labels = labels; _opens = opens; }
 
-        // Drill-ins into a feature ROW inside another tooltip carry the game's plain
-        // TooltipTemplateFeature, which never builds the "Possible selections" list — the game only
-        // does that in its unit-aware templates (TooltipTemplateUIFeature / LevelUpFeature). For a
-        // selection feature ("choose a feat"-style), upgrade to the unit-aware template so the
-        // choosable options read out (deliberate enrichment, like the feat Source line).
-        private static TooltipBaseTemplate Upgrade(TooltipBaseTemplate template)
-        {
-            try
-            {
-                if (!(template is Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateFeature tf)) return template;
-                if (!(tf.BlueprintFeatureBase is Kingmaker.Blueprints.Classes.Selection.BlueprintFeatureSelection sel))
-                    return template;
-                var unit = Kingmaker.Game.Instance?.LevelUpController?.Preview
-                    ?? Kingmaker.Game.Instance?.Player?.MainCharacter.Value;
-                if (unit == null) return template;
-                var uif = new Kingmaker.UI.ServiceWindow.CharacterScreen.UIFeature(sel, null, 1, null, null, unit);
-                return new Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateUIFeature(uif);
-            }
-            catch { return template; } // enrichment only — never let it break the plain tooltip
-        }
-
         /// <summary>Open a tooltip document page (pushed as a child of the current screen / page).</summary>
         public static void Open(TooltipBaseTemplate template)
         {
-            template = Upgrade(template);
             if (template != null) ScreenManager.Current?.PushChild(new TooltipScreen(template));
         }
 

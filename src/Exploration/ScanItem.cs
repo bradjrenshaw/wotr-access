@@ -51,10 +51,36 @@ namespace WrathAccess.Exploration
         /// geometry, so we don't surface something straight through a wall you'd have to walk around to reach.
         /// (Room exits bypass this entirely — that geometry is known and we keep it always-reachable.)
         /// </summary>
+        // The game's fog-reveal radius (FogOfWarController.VisionRadius — private, campaign-
+        // adjustable: 11.7m * multiplier + addition), read by reflection and cached (refreshed every
+        // few seconds; per-frame reads must not box). Fallback = the game's base 11.7m.
+        private static readonly System.Reflection.FieldInfo VisionRadiusField =
+            HarmonyLib.AccessTools.Field(typeof(Kingmaker.Controllers.FogOfWarController), "VisionRadius");
+        private static float _visionRadius = 11.7f;
+        private static float _visionRadiusNext;
+
+        private static float FogVisionRadius
+        {
+            get
+            {
+                if (Time.unscaledTime >= _visionRadiusNext)
+                {
+                    _visionRadiusNext = Time.unscaledTime + 5f;
+                    try { _visionRadius = (float)VisionRadiusField.GetValue(null); } catch { }
+                }
+                return _visionRadius;
+            }
+        }
+
         public bool DetectableFrom(Vector3 cursor)
         {
             if (!IsVisible) return false;
             if (CurrentlySeen) return true;
+            // The game's fog lifts only within a revealer's VISION RADIUS *and* clear LOS — obstacle
+            // testing alone can never say no down a long unobstructed corridor (verified live: a
+            // remembered door 33m up a straight hall reads obstacle-free). Mirror both halves: a
+            // remembered (fogged) thing is offerable iff standing at the cursor would lift its fog.
+            if (DistanceTo(cursor) > FogVisionRadius) return false;
             var los = LineOfSightGeometry.Instance;
             if (los == null) return true;
             // Call the LOS oracle EXACTLY the way every game caller does (UnitSightCache,

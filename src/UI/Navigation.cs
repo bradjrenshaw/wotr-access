@@ -17,9 +17,6 @@ namespace WrathAccess.UI
         /// screen like exploration, where arrows bubble to the overlay.</summary>
         public static bool HasFocus => Active != null && Active.HasFocus;
 
-        /// <summary>The currently focused element, or null.</summary>
-        public static UIElement Current => Active?.Current;
-
         public static bool DispatchJustPressed(InputAction action) =>
             Active != null && Active.OnInputJustPressed(action);
 
@@ -32,20 +29,6 @@ namespace WrathAccess.UI
         /// focused yet (e.g. a screen that built its content lazily after attach). Ticked each frame.</summary>
         public static void EnsureFocus() => Active?.EnsureFocus();
 
-        // The element OnUpdate last ticked, so we fire OnFocusEnter exactly once when focus lands somewhere new.
-        private static UIElement _ticked;
-
-        /// <summary>Tick the focused element's per-frame state watch: fire <see cref="UIElement.OnFocusEnter"/>
-        /// once on a focus change (to baseline silently), then <see cref="UIElement.OnUpdate"/> every frame.
-        /// Ticked from the screen loop after focus has settled. No-op when nothing is focused.</summary>
-        public static void TickFocused()
-        {
-            var el = Current;
-            if (!ReferenceEquals(el, _ticked)) { _ticked = el; el?.OnFocusEnter(); }
-            el?.OnUpdate();
-        }
-
-        public static void Focus(UIElement element, bool announce = true) => Active?.Focus(element, announce);
 
         /// <summary>Return to the unfocused (exploration) state — see <see cref="Navigator.Blur"/>.</summary>
         public static void Blur() => Active?.Blur();

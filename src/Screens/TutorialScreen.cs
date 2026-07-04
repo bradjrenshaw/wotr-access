@@ -69,7 +69,6 @@ namespace WrathAccess.Screens
             _spokenPage = CurrentPageOf(vm);
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

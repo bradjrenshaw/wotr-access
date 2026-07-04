@@ -62,7 +62,6 @@ namespace WrathAccess.Screens
             return vm != null && vm.CurrentPhase.Value != UIRestPhase.None;
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

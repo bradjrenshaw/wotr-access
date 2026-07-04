@@ -52,7 +52,6 @@ namespace WrathAccess.Screens
             Tts.Speak(CueText(vm), interrupt: false);
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

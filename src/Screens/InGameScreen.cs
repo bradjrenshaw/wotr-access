@@ -64,7 +64,6 @@ namespace WrathAccess.Screens
             PartyStateWatch.Tick();
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

@@ -116,7 +116,6 @@ namespace WrathAccess.Screens
             EventBus.RaiseEvent<IEncyclopediaHandler>(x => x.HandleEncyclopediaPage(prev, scrollToCenter: false));
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

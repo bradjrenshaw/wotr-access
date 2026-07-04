@@ -74,7 +74,6 @@ namespace WrathAccess.Screens
             OnPhaseTick();
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

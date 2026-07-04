@@ -35,13 +35,6 @@ namespace WrathAccess.UI.Announcements
                 catch (Exception e) { Main.Log?.Error("[ann] global register failed for " + t.Name + ": " + e.Message); }
             }
 
-            foreach (var t in types.Where(t => !t.IsAbstract && typeof(UIElement).IsAssignableFrom(t)
-                                               && !typeof(WrathAccess.Screens.Screen).IsAssignableFrom(t) // screens aren't focusable elements
-                                               && t.GetCustomAttribute<AnnouncementOrderAttribute>(true) != null))
-            {
-                try { RegisterElementOverrides(t); }
-                catch (Exception e) { Main.Log?.Error("[ann] per-element register failed for " + t.Name + ": " + e.Message); }
-            }
 
             // Graph control types (the registry): the same per-type override schema, keyed on the registry
             // entry instead of a proxy class. Keys shared with legacy collapsed element keys ("toggle",
@@ -108,47 +101,6 @@ namespace WrathAccess.UI.Announcements
             annType.GetMethod("RegisterSettings", BindingFlags.Public | BindingFlags.Static,
                 null, new[] { typeof(CategorySetting) }, null)?.Invoke(null, new object[] { category });
         }
-
-        private static void RegisterElementOverrides(Type elType)
-        {
-            var orderAttr = elType.GetCustomAttribute<AnnouncementOrderAttribute>(true);
-            if (orderAttr == null) return;
-
-            var elementKey = DeriveElementKey(elType);
-            var elementDisplay = DeriveElementDisplayName(elType);
-
-            // PositionAnnouncement is injected universally (any element with a parent), so every element
-            // gets an override entry for it even though it's not in the [AnnouncementOrder].
-            var annTypes = orderAttr.Types.Concat(new[] { typeof(PositionAnnouncement) }).Distinct().ToList();
-
-            foreach (var annType in annTypes)
-            {
-                var annKey = DeriveAnnouncementKey(annType);
-                var annDisplay = DeriveDisplayName(StripSuffix(annType.Name, "Announcement"));
-
-                // The global category RegisterGlobal created above — fetched directly via EnsureCategory
-                // (returns the existing one). We can't use ModSettings.GetSetting here: the path index isn't
-                // built until ModSettings.Initialize, which runs AFTER registration, and it indexes only leaves.
-                var global = ModSettingsRegistry.EnsureCategory("announcements." + annKey, "Announcements/" + annDisplay);
-
-                // Under an "Announcements" subnode, so each element node's root stays free for future
-                // element-specific (non-announcement) settings.
-                var perEl = ModSettingsRegistry.EnsureCategory(
-                    "ui." + elementKey + ".announcements." + annKey,
-                    "UI/" + elementDisplay + "/Announcements/" + annDisplay,
-                    // "ui" root segment skipped (empty); element node, the Announcements subnode, and the
-                    // per-announcement leaf each get a "settings"-table loc key (English fallback if absent).
-                    "/element." + elementKey + "/announcements_group/announcement." + annKey);
-
-                foreach (var child in global.Children)
-                {
-                    if (perEl.GetByKey(child.Key) != null) continue;
-                    var ov = CreateOverride(child);
-                    if (ov != null) perEl.Add(ov);
-                }
-            }
-        }
-
         // Mirror a global setting as a Nullable* override that inherits from it. (Only Bool globals exist
         // today — enabled / include_suffix; extend for Int/Choice if an announcement declares them.)
         private static Setting CreateOverride(Setting global)

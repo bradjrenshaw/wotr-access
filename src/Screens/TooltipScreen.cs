@@ -42,14 +42,6 @@ namespace WrathAccess.Screens
                 ScreenManager.Current?.PushChild(new TooltipScreen(title, labels, opens));
         }
 
-        /// <summary>Follow an element's drill-in from Space: its template alone opens directly; inline
-        /// glossary links (alone or alongside the template) go through the chooser page; nothing at all
-        /// speaks the "no tooltip" line. The graph rows' shared OnTooltip handler.</summary>
-        public static void FollowElement(UIElement el)
-        {
-            if (el == null) return;
-            FollowLinks(el.GetLinkSourceText(), el.ResolveLink, el.GetTooltipTemplate());
-        }
 
         /// <summary>The same drill-in dispatch over RAW (markup-intact) text + a custom link resolver —
         /// for graph nodes with no backing element (a dialogue cue's skill-check result link, an
@@ -82,7 +74,6 @@ namespace WrathAccess.Screens
                 _ => ParentScreen?.RemoveChild(this));
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

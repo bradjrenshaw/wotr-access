@@ -42,7 +42,6 @@ namespace WrathAccess.Screens
 
         private static Kingmaker.Items.VendorLogic Logic => Game.Instance?.Vendor;
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

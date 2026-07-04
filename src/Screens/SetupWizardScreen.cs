@@ -68,7 +68,6 @@ namespace WrathAccess.Screens
             }
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

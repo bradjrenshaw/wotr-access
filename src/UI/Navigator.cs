@@ -17,13 +17,9 @@ namespace WrathAccess.UI
     {
         protected Screen Screen { get; set; }
 
-        /// <summary>The currently focused element, or null (e.g. an unfocused exploration screen).</summary>
-        public abstract UIElement Current { get; }
-
         /// <summary>True when the navigator owns the keys (something is focused) — false in the
-        /// unfocused exploration state. Graph navigators override this: a focused graph node counts
-        /// even when it has no backing UIElement (Current is element-typed and reads null then).</summary>
-        public virtual bool HasFocus => Current != null;
+        /// unfocused exploration state.</summary>
+        public abstract bool HasFocus { get; }
 
         /// <summary>Bind to a screen. Re-attaching the SAME screen means "content changed" (focus and
         /// announce memory survive); a new screen resets both.</summary>
@@ -50,9 +46,6 @@ namespace WrathAccess.UI
         /// e.g. when focus mode engages.</summary>
         public abstract void AnnounceCurrent();
 
-        /// <summary>Move focus to a specific element. <paramref name="announce"/> false lands silently
-        /// (the screen owns whatever is spoken instead).</summary>
-        public abstract void Focus(UIElement target, bool announce = true);
 
         /// <summary>A screen closed (stack pop without <see cref="Screen.KeepStateOnPop"/>, or a child
         /// page removed): drop its per-screen state so reopening starts fresh (and the map doesn't
@@ -71,62 +64,6 @@ namespace WrathAccess.UI
         /// <summary>The Tab-stop the focused node belongs to, or null (screen logic that branches on
         /// where focus is — e.g. Escape drills back only from the page stop, closes from the tree).</summary>
         public virtual object FocusedStopKey => null;
-
-        // ---- shared focus-restore rules ----
-
-        /// <summary>The child to land on when first focusing a container: the remembered focus, else —
-        /// for a single-select <b>list or tree</b> (radio buttons, tabs, the deity tree) — the currently-
-        /// selected DIRECT child, else the first focusable. Single-level by design; descent chains it to
-        /// reach the innermost remembered/selected element.</summary>
-        protected static UIElement RepresentativeChild(Container c)
-        {
-            if (c == null) return null;
-            if (c.FocusedChild != null && c.FocusedChild.CanFocus && !IsEmptyPanel(c.FocusedChild))
-                return c.FocusedChild;
-            if (c.Shape == ContainerShape.VerticalList || c.Shape == ContainerShape.HorizontalList
-                || c.Shape == ContainerShape.Tree)
-            {
-                var selected = SelectedChild(c);
-                if (selected != null) return selected;
-            }
-            return c.FirstFocusable();
-        }
-
-        /// <summary>A container's remembered focus, else its selected child — WITHOUT the first-focusable
-        /// fallback (used to decide whether descending deeper into a tree node is justified).</summary>
-        protected static UIElement RememberedOrSelected(Container c)
-        {
-            if (c.FocusedChild != null && c.FocusedChild.CanFocus && !IsEmptyPanel(c.FocusedChild))
-                return c.FocusedChild;
-            return SelectedChild(c);
-        }
-
-        // A Panel with nothing focusable inside — structural only; never a valid focus target or
-        // remembered-focus memory (a stranded landing on one must not be resurrected by descent).
-        private static bool IsEmptyPanel(UIElement e)
-            => e is Container c && c.Shape == ContainerShape.Panel && c.FirstFocusable() == null;
-
-        private static UIElement SelectedChild(Container c)
-        {
-            foreach (var child in c.Children)
-                if (child.CanFocus && ReportsSelected(child)) return child;
-            return null;
-        }
-
-        // An element is "selected" if it yields a SelectedAnnouncement that renders non-empty (single-
-        // select controls render "selected" only when selected). Checkboxes/toggles use
-        // ValueAnnouncement, not SelectedAnnouncement, so they never count here.
-        private static bool ReportsSelected(UIElement e)
-        {
-            var ctx = new AnnouncementContext(e);
-            foreach (var a in e.GetFocusAnnouncements())
-                if (a is SelectedAnnouncement)
-                {
-                    var m = a.Render(ctx);
-                    if (m != null && !m.IsEmpty) return true;
-                }
-            return false;
-        }
 
         // interrupt: true for focus MOVES (so held key-repeat reads the item you land on instead of
         // backing up a queue); false for screen-entry / landing readouts.

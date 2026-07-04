@@ -55,7 +55,6 @@ namespace WrathAccess.Screens
         private static ServiceWindowsVM ServiceWindows()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

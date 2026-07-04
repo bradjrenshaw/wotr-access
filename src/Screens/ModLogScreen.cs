@@ -81,7 +81,6 @@ namespace WrathAccess.Screens
             return ch.ChannelName; // fallback to the game's English id
         }
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

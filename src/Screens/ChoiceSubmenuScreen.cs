@@ -52,7 +52,6 @@ namespace WrathAccess.Screens
 
         private void Close() => ParentScreen?.RemoveChild(this);
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

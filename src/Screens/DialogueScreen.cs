@@ -168,7 +168,6 @@ namespace WrathAccess.Screens
             }
         }
 
-        public override bool BuildsGraph => true;
 
         private static ControlId CueId(DialogVM vm)
             => ControlId.Structural("dlg:" + vm.GetHashCode() + ":cue:"

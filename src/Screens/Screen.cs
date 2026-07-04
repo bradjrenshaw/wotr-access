@@ -4,35 +4,41 @@ using WrathAccess.UI;
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// Base for a navigable screen — and the root Container of its element tree.
-    /// Lifecycle (dispatched by ScreenManager from the stack diff): OnPush (entered
+    /// Base for a navigable screen. Lifecycle (dispatched by ScreenManager from the stack diff): OnPush (entered
     /// the stack) → OnFocus (became active); OnUnfocus → OnPop on the way out. The
     /// push/focus split enables focus restoration: a covered screen gets OnUnfocus
     /// then, when re-exposed, OnFocus without another OnPush, so its built tree and
     /// remembered focus survive.
     ///
     /// Navigation/input is owned by the active Navigator (Navigation.Active), which
-    /// ScreenManager attaches to the focused screen. Screens just build their tree
-    /// (OnPush) and expose ScreenName.
+    /// ScreenManager attaches to the focused screen. Screens declare their graph
+    /// (Build, immediate mode) and expose ScreenName.
     /// </summary>
-    public abstract class Screen : Container
+    public abstract class Screen
     {
-        // Screens are panels (Tab between their regions); a single child list then
-        // navigates with arrows and doesn't report a meaningless "1 of 1" position.
-        protected Screen() { Shape = ContainerShape.Panel; }
+        /// <summary>Whether Tab wraps from the last stop back to the first (set by screens that are
+        /// closed loops, e.g. the formation window).</summary>
+        public bool Wrap { get; set; }
+
+        /// <summary>Screen-level actions (Back/Escape handlers and the like), dispatched by id.</summary>
+        public virtual IEnumerable<ElementAction> GetActions() { yield break; }
+
+        /// <summary>Find an advertised action by id and execute it. Returns true if found.</summary>
+        public bool InvokeAction(string id, object args = null)
+        {
+            foreach (var a in GetActions())
+                if (a.Id == id) { a.Execute(args); return true; }
+            return false;
+        }
 
         /// <summary>Stable identity used for stack diffing.</summary>
         public abstract string Key { get; }
 
-        /// <summary>Graph-native declaration: when true the navigator builds this screen's graph by
-        /// calling <see cref="Build"/> on every render — IMMEDIATE MODE: declare controls fresh from live
-        /// game state each call (no retained element tree, no VM-swap rebuild bookkeeping, no Clear());
-        /// focus persists by <see cref="WrathAccess.UI.Graph.ControlId"/> identity. False = the legacy
-        /// Container tree, compiled by TreeGraphAdapter (deleted once every screen migrates).</summary>
-        public virtual bool BuildsGraph => false;
-
-        /// <summary>The graph-native declaration (see <see cref="BuildsGraph"/>). Declare nothing (or
-        /// return with an empty builder) while the screen's content doesn't exist yet.</summary>
+        /// <summary>The screen's graph declaration — IMMEDIATE MODE: the navigator calls this on every
+        /// render; declare controls fresh from live game state each call (no retained tree, no rebuild
+        /// bookkeeping); focus persists by <see cref="WrathAccess.UI.Graph.ControlId"/> identity.
+        /// Declare nothing while the screen's content doesn't exist yet (a raw-capture screen declares
+        /// nothing at all).</summary>
         public virtual void Build(WrathAccess.UI.Graph.GraphBuilder b) { }
 
         /// <summary>Keep this screen's per-screen nav state (focus, stop memory, tree expansion) when it
@@ -97,11 +103,8 @@ namespace WrathAccess.Screens
 
         public virtual void OnUnfocus() { }
         public virtual void OnPop() { }
-        // Per-frame update for the ACTIVE (top) screen, dispatched by ScreenManager. Overrides the UIElement
-        // hook (a Screen is a UIElement): same concept — the screen tree's per-frame work — at screen scope.
-        // (The focused element's own OnUpdate is dispatched separately by Navigation.TickFocused; a screen is
-        // never the focused element, so the two never collide.)
-        public override void OnUpdate() { }
+        /// <summary>Per-frame update for the ACTIVE (top) screen, dispatched by ScreenManager.</summary>
+        public virtual void OnUpdate() { }
 
         // ---- child screen tree (mod-driven sub-screens within a screen) ----
         // A screen can host a single ActiveChild (which can host its own child, forming a chain) — e.g. a
@@ -110,9 +113,7 @@ namespace WrathAccess.Screens
         // imperatively by their parent. ScreenManager re-syncs focus each frame, so a push/remove here is
         // picked up automatically; removing an outer screen disposes its whole child subtree.
 
-        /// <summary>The screen hosting this one as a child, or null for an outer (poll-driven) screen.
-        /// Named ParentScreen to avoid hiding <see cref="UIElement.Parent"/> (the element-tree parent used
-        /// for focus-path announcements — a Screen is its own root container, so that stays null).</summary>
+        /// <summary>The screen hosting this one as a child, or null for an outer (poll-driven) screen.</summary>
         public Screen ParentScreen { get; private set; }
 
         /// <summary>This screen's single active child sub-screen, or null.</summary>

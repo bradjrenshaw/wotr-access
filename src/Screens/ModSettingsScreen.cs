@@ -59,7 +59,6 @@ namespace WrathAccess.Screens
         private static string L(string key, string fallback)
             => WrathAccess.Localization.LocalizationManager.GetOrDefault("settings", key, fallback);
 
-        public override bool BuildsGraph => true;
 
         public override void Build(GraphBuilder b)
         {

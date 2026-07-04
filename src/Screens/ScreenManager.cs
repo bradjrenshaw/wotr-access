@@ -51,7 +51,6 @@ namespace WrathAccess.Screens
             WrathAccess.UI.Navigation.EnsureFocus();
             // After focus has settled, let the focused element observe its own live state and announce any
             // in-place change (async toggle settle, enabled/disabled flip) — the per-element OnUpdate hook.
-            WrathAccess.UI.Navigation.TickFocused();
         }
 
         /// <summary>Active screens, ordered bottom (low layer) → top (high layer).</summary>

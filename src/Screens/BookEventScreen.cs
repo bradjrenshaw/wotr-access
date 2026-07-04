@@ -81,7 +81,6 @@ namespace WrathAccess.Screens
         private static string PageKey(BookEventVM vm)
             => "book:" + vm.GetHashCode() + ":" + (vm.BlueprintBookPage.Value?.GetHashCode() ?? 0) + ":";
 
-        public override bool BuildsGraph => true;
 
         // Same shape as ordinary dialogue: the passage rows, then the choices — one stop, no positions.
         // Keys carry the page, so choosing an answer re-keys everything (OnUpdate re-homes silently).

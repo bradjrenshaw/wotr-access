@@ -17,8 +17,28 @@ namespace WrathAccess.Screens
     {
         public RacePhaseContent(CharGenRacePhaseVM phase) : base(phase) { }
 
+        // The game's on-screen info panel is HOVER-fed (rows scrolling under the parked mouse write
+        // their template into ReactiveTooltipTemplate), so it can show a race nobody selected. While
+        // our UI drives, re-assert the SELECTION's template whenever the panel diverges — the same
+        // UpdateTooltipTemplate() the game's selection path calls (see ClassPhaseContent.SyncGamePanel).
+        private static readonly System.Reflection.FieldInfo TplRaceField =
+            HarmonyLib.AccessTools.Field(
+                typeof(Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateLevelUpRace), "m_Race");
+
+        private void SyncGamePanel()
+        {
+            var race = Phase.SelectedRaceVM.Value?.Race;
+            if (race == null) return;
+            var tpl = Phase.ReactiveTooltipTemplate.Value
+                as Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateLevelUpRace;
+            if (tpl == null) return; // not a race page (glossary etc.) — leave it be
+            if (!ReferenceEquals(TplRaceField?.GetValue(tpl), race))
+                Phase.UpdateTooltipTemplate();
+        }
+
         public override void Build(GraphBuilder b, string k)
         {
+            SyncGamePanel();
             b.PushContext(Loc.T("chargen.races"), "list");
             int i = 0;
             if (Phase.RaceSelector?.EntitiesCollection != null)

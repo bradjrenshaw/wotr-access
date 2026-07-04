@@ -72,6 +72,7 @@ namespace WrathAccess.Screens
 
         public override void Build(GraphBuilder b, string k)
         {
+            SyncGamePanel();
             int ci = 0;
             foreach (var item in Classes())
             {
@@ -137,6 +138,40 @@ namespace WrathAccess.Screens
             // the details (the grid is a big table; burying it at the bottom of the details vertical
             // makes it undiscoverable by Tab).
             if (cls != null && detailed) EmitProgression(b, dk);
+        }
+
+        // The game's on-screen info panel (InfoSectionView ← ReactiveTooltipTemplate) is HOVER-fed:
+        // rows scrolling under the parked mouse write their template into it, so the panel can show a
+        // class nobody selected (a sighted observer sees Oracle while Sorcerer is selected — the mod's
+        // own reads/announcements are unaffected). While our UI drives, re-assert the SELECTION's
+        // template whenever the panel diverges — the same UpdateTooltipTemplate(hover: false) the
+        // game's selection path calls. Cheap: two reflected field reads per render, write only on
+        // divergence.
+        private static readonly Dictionary<System.Type, System.Reflection.FieldInfo> TplClassFields =
+            new Dictionary<System.Type, System.Reflection.FieldInfo>();
+        private static readonly Dictionary<System.Type, System.Reflection.FieldInfo> TplArchFields =
+            new Dictionary<System.Type, System.Reflection.FieldInfo>();
+
+        private static object TplField(Dictionary<System.Type, System.Reflection.FieldInfo> cache,
+            object tpl, string name)
+        {
+            var t = tpl.GetType();
+            if (!cache.TryGetValue(t, out var f)) { f = AccessTools.Field(t, name); cache[t] = f; }
+            return f?.GetValue(tpl);
+        }
+
+        private void SyncGamePanel()
+        {
+            var cls = Phase.SelectedClassVM.Value?.Class;
+            if (cls == null) return;
+            var tpl = Phase.ReactiveTooltipTemplate.Value;
+            if (tpl == null) return;
+            var tplClass = TplField(TplClassFields, tpl, "Class");
+            if (tplClass == null) return; // not a class template (glossary page etc.) — leave it be
+            var arch = Phase.SelectedArchetypeVM.Value?.Archetype;
+            var tplArch = TplField(TplArchFields, tpl, "Archetype");
+            if (!ReferenceEquals(tplClass, cls) || !ReferenceEquals(tplArch, arch))
+                Phase.UpdateTooltipTemplate(hover: false);
         }
 
         // The current detail mode, READ from the game's own class-detail view (its m_ViewMode reactive —

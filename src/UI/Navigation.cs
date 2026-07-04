@@ -15,7 +15,7 @@ namespace WrathAccess.UI
 
         /// <summary>True when something is focused (the navigator owns the keys). False in an unfocused
         /// screen like exploration, where arrows bubble to the overlay.</summary>
-        public static bool HasFocus => Active != null && Active.Current != null;
+        public static bool HasFocus => Active != null && Active.HasFocus;
 
         /// <summary>The currently focused element, or null.</summary>
         public static UIElement Current => Active?.Current;

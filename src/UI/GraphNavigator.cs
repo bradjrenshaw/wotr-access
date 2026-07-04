@@ -40,6 +40,10 @@ namespace WrathAccess.UI
 
         public override UIElement Current => _graph?.CurrentNode?.Id.Reference as UIElement;
 
+        // Focus = a focused NODE — graph nodes usually reference VMs, not UIElements, so the
+        // element-typed Current can't stand in for "is anything focused".
+        public override bool HasFocus => _graph?.CurrentNode != null;
+
         public override void Attach(Screens.Screen screen)
         {
             bool same = ReferenceEquals(screen, Screen);

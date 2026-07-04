@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Text;
 using Kingmaker;
 using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized TB control names)
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
@@ -11,25 +10,20 @@ using Kingmaker.UI.UnitSettings; // MechanicActionBarSlotEmpty
 using Kingmaker.UnitLogic; // GetRider / IsSummoned extensions
 using Kingmaker.UnitLogic.Parts; // UnitPartInsideAnotherCreature
 using WrathAccess.Exploration; // CombatMode
-using WrathAccess.Localization;
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The in-game (exploration) context as a navigable screen. It's UNFOCUSED by default — the overlay
-    /// owns the arrows for spatial navigation — and <b>Tab enters the HUD</b>, then Tab cycles its regions
-    /// (Tab off the end returns to exploration). Regions, in order: the <b>Action bar</b> (the selected
-    /// unit's ability/spell/item slots), the <b>Menu</b> list (Log → <see cref="ModLogScreen"/>, Rest,
-    /// and eventually the rest of the game's compass-corner cluster), and the <b>Windows</b> list.
-    /// Party/combat-turn-order regions come later; combat will vary the set.
-    ///
-    /// Nothing about the action bar is cached: the Log/Windows tab-stops are built once, and the action bar
-    /// itself is a FlowSheet rebuilt in place whenever its content signature changes — the selected character
-    /// swapping, abilities/items appearing or being consumed, etc. — so it refreshes even while focused. A
-    /// rebuild restores the cursor to the same grid position (deduping the announce), so it never strands you.
-    /// Each slot's live state (on/off, counts) is read by the proxy without needing a rebuild.
+    /// The in-game (exploration) context as a navigable screen, graph-native. It's UNFOCUSED by default —
+    /// the overlay owns the arrows for spatial navigation — and <b>Tab enters the HUD</b>, then Tab cycles
+    /// its stops (Tab off the end returns to exploration). Stops, in order: the <b>Action bar</b> (the
+    /// selected unit's usable slots, then the Abilities / Spells / Items groups as collapsible tree
+    /// sections), the turn-based <b>Turn</b> panel (only in TB combat), the <b>Menu</b> control list, and
+    /// the <b>Windows</b> list. Everything renders live per frame — a character swap or an item being
+    /// consumed just re-renders, and focus follows slot/unit IDENTITY across the change (the old
+    /// signature/rebuild/restore machinery is gone).
     /// </summary>
     public sealed class InGameScreen : Screen
     {
@@ -58,167 +52,128 @@ namespace WrathAccess.Screens
         // parallel (OverlayManager.Active is gated on control too).
         private static readonly WrathAccess.Input.InputCategory[] NoControlCats =
             { WrathAccess.Input.InputCategory.InGame, WrathAccess.Input.InputCategory.UI };
-        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories
+        public override IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories
             => !ControlState.HasControl ? NoControlCats
-             : WrathAccess.UI.Navigation.HasFocus ? FocusedCats : UnfocusedCats;
+             : Navigation.HasFocus ? FocusedCats : UnfocusedCats;
         public override bool IsActive() => Game.Instance?.RootUiContext?.IsInGame ?? false;
-
-        public override void OnPush() { BuildShell(); _sig = null; _turnSig = null; _lastRestoreLabel = null; }
-        public override void OnPop() { Clear(); _bar = null; _turn = null; }
-
-        private FlowSheet _bar;        // the action-bar FlowSheet (a stable child; only its regions rebuild)
-        private ListContainer _turn;   // turn-based Turn panel (a stable child; empty out of combat)
-        private string _sig;          // last action-bar content signature
-        private string _turnSig;      // last Turn-panel membership signature
-        private string _lastRestoreLabel; // dedupe the restore announce across a multi-frame settle
 
         public override void OnUpdate()
         {
-            // The focused action-bar slot watches its own live state via ProxyActionBarSlot.OnUpdate (the
-            // generic focused-element hook, ticked by Navigation.TickFocused) — no screen-level watch needed.
-            if (_bar == null) BuildShell();
-            var sig = Sig();
-            if (sig != _sig) { _sig = sig; RefreshBar(); }
-            else _lastRestoreLabel = null; // settled: the next change announces its landing
-            RefreshTurn();
             // Hold/Stop/Stealth/AI are global party commands: announce their settled state changes whether
             // or not the HUD is focused (the hotkeys fire from unfocused exploration).
-            WrathAccess.Exploration.PartyStateWatch.Tick();
+            PartyStateWatch.Tick();
         }
 
-        // Build the stable HUD shell once: the action-bar FlowSheet (populated separately), then the Log
-        // button and the service-window buttons (which never change), so their focus survives a bar refresh.
-        private void BuildShell()
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            Clear();
-            _bar = new FlowSheet(Loc.T("hud.action_bar"));
-            Add(_bar);
-
-            // The turn-based Turn panel: a stable tab-stop right after the action bar — one vertical list
-            // with the status line and controls (End turn, Five foot step) at the top and the initiative
-            // order beneath (Enter on a unit = delay your turn until after them). Populated only in
-            // turn-based combat (RefreshTurn); while empty it has no focusable children, so the Tab cycle
-            // skips it entirely.
-            _turn = new ListContainer(Message.Localized("ui", "hud.turn").Resolve());
-            Add(_turn);
-
-            // The game's IngameMenu cluster (the compass-corner bar) as ONE Tab-stop vertical list, in the
-            // game's button order, each driving the live IngameMenuVM method + the button-click sound. Out of
-            // combat (Turn panel empty/skipped) this is the tab stop right after the action bar.
-            Add(BuildMenuBar());
-
-            // Service-window buttons (the game's bottom bar): one Tab-stop list after Log. Activating one
-            // calls the game's own open path (HandleOpenWindowOfType, which creates the menu + toggles the
-            // window), labeled with the game's own localized name.
-            var windows = new ListContainer(Loc.T("hud.windows"));
-            foreach (var type in ServiceButtons)
-            {
-                var t = type; // capture for the live closures
-                windows.Add(new ProxyActionButton(() => UIUtility.GetServiceWindowsLabel(t), () => true,
-                    () => ServiceWindows()?.HandleOpenWindowOfType(t), actionVerb: "open"));
-            }
-            // Our log review + the game menu (the gear) live here too, after the service windows (the deliberate
-            // split: window-like destinations here, combat/control actions in the menu bar above).
-            windows.Add(new ProxyActionButton(Loc.T("hud.log"), () => true, ModLogScreen.Open, actionVerb: "open"));
-            windows.Add(new ProxyActionButton(Loc.T("hud.game_menu"), () => true,
-                () => Kingmaker.PubSubSystem.EventBus.RaiseEvent(
-                    delegate(Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); }),
-                actionVerb: "open"));
-            Add(windows);
-
-            PopulateBar();
+            BuildActionBar(b);
+            BuildTurnPanel(b);
+            BuildMenuBar(b);
+            BuildWindows(b);
         }
 
-        // (Re)fill the action-bar FlowSheet in place: the main slot list, then the game's Spell / Ability /
-        // Item groups as collapsible regions (collapsed = a header button; expanded = every spell/ability/item
-        // the unit has — the source the game drags onto the bar, so e.g. Charge is reachable + usable here).
-        private void PopulateBar()
+        // ----- the action bar (stop 1) -----
+
+        // The main slot list, then the game's Ability / Spell / Item groups as collapsible tree sections
+        // (collapsed = just the header; expanded = every spell/ability/item the unit has — the source the
+        // game drags onto the bar, so e.g. Charge is reachable + usable here). Slots key by their VM, so
+        // focus follows a slot across renders and survives the game repopulating around it.
+        private void BuildActionBar(GraphBuilder b)
         {
-            _bar.ClearRegions();
+            b.PushContext(Loc.T("hud.action_bar"));
             var vm = ActionBar();
-            var main = _bar.List(null); // the sheet is already "Action bar"; the groups below carry their own labels
-            int mainCount = 0;
+
+            b.SetRegion("bar:main");
+            int i = 0, usable = 0;
             if (vm != null)
                 foreach (var slot in vm.Slots)
-                    if (Usable(slot)) { main.Item(new ProxyActionBarSlot(slot)); mainCount++; }
-            if (mainCount == 0) main.Item(new TextElement(Loc.T("hud.no_actions")));
-            AddGroup(_bar, vm?.GroupAbilities, "hud.abilities");
-            AddGroup(_bar, vm?.GroupSpells, "hud.spells");
-            AddGroup(_bar, vm?.GroupItems, "hud.items");
-            _bar.Reflow();
+                {
+                    if (!Usable(slot)) { i++; continue; }
+                    b.AddItem(ControlId.Referenced(slot, "bar:main:" + i), ActionBarNodes.Slot(slot));
+                    i++; usable++;
+                }
+            if (usable == 0)
+                b.AddItem(ControlId.Structural("bar:none"), GraphNodes.Text(() => Loc.T("hud.no_actions")));
+
+            AddGroup(b, vm?.GroupAbilities, "hud.abilities");
+            AddGroup(b, vm?.GroupSpells, "hud.spells");
+            AddGroup(b, vm?.GroupItems, "hud.items");
+            b.PopContext();
         }
 
-        // Rebuild the bar, keeping the cursor on the same grid position if it was in the bar (so a character
-        // swap / item use under you doesn't strand focus). Focus on Log/Windows is untouched.
-        private void RefreshBar()
+        // One collapsible group (Abilities / Spells / Items): the group's usable slots under a folding
+        // header (persistent expansion; collapsed by default like the game's fold-outs). Its own region,
+        // so Ctrl+arrows jump between the bar's sections.
+        private static void AddGroup(GraphBuilder b, List<ActionBarSlotVM> slots, string labelKey)
         {
-            int row = -1, col = 0;
-            var cur = Navigation.Active?.Current;
-            if (cur != null && _bar.TryCoords(cur, out int r, out int c)) { row = r; col = c; }
-            PopulateBar();
-            if (row >= 0) RestoreBarFocus(row, col);
-        }
+            if (slots == null) return;
+            bool any = false;
+            foreach (var slot in slots) if (Usable(slot)) { any = true; break; }
+            if (!any) return;
 
-        private void RestoreBarFocus(int row, int col)
-        {
-            if (_bar.RowCount == 0) return;
-            int r = System.Math.Min(row, _bar.RowCount - 1);
-            int c = _bar.Visitable(r, col) ? col : _bar.LeftmostVisitable(r);
-            var cell = c >= 0 ? _bar.CellAt(r, c) : _bar.FirstFocusable();
-            if (cell == null) return;
-            var label = cell.GetLabelText();
-            bool announce = label != _lastRestoreLabel; // suppress the repeat while a change settles over frames
-            _lastRestoreLabel = label;
-            Navigation.Focus(cell, announce);
-        }
-
-        // Rebuild the Turn panel only when its membership changes (turn-based toggling, units joining,
-        // dying, or delaying). The status line, button states, and entry labels are all LIVE, so the
-        // active marker moving or actions being spent needs no rebuild — and no focus juggling. If a
-        // rebuild does land while focus is inside, restore to the same unit's entry (or the same child
-        // index for the fixed controls at the top).
-        private void RefreshTurn()
-        {
-            if (_turn == null) return;
-            var units = InitiativeUnits();
-            var sb = new StringBuilder(CombatMode.InTurnBased ? "tb|" : "off|");
-            foreach (var u in units) sb.Append(u.UniqueId).Append('|');
-            var sig = sb.ToString();
-            if (sig == _turnSig) return;
-            _turnSig = sig;
-
-            // Capture focus (a unit identity for entries; a child index for the fixed controls).
-            var current = Navigation.Active?.Current;
-            var focusedUnit = (current as InitiativeEntry)?.Unit;
-            int focusedIndex = (current != null && current.Parent == _turn) ? _turn.IndexOf(current) : -1;
-
-            _turn.Clear();
-            if (CombatMode.InTurnBased)
+            b.SetRegion("bar:" + labelKey);
+            b.BeginGroup(ControlId.Structural("bar:" + labelKey), GraphNodes.Group(() => Loc.T(labelKey)));
+            int i = 0;
+            foreach (var slot in slots)
             {
-                // Controls/status at the top, initiative order beneath.
-                _turn.Add(new TextElement(() => CombatMode.StatusLine()));
-                _turn.Add(new ProxyActionButton(Message.Localized("ui", "turn.end").Resolve(),
-                    () => true, CombatMode.EndTurn));
-                // The game's own localized control name + a live on/off state.
-                _turn.Add(new ProxyActionButton(
-                    () => (string)UIStrings.Instance.TurnBasedTexts.FiveFeetActionName + ", "
-                        + Message.Localized("ui", CombatMode.FiveFootEngaged ? "value.on" : "value.off").Resolve(),
-                    () => CombatMode.FiveFootAvailable || CombatMode.FiveFootEngaged,
-                    CombatMode.ToggleFiveFoot,
-                    suppressActivateSound: true, actionVerb: "toggle"));
-                foreach (var u in units) _turn.Add(new InitiativeEntry(u));
+                if (!Usable(slot)) { i++; continue; }
+                b.AddItem(ControlId.Referenced(slot, "bar:" + labelKey + ":" + i), ActionBarNodes.Slot(slot));
+                i++;
             }
+            b.EndGroup();
+        }
 
-            if (focusedUnit == null && focusedIndex < 0) return; // focus wasn't in the panel
-            UIElement target = null;
-            if (focusedUnit != null)
-                foreach (var child in _turn.Children)
-                    if (child is InitiativeEntry e && e.Unit == focusedUnit) { target = e; break; }
-            if (target == null && focusedIndex >= 0 && _turn.Children.Count > 0)
-                target = _turn.Children[System.Math.Min(focusedIndex, _turn.Children.Count - 1)];
-            target = target ?? _turn.FirstFocusable();
-            // Same unit → silent restore (its live label already reads current); otherwise announce the landing.
-            if (target != null) Navigation.Focus(target, announce: (target as InitiativeEntry)?.Unit != focusedUnit);
+        // ----- the turn-based Turn panel (stop 2; only in TB combat) -----
+
+        // One vertical list: the status line and controls (End turn, Five foot step) at the top and the
+        // initiative order beneath (Enter on a unit = delay your turn until after them). Out of combat
+        // nothing is emitted, so the Tab cycle skips it entirely. Entries key by UNIT, so units joining,
+        // dying, or delaying just re-render and focus follows the unit.
+        private void BuildTurnPanel(GraphBuilder b)
+        {
+            if (!CombatMode.InTurnBased) return;
+            b.BeginStop("turn").PushContext(Loc.T("hud.turn"), "list");
+
+            b.AddItem(ControlId.Structural("turn:status"), GraphNodes.Text(() => CombatMode.StatusLine()));
+            b.AddItem(ControlId.Structural("turn:end"), GraphNodes.Button(
+                () => Loc.T("turn.end"), CombatMode.EndTurn));
+            // The game's own localized control name + a live on/off state; the engage/step feedback is
+            // CombatMode's own, so no generic click.
+            b.AddItem(ControlId.Structural("turn:fivefoot"), GraphNodes.Button(
+                () => (string)UIStrings.Instance.TurnBasedTexts.FiveFeetActionName + ", "
+                    + Loc.T(CombatMode.FiveFootEngaged ? "value.on" : "value.off"),
+                CombatMode.ToggleFiveFoot,
+                () => CombatMode.FiveFootAvailable || CombatMode.FiveFootEngaged,
+                sound: null));
+
+            foreach (var u in InitiativeUnits())
+            {
+                var unit = u; // capture for the live closures
+                b.AddItem(ControlId.Referenced(unit, "turn:u:" + unit.UniqueId), new NodeVtable
+                {
+                    ControlType = ControlTypes.Text,
+                    Announcements = new List<NodeAnnouncement>
+                    {
+                        new NodeAnnouncement(() => RenderInitiative(unit)),
+                    },
+                    SearchText = () => unit.CharacterName,
+                    // Enter = delay the acting unit's turn until after this unit (the game's tracker
+                    // interaction; CombatMode gates it on CanDelay and raises the game's own modals).
+                    OnActivate = () => CombatMode.DelayAfter(unit),
+                });
+            }
+            b.PopContext();
+        }
+
+        // One initiative row — live text, so the active marker follows the turn without a rebuild.
+        private static string RenderInitiative(UnitEntityData u)
+        {
+            string s = u.CharacterName + ", " + u.CombatState.Initiative;
+            if (Game.Instance?.TurnBasedCombatController?.CurrentTurn?.Rider == u)
+                s += ", " + Loc.T("combat.active_marker");
+            return s;
         }
 
         // The units in initiative order, mirroring the game's own tracker (InitiativeTrackerVM.UpdateUnits):
@@ -245,75 +200,96 @@ namespace WrathAccess.Screens
             return list;
         }
 
-        // One initiative row — live text, so the active marker follows the turn without a rebuild.
-        // Enter = delay the acting unit's turn until after this unit (the game's tracker interaction;
-        // CombatMode gates it on CanDelay and raises the game's own confirmation modals).
-        private sealed class InitiativeEntry : TextElement
+        // ----- the menu-bar controls (stop 3) -----
+
+        // The game-menu CONTROLS as one Tab-stop vertical list — a deliberate split from the game: the
+        // window-openers, Log, and game menu live in the Windows list instead, so this holds only controls.
+        // Order is the user's: pause, hold, stop, stealth, AI, select all, formation, rest, skip time,
+        // turn-based, inspect, reset camera. Each drives the live IngameMenuVM method (+ the game's own
+        // button-click sound); toggles carry the live on/off value part.
+        private void BuildMenuBar(GraphBuilder b)
         {
-            public readonly UnitEntityData Unit;
-            public InitiativeEntry(UnitEntityData unit) : base(() => Render(unit)) { Unit = unit; }
+            b.BeginStop("menu").PushContext(Loc.T("hud.menu"), "list");
+            int i = 0;
+            void Act(string key, System.Action call, System.Func<bool> enabled = null)
+                => b.AddItem(ControlId.Structural("menu:" + i++), GraphNodes.Button(
+                    () => Loc.T(key), () => { MenuClick(); call(); }, enabled, sound: null));
 
-            public override IEnumerable<ElementAction> GetActions()
-            {
-                yield return new ElementAction(ActionIds.Activate,
-                    Message.Raw((string)UIStrings.Instance.TurnBasedTexts.DelayTurn),
-                    _ => CombatMode.DelayAfter(Unit));
-            }
+            // Toggles play their own switch sound and re-announce on press — like every other toggle.
+            void Toggle(string key, System.Func<bool> on, System.Action call,
+                System.Func<bool> enabled = null, bool announceOnActivate = true)
+                => b.AddItem(ControlId.Structural("menu:" + i++), GraphNodes.Toggle(
+                    () => Loc.T(key), on, call, enabled, announceOnActivate: announceOnActivate));
 
-            private static string Render(UnitEntityData u)
-            {
-                string s = u.CharacterName + ", " + u.CombatState.Initiative;
-                if (Game.Instance?.TurnBasedCombatController?.CurrentTurn?.Rider == u)
-                    s += ", " + Message.Localized("ui", "combat.active_marker").Resolve();
-                return s;
-            }
+            // Pause is a toggle (paused / running); hidden in turn-based combat (the game shows it only
+            // when !IsPauseButtonEnable, verified live) → grey it then.
+            Toggle("hudmenu.pause", () => Game.Instance.IsPaused, () => IngameMenu()?.Pause(),
+                () => !(IngameMenu()?.IsPauseButtonEnable.Value ?? false));
+            // Hold / Stop / Stealth / AI reflect the game's own selection state, read LIVE from the source
+            // (IsHold/IsStop = "all selected units …") rather than the IngameMenuVM reactive (which can lag
+            // a frame). The settled state CHANGE is announced by PartyStateWatch (one watcher for hotkeys +
+            // buttons + game-caused flips), so activation doesn't re-read the optimistic pre-settle value.
+            Toggle("hudmenu.hold", () => Game.Instance?.UI?.SelectionManager?.IsHold() ?? false,
+                () => IngameMenu()?.HandleHoldStateSwitched(), announceOnActivate: false);
+            Toggle("hudmenu.stop", () => Game.Instance?.UI?.SelectionManager?.IsStop() ?? false,
+                () => IngameMenu()?.HandleStopStateSwitched(), announceOnActivate: false);
+            // Stealth + AI: the action-bar ControlCharactersVM toggles (sneak / AI control), grouped here
+            // with the other selection-command toggles; the hotkeys (Ctrl+S / Ctrl+D) route through the
+            // same ControlCharactersVM handlers.
+            Toggle("hudmenu.stealth", PartySelection.IsStealthOn,
+                () => ActionBar()?.ControlCharactersVM?.OnStealthClick(), announceOnActivate: false);
+            Toggle("hudmenu.ai", PartySelection.IsAiOn,
+                () => ActionBar()?.ControlCharactersVM?.OnAiClick(), announceOnActivate: false);
+            Act("hudmenu.select_all", () => IngameMenu()?.SelectAll());
+            Act("hudmenu.formation", () => IngameMenu()?.OpenFormation());
+            // Rest = a targeted action (like an action-bar slot): Enter arms the game's rest-marker mode,
+            // then the cursor aims + Enter places the camp. Labelled with the game's own Rest text.
+            System.Func<string> restName = () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText);
+            b.AddItem(ControlId.Structural("menu:" + i++), GraphNodes.Button(restName,
+                () => { MenuClick(); Targeting.BeginRest(restName()); }, sound: null));
+            Act("hudmenu.skip_time", () => IngameMenu()?.SkipTime());
+            Toggle("hudmenu.turn_based", () => IngameMenu()?.IsTurnBasedEnabled.Value ?? false,
+                () => IngameMenu()?.SwitchTBM(), () => !(IngameMenu()?.IsTurnBasedLocked.Value ?? false));
+            Toggle("hudmenu.inspect", () => IngameMenu()?.IsInspectActive.Value ?? false,
+                () => IngameMenu()?.OnInspectToggle());
+            Act("hudmenu.reset_camera", () => Game.Instance.UI.GetCameraRig().SetCameraRotateDefault());
+            b.PopContext();
         }
 
-        // The action bar's content fingerprint: the selected unit + the titles of the usable slots in each
-        // group. Changes when a character is swapped, abilities/items appear, or an item is consumed — which
-        // is exactly when we must rebuild. Live per-slot state (counts, on/off) is read by the proxy, so it
-        // doesn't need to be in here.
-        private static string Sig()
+        // ----- the Windows list (stop 4) -----
+
+        // Service-window buttons (the game's bottom bar): activating one calls the game's own open path
+        // (HandleOpenWindowOfType, which creates the menu + toggles the window), labeled with the game's
+        // own localized name. Our log review + the game menu (the gear) live here too, after the service
+        // windows (the deliberate split: window-like destinations here, controls in the menu above).
+        private void BuildWindows(GraphBuilder b)
         {
-            var sb = new StringBuilder();
-            sb.Append(Game.Instance?.SelectionCharacter?.SelectedUnit?.Value.Value?.CharacterName).Append('|');
-            var vm = ActionBar();
-            if (vm != null)
+            b.BeginStop("windows").PushContext(Loc.T("hud.windows"), "list");
+            int i = 0;
+            foreach (var type in ServiceButtons)
             {
-                AppendSlots(sb, vm.Slots);
-                AppendSlots(sb, vm.GroupAbilities);
-                AppendSlots(sb, vm.GroupSpells);
-                AppendSlots(sb, vm.GroupItems);
+                var t = type; // capture for the live closures
+                b.AddItem(ControlId.Structural("win:" + i), GraphNodes.Button(
+                    () => UIUtility.GetServiceWindowsLabel(t),
+                    () => ServiceWindows()?.HandleOpenWindowOfType(t)));
+                i++;
             }
-            return sb.ToString();
+            b.AddItem(ControlId.Structural("win:log"), GraphNodes.Button(
+                () => Loc.T("hud.log"), ModLogScreen.Open));
+            b.AddItem(ControlId.Structural("win:menu"), GraphNodes.Button(
+                () => Loc.T("hud.game_menu"),
+                () => Kingmaker.PubSubSystem.EventBus.RaiseEvent(
+                    delegate(Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); })));
+            b.PopContext();
         }
 
-        private static void AppendSlots(StringBuilder sb, List<ActionBarSlotVM> slots)
-        {
-            sb.Append('|');
-            if (slots == null) return;
-            foreach (var s in slots)
-                if (Usable(s)) sb.Append(s.MechanicActionBarSlot.GetTitle()).Append(',');
-        }
+        // ----- shared helpers -----
 
         // A real, usable action-bar slot: backed by a non-empty, non-bad mechanic.
         private static bool Usable(ActionBarSlotVM slot)
         {
             var m = slot?.MechanicActionBarSlot;
             return m != null && !(m is MechanicActionBarSlotEmpty) && !m.IsBad();
-        }
-
-        // One collapsible group (Abilities / Spells / Items): the group's usable slots under a folding header.
-        private void AddGroup(FlowSheet sheet, System.Collections.Generic.List<ActionBarSlotVM> slots, string labelKey)
-        {
-            if (slots == null) return;
-            CollapsibleRegion region = null;
-            foreach (var slot in slots)
-                if (Usable(slot))
-                {
-                    if (region == null) region = sheet.Collapsible(Message.Localized("ui", labelKey).Resolve());
-                    region.Item(new ProxyActionBarSlot(slot));
-                }
         }
 
         // The service windows we expose (in-game). Mythic / Equipment / SmartItem are conditional — added
@@ -345,64 +321,5 @@ namespace WrathAccess.Screens
         // The game's button-click sound (what each OwlcatButton plays on press) — fired alongside the VM
         // method so our menu-bar activations match a real press.
         private static void MenuClick() => Kingmaker.UI.UISoundController.Instance?.PlayButtonClickSound();
-
-        private static readonly System.Func<bool> AlwaysOn = () => true;
-
-        // The game-menu CONTROLS as one Tab-stop vertical list — a deliberate split from the game: the
-        // window-openers, Log, and game menu live in the Windows list instead, so this holds only controls.
-        // Order is the user's: pause, hold, stop, select all, formation, rest, skip time, turn-based, inspect,
-        // reset camera. Each drives the live IngameMenuVM method (+ the click sound); toggles append on/off.
-        private ListContainer BuildMenuBar()
-        {
-            var menu = new ListContainer(Loc.T("hud.menu"));
-
-            void Act(string key, System.Action call, System.Func<bool> enabled = null, string verb = "activate")
-                => menu.Add(new ProxyActionButton(() => Loc.T(key), enabled ?? AlwaysOn,
-                    () => { MenuClick(); call(); }, suppressActivateSound: true, actionVerb: verb));
-
-            // Toggles are real checkboxes (ProxyBoolToggle): the on/off rides a ValueAnnouncement (a status,
-            // not baked into the label) and re-announces on press — like every other toggle in the mod. It
-            // plays its own toggle sound, so no MenuClick here.
-            void Toggle(string key, System.Func<bool> on, System.Action call, System.Func<bool> enabled = null)
-                => menu.Add(new ProxyBoolToggle(Loc.T(key), on, call, enabled));
-
-            // Pause is a toggle (paused / running); hidden in turn-based combat (the game shows it only when
-            // !IsPauseButtonEnable, verified live) → grey it then.
-            Toggle("hudmenu.pause", () => Game.Instance.IsPaused, () => IngameMenu()?.Pause(),
-                () => !(IngameMenu()?.IsPauseButtonEnable.Value ?? false));
-            // Hold / Stop / Stealth / AI reflect the game's own selection state, read LIVE from the source
-            // (IsHold/IsStop = "all selected units …") rather than the IngameMenuVM reactive (which can lag
-            // a frame). They're plain checkboxes: the settled state CHANGE is announced by PartyStateWatch
-            // (one watcher for hotkeys + buttons + game-caused flips), so activation doesn't re-read the
-            // optimistic pre-settle value (reannounceOnActivate: false).
-            menu.Add(new ProxyBoolToggle(Loc.T("hudmenu.hold"),
-                () => Game.Instance?.UI?.SelectionManager?.IsHold() ?? false,
-                () => IngameMenu()?.HandleHoldStateSwitched(), reannounceOnActivate: false));
-            menu.Add(new ProxyBoolToggle(Loc.T("hudmenu.stop"),
-                () => Game.Instance?.UI?.SelectionManager?.IsStop() ?? false,
-                () => IngameMenu()?.HandleStopStateSwitched(), reannounceOnActivate: false));
-            // Stealth + AI: the action-bar ControlCharactersVM toggles (sneak / AI control), grouped here
-            // with the other selection-command toggles; the hotkeys (Ctrl+S / Ctrl+D) route through the
-            // same ControlCharactersVM handlers.
-            menu.Add(new ProxyBoolToggle(Loc.T("hudmenu.stealth"),
-                WrathAccess.Exploration.PartySelection.IsStealthOn,
-                () => ActionBar()?.ControlCharactersVM?.OnStealthClick(), reannounceOnActivate: false));
-            menu.Add(new ProxyBoolToggle(Loc.T("hudmenu.ai"),
-                WrathAccess.Exploration.PartySelection.IsAiOn,
-                () => ActionBar()?.ControlCharactersVM?.OnAiClick(), reannounceOnActivate: false));
-            Act("hudmenu.select_all", () => IngameMenu()?.SelectAll());
-            Act("hudmenu.formation", () => IngameMenu()?.OpenFormation(), verb: "open");
-            // Rest = a targeted action (like an action-bar slot): Enter arms the game's rest-marker mode, then
-            // the cursor aims + Enter places the camp. Labelled with the game's own Rest text.
-            System.Func<string> restName = () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.RestText);
-            menu.Add(new ProxyActionButton(restName,
-                AlwaysOn, () => { MenuClick(); WrathAccess.Exploration.Targeting.BeginRest(restName()); }, suppressActivateSound: true));
-            Act("hudmenu.skip_time", () => IngameMenu()?.SkipTime());
-            Toggle("hudmenu.turn_based", () => IngameMenu()?.IsTurnBasedEnabled.Value ?? false, () => IngameMenu()?.SwitchTBM(),
-                () => !(IngameMenu()?.IsTurnBasedLocked.Value ?? false));
-            Toggle("hudmenu.inspect", () => IngameMenu()?.IsInspectActive.Value ?? false, () => IngameMenu()?.OnInspectToggle());
-            Act("hudmenu.reset_camera", () => Game.Instance.UI.GetCameraRig().SetCameraRotateDefault());
-            return menu;
-        }
     }
 }

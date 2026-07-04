@@ -20,6 +20,11 @@ namespace WrathAccess.UI
         /// <summary>The currently focused element, or null (e.g. an unfocused exploration screen).</summary>
         public abstract UIElement Current { get; }
 
+        /// <summary>True when the navigator owns the keys (something is focused) — false in the
+        /// unfocused exploration state. Graph navigators override this: a focused graph node counts
+        /// even when it has no backing UIElement (Current is element-typed and reads null then).</summary>
+        public virtual bool HasFocus => Current != null;
+
         /// <summary>Bind to a screen. Re-attaching the SAME screen means "content changed" (focus and
         /// announce memory survive); a new screen resets both.</summary>
         public abstract void Attach(Screen screen);

@@ -40,15 +40,38 @@ namespace WrathAccess.Screens
 
         protected override void BuildContent(GraphBuilder b, string k)
         {
+            // Make sure the phase the player is WORKING IN is in detailed view. The game's phase VMs
+            // gate their mechanic sync on it — CharGenClassPhaseVM.OnSelectorClassChanged only calls
+            // LevelUpController.SelectClass while IsInDetailedView — and the flag only flips true when
+            // the game's own detailed view BINDS, which can lag (or never happen) under our UI. Without
+            // this, a class picked in that window updates the radio but not the mechanic: announced
+            // Sorcerer, built Oracle. BeginDetailedView is exactly what the real view's bind calls
+            // (incl. OnBeginDetailedView side effects like TrySelectSuitableClass), gated so it runs
+            // once per phase instance.
+            var phaseVm = Vm()?.CurrentPhaseVM.Value;
+            if (phaseVm != null && !InDetailedView(phaseVm)) phaseVm.BeginDetailedView();
+
             // Stateless per render (immediate mode): the phase content holds NO view state of its own —
             // it reflects the game's live state each frame (e.g. Class reads the game view's Short/
             // Mechanic mode), so recreating it every render is correct and cheap.
-            var content = CharGenPhaseContentFactory.Create(Vm()?.CurrentPhaseVM.Value);
+            var content = CharGenPhaseContentFactory.Create(phaseVm);
             if (content != null)
                 content.Build(b, k);
             else
                 b.AddItem(ControlId.Structural(k + "unavailable"),
                     GraphNodes.Text(() => Loc.T("chargen.phase_unavailable")));
+        }
+
+        // The phase's protected IsInDetailedView reactive, reflected (no public read; see BuildContent).
+        private static readonly System.Reflection.PropertyInfo DetailedViewProp =
+            HarmonyLib.AccessTools.Property(typeof(Kingmaker.UI.MVVM._VM.CharGen.Phases.CharGenPhaseBaseVM),
+                "IsInDetailedView");
+
+        private static bool InDetailedView(Kingmaker.UI.MVVM._VM.CharGen.Phases.CharGenPhaseBaseVM phase)
+        {
+            var rp = DetailedViewProp?.GetValue(phase);
+            var v = rp?.GetType().GetProperty("Value")?.GetValue(rp);
+            return v is bool b && b;
         }
 
         // The roadmap strip (top of screen): one entry per phase, name + state + live summary, each a

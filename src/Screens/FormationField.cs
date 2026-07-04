@@ -10,7 +10,6 @@ using WrathAccess.Exploration.Overlays; // OverlayAudio (cue dir/volume)
 using WrathAccess.Input; // InputManager (glide-key Held polling)
 using WrathAccess.Settings; // ModSettings / IntSetting (cue volume)
 using WrathAccess.UI;
-using WrathAccess.UI.Announcements;
 
 namespace WrathAccess.Screens
 {
@@ -25,7 +24,7 @@ namespace WrathAccess.Screens
     /// and the game adds to the destination on a party move — so placement is 1:1 with the layout. (Shift+WASD
     /// continuous gliding with enter/exit cues + release-to-read is the next increment.)
     /// </summary>
-    public sealed class FormationField : UIElement
+    public sealed class FormationField
     {
         private const float GridStep = 23f / 40f;        // one cell: 23 UI px at 40 px-per-metre ≈ 0.58 m
         private const float FieldHalf = 388f / 2f / 40f; // the draggable field's half-extent ≈ 4.85 m
@@ -38,18 +37,6 @@ namespace WrathAccess.Screens
         private bool _wasGliding;           // last frame's glide state (to fire read-on-release)
         private FormationCharacterVM _reviewed; // member last reached by the Comma cycle (Slash jumps here)
 
-        public override IEnumerable<Announcement> GetFocusAnnouncements()
-        {
-            yield return new LabelAnnouncement(Message.Raw(Loc.T("formation.field")));
-            yield return new ValueAnnouncement(Message.Raw(CellReadout()));
-        }
-
-        public override IEnumerable<ElementAction> GetActions()
-        {
-            yield return new ElementAction(ActionIds.Activate, Message.Localized("ui", "formation.pick_drop"),
-                _ => PickOrDrop());
-        }
-
         /// <summary>Step the cursor one grid cell (called by the Formation input actions while focused).</summary>
         public void MoveStep(int dx, int dy)
         {
@@ -59,12 +46,13 @@ namespace WrathAccess.Screens
             Tts.Speak(CellReadout(), interrupt: true);
         }
 
-        // Continuous mode (Shift+WASD), ticked while focused: glide the cursor freely (no grid snap), play an
+        // Continuous mode (Shift+WASD), ticked by the screen while the field node is focused: glide the
+        // cursor freely (no grid snap), play an
         // enter/exit cue as it crosses a member, and on key release read where it landed. Gliding is too fast
         // to narrate per-frame, so it stays silent on move (the cue carries it) and speaks once on release —
         // the same feel as the exploration cursor's continuous mode (duplicated, not shared). The discrete
         // WASD path is unaffected (it isn't gliding, so this no-ops then).
-        public override void OnUpdate()
+        public void Tick()
         {
             int ix = (InputManager.Held("formation.glideRight") ? 1 : 0) - (InputManager.Held("formation.glideLeft") ? 1 : 0);
             int iz = (InputManager.Held("formation.glideUp") ? 1 : 0) - (InputManager.Held("formation.glideDown") ? 1 : 0);
@@ -95,7 +83,8 @@ namespace WrathAccess.Screens
             AudioEngines.NAudio.Play2D(Path.Combine(OverlayAudio.Dir, enter ? "object_enter.wav" : "object_exit.wav"), vol);
         }
 
-        private void PickOrDrop()
+        /// <summary>Enter: pick up the member at the cursor / drop the held one here (Custom only).</summary>
+        public void PickOrDrop()
         {
             var vm = FormationScreen.Vm();
             if (vm == null) return;
@@ -231,8 +220,8 @@ namespace WrathAccess.Screens
             return best;
         }
 
-        // "<member or empty>, <position>" — what the cursor is over.
-        private string CellReadout()
+        /// <summary>"&lt;member or empty&gt;, &lt;position&gt;" — what the cursor is over (the field node's value).</summary>
+        public string CellReadout()
         {
             var who = MemberAt(_cursor);
             string name = who != null ? who.Unit.CharacterName : Loc.T("formation.empty");

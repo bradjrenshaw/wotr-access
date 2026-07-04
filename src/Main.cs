@@ -521,21 +521,21 @@ namespace WrathAccess
 
             // Formation editor cursor (WASD), live only while the formation window's field is focused (the
             // FormationScreen claims the Formation category then). W/S = forward/back (north/south), A/D =
-            // left/right (west/east). Routed to the focused FormationField.
+            // left/right (west/east). Routed to the focused screen's editor state (FocusedField).
             InputManager.Register("formation.cursorUp", "Formation: move cursor forward", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(0, 1))
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.MoveStep(0, 1))
                 .AddBinding(KeyCode.W).Repeating().Grouped("formation");
             InputManager.Register("formation.cursorDown", "Formation: move cursor back", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(0, -1))
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.MoveStep(0, -1))
                 .AddBinding(KeyCode.S).Repeating().Grouped("formation");
             InputManager.Register("formation.cursorLeft", "Formation: move cursor left", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(-1, 0))
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.MoveStep(-1, 0))
                 .AddBinding(KeyCode.A).Repeating().Grouped("formation");
             InputManager.Register("formation.cursorRight", "Formation: move cursor right", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.MoveStep(1, 0))
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.MoveStep(1, 0))
                 .AddBinding(KeyCode.D).Repeating().Grouped("formation");
             // Continuous free glide (Shift+WASD): no-op handlers, polled via InputManager.Held in
-            // FormationField.OnUpdate (like the overlay "play while held" keys) — glides + cues + reads on release.
+            // FormationField.Tick (like the overlay "play while held" keys) — glides + cues + reads on release.
             InputManager.Register("formation.glideUp", "Formation: glide cursor forward", InputCategory.Formation,
                 () => { }).AddBinding(KeyCode.W, shift: true).Grouped("formation");
             InputManager.Register("formation.glideDown", "Formation: glide cursor back", InputCategory.Formation,
@@ -546,18 +546,18 @@ namespace WrathAccess
                 () => { }).AddBinding(KeyCode.D, shift: true).Grouped("formation");
             // Comma / Shift+Comma: jump the cursor to the next / previous member.
             InputManager.Register("formation.cycleNext", "Formation: next member", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.CycleMember(1))
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.CycleMember(1))
                 .AddBinding(KeyCode.Comma).Repeating().Grouped("formation");
             InputManager.Register("formation.cyclePrev", "Formation: previous member", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.CycleMember(-1))
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.CycleMember(-1))
                 .AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("formation");
             // Slash: move the cursor onto the reviewed member (like exploration's plant-cursor-on-review).
             InputManager.Register("formation.cursorToReview", "Formation: cursor to reviewed member", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.JumpToReviewed())
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.JumpToReviewed())
                 .AddBinding(KeyCode.Slash).Grouped("formation");
             // C: jump the cursor to the formation centre (0, 0).
             InputManager.Register("formation.center", "Formation: cursor to centre", InputCategory.Formation,
-                () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.CenterCursor())
+                () => WrathAccess.Screens.FormationScreen.FocusedField?.CenterCursor())
                 .AddBinding(KeyCode.C).Grouped("formation");
             // Ctrl+1..6: grab that party member straight away (then move + Enter to place).
             for (int i = 0; i < 6; i++)
@@ -565,7 +565,7 @@ namespace WrathAccess
                 int idx = i; // capture per-iteration for the closure
                 InputManager.Register("formation.pickMember" + (i + 1), "Formation: pick up member " + (i + 1),
                     InputCategory.Formation,
-                    () => (WrathAccess.UI.Navigation.Active?.Current as WrathAccess.Screens.FormationField)?.PickMember(idx))
+                    () => WrathAccess.Screens.FormationScreen.FocusedField?.PickMember(idx))
                     .AddBinding(KeyCode.Alpha1 + i, ctrl: true).Grouped("formation");
             }
 

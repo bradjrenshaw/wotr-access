@@ -4,18 +4,20 @@ using Kingmaker.Blueprints.Root.Strings; // UIStrings.FormationTexts (game-local
 using Kingmaker.UI.MVVM._VM.Formation; // FormationVM
 using Kingmaker.UI.MVVM._VM.Tooltip.Templates; // TooltipTemplateGlossary ("Hold the line")
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
     /// The party-formation window (<see cref="FormationVM"/> on <c>InGameStaticPartVM.FormationVM</c>),
-    /// opened from the HUD menu's Formation button. Tab stops, in order: the <b>formations list</b> (a radio
-    /// of the 6 — Optimal Auto first, then the editable named ones), [the editing FIELD — added next], then
-    /// <b>Restore to default</b>, the <b>Hold the line</b> preserve-formation toggle, and <b>Close</b>. The
-    /// list drives the game's own SelectionGroupRadioVM (via ProxySelectionItem); Restore/Hold only apply to
-    /// an editable (Custom) formation, so they grey out on the Auto one. Layer 16, Exclusive (owns the keyboard
-    /// while open). Back / Escape closes via FormationVM.Close.
+    /// opened from the HUD menu's Formation button — graph-native. Tab stops, in order: the
+    /// <b>formations list</b> (a radio of the 6 — Optimal Auto first, then the editable named ones), the
+    /// WASD editing <b>field</b>, <b>Restore to default</b>, the <b>Hold the line</b> preserve-formation
+    /// toggle, and <b>Close</b>. The list drives the game's own SelectionGroupRadioVM; Restore/Hold only
+    /// apply to an editable (Custom) formation, so they grey out on the Auto one. The field's 2-D cursor
+    /// is OUR editor state (like the exploration cursor), held on <see cref="FormationField"/> — reset
+    /// each open, never mirroring game state. Layer 16, Exclusive (owns the keyboard while open).
+    /// Back / Escape closes via FormationVM.Close.
     /// </summary>
     public sealed class FormationScreen : Screen
     {
@@ -27,34 +29,36 @@ namespace WrathAccess.Screens
         public override bool Exclusive => true;
         public override bool AllowsTypeahead => false; // WASD drive the editor field; no name-search needed
 
-        // While the WASD editor field is focused, claim the Formation category so WASD move the cursor; on the
-        // other tab stops only UI is live (so WASD stay free). Mirrors the in-game screen's focus-driven flip.
+        // While the WASD editor field is focused, claim the Formation category so WASD move the cursor; on
+        // the other tab stops only UI is live (so WASD stay free). Mirrors the game's focus-driven flip.
         private static readonly WrathAccess.Input.InputCategory[] FieldCats =
             { WrathAccess.Input.InputCategory.Formation, WrathAccess.Input.InputCategory.UI };
         private static readonly WrathAccess.Input.InputCategory[] BaseCats =
             { WrathAccess.Input.InputCategory.UI };
-        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories
-            => Navigation.Current is FormationField ? FieldCats : BaseCats;
+        public override IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories
+            => IsFieldFocused ? FieldCats : BaseCats;
 
         public override bool IsActive() => Vm() != null;
 
         internal static FormationVM Vm()
             => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.FormationVM?.Value;
 
-        private FormationVM _built;
+        // The editor's 2-D cursor + held member — mod-owned editor state, fresh per open.
+        private FormationField _field = new FormationField();
 
-        public override void OnPush() { _built = null; Rebuild(); }
-        public override void OnPop() { Clear(); _built = null; }
+        private bool IsFieldFocused
+            => ReferenceEquals(ScreenManager.Current, this) && Equals(Navigation.FocusedStopKey, "field");
 
-        public override void OnUpdate()
-        {
-            var vm = Vm();
-            if (vm != null && vm != _built)
-            {
-                Rebuild();
-                Navigation.Attach(this);
-            }
-        }
+        /// <summary>The editor field of the open, field-focused formation screen — the target the
+        /// Formation-category input actions (WASD/Comma/Slash/C/Ctrl+N) route to; null otherwise.</summary>
+        internal static FormationField FocusedField
+            => ScreenManager.Current is FormationScreen fs && fs.IsFieldFocused ? fs._field : null;
+
+        public override void OnPush() { _field = new FormationField(); }
+
+        // The glide tick (Shift+WASD held) runs only while the field is focused — the same scope the
+        // old per-focused-element OnUpdate had.
+        public override void OnUpdate() { if (IsFieldFocused) _field.Tick(); }
 
         public override IEnumerable<ElementAction> GetActions()
         {
@@ -62,41 +66,58 @@ namespace WrathAccess.Screens
                 _ => Vm()?.Close());
         }
 
-        private void Rebuild()
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            Clear();
             var vm = Vm();
-            _built = vm;
             if (vm == null) return;
 
-            // The formations, in the game's order (Optimal Auto, then the five editable named shapes). Each
-            // radio item is the game's FormationSelectionItemVM, so ProxySelectionItem's select contract
-            // (IsSelected / SetSelectedFromView) drives the real SelectionGroupRadioVM → CurrentFormationIndex.
-            // Names come from the formation blueprints (game-localized, passed through), keyed by item index.
+            // The formations, in the game's order (Optimal Auto, then the five editable named shapes).
+            // Names come from the formation blueprints (game-localized, passed through).
             var names = FormationNames();
-            var formations = new ListContainer(Loc.T("formation.list"));
+            b.PushContext(Loc.T("formation.list"), "list");
+            int i = 0;
             foreach (var item in vm.FormationSelector.EntitiesCollection)
             {
-                var it = item; // capture per-iteration for the closure
-                formations.Add(new ProxySelectionItem(it,
+                if (item == null) { i++; continue; }
+                var it = item; // capture for the live closure
+                b.AddItem(ControlId.Referenced(it, "form:" + i), GraphNodes.SelectionItem(it,
                     () => it.FormationIndex >= 0 && it.FormationIndex < names.Count ? names[it.FormationIndex] : ""));
+                i++;
             }
-            Add(formations);
+            b.PopContext();
 
-            // The WASD editing field (move the cursor, pick up / drop members). Editing applies to a Custom
-            // formation; on Auto it reads the layout but reports it can't be edited.
-            Add(new FormationField());
+            // The WASD editing field: one stop holding the 2-D cursor. Enter picks up / drops; the value
+            // reads what the cursor is over (moves speak themselves, so the part isn't live).
+            b.BeginStop("field").AddItem(ControlId.Structural("field"), new NodeVtable
+            {
+                ControlType = ControlTypes.Text,
+                Announcements = new List<NodeAnnouncement>
+                {
+                    GraphNodes.LabelPart(() => Loc.T("formation.field")),
+                    new NodeAnnouncement(() => _field.CellReadout(), kind: AnnouncementKinds.Value),
+                },
+                SearchText = () => Loc.T("formation.field"),
+                OnActivate = () => _field.PickOrDrop(), // pick-up/placement speaks itself (no generic click)
+            });
 
-            // Footer. Restore + Hold the line act on the Custom formation only (the game greys them on Auto);
-            // their labels are the game's own localized strings.
+            // Footer. Restore + Hold the line act on the Custom formation only (the game greys them on
+            // Auto); their labels are the game's own localized strings.
             var t = UIStrings.Instance.FormationTexts;
-            Add(new ProxyActionButton(() => (string)t.RestoreToDefault,
-                () => Vm()?.IsCustomFormation ?? false, () => Vm()?.ResetCurrentFormation()));
-            Add(new ProxyBoolToggle((string)t.HoldTheLine,
-                () => Vm()?.IsPreserveFormation.Value ?? false, () => Vm()?.SwitchPreserveFormation(),
-                () => Vm()?.IsCustomFormation ?? false,
-                tooltip: () => new TooltipTemplateGlossary("HoldTheLine"))); // same glossary entry the game shows
-            Add(new ProxyActionButton(() => Loc.T("action.close"), () => true, () => Vm()?.Close()));
+            b.BeginStop("restore").AddItem(ControlId.Structural("restore"), GraphNodes.Button(
+                () => (string)t.RestoreToDefault,
+                () => Vm()?.ResetCurrentFormation(),
+                () => Vm()?.IsCustomFormation ?? false));
+            var hold = GraphNodes.Toggle(
+                () => (string)t.HoldTheLine,
+                () => Vm()?.IsPreserveFormation.Value ?? false,
+                () => Vm()?.SwitchPreserveFormation(),
+                () => Vm()?.IsCustomFormation ?? false);
+            hold.OnTooltip = () => TooltipScreen.Open(new TooltipTemplateGlossary("HoldTheLine")); // the game's glossary entry
+            b.BeginStop("hold").AddItem(ControlId.Structural("hold"), hold);
+            b.BeginStop("close").AddItem(ControlId.Structural("close"), GraphNodes.Button(
+                () => Loc.T("action.close"), () => Vm()?.Close()));
         }
 
         // The predefined formations' display names, in order (parallel to the selector items by index).

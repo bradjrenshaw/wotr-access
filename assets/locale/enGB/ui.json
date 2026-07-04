@@ -715,5 +715,7 @@
   "spell_ordinal.7": "Seventh",
   "spell_ordinal.8": "Eighth",
   "spell_ordinal.9": "Ninth",
-  "spell_ordinal.10": "Tenth"
+  "spell_ordinal.10": "Tenth",
+  "taxonomy.trapzones": "Trap zones",
+  "scan.trap_zone": "Trap zone"
 }

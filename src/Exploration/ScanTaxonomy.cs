@@ -43,6 +43,7 @@ namespace WrathAccess.Exploration
         public const string Exits = "exits";
         public const string SearchPoints = "searchpoints";
         public const string Traps = "traps";
+        public const string TrapZones = "trapzones";
         public const string Mechanisms = "mechanisms";
         public const string Hazards = "hazards";
         public const string HazardsSpell = "hazards.spell";
@@ -129,6 +130,8 @@ namespace WrathAccess.Exploration
             Cat("exits", "Exits", ScanClass.Object, "transition");
             Cat("searchpoints", "Search points", ScanClass.Object, "unknown");
             Cat("traps", "Traps", ScanClass.Object, "trap");
+            // The trap trigger AREAS (where not to step) — separate from the disarm devices above.
+            Cat("trapzones", "Trap zones", ScanClass.Object, "trap-zone");
             Cat("mechanisms", "Mechanisms", ScanClass.Object, "mechanism");
 
             // Live area effects (Game.Instance.State.AreaEffects): harmful zones (spell AoEs like stinking

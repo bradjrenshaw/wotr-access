@@ -45,7 +45,20 @@ namespace WrathAccess.Exploration
             // HP change, etc. is still seen instantly; we just stop manufacturing garbage every frame.
             _present.Clear();
             foreach (var u in state.Units) { if (!_items.ContainsKey(u)) Ensure(u, () => new ProxyUnit(u)); _present.Add(u); }
-            foreach (var o in state.MapObjects) { if (!_items.ContainsKey(o)) Ensure(o, () => new ProxyMapObject(o)); _present.Add(o); }
+            foreach (var o in state.MapObjects)
+            {
+                if (!_items.ContainsKey(o)) Ensure(o, () => new ProxyMapObject(o));
+                _present.Add(o);
+                // A trap additionally surfaces its TRIGGER AREA as its own item ("Trap zones") — keyed
+                // by the trap view (a distinct object, so it can't collide with the entity keys).
+                if (o is Kingmaker.View.MapObjects.Traps.TrapObjectData td
+                    && td.View is Kingmaker.View.MapObjects.Traps.TrapObjectView tv)
+                {
+                    var trap = td; // capture for the factory closure (only built when new)
+                    if (!_items.ContainsKey(tv)) Ensure(tv, () => new ProxyTrapZone(trap));
+                    _present.Add(tv);
+                }
+            }
             // Area effects: only PLACED ground zones (spell AoEs, terrain hazards). Skip on-unit auras
             // (Aura of Courage, etc.) — they follow a unit and there can be hundreds, so they're noise as
             // "zones"; the unit carries them (inspect the unit). View.OnUnit is the live flag (from m_OnUnit).

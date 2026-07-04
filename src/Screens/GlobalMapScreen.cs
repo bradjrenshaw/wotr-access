@@ -9,19 +9,20 @@ using UnityEngine;
 using WrathAccess.Exploration; // GlobalMapModel, GlobalMapActions, GlobalMapScanner, GlobalMapEnterPanel, Geo
 using WrathAccess.Input; // InputCategory
 using WrathAccess.UI;
-using WrathAccess.UI.Proxies;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
     /// <summary>
-    /// The world map (global map) base context. Browse a Tab-stop location list (arrow, Enter selects), the
-    /// isolated <see cref="GlobalMapScanner"/> review cursor (PageUp/Down + b/m/n + . , armies), and the free
-    /// movement cursor (WASD). Selecting a node (Enter / I / a list item → <see cref="GlobalMapActions.Go"/>)
-    /// triggers the game's REAL node-select, and its location panel (<see cref="GlobalMapEnterMessageVM"/>)
-    /// then appears as an extra <b>tab stop</b> here — description + Travel/Enter/Manage/Close — which the
-    /// player tabs to and acts on. (Earlier this was a separate modal; the game disposes+recreates that VM on
-    /// open, which fought a modal's focus, so it's a passive tab stop instead — added/removed in place,
-    /// location-keyed with a short grace so the recreate churn doesn't flicker it.)
+    /// The world map (global map) base context, graph-native. Browse a Tab-stop location list (arrow,
+    /// Enter selects), the isolated <see cref="GlobalMapScanner"/> review cursor (PageUp/Down + b/m/n +
+    /// . , armies), and the free movement cursor (WASD). Selecting a node (Enter / I / a list item →
+    /// <see cref="GlobalMapActions.Go"/>) triggers the game's REAL node-select, and its location panel
+    /// (<see cref="GlobalMapEnterMessageVM"/>) then appears as the FIRST <b>tab stop</b> here —
+    /// description + Travel/Enter/Manage/Close — which the player tabs to and acts on. The game
+    /// disposes+recreates that VM on open, so the panel is location-keyed with a short grace before
+    /// dropping (the recreate churn doesn't flicker it) and its texts/labels are captured per location
+    /// (the actions still resolve the LIVE VM each press).
     /// </summary>
     public sealed class GlobalMapScreen : Screen
     {
@@ -56,25 +57,31 @@ namespace WrathAccess.Screens
         /// sonar system check this and freeze, so they don't run while the player reads/acts on the panel.</summary>
         public static bool PanelActive { get; private set; }
 
-        private bool _built;
-        private ListContainer _panel;              // the location-panel tab stop (null = none open)
-        private BlueprintGlobalMapPoint _panelLoc; // the location it was built for
-        private float _panelClearAt;               // grace deadline before dropping the panel after its VM vanished
-        private bool _wasPaused;                   // last frame's travel-pause state (announce on the transition)
+        // The location list's ORDER, frozen at map entry (nearest-first from where you arrived) — live
+        // distance sorting would shuffle the list under the cursor as the traveler moves. The SET still
+        // reads live each render; only the ordering is a per-entry presentation choice (as before).
+        private List<GlobalMapPointView> _order;
+
+        // The location panel's grace-stabilized state: which location it's for (null = none), the capture
+        // of its location-stable texts/labels, and the drop deadline absorbing the game's transient nulls.
+        private BlueprintGlobalMapPoint _panelLoc;
+        private float _panelClearAt;
+        private bool _wasPaused; // last frame's travel-pause state (announce on the transition)
+        private string _lore, _desc, _acceptLabel, _manageLabel, _closeLabel;
+        private bool _acceptEnabled, _hasSettlement;
 
         public override void OnPush()
         {
-            _built = false; ClearPanelState();
+            _order = null; ClearPanelState();
             GlobalMapScanner.Reset(); GlobalMapCursor.Reset(); // the sonar is an overlay system now (resets on overlay exit)
         }
-        public override void OnPop() { Clear(); _built = false; ClearPanelState(); }
+        public override void OnPop() { _order = null; ClearPanelState(); }
 
-        private void ClearPanelState() { _panel = null; _panelLoc = null; _panelClearAt = 0f; PanelActive = false; _wasPaused = false; }
+        private void ClearPanelState() { _panelLoc = null; _panelClearAt = 0f; PanelActive = false; _wasPaused = false; }
 
         public override void OnUpdate()
         {
-            if (!_built && GlobalMapModel.Active) { _built = true; Rebuild(); }
-            if (_built) SyncPanel();
+            SyncPanel();
             SyncTravelPause();
         }
 
@@ -89,18 +96,35 @@ namespace WrathAccess.Screens
             _wasPaused = paused;
         }
 
-        private void Rebuild()
+        public override bool BuildsGraph => true;
+
+        public override void Build(GraphBuilder b)
         {
-            Clear();
-            var from = GlobalMapModel.TravelerPos;
-            var list = new ListContainer(Loc.T("worldmap.locations"));
-            foreach (var p in GlobalMapModel.Locations.OrderBy(p => Geo.Distance(from, p.transform.position)))
+            if (!GlobalMapModel.Active) return;
+            BuildPanel(b);    // when open: the FIRST stop, so Tab from the map lands on it directly
+            BuildLocations(b);
+        }
+
+        private void BuildLocations(GraphBuilder b)
+        {
+            if (_order == null)
             {
-                var pv = p; // capture per-iteration for the closures
-                list.Add(new ProxyActionButton(() => GlobalMapActions.Label(pv), () => true, () => GlobalMapActions.Go(pv)));
+                var from = GlobalMapModel.TravelerPos;
+                _order = GlobalMapModel.Locations.OrderBy(p => Geo.Distance(from, p.transform.position)).ToList();
             }
-            if (list.Children.Count > 0) Add(list);
-            Navigation.Attach(this);
+            // Live set ∩ frozen order: locations key by their view, labels/actions read live.
+            var live = new HashSet<GlobalMapPointView>(GlobalMapModel.Locations);
+            b.BeginStop("locations").PushContext(Loc.T("worldmap.locations"), "list");
+            int i = 0;
+            foreach (var p in _order)
+            {
+                if (p == null || !live.Contains(p)) { i++; continue; }
+                var pv = p; // capture per-iteration for the closures
+                b.AddItem(ControlId.Referenced(pv, "loc:" + i), GraphNodes.Button(
+                    () => GlobalMapActions.Label(pv), () => GlobalMapActions.Go(pv)));
+                i++;
+            }
+            b.PopContext();
         }
 
         // ---- the location panel, as a tab stop synced to the game's live GlobalMapEnterMessageVM ----
@@ -111,9 +135,10 @@ namespace WrathAccess.Screens
             return rc?.GlobalMapVM?.GlobalMapEnterMessageVM?.Value;
         }
 
-        // Add/drop the panel tab stop as the game's panel VM comes and goes — WITHOUT touching the location
-        // list (so its focus survives). Keyed on the LOCATION so the game's open-time dispose+recreate churn
-        // (same location) doesn't rebuild it; a short grace before dropping absorbs the transient nulls.
+        // Track the panel VM as it comes and goes — keyed on the LOCATION so the game's open-time
+        // dispose+recreate churn (same location) doesn't re-key it, with a short grace before dropping to
+        // absorb the transient nulls. Captures the location-stable texts/labels at open (the VM instance
+        // is churned under us; the ACTIONS resolve the live VM each press).
         private void SyncPanel()
         {
             var vm = PanelVm();
@@ -121,54 +146,54 @@ namespace WrathAccess.Screens
             if (loc != null)
             {
                 _panelClearAt = 0f;
-                if (loc != _panelLoc) SetPanel(loc, vm);
+                if (loc != _panelLoc) OpenPanel(loc, vm);
                 return;
             }
             if (_panelLoc == null) return;
             if (_panelClearAt == 0f) _panelClearAt = Time.unscaledTime + 0.25f;
-            else if (Time.unscaledTime >= _panelClearAt) SetPanel(null, null);
+            else if (Time.unscaledTime >= _panelClearAt) { ClearPanelState(); }
         }
 
-        private void SetPanel(BlueprintGlobalMapPoint loc, GlobalMapEnterMessageVM vm)
+        private void OpenPanel(BlueprintGlobalMapPoint loc, GlobalMapEnterMessageVM vm)
         {
-            if (_panel != null) { Remove(_panel); _panel = null; }
             _panelLoc = loc;
             _panelClearAt = 0f;
-            PanelActive = loc != null;
-            if (loc == null || vm == null) return;
-            _panel = BuildPanel(vm);
-            Insert(0, _panel); // FIRST tab stop, so Tab from the map lands on the panel directly when it's open
-            Tts.Speak(Loc.T("worldmap.selected", new { name = GlobalMapEnterPanel.Title(vm) })); // signal it's there
-        }
-
-        private static ListContainer BuildPanel(GlobalMapEnterMessageVM vm)
-        {
-            var list = new ListContainer(Loc.T("worldmap.panel")); // header announces "Location options" on Tab-in
+            PanelActive = true;
 
             // Location lore first (what the place is), then the game-panel body (travel time / enter
             // confirmation / closed or restricted reason). Both are location-stable, captured here.
-            var lore = GlobalMapEnterPanel.LocationDescription(vm);
-            if (!string.IsNullOrWhiteSpace(lore)) list.Add(new TextElement(() => lore));
+            _lore = GlobalMapEnterPanel.LocationDescription(vm);
+            GlobalMapEnterPanel.Compute(vm, out _desc, out _acceptEnabled);
+            _acceptLabel = TextUtil.StripRichText(GlobalMapEnterPanel.AcceptLabel(vm));
+            _hasSettlement = GlobalMapEnterPanel.HasSettlement(vm);
+            _manageLabel = TextUtil.StripRichText(GlobalMapEnterPanel.ManageLabel());
+            _closeLabel = TextUtil.StripRichText(GlobalMapEnterPanel.CloseLabel());
 
-            GlobalMapEnterPanel.Compute(vm, out string desc, out bool acceptEnabled);
-            if (!string.IsNullOrWhiteSpace(desc)) list.Add(new TextElement(() => TextUtil.StripRichText(desc)));
+            Tts.Speak(Loc.T("worldmap.selected", new { name = GlobalMapEnterPanel.Title(vm) })); // signal it's there
+        }
 
-            // Labels are location-stable (captured); the actions resolve the LIVE VM each press (the instance
-            // may be recreated under us), never a stale capture. Each fires the game's button-click sound +
-            // the VM method the real OwlcatButton is wired to (Accept/AlternativeAction/Close) — same behavior
-            // as pressing the button (see GlobalMapEnterMessagePCView), minus reaching into the live view.
-            string acceptLabel = TextUtil.StripRichText(GlobalMapEnterPanel.AcceptLabel(vm));
-            list.Add(new ProxyActionButton(() => acceptLabel, () => acceptEnabled, AcceptLive));
+        private void BuildPanel(GraphBuilder b)
+        {
+            if (_panelLoc == null) return;
+            string k = "panel:" + _panelLoc.GetHashCode() + ":"; // re-keys per location
+            b.BeginStop("panel").PushContext(Loc.T("worldmap.panel"), "list"); // "Location options" on Tab-in
 
-            if (GlobalMapEnterPanel.HasSettlement(vm))
-            {
-                string manageLabel = TextUtil.StripRichText(GlobalMapEnterPanel.ManageLabel());
-                list.Add(new ProxyActionButton(() => manageLabel, () => true, () => { PlayClick(); PanelVm()?.AlternativeAction(); }));
-            }
+            if (!string.IsNullOrWhiteSpace(_lore))
+                b.AddItem(ControlId.Structural(k + "lore"), GraphNodes.Text(() => _lore));
+            if (!string.IsNullOrWhiteSpace(_desc))
+                b.AddItem(ControlId.Structural(k + "desc"), GraphNodes.Text(() => TextUtil.StripRichText(_desc)));
 
-            string closeLabel = TextUtil.StripRichText(GlobalMapEnterPanel.CloseLabel());
-            list.Add(new ProxyActionButton(() => closeLabel, () => true, () => { PlayClick(); PanelVm()?.Close(); }));
-            return list;
+            // Each action fires the game's button-click sound + the VM method the real OwlcatButton is
+            // wired to (Accept/AlternativeAction/Close) — same behavior as pressing the button (see
+            // GlobalMapEnterMessagePCView), resolving the LIVE VM each press, never a stale capture.
+            b.AddItem(ControlId.Structural(k + "accept"), GraphNodes.Button(
+                () => _acceptLabel, AcceptLive, () => _acceptEnabled, sound: null));
+            if (_hasSettlement)
+                b.AddItem(ControlId.Structural(k + "manage"), GraphNodes.Button(
+                    () => _manageLabel, () => { PlayClick(); PanelVm()?.AlternativeAction(); }, sound: null));
+            b.AddItem(ControlId.Structural(k + "close"), GraphNodes.Button(
+                () => _closeLabel, () => { PlayClick(); PanelVm()?.Close(); }, sound: null));
+            b.PopContext();
         }
 
         // The default button-click sound the OwlcatButton plays on a left-click (UISoundController, exactly as

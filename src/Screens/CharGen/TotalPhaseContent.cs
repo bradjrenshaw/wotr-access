@@ -4,6 +4,7 @@ using Kingmaker.UI.MVVM._VM.CharGen.Phases.Total;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.BAB; // CharInfoBABVM (decompiler-skipped; members reconstructed from its view)
 using WrathAccess.UI;
 using WrathAccess.UI.CharSheet;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.Screens
 {
@@ -62,23 +63,22 @@ namespace WrathAccess.Screens
             BuildDamageReduction();
             BuildEnergyResistance();
 
-            _sink.Build();
+            _sink.Finish();
         }
 
         // Race / gender / alignment and HP — free-form lines, each with the game's tooltip.
         private void BuildSummary()
         {
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             var rga = Phase.RaceGenderAlignment;
             if (rga != null)
             {
-                items.Add(new TextElement(() => rga.RaceValue, tooltip: () => rga.RaceTooltip));
-                items.Add(new TextElement(() => rga.GenderValue, tooltip: () => rga.GenderTooltip));
-                items.Add(new TextElement(() => rga.AlignmentDisplayValue, tooltip: () => rga.AlignmentTooltip));
+                items.Add(GraphNodes.Text(() => rga.RaceValue, () => rga.RaceTooltip));
+                items.Add(GraphNodes.Text(() => rga.GenderValue, () => rga.GenderTooltip));
+                items.Add(GraphNodes.Text(() => rga.AlignmentDisplayValue, () => rga.AlignmentTooltip));
             }
             if (Phase.HitPoints != null)
-                items.Add(new TextElement(() => Labeled((string)S.HP, Phase.HitPoints.HpText.Value),
-                    tooltip: () => Phase.HitPoints.Tooltip.Value));
+                items.Add(GraphNodes.Text(() => Labeled((string)S.HP, Phase.HitPoints.HpText.Value), () => Phase.HitPoints.Tooltip.Value));
             _sink.ListSection((string)S.Summary, items);
         }
 
@@ -108,17 +108,17 @@ namespace WrathAccess.Screens
         // was skipped by the decompiler; its public members (Type, BabValue, Tooltip) come from its view.
         private void BuildAttack()
         {
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             AddBab(items, Phase.MainBAB, (string)S.BAB);
             AddBab(items, Phase.MeleeBAB, (string)S.BABMelee);
             AddBab(items, Phase.RangedBAB, (string)S.BABRanged);
             _sink.ListSection((string)S.Attack, items);
         }
 
-        private void AddBab(List<UIElement> items, CharInfoBABVM bab, string label)
+        private void AddBab(List<NodeVtable> items, CharInfoBABVM bab, string label)
         {
             if (bab == null) return;
-            items.Add(new TextElement(() => label + ", " + BabString(bab), tooltip: () => bab.Tooltip));
+            items.Add(GraphNodes.Text(() => label + ", " + BabString(bab), () => bab.Tooltip));
         }
 
         // Mirrors CharInfoBABView.FillData: first attack always signed; later ones show "-" when <= 0.
@@ -153,11 +153,11 @@ namespace WrathAccess.Screens
         {
             var vms = Phase.Classes?.ClassVMs;
             if (vms == null || vms.Count == 0) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var c in vms)
             {
                 var entry = c;
-                items.Add(new TextElement(() => entry.ClassName + " " + entry.Level, tooltip: () => entry.Tooltip));
+                items.Add(GraphNodes.Text(() => entry.ClassName + " " + entry.Level, () => entry.Tooltip));
             }
             _sink.ListSection((string)S.Class, items);
         }
@@ -168,15 +168,15 @@ namespace WrathAccess.Screens
         {
             var groups = Phase.Abilities?.ShowGroupList;
             if (groups == null) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var group in groups)
             {
                 if (group == null || group.IsEmpty) continue;
-                if (!string.IsNullOrEmpty(group.Label)) items.Add(new TextElement(group.Label, "heading"));
+                if (!string.IsNullOrEmpty(group.Label)) items.Add(GraphNodes.Heading(() => group.Label));
                 foreach (var f in group.FeatureList)
                 {
                     var feat = f;
-                    items.Add(new TextElement(() => FeatureName(feat), tooltip: () => feat.Tooltip));
+                    items.Add(GraphNodes.Text(() => FeatureName(feat), () => feat.Tooltip));
                 }
             }
             _sink.ListSection((string)S.FeaturesAndAbilitites, items);
@@ -188,11 +188,11 @@ namespace WrathAccess.Screens
         {
             var books = Phase.SpellTables?.SpellbookTables;
             if (books == null || books.Count == 0) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var book in books)
             {
                 var b = book;
-                items.Add(new TextElement(() => SpellbookLine(b)));
+                items.Add(GraphNodes.Text(() => SpellbookLine(b)));
             }
             _sink.ListSection((string)S.Spells, items);
         }
@@ -201,11 +201,11 @@ namespace WrathAccess.Screens
         {
             var data = Phase.WeaponProficiency?.Data;
             if (data == null || data.Count == 0) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var e in data)
             {
                 var entry = e;
-                items.Add(new TextElement(() => entry.DisplayName));
+                items.Add(GraphNodes.Text(() => entry.DisplayName));
             }
             _sink.ListSection((string)S.WeaponProficiency, items);
         }
@@ -214,11 +214,11 @@ namespace WrathAccess.Screens
         {
             var data = Phase.DamageReduction?.Data;
             if (data == null || data.Count == 0) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var e in data)
             {
                 var entry = e;
-                items.Add(new TextElement(() => entry.Value + "/" + string.Join(", ", entry.Exceptions.ToArray())));
+                items.Add(GraphNodes.Text(() => entry.Value + "/" + string.Join(", ", entry.Exceptions.ToArray())));
             }
             _sink.ListSection((string)S.DamageReduction, items);
         }
@@ -227,11 +227,11 @@ namespace WrathAccess.Screens
         {
             var data = Phase.EnergyResistance?.Data;
             if (data == null || data.Count == 0) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var e in data)
             {
                 var entry = e;
-                items.Add(new TextElement(() => entry.Immunity ? entry.Type + ", immunity" : entry.Type + " " + entry.Value));
+                items.Add(GraphNodes.Text(() => entry.Immunity ? entry.Type + ", immunity" : entry.Type + " " + entry.Value));
             }
             _sink.ListSection((string)S.EnergyRsistance, items);
         }

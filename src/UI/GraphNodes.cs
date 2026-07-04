@@ -48,6 +48,18 @@ namespace WrathAccess.UI
 
         /// <summary>A plain read-only text line (the modal body, a help paragraph), optionally carrying
         /// a tooltip drill-in on Space (resolved live per press — tooltips-live-not-cached).</summary>
+        /// <summary>A heading line ("<text>, heading") — story titles, grid section heads.</summary>
+        public static NodeVtable Heading(Func<string> text) => new NodeVtable
+        {
+            ControlType = ControlTypes.Text,
+            Announcements = new List<NodeAnnouncement>
+            {
+                LabelPart(text),
+                new NodeAnnouncement(() => Loc.T("role.heading"), kind: AnnouncementKinds.Role),
+            },
+            SearchText = text,
+        };
+
         public static NodeVtable Text(Func<string> text,
             Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> tooltip = null) => new NodeVtable
         {

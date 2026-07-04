@@ -7,6 +7,7 @@ using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.LevelClassScor
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.Attack;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.Martial.Defence;
 using Kingmaker.UI.MVVM._VM.ServiceWindows.CharacterInfo.Sections.NameAndPortrait;
+using WrathAccess.UI.Graph;
 
 namespace WrathAccess.UI.CharSheet
 {
@@ -22,12 +23,11 @@ namespace WrathAccess.UI.CharSheet
         public static void NamePortrait(CharInfoNameAndPortraitVM np, ICharSheetSink sink)
         {
             if (np == null) return;
-            var items = new List<UIElement> { new TextElement(() => Loc.T("char.name", new { value = np.UnitName })) };
+            var items = new List<NodeVtable> { GraphNodes.Text(() => Loc.T("char.name", new { value = np.UnitName })) };
             var mythic = np.MythicName?.Value;
-            if (!string.IsNullOrEmpty(mythic)) items.Add(new TextElement(() => Loc.T("char.mythic", new { value = np.MythicName.Value })));
+            if (!string.IsNullOrEmpty(mythic)) items.Add(GraphNodes.Text(() => Loc.T("char.mythic", new { value = np.MythicName.Value })));
             if (np.HitPoints != null)
-                items.Add(new TextElement(() => Loc.T("char.hit_points", new { value = np.HitPoints.HpText.Value }),
-                    tooltip: () => np.HitPoints.Tooltip.Value));
+                items.Add(GraphNodes.Text(() => Loc.T("char.hit_points", new { value = np.HitPoints.HpText.Value }), () => np.HitPoints.Tooltip.Value));
             sink.ListSection(Loc.T("section.character"), items);
         }
 
@@ -42,27 +42,25 @@ namespace WrathAccess.UI.CharSheet
             var xp = lcs.Experience;
             if (xp != null)
             {
-                var items = new List<UIElement> { new TextElement(() => Loc.T("char.level", new { value = xp.Level })) };
-                items.Add(new TextElement(() => Loc.T("char.experience", new { current = xp.CurrentExp, next = xp.NextLevelExp })));
-                if (xp.NegativeLevels > 0) items.Add(new TextElement(() => Loc.T("char.negative_levels", new { value = xp.NegativeLevels })));
-                if (withLevelUp)
-                    // Same gate (CanLevelup, refreshed per character) and same VM call as the game's
-                    // button; canFocus mirrors the game hiding the button entirely when not pending.
-                    items.Add(new Proxies.ProxyActionButton(
+                var items = new List<NodeVtable> { GraphNodes.Text(() => Loc.T("char.level", new { value = xp.Level })) };
+                items.Add(GraphNodes.Text(() => Loc.T("char.experience", new { current = xp.CurrentExp, next = xp.NextLevelExp })));
+                if (xp.NegativeLevels > 0) items.Add(GraphNodes.Text(() => Loc.T("char.negative_levels", new { value = xp.NegativeLevels })));
+                if (withLevelUp && xp.CanLevelup)
+                    // Same gate (CanLevelup, re-read every render — the button appears/disappears live,
+                    // mirroring the game hiding it when no level-up is pending) and same VM call.
+                    items.Add(GraphNodes.Button(
                         () => TextUtil.StripRichText(UIStrings.Instance.InGameMenuTexts.LevelUpText),
-                        enabled: null,
-                        activate: () => xp.LevelUp(),
-                        canFocus: () => xp.CanLevelup));
+                        () => xp.LevelUp()));
                 sink.ListSection(Loc.T("section.level"), items);
             }
 
             var rga = lcs.RaceGenderAlignment;
             if (rga != null)
-                sink.ListSection(Loc.T("section.race"), new List<UIElement>
+                sink.ListSection(Loc.T("section.race"), new List<NodeVtable>
                 {
-                    new TextElement(() => Loc.T("char.race", new { value = rga.RaceValue }), tooltip: () => rga.RaceTooltip),
-                    new TextElement(() => Loc.T("char.gender", new { value = rga.GenderValue })),
-                    new TextElement(() => Loc.T("char.alignment", new { value = rga.AlignmentDisplayValue }), tooltip: () => rga.AlignmentTooltip),
+                    GraphNodes.Text(() => Loc.T("char.race", new { value = rga.RaceValue }), () => rga.RaceTooltip),
+                    GraphNodes.Text(() => Loc.T("char.gender", new { value = rga.GenderValue })),
+                    GraphNodes.Text(() => Loc.T("char.alignment", new { value = rga.AlignmentDisplayValue }), () => rga.AlignmentTooltip),
                 });
 
             if (lcs.AbilityScores?.AbilityScores != null)
@@ -75,8 +73,8 @@ namespace WrathAccess.UI.CharSheet
             var classes = lcs.Classes?.ClassVMs;
             if (classes != null && classes.Count > 0)
             {
-                var items = new List<UIElement>();
-                foreach (var c in classes) { var cc = c; items.Add(new TextElement(() => Loc.T("char.class_level", new { name = cc.ClassName, level = cc.Level }), tooltip: () => cc.Tooltip)); }
+                var items = new List<NodeVtable>();
+                foreach (var c in classes) { var cc = c; items.Add(GraphNodes.Text(() => Loc.T("char.class_level", new { name = cc.ClassName, level = cc.Level }), () => cc.Tooltip)); }
                 sink.ListSection(Loc.T("section.classes"), items);
             }
         }
@@ -90,7 +88,7 @@ namespace WrathAccess.UI.CharSheet
             if (atk.AdditionalAttackEntities != null)
                 foreach (var a in atk.AdditionalAttackEntities) AddAttackRow(g, a);
             if (g.Rows.Count > 0) sink.StatGroup(g);
-            else sink.ListSection(Loc.T("section.attacks"), new[] { new TextElement(() => Loc.T("char.no_attacks")) });
+            else sink.ListSection(Loc.T("section.attacks"), new[] { GraphNodes.Text(() => Loc.T("char.no_attacks")) });
         }
 
         private static void AddAttackRow(StatGroup g, CharInfoAttackEntityVM a)

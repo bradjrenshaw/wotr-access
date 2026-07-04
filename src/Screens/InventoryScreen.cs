@@ -86,7 +86,7 @@ namespace WrathAccess.Screens
             CharSheetBlocks.LevelClassScores(vm.LevelClassScoresVM, sink);
             CharSheetBlocks.Attacks(vm.AttacksBlockVM, sink);
             CharSheetBlocks.Defence(vm.DefenceBlockVM, sink);
-            sink.Build();
+            sink.Finish();
 
             BuildEquipment(b, vm.DollVM, uk);
             BuildLoad(b, vm.StashVM, k);

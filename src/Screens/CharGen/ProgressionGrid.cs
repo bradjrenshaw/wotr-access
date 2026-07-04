@@ -55,61 +55,29 @@ namespace WrathAccess.Screens
 
         // ---- the render target: one grid, two presentations ----
 
-        // The block/row emission surface both outputs implement. Rows are SPARSE: a null cell means
-        // "nothing at that level" — not landable (the graph target skips it; the FlowSheet leaves it
-        // non-visitable).
+        // The block/row emission surface. Rows are SPARSE: a null cell means "nothing at that
+        // level" — not landable (the target skips it).
         private interface ITarget
         {
-            void Heading(UIElement el);
+            void Heading(NodeVtable vt);
             void Table(string name, string[] cols);
-            void Row(UIElement head, UIElement[] cells);
-        }
-
-        private sealed class FlowTarget : ITarget
-        {
-            public readonly FlowSheet Sheet;
-            private TableRegion _region;
-            public FlowTarget(FlowSheet sheet) { Sheet = sheet; }
-            public void Heading(UIElement el) => Sheet.List(null).Item(el);
-            public void Table(string name, string[] cols) => _region = Sheet.Table(name ?? "", cols);
-            public void Row(UIElement head, UIElement[] cells) => _region.Row(head, cells);
+            void Row(NodeVtable head, NodeVtable[] cells);
         }
 
         private sealed class GraphTarget : ITarget
         {
             private readonly GraphSheet _sheet;
-            private string[] _cols;
             public GraphTarget(GraphSheet sheet) { _sheet = sheet; }
-            public void Heading(UIElement el) => _sheet.Line(Wrap(el));
-            public void Table(string name, string[] cols) { _cols = cols; _sheet.Region(name ?? "", cols); }
-            public void Row(UIElement head, UIElement[] cells)
+            public void Heading(NodeVtable vt) => _sheet.Line(vt);
+            public void Table(string name, string[] cols) => _sheet.Region(name ?? "", cols);
+            public void Row(NodeVtable head, NodeVtable[] cells)
             {
                 var sparse = new List<KeyValuePair<int, NodeVtable>>();
                 if (cells != null)
                     for (int i = 0; i < cells.Length; i++)
-                        if (cells[i] != null) sparse.Add(new KeyValuePair<int, NodeVtable>(i + 1, Wrap(cells[i])));
-                _sheet.RowAt(Wrap(head), null, sparse);
+                        if (cells[i] != null) sparse.Add(new KeyValuePair<int, NodeVtable>(i + 1, cells[i]));
+                _sheet.RowAt(head, null, sparse);
             }
-
-            // Adapter-style wrap: the element's composed message + its drill-in on Space (dies when
-            // the grid's cell builders are re-typed to vtables with the rest of the element layer).
-            private static NodeVtable Wrap(UIElement e) => new NodeVtable
-            {
-                ControlType = ControlTypes.Text,
-                Announcements = new[] { new NodeAnnouncement(() => e.GetFocusMessage().Resolve()) },
-                SearchText = e.GetLabelText,
-                OnTooltip = () => TooltipScreen.FollowElement(e),
-            };
-        }
-
-        /// <summary>Render as a retained FlowSheet (adapter consumers), or null when empty.</summary>
-        public static FlowSheet Build(UnitProgressionVM prog, BlueprintCharacterClass selectedClass,
-                                      Options options = null)
-        {
-            var target = new FlowTarget(new FlowSheet(Loc.T("chargen.progression")));
-            if (!Render(target, prog, selectedClass, options)) return null;
-            target.Sheet.Reflow();
-            return target.Sheet.RowCount > 0 ? target.Sheet : null;
         }
 
         /// <summary>Render as graph nodes under <paramref name="keyPrefix"/> (graph-native screens).
@@ -205,7 +173,7 @@ namespace WrathAccess.Screens
             var head = cls.Name ?? "Class";
             if (cls.Level != null) head += ", level " + cls.Level.Value;
             if (!string.IsNullOrEmpty(cls.HitPointsPerLevel)) head += ", hit points per level " + cls.HitPointsPerLevel;
-            t.Heading(new TextElement(head, "heading"));
+            t.Heading(GraphNodes.Heading(() => head));
 
             NewBlock(t, prefix + "Statistics", levels);
             AddStatRows(t, cls, levels);
@@ -257,13 +225,13 @@ namespace WrathAccess.Screens
             IList<LevelProgressionEntryVM> levels, string glossaryKey)
         {
             if (prog == null) return;
-            var cells = new List<UIElement>(levels.Count);
+            var cells = new List<NodeVtable>(levels.Count);
             foreach (var lv in levels)
             {
-                int b = prog.GetBonus(lv.Level);
-                cells.Add(new TextElement(b >= 0 ? "+" + b : b.ToString()));
+                int bonus = prog.GetBonus(lv.Level); // capture per level for the closure
+                cells.Add(GraphNodes.Text(() => bonus >= 0 ? "+" + bonus : bonus.ToString()));
             }
-            t.Row(new TextElement(name, null, () => new TooltipTemplateGlossary(glossaryKey)), cells.ToArray());
+            t.Row(GraphNodes.Text(() => name, () => new TooltipTemplateGlossary(glossaryKey)), cells.ToArray());
         }
 
         // One "Spells" row mirroring the game: a cell at each caster level showing the highest spell
@@ -272,18 +240,19 @@ namespace WrathAccess.Screens
         private static void AddSpellRow(ITarget t, IList<SpellbookProgressionChupaChupsVM> markers,
             IList<LevelProgressionEntryVM> levels)
         {
-            var cellAt = new Dictionary<int, UIElement>();
+            var cellAt = new Dictionary<int, NodeVtable>();
             int runningMax = 0;
             foreach (var ch in markers) // ordered by character level
             {
                 if (ch == null) continue;
                 if (ch.SpellLevel.HasValue) runningMax = ch.SpellLevel.Value;
-                cellAt[ch.Level] = new TextElement(Ordinal(runningMax) + "-level spells", null, () => ch.Tooltip);
+                var chc = ch; var max = runningMax; // capture per marker
+                cellAt[ch.Level] = GraphNodes.Text(() => Ordinal(max) + "-level spells", () => chc.Tooltip);
             }
 
-            var cells = new List<UIElement>(levels.Count);
+            var cells = new List<NodeVtable>(levels.Count);
             foreach (var lv in levels) cells.Add(cellAt.TryGetValue(lv.Level, out var c) ? c : null);
-            t.Row(new TextElement(() => Loc.T("chargen.spells")), cells.ToArray());
+            t.Row(GraphNodes.Text(() => Loc.T("chargen.spells")), cells.ToArray());
         }
 
         private static string Ordinal(int n)
@@ -350,21 +319,21 @@ namespace WrathAccess.Screens
                     else if (header != ch.Name) mixed = true;
                 }
 
-                var cells = new List<UIElement>(levels.Count);
+                var cells = new List<NodeVtable>(levels.Count);
                 foreach (var lv in levels)
                     cells.Add(byLevel.TryGetValue(lv.Level, out var ch) ? Cell(ch) : null);
 
-                t.Row(new TextElement(mixed ? "Features" : (header ?? "Feature")), cells.ToArray());
+                t.Row(GraphNodes.Text(() => mixed ? "Features" : (header ?? "Feature")), cells.ToArray());
             }
         }
 
-        private static UIElement Cell(FeatureProgressionChupaChupsVM ch)
+        private static NodeVtable Cell(FeatureProgressionChupaChupsVM ch)
         {
             var text = ch.Name ?? "";
             if (ch.HasRank && !string.IsNullOrEmpty(ch.Rank)) text += " " + ch.Rank;
             if (ch.DifType == ClassArchetypeDifType.Added) text += " (added)";
             else if (ch.DifType == ClassArchetypeDifType.Removed) text += " (removed)";
-            return new TextElement(text, null, () => ch.Tooltip); // Space drills into the feature write-up
+            return GraphNodes.Text(() => text, () => ch.Tooltip); // Space drills into the feature write-up
         }
     }
 }

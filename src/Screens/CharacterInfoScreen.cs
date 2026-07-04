@@ -105,7 +105,7 @@ namespace WrathAccess.Screens
                 if (block is UnitProgressionVM prog) progression = prog;
                 else RenderBlock(type, block, sink);
             }
-            sink.Build();
+            sink.Finish();
 
             if (progression != null)
             {
@@ -144,7 +144,7 @@ namespace WrathAccess.Screens
                 case CharInfoMartialVM mt: RenderMartial(mt, sink); break;
                 case CharInfoAlignmentVM al: RenderAlignment(type, al, sink); break;
                 case CharInfoStoriesVM st: RenderStories(st, sink); break;
-                default: sink.ListSection(type.ToString(), new[] { new TextElement(() => Loc.T("char.not_shown")) }); break;
+                default: sink.ListSection(type.ToString(), new[] { GraphNodes.Text(() => Loc.T("char.not_shown")) }); break;
             }
         }
 
@@ -156,21 +156,21 @@ namespace WrathAccess.Screens
         {
             if (type == CharInfoComponentType.AlignmentWheel)
             {
-                var items = new List<UIElement>();
-                items.Add(new TextElement(() => Loc.T("char.alignment", new { value = AlignmentText(al) })));
-                if (!string.IsNullOrEmpty(al.MythicLevel)) items.Add(new TextElement(() => Loc.T("char.mythic", new { value = al.MythicLevel })));
+                var items = new List<NodeVtable>();
+                items.Add(GraphNodes.Text(() => Loc.T("char.alignment", new { value = AlignmentText(al) })));
+                if (!string.IsNullOrEmpty(al.MythicLevel)) items.Add(GraphNodes.Text(() => Loc.T("char.mythic", new { value = al.MythicLevel })));
                 sink.ListSection("Alignment", items);
                 return;
             }
             // History (AlignmentHistory / BiographyAlignmentHistory).
             var hist = al.AlignmentHistory;
             if (hist == null || hist.Count == 0) return;
-            var lines = new List<UIElement>();
+            var lines = new List<NodeVtable>();
             string shifted = (string)S.AlignmentShifted;
             foreach (var rec in hist)
             {
                 var r = rec;
-                lines.Add(new TextElement(() => shifted + " " + (string)UIUtility.GetAlignmentShiftDirectionText(r.Direction)
+                lines.Add(GraphNodes.Text(() => shifted + " " + (string)UIUtility.GetAlignmentShiftDirectionText(r.Direction)
                     + (string.IsNullOrEmpty(r.Description) ? "" : ": " + r.Description)));
             }
             sink.ListSection((string)S.History, lines);
@@ -183,12 +183,12 @@ namespace WrathAccess.Screens
         private static void RenderStories(CharInfoStoriesVM st, ICharSheetSink sink)
         {
             if (st.Stories == null || st.Stories.Count == 0) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var story in st.Stories)
             {
                 var s = story;
-                if (!string.IsNullOrEmpty(s.Title)) items.Add(new TextElement(s.Title, "heading"));
-                if (!string.IsNullOrEmpty(s.StoryText)) items.Add(new TextElement(() => s.StoryText));
+                if (!string.IsNullOrEmpty(s.Title)) items.Add(GraphNodes.Heading(() => s.Title));
+                if (!string.IsNullOrEmpty(s.StoryText)) items.Add(GraphNodes.Text(() => s.StoryText));
             }
             if (items.Count > 0) sink.ListSection("Stories", items);
         }
@@ -209,7 +209,7 @@ namespace WrathAccess.Screens
         // Damage Reduction, Energy Resistance. BAB/proficiency/DR/resistance reuse the chargen patterns.
         private static void RenderMartial(CharInfoMartialVM m, ICharSheetSink sink)
         {
-            var bab = new List<UIElement>();
+            var bab = new List<NodeVtable>();
             AddBab(bab, m.MainBab, (string)S.BAB);
             AddBab(bab, m.MeleeBab, (string)S.BABMelee);
             AddBab(bab, m.RangedBab, (string)S.BABRanged);
@@ -235,32 +235,32 @@ namespace WrathAccess.Screens
             var wp = m.WeaponProficiency?.Data;
             if (wp != null && wp.Count > 0)
             {
-                var items = new List<UIElement>();
-                foreach (var e in wp) { var entry = e; items.Add(new TextElement(() => entry.DisplayName, tooltip: () => new TooltipTemplateGlossary("WeaponProficiency"))); }
+                var items = new List<NodeVtable>();
+                foreach (var e in wp) { var entry = e; items.Add(GraphNodes.Text(() => entry.DisplayName, () => new TooltipTemplateGlossary("WeaponProficiency"))); }
                 sink.ListSection((string)S.WeaponProficiency, items);
             }
 
             var dr = m.DamageReduction?.Data;
             if (dr != null && dr.Count > 0)
             {
-                var items = new List<UIElement>();
-                foreach (var e in dr) { var entry = e; items.Add(new TextElement(() => entry.Value + "/" + string.Join(", ", entry.Exceptions.ToArray()), tooltip: () => new TooltipTemplateGlossary("DR"))); }
+                var items = new List<NodeVtable>();
+                foreach (var e in dr) { var entry = e; items.Add(GraphNodes.Text(() => entry.Value + "/" + string.Join(", ", entry.Exceptions.ToArray()), () => new TooltipTemplateGlossary("DR"))); }
                 sink.ListSection((string)S.DamageReduction, items);
             }
 
             var er = m.EnergyResistance?.Data;
             if (er != null && er.Count > 0)
             {
-                var items = new List<UIElement>();
-                foreach (var e in er) { var entry = e; items.Add(new TextElement(() => entry.Immunity ? entry.Type + ", immunity" : entry.Type + " " + entry.Value, tooltip: () => new TooltipTemplateGlossary("ER"))); }
+                var items = new List<NodeVtable>();
+                foreach (var e in er) { var entry = e; items.Add(GraphNodes.Text(() => entry.Immunity ? entry.Type + ", immunity" : entry.Type + " " + entry.Value, () => new TooltipTemplateGlossary("ER"))); }
                 sink.ListSection((string)S.EnergyRsistance, items);
             }
         }
 
-        private static void AddBab(List<UIElement> items, CharInfoBABVM bab, string label)
+        private static void AddBab(List<NodeVtable> items, CharInfoBABVM bab, string label)
         {
             if (bab == null) return;
-            items.Add(new TextElement(() => label + ", " + BabString(bab), tooltip: () => bab.Tooltip));
+            items.Add(GraphNodes.Text(() => label + ", " + BabString(bab), () => bab.Tooltip));
         }
 
         // Mirrors CharInfoBABView.FillData: first attack always signed; later ones show "-" when <= 0.
@@ -280,15 +280,15 @@ namespace WrathAccess.Screens
         private static void RenderFeatureGroups(List<CharInfoFeatureGroupVM> groups, string label, ICharSheetSink sink)
         {
             if (groups == null) return;
-            var items = new List<UIElement>();
+            var items = new List<NodeVtable>();
             foreach (var group in groups)
             {
                 if (group == null || group.IsEmpty) continue;
-                if (!string.IsNullOrEmpty(group.Label)) items.Add(new TextElement(group.Label, "heading"));
+                if (!string.IsNullOrEmpty(group.Label)) items.Add(GraphNodes.Heading(() => group.Label));
                 foreach (var f in group.FeatureList)
                 {
                     var feat = f;
-                    items.Add(new TextElement(() => FeatureName(feat), tooltip: () => feat.Tooltip));
+                    items.Add(GraphNodes.Text(() => FeatureName(feat), () => feat.Tooltip));
                 }
             }
             if (items.Count > 0) sink.ListSection(label, items);

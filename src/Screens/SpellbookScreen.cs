@@ -124,7 +124,7 @@ namespace WrathAccess.Screens
                 g.Row(CharInfoStatRows.Value(ch.SpellPenetration, signed: true));
                 g.Row(CharInfoStatRows.Value(ch.SpellFailureChance, signed: false));
                 sink.StatGroup(g);
-                sink.Build();
+                sink.Finish();
             }
 
             // Spell-level switcher (only levels that have spells).

@@ -8,10 +8,7 @@ namespace WrathAccess.UI.CharSheet
     /// The graph-native char-sheet sink: presents the shared blocks (<see cref="CharSheetBlocks"/>) as
     /// ONE <see cref="GraphSheet"/> stop — each stat group / list section a region (Ctrl+arrow jump
     /// target), rows read whole with their values as parts, Right stepping the value columns under
-    /// their headers, Space following the stat's drill-in tooltip. The graph twin of
-    /// <see cref="FlowSheetCharSheetSink"/> (which remains for the adapter consumers until they migrate).
-    /// The element-typed <see cref="ICharSheetSink.ListSection"/> items are wrapped adapter-style
-    /// (composed message + tooltip drill-in via <see cref="Screens.TooltipScreen.FollowElement"/>).
+    /// their headers, Space following the stat's drill-in tooltip.
     /// </summary>
     public sealed class GraphCharSheetSink : ICharSheetSink
     {
@@ -56,7 +53,7 @@ namespace WrathAccess.UI.CharSheet
             }
         }
 
-        public void ListSection(string label, IEnumerable<UIElement> items)
+        public void ListSection(string label, IEnumerable<NodeVtable> items)
         {
             if (items == null) return;
             bool open = false;
@@ -64,23 +61,11 @@ namespace WrathAccess.UI.CharSheet
             {
                 if (it == null) continue;
                 if (!open) { _sheet.Region(label); open = true; } // opened lazily → empty sections add nothing
-                var e = it;
-                _sheet.Line(new NodeVtable
-                {
-                    ControlType = ControlTypes.Text,
-                    Announcements = new[] { new NodeAnnouncement(() => e.GetFocusMessage().Resolve()) },
-                    SearchText = e.GetLabelText,
-                    OnTooltip = () => Screens.TooltipScreen.FollowElement(e),
-                });
+                _sheet.Line(it);
             }
         }
 
-        /// <summary>Finish the sheet. (The interface's element-returning Build is unused here.)</summary>
-        public UIElement Build()
-        {
-            _sheet.Finish();
-            return null;
-        }
+        public void Finish() => _sheet.Finish();
 
         private static NodeVtable StatVt(List<NodeAnnouncement> parts,
             Func<Owlcat.Runtime.UI.Tooltips.TooltipBaseTemplate> tooltip)

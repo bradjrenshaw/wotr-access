@@ -8,35 +8,41 @@ using UnityEngine;
 namespace WrathAccess.UI.Tooltips
 {
     /// <summary>
-    /// Converts one game tooltip-brick VM into nav <see cref="UIElement"/>s. Each brick type has
-    /// its own renderer (registered in <see cref="TooltipBrickRegistry"/>), keeping its logic in
-    /// one place. Two forms: <c>Expanded</c> (granular — e.g. one line per skill) and <c>Flat</c>
-    /// (condensed — e.g. all skills in a single line); the caller picks per context. Flat defaults
-    /// to expanded, so single-element bricks only implement one method.
+    /// One read-out line of a rendered tooltip brick — the plain carrier the renderers emit and the
+    /// flow builder turns into graph nodes. <see cref="Text"/> is RAW game text (markup intact — the
+    /// drill-in link extractor needs the &lt;link&gt; tags; speech strips it); <see cref="Suffix"/> is an
+    /// already-localized read-out tail ("heading level 2") outside the searchable text;
+    /// <see cref="DrillIn"/> is the line's lazy nested tooltip (a feature write-up, a stat breakdown),
+    /// resolved live on Space — never a cached template.
+    /// </summary>
+    public sealed class BrickLine
+    {
+        public readonly string Text;
+        public readonly string Suffix;
+        public readonly Func<TooltipBaseTemplate> DrillIn;
+
+        public BrickLine(string text, Func<TooltipBaseTemplate> drillIn = null, string suffix = null)
+        {
+            Text = text;
+            DrillIn = drillIn;
+            Suffix = suffix;
+        }
+
+        public bool IsEmpty => string.IsNullOrWhiteSpace(Text);
+    }
+
+    /// <summary>
+    /// Converts one game tooltip-brick VM into <see cref="BrickLine"/>s. Each brick type has its own
+    /// renderer (registered in <see cref="TooltipBrickRegistry"/>), keeping its logic in one place.
+    /// Two forms: <c>Expanded</c> (granular — e.g. one line per skill) and <c>Flat</c> (condensed —
+    /// e.g. all skills in a single line); the caller picks per context. Flat defaults to expanded, so
+    /// single-line bricks only implement one method.
     /// </summary>
     public abstract class TooltipBrickRenderer
     {
         public abstract Type BrickType { get; }
-        public abstract IEnumerable<UIElement> GetExpandedElements(TooltipBaseBrickVM vm);
-        public abstract IEnumerable<UIElement> GetFlatElements(TooltipBaseBrickVM vm);
-
-        /// <summary>
-        /// The tree nodes for this brick (the new tooltip model). Default bridges the legacy element
-        /// output — each element becomes a leaf carrying its text + any drill-in tooltip — so a
-        /// renderer works in the tree before it's converted. Override to emit real structure (a group
-        /// with children, a row node, a feature node with a lazy write-up, …).
-        /// </summary>
-        public virtual IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-        {
-            foreach (var el in GetExpandedElements(vm))
-            {
-                if (el == null) continue;
-                var text = el.GetLabelText();
-                if (string.IsNullOrWhiteSpace(text)) continue;
-                var element = el; // capture for the live drill-in factory
-                yield return TooltipNode.Leaf(text, drillIn: element.GetTooltipTemplate);
-            }
-        }
+        public abstract IEnumerable<BrickLine> GetExpandedLines(TooltipBaseBrickVM vm);
+        public abstract IEnumerable<BrickLine> GetFlatLines(TooltipBaseBrickVM vm);
 
         // ---- shared formatting helpers ----
 
@@ -63,35 +69,22 @@ namespace WrathAccess.UI.Tooltips
             return name + ": " + val;
         }
 
-        protected static IEnumerable<UIElement> One(string text, Func<TooltipBaseTemplate> tooltip = null)
+        protected static IEnumerable<BrickLine> One(string text, Func<TooltipBaseTemplate> tooltip = null)
         {
-            yield return new TextElement(text, null, tooltip);
+            yield return new BrickLine(text, tooltip);
         }
 
-        protected static readonly IEnumerable<UIElement> None = Array.Empty<UIElement>();
-
-        /// <summary>One leaf node per non-empty line of <paramref name="text"/> — game text bricks
-        /// often pack a list (e.g. class skills) into a single brick separated by newlines, which a
-        /// single node would flatten into one spoken run.</summary>
-        protected static IEnumerable<TooltipNode> Lines(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) yield break;
-            foreach (var part in text.Split('\n'))
-            {
-                var line = part.Trim();
-                if (line.Length > 0) yield return TooltipNode.Leaf(line);
-            }
-        }
+        protected static readonly IEnumerable<BrickLine> None = Array.Empty<BrickLine>();
     }
 
     /// <summary>Typed base: subclasses read the concrete VM without casting.</summary>
     public abstract class TooltipBrickRenderer<TVM> : TooltipBrickRenderer where TVM : TooltipBaseBrickVM
     {
         public sealed override Type BrickType => typeof(TVM);
-        public sealed override IEnumerable<UIElement> GetExpandedElements(TooltipBaseBrickVM vm) => GetExpandedElements((TVM)vm);
-        public sealed override IEnumerable<UIElement> GetFlatElements(TooltipBaseBrickVM vm) => GetFlatElements((TVM)vm);
+        public sealed override IEnumerable<BrickLine> GetExpandedLines(TooltipBaseBrickVM vm) => GetExpandedLines((TVM)vm);
+        public sealed override IEnumerable<BrickLine> GetFlatLines(TooltipBaseBrickVM vm) => GetFlatLines((TVM)vm);
 
-        public abstract IEnumerable<UIElement> GetExpandedElements(TVM vm);
-        public virtual IEnumerable<UIElement> GetFlatElements(TVM vm) => GetExpandedElements(vm);
+        public abstract IEnumerable<BrickLine> GetExpandedLines(TVM vm);
+        public virtual IEnumerable<BrickLine> GetFlatLines(TVM vm) => GetExpandedLines(vm);
     }
 }

@@ -6,60 +6,45 @@ using Owlcat.Runtime.UI.Tooltips;
 namespace WrathAccess.UI.Tooltips
 {
     /// <summary>
-    /// Renders a game <see cref="TooltipBaseTemplate"/> into a <see cref="FlowSheet"/> — the DOCUMENT
-    /// model. A template is a linear brick stream (effectively an HTML page: headings, paragraphs,
-    /// label/value rows, tables, inline links), so we lay it out flat in ONE region:
-    ///  • a <see cref="TooltipBrickTitleVM"/> becomes an inline HEADING ELEMENT — a text row read as
+    /// Renders a game <see cref="TooltipBaseTemplate"/> into graph nodes — the DOCUMENT model. A
+    /// template is a linear brick stream (effectively an HTML page: headings, paragraphs, label/value
+    /// rows, tables, inline links), so we lay it out flat:
+    ///  • a <see cref="TooltipBrickTitleVM"/> becomes an inline HEADING row — read as
     ///    "&lt;title&gt;, heading level N" (N from its H1–H6 <see cref="TooltipTitleType"/>). It does NOT
     ///    start a group: heading-driven sectioning grouped bricks illogically (e.g. a spell's description
-    ///    landing inside its "Descriptors" section), so headings are now just markers in the flat stream;
-    ///  • every other brick contributes its renderer's elements as rows;
-    ///  • plain (link-free) multi-line text — a class's skill list packed into one brick — splits into
-    ///    one row per line so each reads on its own.
-    /// Drill-in rides each row element's own <see cref="UIElement.GetTooltipTemplate"/>: Space FOLLOWS
-    /// it to a new page (the <see cref="WrathAccess.Screens.TooltipScreen"/> stack), nothing expands
-    /// inline — which is why the old tree's repeating-headers / cycle guards are gone. Read at
+    ///    landing inside its "Descriptors" section), so headings are just markers in the flat stream;
+    ///  • every other brick contributes its renderer's <see cref="BrickLine"/>s as rows;
+    ///  • plain (drill-in-free) multi-line text — a class's skill list packed into one brick — splits
+    ///    into one row per line so each reads on its own.
+    /// Space FOLLOWS each row's drill-ins to a new page (the <see cref="WrathAccess.Screens.TooltipScreen"/>
+    /// stack): the row's own nested template and/or its inline glossary links, resolved LIVE. Read at
     /// <see cref="TooltipTemplateType.Info"/> (the larger panel form).
     /// </summary>
     public static class TooltipFlowBuilder
     {
+        /// <summary>Emit the document's rows as text nodes under <paramref name="keyPrefix"/>-indexed
+        /// keys. Returns the row count.</summary>
         /// <param name="includeEmptyNotice">When the template yields no rows, add a single
-        /// "No tooltip information" row (true, for the standalone reader where Space must show
-        /// something) or leave the sheet empty (false, for embedded detail panels that just want
-        /// nothing — the caller checks <see cref="FlowSheet.RowCount"/> and skips adding it).</param>
-        public static FlowSheet Build(TooltipBaseTemplate template,
-            TooltipTemplateType type = TooltipTemplateType.Info, bool includeEmptyNotice = true)
-        {
-            var sheet = new FlowSheet();
-            var current = sheet.List(null); // ONE flat region holds the whole document (headings inline)
-            int rows = 0;
-            foreach (var el in Rows(template, type)) { current.Item(el); rows++; }
-            if (rows == 0 && includeEmptyNotice)
-                sheet.List(null).Item(new TextElement(() => Loc.T("tooltip.empty")));
-            sheet.Reflow();
-            return sheet;
-        }
-
-        /// <summary>The GRAPH twin: emit the document's rows as text nodes under
-        /// <paramref name="keyPrefix"/>-indexed keys — same layout as <see cref="Build"/>, with Space
-        /// following each row's own drill-in (template and/or inline glossary links) via
-        /// <see cref="WrathAccess.Screens.TooltipScreen.FollowElement"/>. Returns the row count.</summary>
+        /// "No tooltip information" row (true, for standalone pages where Space must show something)
+        /// or emit nothing (false, for embedded detail panels).</param>
         public static int Emit(WrathAccess.UI.Graph.GraphBuilder b, string keyPrefix,
             TooltipBaseTemplate template, TooltipTemplateType type = TooltipTemplateType.Info,
             bool includeEmptyNotice = true)
         {
             int i = 0;
-            foreach (var el in Rows(template, type))
+            foreach (var row in Rows(template, type))
             {
-                var e = el;
+                var line = row;
                 b.AddItem(WrathAccess.UI.Graph.ControlId.Structural(keyPrefix + "r" + i), new WrathAccess.UI.Graph.NodeVtable
                 {
                     ControlType = ControlTypes.Text,
-                    Announcements = new[] { new WrathAccess.UI.Graph.NodeAnnouncement(() => e.GetFocusMessage().Resolve()) },
-                    SearchText = e.GetLabelText,
-                    // Every row offers Space: the handler resolves the drill targets LIVE (template +
-                    // inline links) and speaks "no tooltip" when there are none — the old reader's UX.
-                    OnTooltip = () => WrathAccess.Screens.TooltipScreen.FollowElement(e),
+                    Announcements = new[] { new WrathAccess.UI.Graph.NodeAnnouncement(() => Speech(line)) },
+                    SearchText = () => TextUtil.StripRichText(line.Text),
+                    // Every row offers Space: the handler resolves the drill targets LIVE (the line's own
+                    // template + inline glossary links from the RAW text) and speaks "no tooltip" when
+                    // there are none — the reader's UX.
+                    OnTooltip = () => WrathAccess.Screens.TooltipScreen.FollowLinks(
+                        line.Text, null, line.DrillIn != null ? line.DrillIn() : null),
                 });
                 i++;
             }
@@ -72,9 +57,16 @@ namespace WrathAccess.UI.Tooltips
             return i;
         }
 
-        // The document's rows, flat: headings inline, each brick's renderer elements, plain multi-line
-        // text split one row per line (each reads on its own); link/label rows keep their drill-ins.
-        private static IEnumerable<UIElement> Rows(TooltipBaseTemplate template, TooltipTemplateType type)
+        // What a row speaks: the markup-stripped text, plus the already-localized suffix (heading rank).
+        private static string Speech(BrickLine line)
+        {
+            var text = TextUtil.StripRichText(line.Text);
+            return string.IsNullOrEmpty(line.Suffix) ? text : text + ", " + line.Suffix;
+        }
+
+        // The document's rows, flat: headings inline, each brick's renderer lines, plain drill-in-free
+        // multi-line text split one row per line (each reads on its own).
+        private static IEnumerable<BrickLine> Rows(TooltipBaseTemplate template, TooltipTemplateType type)
         {
             if (template == null) yield break;
             Prepare(template, type);
@@ -85,30 +77,26 @@ namespace WrathAccess.UI.Tooltips
 
                 if (vm is TooltipBrickTitleVM title)
                 {
-                    // Inline heading element (NOT a new section): "<title>, heading level N", N from H1–H6.
+                    // Inline heading row (NOT a new section): "<title>, heading level N", N from H1–H6.
                     if (!string.IsNullOrWhiteSpace(title.Title))
-                        yield return new TextElement(title.Title, "heading_level", null,
-                            new { level = (int)title.Type + 1 });
+                        yield return new BrickLine(title.Title,
+                            suffix: Loc.T("role.heading_level", new { level = (int)title.Type + 1 }));
                     continue;
                 }
 
-                foreach (var el in TooltipBrickRegistry.Elements(vm, expanded: true))
+                foreach (var line in TooltipBrickRegistry.Lines(vm, expanded: true))
                 {
-                    if (el == null || !el.CanFocus) continue;
-                    if (el is TextElement te && !te.HasTooltip)
+                    if (line == null || line.IsEmpty) continue;
+                    if (line.DrillIn == null && line.Text.IndexOf('\n') >= 0)
                     {
-                        var text = te.GetText();
-                        if (!string.IsNullOrEmpty(text) && text.IndexOf('\n') >= 0)
+                        foreach (var part in line.Text.Split('\n'))
                         {
-                            foreach (var part in text.Split('\n'))
-                            {
-                                var line = part.Trim();
-                                if (line.Length > 0) yield return new TextElement(line);
-                            }
-                            continue;
+                            var one = part.Trim();
+                            if (one.Length > 0) yield return new BrickLine(one);
                         }
+                        continue;
                     }
-                    yield return el;
+                    yield return line;
                 }
             }
         }

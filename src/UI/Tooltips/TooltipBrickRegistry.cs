@@ -19,58 +19,19 @@ namespace WrathAccess.UI.Tooltips
 
         public static void Register(TooltipBrickRenderer renderer) => _map[renderer.BrickType] = renderer;
 
-        /// <summary>The nav elements for a brick — expanded (granular) or flat (condensed).</summary>
-        public static IEnumerable<UIElement> Elements(TooltipBaseBrickVM vm, bool expanded)
+        /// <summary>The read-out lines for a brick — expanded (granular) or flat (condensed).</summary>
+        public static IEnumerable<BrickLine> Lines(TooltipBaseBrickVM vm, bool expanded)
         {
-            if (vm == null) return Array.Empty<UIElement>();
+            if (vm == null) return Array.Empty<BrickLine>();
             if (_map.TryGetValue(vm.GetType(), out var renderer))
-                return expanded ? renderer.GetExpandedElements(vm) : renderer.GetFlatElements(vm);
+                return expanded ? renderer.GetExpandedLines(vm) : renderer.GetFlatLines(vm);
 
             if (_loggedUnknown.Add(vm.GetType()))
                 Main.Log?.Log("TooltipBrickRegistry: no renderer for " + vm.GetType().Name + " — reflection fallback.");
             return Fallback(vm);
         }
 
-        /// <summary>The tree nodes for a brick (the new model). Renderer's GetNodes, or a leaf from the
-        /// reflection fallback for unconverted/unknown types.</summary>
-        public static IEnumerable<TooltipNode> Nodes(TooltipBaseBrickVM vm)
-        {
-            if (vm == null) return Array.Empty<TooltipNode>();
-            if (_map.TryGetValue(vm.GetType(), out var renderer))
-                return renderer.GetNodes(vm);
-
-            if (_loggedUnknown.Add(vm.GetType()))
-                Main.Log?.Log("TooltipBrickRegistry: no renderer for " + vm.GetType().Name + " — reflection fallback (node).");
-            return FallbackNodes(vm);
-        }
-
-        // No renderer for this brick → surface it AUDIBLY (annotation "no renderer: <Type>") so an
-        // unhandled brick is obvious while browsing, rather than silently joined-to-one-line or
-        // dropped. Carries whatever string content reflection found (may be nothing).
-        private static IEnumerable<TooltipNode> FallbackNodes(TooltipBaseBrickVM vm)
-        {
-            string type = ShortBrickName(vm.GetType());
-            string content = null;
-            foreach (var el in Fallback(vm))
-            {
-                var t = el.GetLabelText();
-                if (!string.IsNullOrWhiteSpace(t)) { content = t; break; }
-            }
-            yield return string.IsNullOrWhiteSpace(content)
-                ? TooltipNode.Leaf(type, annotation: "no renderer")
-                : TooltipNode.Leaf(content, annotation: "no renderer: " + type);
-        }
-
-        // "TooltipBrickSpellLevelVM" → "SpellLevel" — the readable part for the audible marker.
-        private static string ShortBrickName(Type t)
-        {
-            var n = t.Name;
-            if (n.StartsWith("TooltipBrick")) n = n.Substring("TooltipBrick".Length);
-            if (n.EndsWith("VM")) n = n.Substring(0, n.Length - 2);
-            return n;
-        }
-
-        private static IEnumerable<UIElement> Fallback(TooltipBaseBrickVM vm)
+        private static IEnumerable<BrickLine> Fallback(TooltipBaseBrickVM vm)
         {
             var parts = new List<string>();
             var t = vm.GetType();
@@ -79,7 +40,7 @@ namespace WrathAccess.UI.Tooltips
             foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
                 if (p.PropertyType == typeof(string) && p.GetIndexParameters().Length == 0)
                     try { Add(parts, p.GetValue(vm) as string); } catch { }
-            return parts.Count == 0 ? Array.Empty<UIElement>() : new UIElement[] { new TextElement(string.Join(", ", parts)) };
+            return parts.Count == 0 ? Array.Empty<BrickLine>() : new[] { new BrickLine(string.Join(", ", parts)) };
         }
 
         private static void Add(List<string> parts, string s)

@@ -7,56 +7,31 @@ using Owlcat.Runtime.UI.Tooltips; // TooltipBaseBrickVM
 namespace WrathAccess.UI.Tooltips
 {
     // One renderer per game brick VM type. Register new ones in TooltipBrickRegistry.RegisterDefaults.
-    // Single-element bricks implement only GetExpandedElements (flat falls back to it). Multi-element
-    // bricks override GetFlatElements to condense.
+    // Single-line bricks implement only GetExpandedLines (flat falls back to it). Multi-line bricks
+    // override GetFlatLines to condense.
 
     public sealed class TextBrickRenderer : TooltipBrickRenderer<TooltipBrickTextVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTextVM vm) => One(vm?.Text);
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickTextVM vm) => One(vm?.Text);
 
-        // In the tree, split a multi-line text brick (e.g. the class-skills list, newline-separated)
-        // into one leaf per line instead of a single flattened run.
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm) => Lines((vm as TooltipBrickTextVM)?.Text);
     }
 
     public sealed class ColorizedTextBrickRenderer : TooltipBrickRenderer<TooltipBrickColorizedTextVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickColorizedTextVM vm) => One(vm?.Text);
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickColorizedTextVM vm) => One(vm?.Text);
 
-        // Same as TextBrickRenderer: a multi-line colorized brick (the inspect view packs lists —
-        // e.g. a creature's skills — into one brick separated by newlines) reads as one leaf per
-        // line, not a single run you must sit through.
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm) => Lines((vm as TooltipBrickColorizedTextVM)?.Text);
     }
 
     public sealed class TitleBrickRenderer : TooltipBrickRenderer<TooltipBrickTitleVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTitleVM vm) => One(vm?.Title);
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickTitleVM vm) => One(vm?.Title);
     }
 
     public sealed class DoubleTextBrickRenderer : TooltipBrickRenderer<TooltipBrickDoubleTextVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickDoubleTextVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickDoubleTextVM vm)
             => One(vm == null ? null : Join(vm.LeftLine, vm.RightLine));
 
-        // Tree: a single-line pair stays one joined node (the common "label | value" tooltip row),
-        // but when either side is MULTI-line — the inspect view packs each skills COLUMN into one
-        // side — emit one node per line (left column, then right) so the list reads item by item.
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-        {
-            var v = vm as TooltipBrickDoubleTextVM;
-            if (v == null) yield break;
-            bool multi = (v.LeftLine != null && v.LeftLine.IndexOf('\n') >= 0)
-                || (v.RightLine != null && v.RightLine.IndexOf('\n') >= 0);
-            if (!multi)
-            {
-                var joined = Join(v.LeftLine, v.RightLine);
-                if (!string.IsNullOrWhiteSpace(joined)) yield return TooltipNode.Leaf(joined);
-                yield break;
-            }
-            foreach (var n in Lines(v.LeftLine)) yield return n;
-            foreach (var n in Lines(v.RightLine)) yield return n;
-        }
     }
 
     // Item tooltip footer (weight | cost). The VM is a plain DoubleText subclass — same rendering,
@@ -65,64 +40,52 @@ namespace WrathAccess.UI.Tooltips
     {
         private static readonly DoubleTextBrickRenderer Inner = new DoubleTextBrickRenderer();
 
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickItemFooterVM vm)
-            => Inner.GetExpandedElements(vm);
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickItemFooterVM vm)
+            => Inner.GetExpandedLines(vm);
 
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-            => Inner.GetNodes(vm);
     }
 
     public sealed class TripleTextBrickRenderer : TooltipBrickRenderer<TooltipBrickTripleTextVM>
     {
         // Flat path: all three columns on one line. (Left/Right come from the DoubleTextVM base.)
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTripleTextVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickTripleTextVM vm)
             => One(vm == null ? null : Join(vm.LeftLine, vm.MiddleLine, vm.RightLine));
 
-        // Tree: one node per column, left → middle → right (e.g. per-level saves: Fortitude, Reflex,
-        // Will as three vertical nodes).
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-        {
-            var t = vm as TooltipBrickTripleTextVM;
-            if (t == null) yield break;
-            if (!string.IsNullOrWhiteSpace(t.LeftLine)) yield return TooltipNode.Leaf(t.LeftLine.Trim());
-            if (!string.IsNullOrWhiteSpace(t.MiddleLine)) yield return TooltipNode.Leaf(t.MiddleLine.Trim());
-            if (!string.IsNullOrWhiteSpace(t.RightLine)) yield return TooltipNode.Leaf(t.RightLine.Trim());
-        }
     }
 
     public sealed class IconAndNameBrickRenderer : TooltipBrickRenderer<TooltipBrickIconAndNameVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickIconAndNameVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickIconAndNameVM vm)
             => One(vm?.Line, () => vm?.Tooltip); // icon may carry a nested tooltip → drill-in
     }
 
     public sealed class PortraitAndNameBrickRenderer : TooltipBrickRenderer<TooltipBrickPortraitAndNameVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickPortraitAndNameVM vm) => One(vm?.Line);
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickPortraitAndNameVM vm) => One(vm?.Line);
     }
 
     public sealed class IconNameDescBrickRenderer : TooltipBrickRenderer<TooltipBrickIconNameDescVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickIconNameDescVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickIconNameDescVM vm)
             => One(vm == null ? null : Join(vm.Name, vm.Desc));
     }
 
     public sealed class FeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickFeatureVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickFeatureVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickFeatureVM vm)
             => One(vm?.Name, () => vm?.Tooltip); // full feature/ability writeup on drill-in
     }
 
     public sealed class MultipleFeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickMultipleFeatureVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickMultipleFeatureVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickMultipleFeatureVM vm)
         {
             if (vm?.TooltipBrickFeatures == null) yield break;
             foreach (var f in vm.TooltipBrickFeatures)
-                if (f != null) yield return new TextElement(f.Name, null, () => f.Tooltip);
+                if (f != null) yield return new BrickLine(f.Name, () => f.Tooltip);
         }
 
-        public override IEnumerable<UIElement> GetFlatElements(TooltipBrickMultipleFeatureVM vm)
+        public override IEnumerable<BrickLine> GetFlatLines(TooltipBrickMultipleFeatureVM vm)
             => One(vm?.TooltipBrickFeatures == null ? null
                 : Join(vm.TooltipBrickFeatures.Where(f => f != null).Select(f => f.Name).ToArray()));
     }
@@ -132,166 +95,136 @@ namespace WrathAccess.UI.Tooltips
     // the registry keys on exact type, so it needs its own renderer (it won't reuse FeatureBrick's).
     public sealed class ArchetypeFeatureBrickRenderer : TooltipBrickRenderer<TooltipBrickArchetypeFeatureVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArchetypeFeatureVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickArchetypeFeatureVM vm)
         {
             if (vm == null || string.IsNullOrWhiteSpace(vm.Name)) return None;
-            // Restore the archetype's Added/Removed marker the flow path was dropping (the GetNodes tree
-            // path below still had it) — e.g. "Bombs (removed)" — so archetype changes read in the tooltip.
+            // The archetype's Added/Removed marker — e.g. "Bombs (removed)" — so archetype changes
+            // read in the tooltip.
             string text = vm.Name;
             if (vm.DifType == ClassArchetypeDifType.Added) text += " (" + Loc.T("tooltip.archetype_added") + ")";
             else if (vm.DifType == ClassArchetypeDifType.Removed) text += " (" + Loc.T("tooltip.archetype_removed") + ")";
             return One(text, () => vm.Tooltip);
         }
 
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-        {
-            var f = vm as TooltipBrickArchetypeFeatureVM;
-            if (f == null || string.IsNullOrWhiteSpace(f.Name)) yield break;
-            string anno = f.DifType == ClassArchetypeDifType.Added ? "added"
-                        : f.DifType == ClassArchetypeDifType.Removed ? "removed" : null;
-            yield return TooltipNode.Leaf(f.Name, annotation: anno, drillIn: () => f.Tooltip);
-        }
     }
 
     public sealed class FeatureShortDescriptionBrickRenderer : TooltipBrickRenderer<TooltipBrickFeatureShortDescriptionVM>
     {
         // Name + short desc, with the feature's full write-up as a drill-in (e.g. signature features).
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickFeatureShortDescriptionVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickFeatureShortDescriptionVM vm)
             => One(vm == null ? null : Join(vm.Name, vm.Description), () => vm?.Tooltip);
     }
 
     public sealed class EntityHeaderBrickRenderer : TooltipBrickRenderer<TooltipBrickEntityHeaderVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickEntityHeaderVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickEntityHeaderVM vm)
             => One(vm == null ? null : Join(vm.MainTitle, vm.Title, vm.LeftLabel, vm.RightLabel));
     }
 
     public sealed class IconValueStatBrickRenderer : TooltipBrickRenderer<TooltipBrickIconValueStatVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickIconValueStatVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickIconValueStatVM vm)
             => One(vm == null ? null : Stat(vm.Name, vm.Value, vm.Icon), () => vm?.Tooltip);
     }
 
     public sealed class MultipleIconValueStatBrickRenderer : TooltipBrickRenderer<TooltipBrickMultipleIconValueStatVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickMultipleIconValueStatVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickMultipleIconValueStatVM vm)
         {
             if (vm?.TooltipBrickIconValueStats == null) yield break;
             foreach (var s in vm.TooltipBrickIconValueStats)
-                if (s != null) yield return new TextElement(Stat(s.Name, s.Value, s.Icon), null, () => s.Tooltip);
+                if (s != null) yield return new BrickLine(Stat(s.Name, s.Value, s.Icon), () => s.Tooltip);
         }
 
-        public override IEnumerable<UIElement> GetFlatElements(TooltipBrickMultipleIconValueStatVM vm)
+        public override IEnumerable<BrickLine> GetFlatLines(TooltipBrickMultipleIconValueStatVM vm)
             => One(vm?.TooltipBrickIconValueStats == null ? null
                 : Join(vm.TooltipBrickIconValueStats.Where(s => s != null).Select(s => Stat(s.Name, s.Value, s.Icon)).ToArray()));
     }
 
     public sealed class ValueStatFormulaBrickRenderer : TooltipBrickRenderer<TooltipBrickValueStatFormulaVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickValueStatFormulaVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickValueStatFormulaVM vm)
             => One(vm == null ? null : Stat(vm.Name, vm.Value, null));
     }
 
     public sealed class TwoColumnsStatBrickRenderer : TooltipBrickRenderer<TooltipBrickTwoColumnsStatVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickTwoColumnsStatVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickTwoColumnsStatVM vm)
             => One(vm == null ? null : Join(Stat(vm.NameLeft, vm.ValueLeft, vm.IconLeft), Stat(vm.NameRight, vm.ValueRight, vm.IconRight)));
 
-        // Tree: one node per column so each column's own drill-in tooltip is reachable.
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-        {
-            var v = vm as TooltipBrickTwoColumnsStatVM;
-            if (v == null) yield break;
-            var l = Stat(v.NameLeft, v.ValueLeft, v.IconLeft);
-            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: () => v.TooltipLeft);
-            var r = Stat(v.NameRight, v.ValueRight, v.IconRight);
-            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: () => v.TooltipRight);
-        }
     }
 
     public sealed class ThreeColumnsStatBrickRenderer : TooltipBrickRenderer<TooltipBrickThreeColumnsStatVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickThreeColumnsStatVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickThreeColumnsStatVM vm)
             => One(vm == null ? null : Join(Stat(vm.NameLeft, vm.ValueLeft, vm.IconLeft),
                 Stat(vm.NameCenter, vm.ValueCenter, vm.IconCenter), Stat(vm.NameRight, vm.ValueRight, vm.IconRight)));
 
-        // Tree: one node per column, each carrying its column's drill-in tooltip.
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-        {
-            var v = vm as TooltipBrickThreeColumnsStatVM;
-            if (v == null) yield break;
-            var l = Stat(v.NameLeft, v.ValueLeft, v.IconLeft);
-            if (!string.IsNullOrWhiteSpace(l)) yield return TooltipNode.Leaf(l, drillIn: () => v.TooltipLeft);
-            var c = Stat(v.NameCenter, v.ValueCenter, v.IconCenter);
-            if (!string.IsNullOrWhiteSpace(c)) yield return TooltipNode.Leaf(c, drillIn: () => v.TooltipCenter);
-            var r = Stat(v.NameRight, v.ValueRight, v.IconRight);
-            if (!string.IsNullOrWhiteSpace(r)) yield return TooltipNode.Leaf(r, drillIn: () => v.TooltipRight);
-        }
     }
 
     public sealed class AbilityTargetBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityTargetVM>
     {
-        // Label + text, with its drill-in tooltip (the GetNodes bridge attaches the One()'s tooltip).
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityTargetVM vm)
+        // Label + text, with its drill-in tooltip.
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickAbilityTargetVM vm)
             => One(vm == null ? null : Join(vm.Label, vm.Text), () => vm?.Tooltip);
     }
 
     public sealed class PictureBrickRenderer : TooltipBrickRenderer<TooltipBrickPictureVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickPictureVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickPictureVM vm)
             => One(vm?.Picture != null ? "Image: " + vm.Picture.name : null);
     }
 
     // Composite class build: difficulty, build-balance axes, then the description.
     public sealed class ShortClassDescriptionBrickRenderer : TooltipBrickRenderer<TooltipBrickShortClassDescriptionVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickShortClassDescriptionVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickShortClassDescriptionVM vm)
         {
             if (vm == null) yield break;
 
             var rate = vm.DifficultyRateVM;
             if (rate != null && !string.IsNullOrEmpty(rate.RateName))
-                yield return new TextElement(rate.RateName + ": " + rate.Rate + " of " + rate.MaxRate);
+                yield return new BrickLine(rate.RateName + ": " + rate.Rate + " of " + rate.MaxRate);
 
             var bal = vm.ClassBalanceVM != null ? vm.ClassBalanceVM.ClassBalanceVM : null;
             if (bal != null)
             {
                 string title = !string.IsNullOrEmpty(vm.BuildTitle) ? vm.BuildTitle : "Build balance";
-                yield return new TextElement(title + ": Melee " + bal.Melee.Value
+                yield return new BrickLine(title + ": Melee " + bal.Melee.Value
                     + ", Ranged " + bal.Ranged.Value + ", Defense " + bal.Defense.Value
                     + ", Support " + bal.Support.Value + ", Control " + bal.Control.Value
                     + ", Magic " + bal.Magic.Value);
             }
 
             string desc = vm.ClassDescriptionVM != null ? vm.ClassDescriptionVM.Text : null;
-            if (!string.IsNullOrWhiteSpace(desc)) yield return new TextElement(desc);
+            if (!string.IsNullOrWhiteSpace(desc)) yield return new BrickLine(desc);
         }
     }
 
     public sealed class AbilityScoresBlockBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityScoresBlockVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityScoresBlockVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickAbilityScoresBlockVM vm)
         {
             var stats = vm?.AbilityScoresBlock?.AbilityScores;
             if (stats == null) yield break;
-            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
+            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new BrickLine(line, () => s.Tooltip); }
         }
 
-        public override IEnumerable<UIElement> GetFlatElements(TooltipBrickAbilityScoresBlockVM vm)
+        public override IEnumerable<BrickLine> GetFlatLines(TooltipBrickAbilityScoresBlockVM vm)
             => One(vm?.AbilityScoresBlock?.AbilityScores == null ? null
                 : Join(vm.AbilityScoresBlock.AbilityScores.Select(StatLine).ToArray()));
     }
 
     public sealed class SkillsBrickRenderer : TooltipBrickRenderer<TooltipBrickSkillsVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSkillsVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickSkillsVM vm)
         {
             var stats = vm?.Skills?.Skills;
             if (stats == null) yield break;
-            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
+            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new BrickLine(line, () => s.Tooltip); }
         }
 
-        public override IEnumerable<UIElement> GetFlatElements(TooltipBrickSkillsVM vm)
+        public override IEnumerable<BrickLine> GetFlatLines(TooltipBrickSkillsVM vm)
             => One(vm?.Skills?.Skills == null ? null : Join(vm.Skills.Skills.Select(StatLine).ToArray()));
     }
 
@@ -303,7 +236,7 @@ namespace WrathAccess.UI.Tooltips
         private static readonly string[] Words =
             { "Cantrips", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth" };
 
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSpellTableVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickSpellTableVM vm)
         {
             if (vm?.Values == null) yield break;
             for (int i = 0; i < vm.Values.Count; i++)
@@ -311,7 +244,7 @@ namespace WrathAccess.UI.Tooltips
                 if (string.IsNullOrEmpty(vm.Values[i])) continue; // no spells of this level
                 string label = i < Words.Length ? Words[i] : i.ToString();
                 string value = i == 0 ? "at will" : vm.Values[i]; // cantrips: the infinity sprite → "at will"
-                yield return new TextElement(label + ": " + value);
+                yield return new BrickLine(label + ": " + value);
             }
         }
     }
@@ -321,14 +254,14 @@ namespace WrathAccess.UI.Tooltips
     // with the stat's glossary drill-in; skip the unmodified abilities.
     public sealed class AbilityScoreBonusesBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityScoreBonusesVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityScoreBonusesVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickAbilityScoreBonusesVM vm)
         {
             if (vm?.UIStatBonuses == null) yield break;
             foreach (var s in vm.UIStatBonuses)
             {
                 if (s == null || !s.IsValueEnabled) continue;
                 int v = s.BonusValue;
-                yield return new TextElement(s.DisplayName + ": " + (v >= 0 ? "+" + v : v.ToString()), null, () => s.Tooltip);
+                yield return new BrickLine(s.DisplayName + ": " + (v >= 0 ? "+" + v : v.ToString()), () => s.Tooltip);
             }
         }
     }
@@ -337,13 +270,13 @@ namespace WrathAccess.UI.Tooltips
     // "Strength 13 (met)", "Power Attack (not met)".
     public sealed class PrerequisiteBrickRenderer : TooltipBrickRenderer<TooltipBrickPrerequisiteVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickPrerequisiteVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickPrerequisiteVM vm)
         {
             if (vm?.PrerequisiteEntries == null) yield break;
             foreach (var e in vm.PrerequisiteEntries)
             {
                 if (e == null || string.IsNullOrWhiteSpace(e.Text)) continue;
-                yield return new TextElement(e.Text + (e.Done ? " (met)" : " (not met)"));
+                yield return new BrickLine(e.Text + (e.Done ? " (met)" : " (not met)"));
             }
         }
     }
@@ -351,12 +284,12 @@ namespace WrathAccess.UI.Tooltips
     // Pure layout — nothing to read.
     public sealed class SeparatorBrickRenderer : TooltipBrickRenderer<TooltipBrickSeparatorVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSeparatorVM vm) => None;
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickSeparatorVM vm) => None;
     }
 
     public sealed class SpaceBrickRenderer : TooltipBrickRenderer<TooltipBrickSpaceVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSpaceVM vm) => None;
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickSpaceVM vm) => None;
     }
     // ---- The unit-inspect stat blocks (creature pages / Inspect): each wraps the same CharInfo
     // VMs the character sheet renders — one "Name: Value" line per stat, with the stat's modifier-
@@ -364,47 +297,47 @@ namespace WrathAccess.UI.Tooltips
 
     public sealed class AbilityScoresBrickRenderer : TooltipBrickRenderer<TooltipBrickAbilityScoresVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickAbilityScoresVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickAbilityScoresVM vm)
         {
             var stats = vm?.AbilityScoresBlock?.AbilityScores;
             if (stats == null) yield break;
-            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
+            foreach (var s in stats) { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new BrickLine(line, () => s.Tooltip); }
         }
 
-        public override IEnumerable<UIElement> GetFlatElements(TooltipBrickAbilityScoresVM vm)
+        public override IEnumerable<BrickLine> GetFlatLines(TooltipBrickAbilityScoresVM vm)
             => One(vm?.AbilityScoresBlock?.AbilityScores == null ? null
                 : Join(vm.AbilityScoresBlock.AbilityScores.Select(StatLine).ToArray()));
     }
 
     public sealed class ArmorClassBrickRenderer : TooltipBrickRenderer<TooltipBrickArmorClassVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickArmorClassVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickArmorClassVM vm)
         {
             var ac = vm?.ArmorClass;
             if (ac == null) yield break;
             foreach (var s in new[] { ac.AC, ac.FlatFooted, ac.Touch })
-            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new BrickLine(line, () => s.Tooltip); }
         }
     }
 
     public sealed class SavingThrowBrickRenderer : TooltipBrickRenderer<TooltipBrickSavingThrowVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSavingThrowVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickSavingThrowVM vm)
         {
             var st = vm?.SavingThrowVM;
             if (st == null) yield break;
             foreach (var s in new[] { st.Fortitude, st.Reflex, st.Will })
-            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new BrickLine(line, () => s.Tooltip); }
         }
     }
 
     public sealed class SizeSpeedInitiativeBrickRenderer : TooltipBrickRenderer<TooltipBrickSizeSpeedInitiativeVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickSizeSpeedInitiativeVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickSizeSpeedInitiativeVM vm)
         {
             if (vm == null) yield break;
             foreach (var s in new[] { vm.Size, vm.Speed, vm.Initiative })
-            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new TextElement(line, null, () => s.Tooltip); }
+            { var line = StatLine(s); if (!string.IsNullOrWhiteSpace(line)) yield return new BrickLine(line, () => s.Tooltip); }
         }
     }
 
@@ -412,20 +345,13 @@ namespace WrathAccess.UI.Tooltips
     // child to its own registered renderer.
     public sealed class MultipleValueStatFormulaBrickRenderer : TooltipBrickRenderer<TooltipBrickMultipleValueStatFormulaVM>
     {
-        public override IEnumerable<UIElement> GetExpandedElements(TooltipBrickMultipleValueStatFormulaVM vm)
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickMultipleValueStatFormulaVM vm)
         {
             if (vm?.TooltipBrickValueStatFormulas == null) yield break;
             foreach (var f in vm.TooltipBrickValueStatFormulas)
-                foreach (var el in TooltipBrickRegistry.Elements(f, expanded: true)) yield return el;
+                foreach (var el in TooltipBrickRegistry.Lines(f, expanded: true)) yield return el;
         }
 
-        public override IEnumerable<TooltipNode> GetNodes(TooltipBaseBrickVM vm)
-        {
-            var v = vm as TooltipBrickMultipleValueStatFormulaVM;
-            if (v?.TooltipBrickValueStatFormulas == null) yield break;
-            foreach (var f in v.TooltipBrickValueStatFormulas)
-                foreach (var n in TooltipBrickRegistry.Nodes(f)) yield return n;
-        }
     }
 
 }

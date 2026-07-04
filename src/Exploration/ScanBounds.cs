@@ -27,6 +27,10 @@ namespace WrathAccess.Exploration
         public static ScanBounds Rect(Vector3 center, IList<Vector3> corners) => new RectBounds(center, corners);
         /// <summary>A connected chain of ≥1 points; the closest point lies on its consecutive segments.</summary>
         public static ScanBounds Polyline(Vector3 center, IList<Vector3> points) => new PolylineBounds(center, points);
+
+        /// <summary>A closed polygon footprint (a trap's polygonal trigger zone): inside means you're in
+        /// it (distance 0); outside reports the nearest point on the outline. Handles concave shapes.</summary>
+        public static ScanBounds Polygon(Vector3 center, IList<Vector3> points) => new PolygonBounds(center, points);
         /// <summary>DISJOINT segments as flat endpoint pairs [a0,b0,a1,b1,…] — e.g. a doorway's actual
         /// portal edges (full opening extent, not a chord). <paramref name="center"/> is the cursor target.</summary>
         public static ScanBounds Segments(Vector3 center, IList<Vector3> edgePairs) => new SegmentsBounds(center, edgePairs);
@@ -80,6 +84,31 @@ namespace WrathAccess.Exploration
             if (d < bestD) { bestD = d; best = p; }
         }
 
+        /// <summary>Nearest point of a CLOSED polygon (XZ): inside (even-odd crossing test, concave OK)
+        /// means the query point itself; outside means the closest point on the outline. Non-allocating.</summary>
+        public static Vector3 NearestInPolygonXZ(Vector3 from, IList<Vector3> pts)
+        {
+            int n = pts.Count;
+            if (n == 0) return from;
+            if (n < 3) return ClosestOnSegment(from, pts[0], pts[n - 1]);
+
+            // Even-odd ray crossing (handles concave outlines).
+            bool inside = false;
+            for (int i = 0, j = n - 1; i < n; j = i++)
+            {
+                var pi = pts[i]; var pj = pts[j];
+                if ((pi.z > from.z) != (pj.z > from.z)
+                    && from.x < (pj.x - pi.x) * (from.z - pi.z) / (pj.z - pi.z) + pi.x)
+                    inside = !inside;
+            }
+            if (inside) return new Vector3(from.x, pts[0].y, from.z);
+
+            Vector3 best = pts[0]; float bestD = float.MaxValue;
+            for (int i = 0, j = n - 1; i < n; j = i++)
+                Consider(from, pts[j], pts[i], ref best, ref bestD);
+            return best;
+        }
+
         private static bool InConvexXZ(Vector3 p, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
         {
             bool pos = false, neg = false;
@@ -129,6 +158,21 @@ namespace WrathAccess.Exploration
             // (one source with the per-frame path); a degenerate corner set falls back to the centre.
             public override Vector3 NearestPoint(Vector3 from)
                 => _c != null && _c.Length == 4 ? NearestInQuadXZ(from, _c[0], _c[1], _c[2], _c[3]) : _center;
+        }
+
+        private sealed class PolygonBounds : ScanBounds
+        {
+            private readonly Vector3 _center;
+            private readonly Vector3[] _pts; // ordered outline (closed: last wraps to first)
+            public PolygonBounds(Vector3 center, IList<Vector3> points)
+            {
+                _center = center;
+                _pts = points != null && points.Count >= 3 ? new Vector3[points.Count] : null;
+                for (int i = 0; _pts != null && i < points.Count; i++) _pts[i] = points[i];
+            }
+            public override Vector3 Center => _center;
+            public override Vector3 NearestPoint(Vector3 from)
+                => _pts != null ? NearestInPolygonXZ(from, _pts) : _center;
         }
 
         private sealed class PolylineBounds : ScanBounds

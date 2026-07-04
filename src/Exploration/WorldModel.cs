@@ -51,8 +51,11 @@ namespace WrathAccess.Exploration
                 _present.Add(o);
                 // A trap additionally surfaces its TRIGGER AREA as its own item ("Trap zones") — keyed
                 // by the trap view (a distinct object, so it can't collide with the entity keys).
+                // ONLY the linked pair's mechanics half carries the real danger zone; the disarm DEVICE
+                // half has just an interaction proximity radius (not a danger area) — no zone item.
                 if (o is Kingmaker.View.MapObjects.Traps.TrapObjectData td
-                    && td.View is Kingmaker.View.MapObjects.Traps.TrapObjectView tv)
+                    && td.View is Kingmaker.View.MapObjects.Traps.TrapObjectView tv
+                    && tv.Settings != null && tv.Settings.ScriptZoneTrigger != null)
                 {
                     var trap = td; // capture for the factory closure (only built when new)
                     if (!_items.ContainsKey(tv)) Ensure(tv, () => new ProxyTrapZone(trap));

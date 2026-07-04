@@ -8,15 +8,17 @@ namespace WrathAccess.Exploration
     /// <summary>
     /// A trap's TRIGGER AREA — the ground you must not step on, as its own scanner entity ("Trap
     /// zones"), separate from the trap device (the "Traps" item you walk to for the disarm). The
-    /// game's trap anatomy: <see cref="TrapObjectView.Settings"/>.ScriptZoneTrigger is a
-    /// <see cref="ScriptZone"/> whose <see cref="IScriptZoneShape"/>s are the exact hit-test the game
-    /// springs the trap with (<c>shape.Contains(unit.Position)</c>); proximity-style traps have no
-    /// zone and trigger by radius around the device (<see cref="TrapObjectData.ProximityRadius"/>).
-    /// We read the real shape so distance/bearing (and the sonar cue) report the nearest EDGE of the
-    /// danger area: cylinder → circle, box → its rotated rectangle, polygon → its world outline,
-    /// anything else → its world bounds as a circle. Shown while the trap is DISCOVERED and ARMED —
-    /// reveal rides the trap's perception check like the device item, and disarming/springing it
-    /// (TrapActive false) removes the zone.
+    /// game's trap anatomy (verified live in Shield Maze): traps come in LINKED PAIRS — a mechanics
+    /// entity whose <see cref="TrapObjectView.Settings"/>.ScriptZoneTrigger is the real danger
+    /// <see cref="ScriptZone"/> (its <see cref="IScriptZoneShape"/>s are the exact hit-test the game
+    /// springs the trap with), and a disarm DEVICE half whose only radius is the disarm-interaction
+    /// proximity — NOT a danger area, so device halves get no zone item (WorldModel only feeds traps
+    /// that carry a zone). We read the real shape so distance/bearing (and the sonar cue) report the
+    /// nearest EDGE of the danger area: polygon (the common trap shape) → its world outline (concave
+    /// OK, inside = distance 0), cylinder → circle, box → its rotated rectangle, anything else → its
+    /// world bounds as a circle (guarded: polygon GetBounds is degenerate, -Infinity extents). Shown
+    /// while the trap is DISCOVERED and ARMED — reveal rides the trap's perception check like the
+    /// device item, and disarming/springing it (TrapActive false) removes the zone.
     /// </summary>
     internal sealed class ProxyTrapZone : ProxyEntity
     {
@@ -50,28 +52,49 @@ namespace WrathAccess.Exploration
             }
         }
 
-        // The zone's centre (shape centre → zone transform → the device position for proximity traps).
+        // The zone's centre (polygon centroid → shape centre → zone transform → the trap entity).
         public override Vector3 Position
         {
             get
             {
                 var s = Shape;
-                if (s != null) return s.Center();
+                if (s != null) return s.Center(); // ScriptZonePolygon.Center() is the points' true centroid
                 if (_zone != null) return _zone.transform.position;
-                return base.Position; // proximity trap: the danger radius is around the device
+                return base.Position;
             }
         }
 
-        // Scalar extent for the circle-based systems (sonar / cues / tile grid).
+        // Scalar extent for the circle-based systems (sonar / cues / tile grid). Polygon: the real
+        // max centre-to-corner reach (its GetBounds is degenerate — -Infinity extents — never use it).
         public override float Footprint
         {
             get
             {
                 var s = Shape;
                 if (s is ScriptZoneCylinder cyl) return cyl.Radius;
-                if (s != null) { var e = s.GetBounds().extents; return Mathf.Max(e.x, e.z); }
-                return _trap.ProximityRadius ?? 0f;
+                if (s is PolygonComponent poly) return PolyReach(poly, s.Center());
+                if (s != null)
+                {
+                    var e = s.GetBounds().extents;
+                    float r = Mathf.Max(e.x, e.z);
+                    return !float.IsInfinity(r) && !float.IsNaN(r) && r > 0f ? r : 0f;
+                }
+                return 0f;
             }
+        }
+
+        private static float PolyReach(PolygonComponent poly, Vector3 c)
+        {
+            var pts = poly.TransformedPoints;
+            if (pts == null || pts.Length == 0) return 0f;
+            float best = 0f;
+            for (int i = 0; i < pts.Length; i++)
+            {
+                float dx = pts[i].x - c.x, dz = pts[i].z - c.z;
+                float d = dx * dx + dz * dz;
+                if (d > best) best = d;
+            }
+            return Mathf.Sqrt(best);
         }
 
         // The real footprint geometry, so announcements report the nearest EDGE of the danger area.
@@ -80,13 +103,12 @@ namespace WrathAccess.Exploration
             get
             {
                 var s = Shape;
+                if (s is PolygonComponent poly && poly.TransformedPoints != null && poly.TransformedPoints.Length >= 3)
+                    return ScanBounds.Polygon(Position, poly.TransformedPoints);
                 if (s is ScriptZoneCylinder cyl) return ScanBounds.Circle(s.Center(), cyl.Radius);
                 if (s is ScriptZoneBox && TryCorners(out var p0, out var p1, out var p2, out var p3))
                     return ScanBounds.Rect(Position, new[] { p0, p1, p2, p3 });
-                if (s is PolygonComponent poly && poly.TransformedPoints != null && poly.TransformedPoints.Length >= 3)
-                    return ScanBounds.Rect(Position, poly.TransformedPoints);
-                if (s != null) { var b = s.GetBounds(); return ScanBounds.Circle(s.Center(), Mathf.Max(b.extents.x, b.extents.z)); }
-                var r = _trap.ProximityRadius ?? 0f;
+                float r = Footprint;
                 return r > 0f ? ScanBounds.Circle(Position, r) : base.Bounds;
             }
         }
@@ -96,11 +118,12 @@ namespace WrathAccess.Exploration
         public override Vector3 NearestPoint(Vector3 from)
         {
             var s = Shape;
+            if (s is PolygonComponent poly && poly.TransformedPoints != null && poly.TransformedPoints.Length >= 3)
+                return ScanBounds.NearestInPolygonXZ(from, poly.TransformedPoints);
             if (s is ScriptZoneCylinder cyl) return ScanBounds.NearestOnCircleXZ(s.Center(), cyl.Radius, from);
             if (s is ScriptZoneBox && TryCorners(out var p0, out var p1, out var p2, out var p3))
                 return ScanBounds.NearestInQuadXZ(from, p0, p1, p2, p3);
-            if (s != null) { var b = s.GetBounds(); return ScanBounds.NearestOnCircleXZ(s.Center(), Mathf.Max(b.extents.x, b.extents.z), from); }
-            return ScanBounds.NearestOnCircleXZ(Position, _trap.ProximityRadius ?? 0f, from);
+            return ScanBounds.NearestOnCircleXZ(Position, Footprint, from);
         }
 
         // A box shape's four world-space footprint corners (the rotated rectangle).

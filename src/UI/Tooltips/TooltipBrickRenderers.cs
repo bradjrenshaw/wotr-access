@@ -123,8 +123,15 @@ namespace WrathAccess.UI.Tooltips
 
     public sealed class IconValueStatBrickRenderer : TooltipBrickRenderer<TooltipBrickIconValueStatVM>
     {
+        // The Inverted flag swaps which component shows Name vs Value on screen
+        // (TooltipBrickIconValueStatView.SetupValues) — mirror it so the pair reads the right way.
+        internal static string Line(TooltipBrickIconValueStatVM vm)
+            => vm.Type.HasFlag(TooltipIconValueStatType.Inverted)
+                ? Stat(vm.Value, vm.Name, vm.Icon)
+                : Stat(vm.Name, vm.Value, vm.Icon);
+
         public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickIconValueStatVM vm)
-            => One(vm == null ? null : Stat(vm.Name, vm.Value, vm.Icon), () => vm?.Tooltip);
+            => One(vm == null ? null : Line(vm), () => vm?.Tooltip);
     }
 
     public sealed class MultipleIconValueStatBrickRenderer : TooltipBrickRenderer<TooltipBrickMultipleIconValueStatVM>
@@ -133,18 +140,21 @@ namespace WrathAccess.UI.Tooltips
         {
             if (vm?.TooltipBrickIconValueStats == null) yield break;
             foreach (var s in vm.TooltipBrickIconValueStats)
-                if (s != null) yield return new BrickLine(Stat(s.Name, s.Value, s.Icon), () => s.Tooltip);
+                if (s != null) yield return new BrickLine(IconValueStatBrickRenderer.Line(s), () => s.Tooltip);
         }
 
         public override IEnumerable<BrickLine> GetFlatLines(TooltipBrickMultipleIconValueStatVM vm)
             => One(vm?.TooltipBrickIconValueStats == null ? null
-                : Join(vm.TooltipBrickIconValueStats.Where(s => s != null).Select(s => Stat(s.Name, s.Value, s.Icon)).ToArray()));
+                : Join(vm.TooltipBrickIconValueStats.Where(s => s != null).Select(IconValueStatBrickRenderer.Line).ToArray()));
     }
 
     public sealed class ValueStatFormulaBrickRenderer : TooltipBrickRenderer<TooltipBrickValueStatFormulaVM>
     {
+        // The view lays out [Value][Symbol][Name] left-to-right (e.g. "+11 = Attack bonus") — read in
+        // that screen order, Symbol included (it was being dropped).
         public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickValueStatFormulaVM vm)
-            => One(vm == null ? null : Stat(vm.Name, vm.Value, null));
+            => One(vm == null ? null : string.Join(" ",
+                new[] { vm.Value, vm.Symbol, vm.Name }.Where(x => !string.IsNullOrWhiteSpace(x))));
     }
 
     public sealed class TwoColumnsStatBrickRenderer : TooltipBrickRenderer<TooltipBrickTwoColumnsStatVM>
@@ -172,7 +182,7 @@ namespace WrathAccess.UI.Tooltips
     public sealed class PictureBrickRenderer : TooltipBrickRenderer<TooltipBrickPictureVM>
     {
         public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickPictureVM vm)
-            => One(vm?.Picture != null ? "Image: " + vm.Picture.name : null);
+            => One(vm?.Picture != null ? Loc.T("tooltip.image", new { name = vm.Picture.name }) : null);
     }
 
     // Composite class build: difficulty, build-balance axes, then the description.
@@ -184,17 +194,13 @@ namespace WrathAccess.UI.Tooltips
 
             var rate = vm.DifficultyRateVM;
             if (rate != null && !string.IsNullOrEmpty(rate.RateName))
-                yield return new BrickLine(rate.RateName + ": " + rate.Rate + " of " + rate.MaxRate);
+                yield return new BrickLine(Loc.T("tooltip.rate",
+                    new { name = rate.RateName, rate = rate.Rate, max = rate.MaxRate }));
 
             var bal = vm.ClassBalanceVM != null ? vm.ClassBalanceVM.ClassBalanceVM : null;
             if (bal != null)
-            {
-                string title = !string.IsNullOrEmpty(vm.BuildTitle) ? vm.BuildTitle : "Build balance";
-                yield return new BrickLine(title + ": Melee " + bal.Melee.Value
-                    + ", Ranged " + bal.Ranged.Value + ", Defense " + bal.Defense.Value
-                    + ", Support " + bal.Support.Value + ", Control " + bal.Control.Value
-                    + ", Magic " + bal.Magic.Value);
-            }
+                yield return new BrickLine(ClassBalanceBrickRenderer.Line(bal,
+                    !string.IsNullOrEmpty(vm.BuildTitle) ? vm.BuildTitle : Loc.T("tooltip.build_balance")));
 
             string desc = vm.ClassDescriptionVM != null ? vm.ClassDescriptionVM.Text : null;
             if (!string.IsNullOrWhiteSpace(desc)) yield return new BrickLine(desc);
@@ -233,17 +239,14 @@ namespace WrathAccess.UI.Tooltips
     // with word ordinals ("First", "Second", …) — no "level", to avoid clashing with character level.
     public sealed class SpellTableBrickRenderer : TooltipBrickRenderer<TooltipBrickSpellTableVM>
     {
-        private static readonly string[] Words =
-            { "Cantrips", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth" };
-
         public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickSpellTableVM vm)
         {
             if (vm?.Values == null) yield break;
             for (int i = 0; i < vm.Values.Count; i++)
             {
                 if (string.IsNullOrEmpty(vm.Values[i])) continue; // no spells of this level
-                string label = i < Words.Length ? Words[i] : i.ToString();
-                string value = i == 0 ? "at will" : vm.Values[i]; // cantrips: the infinity sprite → "at will"
+                string label = i <= 10 ? Loc.T("spell_ordinal." + i) : i.ToString();
+                string value = i == 0 ? Loc.T("tooltip.at_will") : vm.Values[i]; // cantrips: infinity sprite
                 yield return new BrickLine(label + ": " + value);
             }
         }
@@ -276,7 +279,7 @@ namespace WrathAccess.UI.Tooltips
             foreach (var e in vm.PrerequisiteEntries)
             {
                 if (e == null || string.IsNullOrWhiteSpace(e.Text)) continue;
-                yield return new BrickLine(e.Text + (e.Done ? " (met)" : " (not met)"));
+                yield return new BrickLine(e.Text + " (" + Loc.T(e.Done ? "tooltip.met" : "tooltip.not_met") + ")");
             }
         }
     }

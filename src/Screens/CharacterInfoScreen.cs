@@ -263,7 +263,7 @@ namespace WrathAccess.Screens
         }
 
         // Mirrors CharInfoBABView.FillData: first attack always signed; later ones show "-" when <= 0.
-        private static string BabString(CharInfoBABVM bab)
+        internal static string BabString(CharInfoBABVM bab)
         {
             var vals = bab.BabValue;
             if (vals == null || vals.Count == 0) return "+0";

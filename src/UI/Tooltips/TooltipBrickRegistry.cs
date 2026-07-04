@@ -84,6 +84,22 @@ namespace WrathAccess.UI.Tooltips
             Register(new MultipleValueStatFormulaBrickRenderer());
             Register(new SeparatorBrickRenderer());
             Register(new SpaceBrickRenderer());
+            // 2026-07-04 brick audit additions (see TooltipBrickRenderers2).
+            Register(new RateBrickRenderer());
+            Register(new ClassBalanceBrickRenderer());
+            Register(new ButtonBrickRenderer());
+            Register(new TimerBrickRenderer());
+            Register(new BuffBrickRenderer());
+            Register(new MultipleBuffBrickRenderer());
+            Register(new ArmyEffectBrickRenderer());
+            Register(new NonStackBrickRenderer());
+            Register(new ChangeVisualBrickRenderer());
+            Register(new BabHorizontalBrickRenderer());
+            Register(new BabVerticalBrickRenderer());
+            Register(new KingdomMoraleFlagBrickRenderer());
+            Register(new KingdomMoraleBarBrickRenderer());
+            Register(new HistoryManagementBrickRenderer());
+            Register(new AutoLevelupButtonBrickRenderer());
         }
     }
 }

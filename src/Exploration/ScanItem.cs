@@ -56,7 +56,16 @@ namespace WrathAccess.Exploration
             if (!IsVisible) return false;
             if (CurrentlySeen) return true;
             var los = LineOfSightGeometry.Instance;
-            return los == null || !los.HasObstacle(cursor, NearestPoint(cursor), LosFudge);
+            if (los == null) return true;
+            // Call the LOS oracle EXACTLY the way every game caller does (UnitSightCache,
+            // FogOfWarController, AI TargetInfo): the entity POSITION as the ray target and EyeShift
+            // (~1m up) added to BOTH endpoints. The grid's only vertical rule is "a wall blocks iff its
+            // top is at or above from.y", so foot-level rays and bounds-shrunk endpoints (our old call)
+            // read "clear" across the Shield Maze's stacked sections where the game's own convention
+            // reads blocked. We deliberately DON'T add stricter tests of our own (symmetric/navmesh):
+            // never hide something the game itself would show.
+            return !los.HasObstacle(cursor + LineOfSightGeometry.EyeShift,
+                Position + LineOfSightGeometry.EyeShift, LosFudge);
         }
 
         /// <summary>The unit this item represents, for ability targeting (null = target its point instead).</summary>

@@ -186,7 +186,45 @@ namespace WrathAccess.Exploration
         }
 
         public static string Describe(Room room)
-            => Loc.T("where.room", new { id = room.Id }) + ", " + Loc.T("room.class." + room.ClassKey);
+        {
+            string s = Loc.T("where.room", new { id = room.Id }) + ", " + Loc.T("room.class." + room.ClassKey);
+            int pct = UnexploredPercent(room);
+            if (pct >= 100) return s + ", " + Loc.T("room.unexplored");
+            if (pct > 0) return s + ", " + Loc.T("room.unexplored_pct", new { pct });
+            return s; // fully explored rooms stay quiet — no "0% unexplored" noise
+        }
+
+        /// <summary>How much of a room the game's explored layer still hides, as the SPOKEN
+        /// percentage: rounded to tens (0, 10 … 100 — grid resolution doesn't honestly support
+        /// finer), so callers comparing against 100 match what Describe says.</summary>
+        public static int UnexploredPercent(Room room)
+            => Mathf.RoundToInt(UnexploredFraction(room) * 10f) * 10;
+
+        // Room.Id -> (fraction, cache expiry). Fraction needs a full-grid pass, so it's cached
+        // briefly; callers are announcements (key presses, room-change events), never frame loops.
+        private static readonly Dictionary<int, KeyValuePair<float, float>> _unexplored
+            = new Dictionary<int, KeyValuePair<float, float>>();
+
+        private static float UnexploredFraction(Room room)
+        {
+            if (room == null || _label == null) return 0f;
+            KeyValuePair<float, float> hit;
+            if (_unexplored.TryGetValue(room.Id, out hit) && Time.unscaledTime < hit.Value)
+                return hit.Key;
+            int label = room.Id - 1; // ids are the label indices, 1-based
+            int total = 0, unexp = 0;
+            for (int gz = 0; gz < _h; gz++)
+                for (int gx = 0; gx < _w; gx++)
+                {
+                    int i = gz * _w + gx;
+                    if (_label[i] != label) continue;
+                    total++;
+                    if (!FogExplored.IsExplored(CellCenter(gx, gz))) unexp++;
+                }
+            float f = total > 0 ? (float)unexp / total : 0f;
+            _unexplored[room.Id] = new KeyValuePair<float, float>(f, Time.unscaledTime + 2f);
+            return f;
+        }
 
         /// <summary>Debug: speak the room count + the current room's stats; full table to Player.log.</summary>
         public static void DebugSpeak()
@@ -206,6 +244,7 @@ namespace WrathAccess.Exploration
         {
             _rooms.Clear();
             _label = null;
+            _unexplored.Clear();
 
             // 1) Collect the recast navmesh triangles (world metres).
             var tris = new List<Vector3>(); // groups of 3

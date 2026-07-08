@@ -486,8 +486,40 @@ namespace WrathAccess.Exploration
             if (target is RoomExitItem) _selectionOverride = target;
             else { _selectionOverride = null; SyncSelectionTo(target); }
             PlayReviewPing(target);
-            Speak(target.Describe(refPos) + ", "
+            // Bare openings announce their destination themselves ("Exit to Room N…"); a door or
+            // transition item speaks the THING, so append where it leads (and its unexplored state).
+            string leadsTo = "";
+            if (!(target is RoomExitItem))
+            {
+                var dest = ExitDestination(target.Position, room);
+                if (dest != null) leadsTo = ", " + Loc.T("exit.leads_to", new { room = RoomMap.Describe(dest) });
+            }
+            Speak(target.Describe(refPos) + leadsTo + ", "
                 + Loc.T("nav.position", new { index = idx + 1, count = candidates.Count }));
+        }
+
+        /// <summary>The room on the far side of a door/transition item in the V cycle: the covered
+        /// geometric opening's destination when one is nearby, else probe around the thing — a CLOSED
+        /// door cuts the navmesh, so no portal (and no Exit record) exists there. Null when nothing
+        /// resolves (e.g. an area transition — the mesh just ends).</summary>
+        private static RoomMap.Room ExitDestination(Vector3 p, RoomMap.Room from)
+        {
+            foreach (var exit in from.Exits)
+            {
+                float dx = exit.Position.x - p.x, dz = exit.Position.z - p.z;
+                if (dx * dx + dz * dz < 2.5f * 2.5f) return exit.To;
+            }
+            for (int radius = 0; radius < 2; radius++)
+                for (int k = 0; k < 4; k++)
+                {
+                    var probe = p;
+                    float d = radius == 0 ? 1.5f : 2.5f;
+                    if (k == 0) probe.x += d; else if (k == 1) probe.x -= d;
+                    else if (k == 2) probe.z += d; else probe.z -= d;
+                    var r = RoomMap.RoomAt(probe);
+                    if (r != null && r != from) return r;
+                }
+            return null;
         }
 
         private static void DoCycleReview(ReviewGroup group, int dir)
@@ -710,7 +742,10 @@ namespace WrathAccess.Exploration
             if (part != null && part.IsIndoor) parts.Add(Loc.T("where.indoors"));
             var room = RoomMap.RoomAt(pos);
             if (room != null) parts.Add(RoomMap.Describe(room));
-            if (!FogExplored.IsExplored(pos)) parts.Add(Loc.T("where.unexplored"));
+            // The spot-level flag ("you're standing in the dark part") — but Describe already ends
+            // with "unexplored" for a fully-unexplored room, so don't say it twice.
+            if (!FogExplored.IsExplored(pos) && (room == null || RoomMap.UnexploredPercent(room) < 100))
+                parts.Add(Loc.T("where.unexplored"));
             var bounds = part?.Bounds;
             if (bounds != null)
             {

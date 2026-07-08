@@ -720,5 +720,8 @@
   "scan.trap_zone": "Trap zone",
   "taxonomy.unexplored": "Unexplored space",
   "scan.unexplored_space": "Unexplored space",
-  "scan.unexplored_in": "Unexplored space, {room}"
+  "scan.unexplored_in": "Unexplored space, {room}",
+  "room.unexplored": "unexplored",
+  "room.unexplored_pct": "{pct}% unexplored",
+  "exit.leads_to": "leads to {room}"
 }

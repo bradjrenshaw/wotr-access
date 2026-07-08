@@ -293,11 +293,15 @@ namespace WrathAccess.Dev
                 if (d > radius) continue;
                 var sp = cam.WorldToScreenPoint(p);
                 if (sp.z <= 0f || sp.x < 0f || sp.y < 0f || sp.x > Screen.width || sp.y > Screen.height) continue;
+                // room lets authoring attribute a labeled thing to ITS room — the radius reaches
+                // through walls (a neighbouring room's puzzle buttons ended up in the wrong prose).
+                var itemRoom = RoomMap.RoomAt(p);
                 labels.Add(new
                 {
                     name,
                     asset,
                     unit,
+                    room = itemRoom != null ? itemRoom.Id : -1,
                     sx = (int)sp.x,
                     sy = Screen.height - (int)sp.y, // image coords: origin top-left
                     d = R(d),

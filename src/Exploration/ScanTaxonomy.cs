@@ -46,6 +46,7 @@ namespace WrathAccess.Exploration
         public const string TrapZones = "trapzones";
         public const string Mechanisms = "mechanisms";
         public const string Hazards = "hazards";
+        public const string Unexplored = "unexplored";
         public const string HazardsSpell = "hazards.spell";
         public const string HazardsTerrain = "hazards.terrain";
         public const string BuffZones = "buffzones";
@@ -140,6 +141,8 @@ namespace WrathAccess.Exploration
                 Sub("spell", "Spell effects", "hazard-zone"),
                 Sub("terrain", "Terrain", "hazard-zone"));
             Cat("buffzones", "Buff zones", ScanClass.Object, "buff-zone");
+            // Frontier blobs — where walkable unexplored ground borders explored ground (FrontierModel).
+            Cat("unexplored", "Unexplored space", ScanClass.Object, Silent);
 
             Cat("scenery", "Scenery", ScanClass.Object, Silent);
             Cat("poi", "Points of interest", ScanClass.Marker, Silent);

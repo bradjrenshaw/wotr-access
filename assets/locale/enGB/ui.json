@@ -717,5 +717,8 @@
   "spell_ordinal.9": "Ninth",
   "spell_ordinal.10": "Tenth",
   "taxonomy.trapzones": "Trap zones",
-  "scan.trap_zone": "Trap zone"
+  "scan.trap_zone": "Trap zone",
+  "taxonomy.unexplored": "Unexplored space",
+  "scan.unexplored_space": "Unexplored space",
+  "scan.unexplored_in": "Unexplored space, {room}"
 }

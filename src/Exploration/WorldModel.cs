@@ -21,6 +21,7 @@ namespace WrathAccess.Exploration
         private static readonly Dictionary<object, ScanItem> _items = new Dictionary<object, ScanItem>();
         private static readonly HashSet<object> _present = new HashSet<object>();
         private static readonly List<object> _gone = new List<object>();
+        private static int _foldedVersion = -1;
 
         /// <summary>Every in-area item (all kinds, unfiltered by fog). Consumers apply <c>IsVisible</c>.</summary>
         public static IReadOnlyCollection<ScanItem> Items => _items.Values;
@@ -31,13 +32,16 @@ namespace WrathAccess.Exploration
         public static void Tick()
         {
             var state = Game.Instance != null ? Game.Instance.State : null;
-            if (state == null) { ClearAll(); return; } // no area loaded (menu/global map) → empty
+            if (state == null) { FrontierModel.SyncArea(null); ClearAll(); return; } // no area loaded (menu/global map) → empty
 
+            var areaName = Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null;
             // Curated environmental details (scene-art things with no runtime data layer) reload on
             // area change and flow through the same registry, keyed by their entry objects.
-            AreaDetails.Refresh(Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null);
+            AreaDetails.Refresh(areaName);
             // Mod-authored environmental descriptions (room ambiance + per-asset), loaded per area the same way.
-            EnvDescriptions.Refresh(Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null);
+            EnvDescriptions.Refresh(areaName);
+            // Frontier blobs are per-area too — entering a different area drops the stale set.
+            FrontierModel.SyncArea(areaName);
 
             // Poll live every frame, but only build a proxy (and its capturing factory closure) for a
             // GENUINELY NEW entity — the ContainsKey guard keeps the common "already tracked" path
@@ -84,6 +88,7 @@ namespace WrathAccess.Exploration
                 if (!_items.ContainsKey(entry)) Ensure(entry, () => new ProxyDetail(entry));
                 _present.Add(entry);
             }
+            FoldFrontier();
 
             // Drop anything no longer in the pools (despawned, or left when the area changed).
             _gone.Clear();
@@ -94,6 +99,38 @@ namespace WrathAccess.Exploration
                 var item = _items[key];
                 _items.Remove(key);
                 Removed?.Invoke(item);
+            }
+        }
+
+        /// <summary>Fold the unexplored-frontier blobs into the model. Called per tick, and directly by
+        /// the L cycle right after FrontierModel.Refresh so the FIRST press already sees fresh items.</summary>
+        public static void FoldFrontier()
+        {
+            // Each recompute mints NEW Blob objects, and a mid-frame fold (the L key) runs AFTER this
+            // frame's Tick already folded the old generation into _present — without an eager purge the
+            // cycle would double-list old + new for a frame (heard live as "1 of 4" over 2 real blobs).
+            // Version-gated so steady-state ticks skip the scan; the purge itself reuses _gone
+            // (recompute is key-press work, and Tick's own _gone use starts after this returns).
+            if (FrontierModel.Version != _foldedVersion)
+            {
+                _foldedVersion = FrontierModel.Version;
+                _gone.Clear();
+                foreach (var key in _items.Keys) if (key is FrontierModel.Blob) _gone.Add(key);
+                for (int i = 0; i < _gone.Count; i++)
+                {
+                    var key = _gone[i];
+                    var item = _items[key];
+                    _items.Remove(key);
+                    _present.Remove(key);
+                    Removed?.Invoke(item);
+                }
+                _gone.Clear();
+            }
+            foreach (var f in FrontierModel.Current)
+            {
+                var blob = f; // capture for the factory closure
+                if (!_items.ContainsKey(blob)) Ensure(blob, () => new ProxyFrontier(blob));
+                _present.Add(blob);
             }
         }
 

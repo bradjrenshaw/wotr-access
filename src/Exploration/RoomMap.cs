@@ -74,6 +74,28 @@ namespace WrathAccess.Exploration
         public static IReadOnlyList<Room> Rooms => _rooms;
         public static bool Ready => _label != null && _rooms.Count > 0;
 
+        /// <summary>Grid snapshot for derived overlays (the unexplored-frontier scan): per-cell room
+        /// label (-1 = unwalkable), per-cell surface height, dims. False while no map is built.</summary>
+        internal static bool TryGetGrid(out int[] label, out float[] cellY, out int w, out int h)
+        {
+            label = _label; cellY = _cellY; w = _w; h = _h;
+            return _label != null && _cellY != null && _w > 0 && _h > 0;
+        }
+
+        /// <summary>World-space centre of a grid cell — the exact inverse of RoomAt's mapping
+        /// (note the +1 border offset), with the cell's rasterized surface height.</summary>
+        internal static Vector3 CellCenter(int gx, int gz)
+        {
+            float x = _x0 + ((gx - 1) + 0.5f) * _cell;
+            float z = _z0 + ((gz - 1) + 0.5f) * _cell;
+            int idx = gz * _w + gx;
+            float y = _cellY != null && idx >= 0 && idx < _cellY.Length ? _cellY[idx] : 0f;
+            return new Vector3(x, y, z);
+        }
+
+        /// <summary>Metres per grid cell (for area/size math on the snapshot).</summary>
+        internal static float CellSize => _cell;
+
         /// <summary>The room at a world position, or null (off-mesh, other floor, or no map yet).</summary>
         public static Room RoomAt(Vector3 pos)
         {

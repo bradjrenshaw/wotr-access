@@ -785,6 +785,14 @@ namespace WrathAccess
             InputManager.Register("review.nextOther", "Review next object", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, 1))
                 .AddBinding(KeyCode.M).Repeating().Grouped("review");
+            // L / Shift+L: cycle the unexplored-space frontier (where the map can still grow). Then
+            // Slash plants the cursor there as with any reviewed thing; the review cue tones as usual.
+            InputManager.Register("review.nextUnexplored", "Review next unexplored space", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Unexplored, 1))
+                .AddBinding(KeyCode.L).Repeating().Grouped("review");
+            InputManager.Register("review.prevUnexplored", "Review previous unexplored space", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Unexplored, -1))
+                .AddBinding(KeyCode.L, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.prevOther", "Review previous object", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, -1))
                 .AddBinding(KeyCode.M, shift: true).Repeating().Grouped("review");

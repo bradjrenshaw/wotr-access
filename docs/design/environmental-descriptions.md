@@ -98,11 +98,21 @@ Rules:
   ambiance). Directions/distances computed live from the anchor + bearing engine.
 - Game examine points: unchanged game interaction + GameLogReader.
 
-## Tooling
+## Tooling (BUILT 2026-07-07, smoke-tested live on Shield Maze)
 
-- A reusable survey script (bash/curl → dev server): area → rooms → FPS points → capture headings; plus
-  enumerate unique assets → capture one framed instance each → numbered screenshot folders. I batch-review
-  and emit the JSON. Fog/camera auto-restored.
+- **`src/Dev/DevSurvey.cs`** (DEBUG-only, public for /eval): all survey logic compile-checked in the
+  mod with direct internals access — `Rooms()` (farthest-point survey points scaling with area, exits),
+  `Contents(roomId)` (objects-vs-units pre-categorized for the stage-not-actors rule, described flags),
+  `Assets()` (unique keys + representative instance + described flag), `Frame(x,y,z,yaw,zoom)` /
+  `Restore()` (fog + camera state saved once, restored after), `Labels()` (screen-projected names for
+  everything in frame — identifies props without hide-renderer tricks), `RoomIdAt` (validation).
+- **`tools/survey.py`** — the driver. `rooms` / `assets` / `validate` modes; downscales captures to
+  1600px (labels rescaled to match) so vision review is cheap; incremental (skips surveyed rooms and
+  described assets; `--force`/`--all` to redo). Output: `survey/<AreaBlueprint>/rooms/room_NN/`
+  (shots + `data.json` with contents and per-shot labels) and `assets/<key>.png` + `index.json`.
+  Requires the game running via `scripts/run-game.ps1` with a save loaded in the target area.
+- Authoring is then a batch review of the survey folders (parallelizable per room) → emit the
+  per-area JSON + `desc.*` locale entries → `survey.py validate`.
 
 ## Phasing
 

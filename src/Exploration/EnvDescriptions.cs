@@ -84,6 +84,11 @@ namespace WrathAccess.Exploration
             return s.Length > 0 ? s : null;
         }
 
+        /// <summary>Whether the global asset table already has text for this key — the survey tooling
+        /// (DevSurvey/tools/survey.py) skips described assets on incremental re-runs.</summary>
+        internal static bool HasAssetText(string key)
+            => !string.IsNullOrEmpty(key) && _assets.ContainsKey(key);
+
         /// <summary>The Describe (X) readout: the focused map-object's asset description if it has one, else the
         /// description of the room the cursor is in, else a "nothing here" line. Never describes units.</summary>
         public static string Describe(ScanItem reviewed, Vector3 cursor)

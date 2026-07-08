@@ -132,10 +132,19 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !ShouldPlay(overlay)) { LogFeed.Clear(); return; }
+            if (!ShouldPlay(overlay)) { LogFeed.Clear(); return; }
+            // The context gate (one of our screens covering exploration — rest, dialogue, a window)
+            // silences log NARRATION: partly lens design, partly because the covering screen often
+            // reads the same content itself (dialogue cues, loot). But BARKS are a character SPEAKING,
+            // and no screen re-delivers those — camp banter during rest arrives here as BarkLogThread
+            // lines while the rest screen is on top, and was being dropped. Speech always gets through.
+            bool covered = !OverlayManager.Active;
             while (LogFeed.TryDequeue(out string thread, out string text))
+            {
+                if (covered && thread != "BarkLogThread") continue;
                 if (ShouldSpeak(thread))
                     Tts.Speak(text, interrupt: false); // passive content — queue behind, never cut off nav
+            }
         }
 
         private bool ShouldSpeak(string threadType)

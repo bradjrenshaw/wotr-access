@@ -261,7 +261,10 @@ namespace WrathAccess.Screens
                 {
                     var watch = Loc.T(status.WakeUpGuardsSlot == 1 ? "rest.role.guard_second" : "rest.role.guard_first");
                     b.AddItem(ControlId.Structural(k + "encounter"), GraphNodes.Text(
-                        () => TextUtil.StripRichText(UIStrings.Instance.Rest.NightEncounter) + ", " + watch));
+                        // NightEncounter is a format TEMPLATE ("After {0} hours of rest…") — fill the
+                        // hours the way RestController's own notification does.
+                        () => string.Format(TextUtil.StripRichText(UIStrings.Instance.Rest.NightEncounter),
+                                status.TimePassedBeforeEncounter.Hours) + ", " + watch));
                 }
                 var iters = status.Iterations;
                 if (iters != null && iters.Count > 0)

@@ -57,10 +57,10 @@ Rules:
 
 ## The X key (mod description) vs. game examine (kept separate)
 
-- **X = "describe"** → OUR authored content ONLY: the focused scanner object's asset-visual description,
-  or (on a room point / open ground) the room ambiance. One key, context-aware, always "extra description
-  from the mod." Distinct from — never mixed with — the game's examine text, so the meaning of X stays
-  unambiguous.
+- **X = "describe scanner target", Shift+X = "describe room"** (split 2026-07-07, user decision — the
+  context-aware single key was ambiguous in practice) → OUR authored content ONLY: X speaks the focused
+  scanner object's asset-visual description, Shift+X the room ambiance where the cursor stands. Always
+  "extra description from the mod," distinct from — never mixed with — the game's examine text.
 - **Rebind "where am I" → Z** (frees X for describe; do the rebind as part of the describe-feature build
   so X isn't a dead key in the interim).
 - Live object state (open / locked / empty / trapped) stays the scanner's normal announcement — X adds the

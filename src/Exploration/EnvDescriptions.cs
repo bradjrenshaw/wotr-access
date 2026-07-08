@@ -89,18 +89,24 @@ namespace WrathAccess.Exploration
         internal static bool HasAssetText(string key)
             => !string.IsNullOrEmpty(key) && _assets.ContainsKey(key);
 
-        /// <summary>The Describe (X) readout: the focused map-object's asset description if it has one, else the
-        /// description of the room the cursor is in, else a "nothing here" line. Never describes units.</summary>
-        public static string Describe(ScanItem reviewed, Vector3 cursor)
+        /// <summary>The Describe-target (X) readout: the focused map-object's asset description. Units
+        /// and undescribed objects get the "nothing described" line — the ROOM is Shift+X's job, so X
+        /// stays unambiguously "about the thing I have focused".</summary>
+        public static string DescribeItem(ScanItem reviewed)
         {
-            if (reviewed != null && !reviewed.IsUnit)
+            if (reviewed == null) return Loc.T("scan.no_item");
+            if (!reviewed.IsUnit)
             {
                 var key = reviewed.AssetKey;
                 if (!string.IsNullOrEmpty(key) && _assets.TryGetValue(key, out var atext) && !string.IsNullOrEmpty(atext))
                     return atext;
             }
-            return RoomTextAt(cursor) ?? Loc.T("desc.none");
+            return Loc.T("desc.none");
         }
+
+        /// <summary>The Describe-room (Shift+X) readout: the ambiance of the room the cursor stands in.</summary>
+        public static string DescribeRoom(Vector3 cursor)
+            => RoomTextAt(cursor) ?? Loc.T("desc.none");
 
         // The nearest room anchor that resolves to the SAME room the cursor is standing in (RoomMap as a live
         // membership test, not a stored key). One anchor per room today, so this is effectively a direct hit.

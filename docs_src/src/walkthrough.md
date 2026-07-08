@@ -135,5 +135,6 @@ the west and southwest (one has loot). The way forward then leads east and south
 The **rooms** system can help with orientation. The mod marks regions of the map as rooms (you've
 probably heard it announce the cursor entering a new room). Press **V** to cycle room exits — doors
 get marked as exits later on — and **Z** for "where am I", which includes the room your cursor is
-in. **X** speaks a hand-written description of the room, where one has been authored. And if you've
-lost the thread of the dungeon entirely, **L** cycles the unexplored openings that remain.
+in. **Shift+X** speaks a hand-written description of the room, and **X** one of the scanner object
+you're focused on, where they've been authored. And if you've lost the thread of the dungeon
+entirely, **L** cycles the unexplored openings that remain.

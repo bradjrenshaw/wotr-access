@@ -44,7 +44,8 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 | C | Recenter the cursor on the party leader |
 | Space | Toggle pause |
 | Z | Where am I (area, indoors, current room, whether the spot is unexplored, and rough map position) |
-| X | Describe surroundings (the mod's authored description of the review item or the current room, where one exists) |
+| X | Describe the scanner target (the mod's authored visual description of the review item, where one exists) |
+| Shift+X | Describe the current room (the mod's authored room description, where one exists) |
 | Escape | Cancel targeting; otherwise open the game menu |
 
 ## Exploration — party

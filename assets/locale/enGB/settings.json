@@ -398,7 +398,8 @@
   "reset.all_done": "All settings reset to defaults",
 
   "bind.explore.whereAmI": "Where am I",
-  "bind.explore.describe": "Describe surroundings",
+  "bind.explore.describe": "Describe scanner target",
+  "bind.explore.describeRoom": "Describe room",
   "bind.scan.debugAreaParts": "Read area parts (debug)",
 
   "overlay.sonar.review_sound": "Review cursor sound",

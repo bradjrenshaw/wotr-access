@@ -92,10 +92,10 @@ closer. In multi-level areas, **Ctrl+Comma** and **Ctrl+Period** follow the surf
 ## Where you are
 
 Press **Z** for "where am I": your area, whether you're indoors, the room you're standing in
-(noting if that spot is still unexplored), and roughly where you are on the map. Press **X** to
-describe your surroundings — the mod's own hand-written description of the current room, or of the
-scanner object you're focused on, where one has been authored. **K** reads the movement cursor's
-exact position, and **Shift+K** reads your party.
+(noting if that spot is still unexplored), and roughly where you are on the map. Press **X** to hear
+the mod's own hand-written visual description of the scanner object you're focused on, and
+**Shift+X** for the description of the room your cursor is standing in, where one has been authored.
+**K** reads the movement cursor's exact position, and **Shift+K** reads your party.
 
 ## Party control and movement
 

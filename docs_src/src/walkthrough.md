@@ -46,6 +46,12 @@ area your characters can't currently see. Press **Ctrl+A** to select the whole p
 **Backspace** to move everyone closer, revealing the hidden areas. If they aren't moving, make sure
 the game is unpaused.
 
+This is a good moment to try **L** and **Shift+L**, which cycle *unexplored space*: the openings
+where walkable ground you haven't revealed yet borders ground you have — in other words, the places
+you could go to push the map back. Each press names the opening (with its room, when known) and how
+far away it is. Press **Slash** to jump the cursor there, then **Backspace** to send the party.
+Whenever you're unsure where to explore next, L is the answer.
+
 There's nothing hidden in the starting room and only one way forward — head south. The room curves
 southwest, and once your characters pass a certain point a scripted rockfall occurs.
 
@@ -128,4 +134,6 @@ the west and southwest (one has loot). The way forward then leads east and south
 
 The **rooms** system can help with orientation. The mod marks regions of the map as rooms (you've
 probably heard it announce the cursor entering a new room). Press **V** to cycle room exits — doors
-get marked as exits later on — and **X** to hear which room your cursor is in.
+get marked as exits later on — and **Z** for "where am I", which includes the room your cursor is
+in. **X** speaks a hand-written description of the room, where one has been authored. And if you've
+lost the thread of the dungeon entirely, **L** cycles the unexplored openings that remain.

@@ -43,7 +43,8 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 | Backspace | Move the selected party to the cursor |
 | C | Recenter the cursor on the party leader |
 | Space | Toggle pause |
-| X | Where am I (area + current room) |
+| Z | Where am I (area, indoors, current room, whether the spot is unexplored, and rough map position) |
+| X | Describe surroundings (the mod's authored description of the review item or the current room, where one exists) |
 | Escape | Cancel targeting; otherwise open the game menu |
 
 ## Exploration — party
@@ -88,6 +89,7 @@ Quick review-cursor cycles (hold **Shift** to go backwards):
 | M | Next interactable / object |
 | B | Next point of interest |
 | V | Next room exit |
+| L | Next unexplored space (openings where the map can still be revealed) |
 
 ## Exploration — buffers
 

@@ -62,7 +62,12 @@ spells without moving the movement cursor. **Slash** jumps the movement cursor t
 
 You can also cycle the review cursor by kind, nearest first: **Period** for enemies, **Comma** for
 allies, **M** for interactables, **N** for neutral units, **B** for points of interest, **V** for
-room exits. Hold **Shift** to go backwards.
+room exits, **L** for unexplored space. Hold **Shift** to go backwards.
+
+Unexplored space (**L**) deserves a note: it cycles the openings where walkable ground you haven't
+revealed yet borders ground you have — the places where the map can still grow. If you're ever
+unsure where to go next, press **L**, jump the cursor there with **Slash**, and send your party with
+**Backspace**.
 
 ## Buffers
 
@@ -86,8 +91,11 @@ closer. In multi-level areas, **Ctrl+Comma** and **Ctrl+Period** follow the surf
 
 ## Where you are
 
-Press **X** for "where am I" (your area and the part of it you're standing in), **K** to hear the
-movement cursor's exact position, and **Shift+K** to hear your party.
+Press **Z** for "where am I": your area, whether you're indoors, the room you're standing in
+(noting if that spot is still unexplored), and roughly where you are on the map. Press **X** to
+describe your surroundings — the mod's own hand-written description of the current room, or of the
+scanner object you're focused on, where one has been authored. **K** reads the movement cursor's
+exact position, and **Shift+K** reads your party.
 
 ## Party control and movement
 

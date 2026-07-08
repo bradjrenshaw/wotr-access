@@ -12,7 +12,8 @@ The current alpha already covers a large slice of the game:
 - Main menu, the New Game flow, and character creation / level-up.
 - A mod menu (Ctrl+M) with the mod's settings and a first-run setup wizard.
 - Exploration: the movement cursor, the categorized scanner and review cursor, sonar and other
-  spatial-audio overlays, wall tones, room/area awareness, and world-map travel.
+  spatial-audio overlays, wall tones, room/area awareness, unexplored-space cycling, and world-map
+  travel.
 - Dialogue, book events, tutorial popups, and the in-game log / barks.
 - Turn-based combat and targeting (abilities, resting).
 - Service windows: inventory, character sheet, spellbook, journal, encyclopedia, local map.

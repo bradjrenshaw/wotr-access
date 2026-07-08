@@ -13,6 +13,10 @@ Modes:
   validate   Check authored content: every anchor in assets/descriptions/<AreaBlueprint>.json
              resolves to a room live (RoomIdAt), every key has desc.<key>.title/.body locale text,
              and orphaned desc.* locale keys are reported.
+  areas      List every area blueprint in the game (survey targets for --area).
+
+--area <BlueprintName> teleports the session into that area first (the cheat transfer path — no
+save in the area needed) and waits for it to load. Captures hide the game HUD automatically.
 
 Camera/fog state is saved on the first frame and restored at the end (also on Ctrl+C).
 Screenshots are downscaled (Pillow, if available) to --max-width for cheap vision review.
@@ -187,9 +191,26 @@ def validate(dev, args, area):
     return problems
 
 
+def enter_area(dev, blueprint, timeout=180):
+    """Teleport into an area by blueprint name and wait until it's loaded and room-mapped."""
+    cur = dev.call("WrathAccess.Dev.DevSurvey.Status()")
+    if cur["area"] != blueprint:
+        dev.call(f'WrathAccess.Dev.DevSurvey.EnterArea("{blueprint}")')
+        print(f"entering {blueprint}...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        s = dev.call("WrathAccess.Dev.DevSurvey.Status()")
+        if s["area"] == blueprint and not s["loading"] and s["roomMap"]:
+            time.sleep(3)  # let WorldModel fill and on-enter scripting settle
+            return
+        time.sleep(2)
+    sys.exit(f"timed out entering {blueprint} (status: {s})")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("mode", choices=["rooms", "assets", "validate"])
+    ap.add_argument("mode", choices=["rooms", "assets", "validate", "areas"])
+    ap.add_argument("--area", help="teleport to this area blueprint first (no save needed)")
     ap.add_argument("--url", default="http://127.0.0.1:8771")
     ap.add_argument("--out", default=str(REPO / "survey"), help="output root (default: <repo>/survey)")
     ap.add_argument("--room", type=int, action="append", help="limit rooms mode to these room ids")
@@ -207,7 +228,13 @@ def main():
     dev = Dev(args.url)
     if not dev.health():
         sys.exit("dev server not reachable — launch a DEBUG build of the game (scripts/run-game.ps1) "
-                 "with a save loaded in the target area")
+                 "and load any save (--area teleports from there)")
+    if args.mode == "areas":
+        for a in dev.call("WrathAccess.Dev.DevSurvey.Areas()")["areas"]:
+            print(f"{a['blueprint']}\t{a['display']}")
+        return
+    if args.area:
+        enter_area(dev, args.area)
     area = dev.call("WrathAccess.Dev.DevSurvey.Area()")
     out_dir = Path(args.out) / area["blueprint"]
 

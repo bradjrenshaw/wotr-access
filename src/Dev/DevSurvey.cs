@@ -2,6 +2,9 @@
 using System;
 using System.Collections.Generic;
 using Kingmaker;
+using Kingmaker.Blueprints.Area;
+using Kingmaker.EntitySystem.Persistence;
+using Kingmaker.UI._ConsoleUI.Overtips;
 using Newtonsoft.Json;
 using Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar;
 using UnityEngine;
@@ -33,6 +36,51 @@ namespace WrathAccess.Dev
             {
                 blueprint = area.name,
                 display = TextUtil.StripRichText(area.AreaDisplayName),
+            });
+        }
+
+        /// <summary>Every area blueprint in the game with its display name — pick a survey target
+        /// without needing a save anywhere near it.</summary>
+        public static string Areas()
+        {
+            var list = new List<object>();
+            foreach (var a in Kingmaker.Cheats.Utilities.GetScriptableObjects<BlueprintArea>())
+                if (a != null)
+                    list.Add(new { blueprint = a.name, display = TextUtil.StripRichText(a.AreaDisplayName) });
+            return JsonConvert.SerializeObject(new { areas = list });
+        }
+
+        /// <summary>Teleport the session into ANY area by blueprint name (the cheat console's transfer
+        /// path — GameHelper.EnterToArea via the area's enter point; no save in the area needed, no
+        /// autosave written). Asynchronous: poll <see cref="Status"/> until the area matches, loading
+        /// is done, and the room map is built. On-enter cutscenes/etudes of story areas may fire —
+        /// harmless for capturing permanent scene dressing, but expect a non-story unit population.</summary>
+        public static string EnterArea(string blueprintName)
+        {
+            var bp = Kingmaker.Cheats.Utilities.GetBlueprintByName<BlueprintArea>(blueprintName);
+            if (bp == null) return Err("no area blueprint named '" + blueprintName + "'");
+            if (Game.Instance != null && Game.Instance.CurrentlyLoadedArea == bp)
+                return JsonConvert.SerializeObject(new { ok = true, note = "already there" });
+            // Not Utilities.GetEnterPoint: its lambda dereferences .Area unguarded, and at least one
+            // enter-point blueprint in the cache has a null area reference (live NRE, 2026-07-08).
+            BlueprintAreaEnterPoint ep = null;
+            foreach (var p in Kingmaker.Cheats.Utilities.GetScriptableObjects<BlueprintAreaEnterPoint>())
+                if (p != null && ReferenceEquals(p.Area, bp)) { ep = p; break; }
+            if (ep == null) return Err("area has no enter point");
+            Kingmaker.Designers.GameHelper.EnterToArea(ep, AutoSaveMode.None);
+            return JsonConvert.SerializeObject(new { ok = true });
+        }
+
+        /// <summary>Load/readiness probe for the driver's post-EnterArea poll.</summary>
+        public static string Status()
+        {
+            var lp = LoadingProcess.Instance;
+            return JsonConvert.SerializeObject(new
+            {
+                area = Game.Instance != null && Game.Instance.CurrentlyLoadedArea != null
+                    ? Game.Instance.CurrentlyLoadedArea.name : null,
+                loading = lp != null && lp.IsLoadingScreenActive,
+                roomMap = RoomMap.Ready,
             });
         }
 
@@ -199,6 +247,7 @@ namespace WrathAccess.Dev
                     if (f != null) _savedFog.Add(new KeyValuePair<FogOfWarArea, bool>(f, f.IsCheatOffFog));
             }
             foreach (var f in FogOfWarArea.All) if (f != null) f.IsCheatOffFog = true;
+            SetUiHidden(true);
             rig.SetRotation(yaw);
             if (rig.CameraZoom != null) rig.CameraZoom.CurrentNormalizePosition = zoom;
             rig.ScrollToImmediately(new Vector3(x, y, z));
@@ -249,6 +298,7 @@ namespace WrathAccess.Dev
             if (!_saved) return JsonConvert.SerializeObject(new { ok = true, note = "nothing to restore" });
             foreach (var kv in _savedFog)
                 if (kv.Key != null) kv.Key.IsCheatOffFog = kv.Value;
+            SetUiHidden(false);
             var rig = Game.Instance != null && Game.Instance.UI != null ? Game.Instance.UI.GetCameraRig() : null;
             if (rig != null)
             {
@@ -262,6 +312,43 @@ namespace WrathAccess.Dev
         }
 
         // ---- helpers ----
+
+        /// <summary>UI-free captures. The photo-mode SetHideHUD only strips world-camera layers — the
+        /// HUD actually renders through the dedicated UICamera, so we disable THAT (kills every
+        /// screen-space-camera canvas) plus the MainCanvas group (covers overlay-mode panels), plus
+        /// overtips and the photo-mode layers for good measure. IMGUI overlays (the leftover UMM
+        /// window) draw with no camera at all — reflected shut separately.</summary>
+        private static void SetUiHidden(bool hidden)
+        {
+            var cam = Kingmaker.UI.UICamera.Instance != null
+                ? Kingmaker.UI.UICamera.Instance.GetComponent<Camera>() : null;
+            if (cam != null) cam.enabled = !hidden;
+            var group = Kingmaker.Assets.UI.MainCanvas.Instance != null
+                ? Kingmaker.Assets.UI.MainCanvas.Instance.CanvasGroup : null;
+            if (group != null) group.alpha = hidden ? 0f : 1f;
+            Game.Instance?.PhotoModeController?.SetHideHUD(hidden);
+            OvertipsView.ShowOvertips(!hidden);
+            if (hidden) CloseUmmWindow();
+        }
+
+        // The retired UMM doorstop is still injected on this machine and pops its IMGUI window every
+        // boot, photobombing captures. Reflect it closed; harmless no-op when UMM isn't present.
+        private static void CloseUmmWindow()
+        {
+            try
+            {
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    if (asm.GetName().Name.IndexOf("UnityModManager", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    var ui = asm.GetType("UnityModManagerNet.UnityModManager+UI");
+                    var inst = ui?.GetProperty("Instance", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
+                    var toggle = ui?.GetMethod("ToggleWindow", new[] { typeof(bool) });
+                    if (inst != null && toggle != null) toggle.Invoke(inst, new object[] { false });
+                    return;
+                }
+            }
+            catch { /* cosmetic only — never sink a capture over it */ }
+        }
 
         private static float R(float v) => (float)Math.Round(v, 2);
         private static string Err(string msg) => JsonConvert.SerializeObject(new { error = msg });

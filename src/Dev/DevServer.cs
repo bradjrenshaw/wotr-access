@@ -242,6 +242,19 @@ namespace WrathAccess.Dev
         {
             if (sel == "latest") return mgr.GetLatestSave();
             if (sel == "quick") return mgr.GetNewestQuickslot();
+            // "area:<BlueprintName>" = the newest save made IN that area — the survey workflow's way
+            // to load an area in its story-correct etude state (teleporting a later save in shows the
+            // area as the LATER story left it, e.g. the festival square already torn by the attack).
+            if (sel.StartsWith("area:", StringComparison.OrdinalIgnoreCase))
+            {
+                string area = sel.Substring("area:".Length).Trim();
+                Kingmaker.EntitySystem.Persistence.SaveInfo best = null;
+                foreach (var s in mgr)
+                    if (s != null && s.Area != null && s.Area.name == area
+                        && (best == null || s.SystemSaveTime > best.SystemSaveTime))
+                        best = s;
+                return best;
+            }
             if (int.TryParse(sel, out int idx))
             {
                 int i = 0;

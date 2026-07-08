@@ -91,11 +91,30 @@ def downscale(path, max_width):
         return max_width / im.width
 
 
+def brightness(path):
+    try:
+        from PIL import Image, ImageStat
+    except ImportError:
+        return None
+    with Image.open(path) as im:
+        return ImageStat.Stat(im.convert("L")).mean[0]
+
+
 def frame_and_shoot(dev, dest, x, y, z, yaw, zoom, settle, max_width):
     """Frame, capture, and return labels with coordinates RESCALED to the saved image's pixels."""
     dev.call(f"WrathAccess.Dev.DevSurvey.Frame({x}f, {y}f, {z}f, {yaw}f, {zoom}f)")
     time.sleep(settle)  # scroll is immediate; zoom smooths over a few frames
     scale = dev.screenshot(dest, max_width)
+    # A capture racing scene streaming (right after a save load) — or a minimized game window —
+    # produces an all-black frame. Retry with growing waits; a stuck-black capture is loudly flagged.
+    for attempt in range(4):
+        b = brightness(dest)
+        if b is None or b >= 0.5:
+            break
+        time.sleep(2 + 2 * attempt)
+        scale = dev.screenshot(dest, max_width)
+    else:
+        print(f"  WARNING: {dest.name} still black after retries (window minimized? scene not loaded?)")
     labels = dev.call("WrathAccess.Dev.DevSurvey.Labels()")
     labels["w"] = round(labels["w"] * scale)
     labels["h"] = round(labels["h"] * scale)

@@ -71,6 +71,8 @@ New-Item -ItemType Directory -Force -Path $MarkerDir | Out-Null
 Set-Content -Path (Join-Path $MarkerDir "devserver.enable") -Value "1" -Encoding ascii
 $env:WRATHACCESS_DEV = "1"
 
+# NOTE: do NOT pass -screen-* args here — launching Wrath with them made the game exit immediately
+# (tested 2026-07-08; plain launch is fine). Black unfocused captures are handled elsewhere.
 $proc = Start-Process -FilePath $Exe -WorkingDirectory $Game -PassThru
 Write-Host "Launched Wrath (PID $($proc.Id)); dev server -> http://127.0.0.1:$Port. Waiting for /health..." -ForegroundColor Cyan
 
@@ -82,13 +84,24 @@ if ($health -match "ok") {
     Write-Host "WARNING: dev server never answered /health (direct-launch env not inherited? game relaunched via Steam?)." -ForegroundColor Yellow
 }
 
+# Steam handoff: the DIRECTLY-launched PID usually exits within seconds while Steam respawns the
+# real game as a fresh process. Track whichever Wrath process is actually alive, so this launcher
+# blocks for the REAL game (and cancelling it kills the real game) instead of exiting early and
+# tempting a second, overlapping launcher into killing this one's game mid-boot.
+$tracked = $proc
 try {
     $proc.WaitForExit()
+    Start-Sleep -Seconds 5
+    $real = Get-Process -Name Wrath -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($real) {
+        Write-Host "Steam respawned the game as PID $($real.Id); tracking that process." -ForegroundColor Cyan
+        $tracked = $real
+        $real.WaitForExit()
+    }
 } finally {
-    if (-not $proc.HasExited) {
-        Write-Host "Launcher stopping; killing game (PID $($proc.Id))..." -ForegroundColor Yellow
-        $proc.Kill()
+    if (-not $tracked.HasExited) {
+        Write-Host "Launcher stopping; killing game (PID $($tracked.Id))..." -ForegroundColor Yellow
+        $tracked.Kill()
     }
 }
-Write-Host "Wrath exited with code $($proc.ExitCode)." -ForegroundColor Cyan
-exit $proc.ExitCode
+Write-Host "Wrath exited." -ForegroundColor Cyan

@@ -227,6 +227,8 @@ namespace WrathAccess.Dev
         private static float _savedYaw, _savedZoom;
         private static readonly List<KeyValuePair<FogOfWarArea, bool>> _savedFog
             = new List<KeyValuePair<FogOfWarArea, bool>>();
+        private static readonly List<KeyValuePair<FogOfWarArea, bool>> _savedFogEnabled
+            = new List<KeyValuePair<FogOfWarArea, bool>>();
 
         /// <summary>Aim the camera for a capture: fog cheat-revealed, immediate scroll to the point,
         /// held yaw (135 = canonical: north upper-right), normalized zoom (0 = in, 1 = out; the zoom
@@ -243,10 +245,23 @@ namespace WrathAccess.Dev
                 _savedYaw = rig.transform.rotation.eulerAngles.y;
                 _savedZoom = rig.CameraZoom != null ? rig.CameraZoom.CurrentNormalizePosition : 0f;
                 _savedFog.Clear();
-                foreach (var f in FogOfWarArea.All)
-                    if (f != null) _savedFog.Add(new KeyValuePair<FogOfWarArea, bool>(f, f.IsCheatOffFog));
+                _savedFogEnabled.Clear();
+                // FindObjectsOfType, not All: disabled areas drop out of the live set, and a prior
+                // (crashed/foreign) fog-off must still be capturable as state to restore.
+                foreach (var f in UnityEngine.Object.FindObjectsOfType<FogOfWarArea>())
+                    if (f != null)
+                    {
+                        _savedFog.Add(new KeyValuePair<FogOfWarArea, bool>(f, f.IsCheatOffFog));
+                        _savedFogEnabled.Add(new KeyValuePair<FogOfWarArea, bool>(f, f.enabled));
+                    }
             }
-            foreach (var f in FogOfWarArea.All) if (f != null) f.IsCheatOffFog = true;
+            // IsCheatOffFog alone only lifts the fog OVERLAY — UNEXPLORED terrain still renders pure
+            // black (a whole survey session's mystery, 2026-07-08). Disabling the FogOfWarArea itself
+            // (what photo mode's IsDisableFogOfWar does) makes the renderer draw everything.
+            // SNAPSHOT first: disabling an area removes it from the live All set mid-enumeration.
+            var fogs = new List<FogOfWarArea>(FogOfWarArea.All);
+            foreach (var f in fogs)
+                if (f != null) { f.IsCheatOffFog = true; f.enabled = false; }
             SetUiHidden(true);
             rig.SetRotation(yaw);
             if (rig.CameraZoom != null) rig.CameraZoom.CurrentNormalizePosition = zoom;
@@ -295,10 +310,15 @@ namespace WrathAccess.Dev
         /// position/yaw/zoom captured at the first <see cref="Frame"/>.</summary>
         public static string Restore()
         {
-            if (!_saved) return JsonConvert.SerializeObject(new { ok = true, note = "nothing to restore" });
+            // UI-unhide runs UNCONDITIONALLY: a Frame in a restarted/foreign session can leave the UI
+            // hidden with _saved false, and a player staring at a working game with an invisible HUD
+            // (and an un-OCR-able pause menu) has no way to know why. Never gate this on _saved.
+            SetUiHidden(false);
+            if (!_saved) return JsonConvert.SerializeObject(new { ok = true, note = "ui unhidden; no camera/fog state to restore" });
             foreach (var kv in _savedFog)
                 if (kv.Key != null) kv.Key.IsCheatOffFog = kv.Value;
-            SetUiHidden(false);
+            foreach (var kv in _savedFogEnabled)
+                if (kv.Key != null) kv.Key.enabled = kv.Value;
             var rig = Game.Instance != null && Game.Instance.UI != null ? Game.Instance.UI.GetCameraRig() : null;
             if (rig != null)
             {

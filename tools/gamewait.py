@@ -10,6 +10,7 @@ Exit 0 when reached, 1 on timeout (--timeout seconds, default 240).
 """
 
 import argparse
+import subprocess
 import sys
 import time
 import urllib.request
@@ -53,11 +54,21 @@ def main():
         "ingame": lambda: "ctx.ingame" in screen(),
     }[args.state]
 
+    def game_alive():
+        out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq Wrath.exe", "/NH"],
+                             capture_output=True, text=True).stdout
+        return "Wrath.exe" in out
+
     start = time.time()
+    grace = start + 20  # allow a just-started launcher a moment to spawn the process
     while time.time() - start < args.timeout:
         if check():
             print(f"{args.state} ready after {time.time() - start:.1f}s")
             return 0
+        # Fail FAST when the game process is gone — polling a dead game "waits forever".
+        if time.time() > grace and not game_alive():
+            print(f"game process not running — aborting wait for {args.state}", file=sys.stderr)
+            return 2
         time.sleep(0.3)
     print(f"timeout waiting for {args.state}", file=sys.stderr)
     return 1

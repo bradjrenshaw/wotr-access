@@ -106,16 +106,27 @@ namespace WrathAccess.Exploration
         /// the L cycle right after FrontierModel.Refresh so the FIRST press already sees fresh items.</summary>
         public static void FoldFrontier()
         {
-            // Each recompute mints NEW Blob objects, and a mid-frame fold (the L key) runs AFTER this
-            // frame's Tick already folded the old generation into _present — without an eager purge the
-            // cycle would double-list old + new for a frame (heard live as "1 of 4" over 2 real blobs).
-            // Version-gated so steady-state ticks skip the scan; the purge itself reuses _gone
-            // (recompute is key-press work, and Tick's own _gone use starts after this returns).
+            // A recompute REUSES Blob objects for surviving openings (identity keeps the L cycle's
+            // "continue from current" working) but drops vanished ones, and a mid-frame fold (the L
+            // key) runs AFTER this frame's Tick already folded the old generation into _present —
+            // without an eager purge of the dropped blobs the cycle would double-list for a frame
+            // (heard live as "1 of 4" over 2 real blobs). Purge ONLY blobs no longer in Current, so
+            // survivors keep their ScanItem. Version-gated so steady-state ticks skip the scan; the
+            // purge reuses _gone (recompute is key-press work, and Tick's own _gone use starts after
+            // this returns).
             if (FrontierModel.Version != _foldedVersion)
             {
                 _foldedVersion = FrontierModel.Version;
+                var current = FrontierModel.Current;
                 _gone.Clear();
-                foreach (var key in _items.Keys) if (key is FrontierModel.Blob) _gone.Add(key);
+                foreach (var key in _items.Keys)
+                {
+                    if (!(key is FrontierModel.Blob)) continue;
+                    bool live = false;
+                    for (int i = 0; i < current.Count; i++)
+                        if (ReferenceEquals(current[i], key)) { live = true; break; }
+                    if (!live) _gone.Add(key);
+                }
                 for (int i = 0; i < _gone.Count; i++)
                 {
                     var key = _gone[i];

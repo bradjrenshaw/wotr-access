@@ -30,6 +30,7 @@ namespace WrathAccess.Exploration
         }
 
         private static readonly List<Blob> _blobs = new List<Blob>();
+        private static readonly List<Blob> _prev = new List<Blob>(); // last generation, for identity matching
         private static float _nextAt;
         private static int _version;
         private static string _area;
@@ -38,8 +39,10 @@ namespace WrathAccess.Exploration
         /// a full-grid recompute is key-press work (<see cref="Refresh"/>), not frame work.</summary>
         public static IReadOnlyList<Blob> Current => _blobs;
 
-        /// <summary>Bumped on every recompute. Each recompute mints NEW Blob objects, so consumers
-        /// keying on blob identity (WorldModel) use this to know their held generation is stale.</summary>
+        /// <summary>Bumped on every recompute. A recompute REUSES the previous generation's Blob for
+        /// an opening it finds again (identity is what the review cycle keys on — new objects every
+        /// press would reset "continue from current" to nearest, sticking the cycle at 1 of N), so
+        /// this signals membership may have changed, not that every held Blob is stale.</summary>
         public static int Version => _version;
 
         /// <summary>Per-tick area guard (WorldModel.Tick): entering a different area (or the menu)
@@ -65,6 +68,8 @@ namespace WrathAccess.Exploration
         private static void Recompute()
         {
             _version++;
+            _prev.Clear();
+            _prev.AddRange(_blobs);
             _blobs.Clear();
             if (!RoomMap.TryGetGrid(out var label, out var cellY, out int w, out int h)) return;
 
@@ -133,8 +138,29 @@ namespace WrathAccess.Exploration
                     if (d < bestD) { bestD = d; best = p; }
                     if (d > reach) reach = d;
                 }
-                _blobs.Add(new Blob { Position = best, Reach = Mathf.Sqrt(reach), Room = RoomMap.RoomAt(best) });
+                AddBlob(best, Mathf.Sqrt(reach), cell);
             }
+            _prev.Clear();
+        }
+
+        /// <summary>Record a blob, reusing the previous generation's object when this is the same
+        /// opening (nearest old blob whose extent overlaps ours — exact when standing still, and a
+        /// receding ribbon still lands within the joined extents). Fields update in place; a split
+        /// opening keeps the old identity for one half, mints the other; a vanished one is simply
+        /// never claimed and drops out.</summary>
+        private static void AddBlob(Vector3 pos, float reach, float cell)
+        {
+            Blob match = null; float bestD = float.MaxValue;
+            foreach (var old in _prev)
+            {
+                float dx = old.Position.x - pos.x, dz = old.Position.z - pos.z;
+                float d = dx * dx + dz * dz;
+                float tol = old.Reach + reach + 2f * cell;
+                if (d <= tol * tol && d < bestD) { bestD = d; match = old; }
+            }
+            if (match != null) _prev.Remove(match); else match = new Blob();
+            match.Position = pos; match.Reach = reach; match.Room = RoomMap.RoomAt(pos);
+            _blobs.Add(match);
         }
     }
 

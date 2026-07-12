@@ -170,7 +170,7 @@ namespace WrathAccess.Exploration.Overlays
         {
             var cat = ModSettingsRegistry.EnsureCategory(path, labelPath, locKey);
             if (cat.GetByKey("mode") == null)
-                cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.mode"));
+                cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.movement_mode"));
             if (cat.GetByKey("speed") == null)
                 cat.Add(new IntSetting("speed", "Speed (feet/sec)", defaultSpeed, 1, 60, 1, "overlay.speed"));
             // World-map cursor for this slot (a SEPARATE system from the in-area one above, but reusing this
@@ -309,7 +309,11 @@ namespace WrathAccess.Exploration.Overlays
             var choices = sys.SupportedModes.Select(OverlayModes.Choice).ToList();
             var def = DefaultOn.Contains(sys.Key) ? OverlayMode.Continuous : OverlayMode.Off;
             if (!sys.SupportedModes.Contains(def)) def = sys.SupportedModes.Count > 0 ? sys.SupportedModes[0] : OverlayMode.Off;
-            return new ChoiceSetting("mode", "Mode", choices, OverlayModes.Id(def), "overlay.mode");
+            // "Active when", NOT "mode": this is the audio playback gate (Off / When moving /
+            // Continuous), and it shared a loc key with the cursor slots' "Movement mode" — the JSON
+            // duplicate made every SYSTEM display "Movement mode", nonsense for cursor-independent
+            // systems like the log (whose choices are just Off/Continuous).
+            return new ChoiceSetting("mode", "Active when", choices, OverlayModes.Id(def), "overlay.play_mode");
         }
 
         // Pre-mode-refactor composition flag: map each saved `<sys>.enabled` bool to the new `<sys>.mode`
@@ -438,7 +442,7 @@ namespace WrathAccess.Exploration.Overlays
             var cat = ModSettingsRegistry.EnsureCategory("overlays." + id + ".cursor." + key,
                 "Overlays/_/Cursor/" + label); // overlay name segment is irrelevant (already labelled)
             if (cat.GetByKey("mode") == null)
-                cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.mode"));
+                cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.movement_mode"));
             if (cat.GetByKey("speed") == null)
                 cat.Add(new IntSetting("speed", "Speed (feet/sec)", 15, 1, 60, 1, "overlay.speed"));
             // World-map cursor for this slot (read by GlobalMapCursor off the active overlay) — same as the

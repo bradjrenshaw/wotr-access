@@ -485,6 +485,11 @@ namespace WrathAccess
                 WrathAccess.Exploration.Scanner.DescribeTarget).AddBinding(KeyCode.X);
             InputManager.Register("explore.describeRoom", "Describe room", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.DescribeRoom).AddBinding(KeyCode.X, shift: true);
+            // Space: skip the current cutscene (the game's own skip — its Enter binding; we use Space so
+            // Enter-after-dialogue can't blow through a scene). InGame so it's live while a cutscene holds
+            // control; in normal play the Exploration Space (pause) shadows it.
+            InputManager.Register("game.skipCutscene", "Skip cutscene", InputCategory.InGame,
+                WrathAccess.Exploration.CutsceneSkip.Request).AddBinding(KeyCode.Space);
             // InGame (not Exploration): this must keep working when we DON'T have control — opening the
             // pause menu mid-cutscene/dialogue is a base in-game key, so it isn't gated off with movement.
             InputManager.Register("explore.cancelTargeting", "Cancel targeting / game menu", InputCategory.InGame,

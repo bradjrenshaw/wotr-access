@@ -192,9 +192,21 @@ namespace WrathAccess.Exploration
 
         /// <summary>
         /// Interact with this item — mirroring the game's click (auto-path + act), driven through the
-        /// game's own click handlers/commands (see the interaction-pipeline memory). Returns true if
-        /// something was triggered. Base: not interactable (e.g. a raw map marker).
+        /// game's own click handlers/commands (see the interaction-pipeline memory).
+        /// Base: not interactable (e.g. a raw map marker).
         /// </summary>
-        public virtual bool Interact() => false;
+        public virtual InteractOutcome Interact() => InteractOutcome.NotSupported;
+    }
+
+    /// <summary>What an <see cref="ScanItem.Interact"/> attempt did — drives the caller's announcement.</summary>
+    internal enum InteractOutcome
+    {
+        /// <summary>Not interactable / nothing triggered — the caller announces "can't interact".</summary>
+        NotSupported,
+        /// <summary>An action was issued — the caller announces "interacting with …".</summary>
+        Started,
+        /// <summary>The item REFUSED and already spoke its own reason (e.g. "too far to attack this
+        /// turn") — the caller stays silent so the refusal isn't clobbered.</summary>
+        RefusedSpoken,
     }
 }

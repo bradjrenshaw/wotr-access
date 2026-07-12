@@ -6,6 +6,7 @@ using Kingmaker.UI.UnitSettings; // MechanicActionBarSlot subtypes
 using Kingmaker.UnitLogic.Abilities; // AbilityData
 using Kingmaker.UnitLogic.Abilities.Blueprints; // AbilityTargetAnchor
 using Kingmaker.UnitLogic.Commands; // UnitUseAbility
+using Kingmaker.UnitLogic.Commands.Base; // UnitCommand (IsUnitCloseEnough)
 using UnityEngine;
 
 namespace WrathAccess.Exploration
@@ -81,12 +82,50 @@ namespace WrathAccess.Exploration
             var ability = Handler != null ? Handler.SelectedAbility : null;
             if (ability == null) return;
             var go = unit != null && unit.View != null ? unit.View.gameObject : null;
+
+            // Turn-based TOUCH cast on an out-of-reach target: vanilla casts IN PLACE onto a held
+            // charge (see TouchApproachPatch) — silent and baffling by ear. Our behavior instead:
+            // approach-then-cast when the MOVE action's range covers the walk (mirrors the attack rule
+            // in ProxyUnit — the standard action must survive for the cast itself), and REFUSE ALOUD
+            // when it can't. Never the silent held-charge trap.
+            bool wantApproach = false;
+            var caster = ability.Caster != null ? ability.Caster.Unit : null;
+            if (CombatMode.InTurnBased && unit != null && caster != null && unit != caster
+                && caster == CombatMode.CurrentUnit && caster.IsDirectlyControllable
+                && ability.Blueprint.StickyTouch != null)
+            {
+                float reach = ability.GetApproachDistance(unit);
+                // The command system's own "am I in range" test (same statics UnitCommand.Start uses).
+                bool inReach = UnitCommand.IsUnitCloseEnough(unit.Position, caster.Position,
+                    caster.EyePosition, reach, needLOS: false, ignoreBlockerRadius: 0f);
+                if (!inReach)
+                {
+                    // TryApproach also POPULATES the path, so the issued command has a route to walk.
+                    if (CombatMode.TryApproach(unit.Position, reach, out float walk, out float moveRange)
+                        && walk <= moveRange)
+                        wantApproach = true;
+                    else
+                    {
+                        Tts.Speak(Loc.T("combat.too_far_to_cast"), interrupt: true);
+                        return;
+                    }
+                }
+            }
+
             // Let the game validate + cast (OnClick: GetTarget, restrictions incl. mount delegation, the cast
             // command, pointer-mode clear). On refusal it raises IWarningNotificationUIHandler with the exact
             // reason, which WarningReader speaks — so we don't second-guess it. OnClick returns true only if
             // it actually issued the cast.
             if (Handler.OnClick(go, point, 0))
+            {
+                if (wantApproach)
+                {
+                    var cmd = caster.Commands.GetCommand<UnitUseAbility>();
+                    if (cmd != null && cmd.Ability != null && cmd.Ability.Blueprint == ability.Blueprint)
+                        WrathAccess.Patches.TouchApproachPatch.Enable(cmd);
+                }
                 Tts.Speak(unit != null ? Loc.T("target.cast_on", new { name = unit.CharacterName }) : Loc.T("target.cast"), interrupt: true);
+            }
         }
 
         public void Cancel()

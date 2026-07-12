@@ -42,7 +42,7 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 | Enter | Interact at the cursor (left-click) |
 | Backspace | Move the selected party to the cursor |
 | C | Recenter the cursor on the party leader |
-| Space | Toggle pause |
+| Space | Toggle pause; during a cutscene, skip it |
 | Z | Where am I (area, indoors, current room, whether the spot is unexplored, and rough map position) |
 | X | Describe the scanner target (the mod's authored visual description of the review item, where one exists) |
 | Shift+X | Describe the current room (the mod's authored room description, where one exists) |

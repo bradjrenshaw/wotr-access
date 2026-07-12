@@ -247,18 +247,19 @@ namespace WrathAccess.Exploration
         // selection (the unit source the click uses); the interaction's SelectUnit picks the actor.
         // forceOvertipInteractions: true — overtip interactions are hover-triggered in mouse mode and
         // we have no hover.
-        public override bool Interact()
+        public override InteractOutcome Interact()
         {
             var view = _obj.View;
-            if (view == null) return false;
+            if (view == null) return InteractOutcome.NotSupported;
 
             // Area transitions (area exits) aren't InteractionParts, so ClickMapObjectHandler can't act on
             // them — that's why they read "can't interact". Trigger them the way the overtip's click does.
             var transition = _obj.Get<AreaTransitionPart>();
-            if (transition != null) return TriggerTransition(view, transition);
+            if (transition != null)
+                return TriggerTransition(view, transition) ? InteractOutcome.Started : InteractOutcome.NotSupported;
 
             var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
-            if (units == null || units.Count == 0) return false;
+            if (units == null || units.Count == 0) return InteractOutcome.NotSupported;
 
             // Locked objects: route through the game's lock check so its tool-choice window (skill / +5 /
             // +10 / destroy) opens — the branch ClickMapObjectHandler.OnClick runs ABOVE Interact, which our
@@ -266,9 +267,10 @@ namespace WrathAccess.Exploration
             if (LockpickVM.NeedLockpick(view))
             {
                 EventBus.RaiseEvent<ILockpickUIHandler>(h => h.HandleLockpickRequest(view, false));
-                return true;
+                return InteractOutcome.Started;
             }
-            return ClickMapObjectHandler.Interact(view.gameObject, units, forceOvertipInteractions: true);
+            return ClickMapObjectHandler.Interact(view.gameObject, units, forceOvertipInteractions: true)
+                ? InteractOutcome.Started : InteractOutcome.NotSupported;
         }
 
         // Mirrors AreaTransitionController.StartAreaTransition: move the party to the exit in formation,

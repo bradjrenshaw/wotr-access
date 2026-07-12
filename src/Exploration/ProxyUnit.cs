@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Kingmaker.Controllers.Clicks.Handlers; // ClickUnitHandler
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UnitLogic.Commands; // UnitAttack (approach radius)
+using Kingmaker.UnitLogic.Commands.Base; // UnitCommand (IsUnitCloseEnough)
 
 namespace WrathAccess.Exploration
 {
@@ -80,15 +81,16 @@ namespace WrathAccess.Exploration
 
         // Same as clicking the unit: the handler selects/talks/attacks/loots as appropriate and derives
         // the acting unit itself (nearest selected + main-player-preferred).
-        public override bool Interact()
+        public override InteractOutcome Interact()
         {
             var view = _unit.View;
-            if (view == null) return false;
+            if (view == null) return InteractOutcome.NotSupported;
             // Turn-based: pre-compute the approach path to the attack's reach (so the command has a route to
             // walk — without it the game's mouse-driven prediction never ran and the unit wouldn't move).
-            // But REFUSE the attack if reaching attack range would take more than the MOVE action: the game
-            // would otherwise spend the standard action as a second move and never strike — a far enemy that
-            // needs move+standard just to reach gets run into for nothing. The player can still close
+            // But REFUSE the attack when attack range can't be reached within the MOVE action — whether the
+            // walk is too long OR there's no route at all: the game would otherwise spend the standard
+            // action as a second move and never strike. RefusedSpoken keeps the caller from talking over
+            // the refusal (it used to announce "Interacting with …" on top). The player can still close
             // deliberately with move-to-cursor (Backspace), which is free to spend both actions on movement.
             if (CombatMode.InTurnBased)
             {
@@ -96,15 +98,19 @@ namespace WrathAccess.Exploration
                 if (attacker != null && attacker.View != null && attacker.CanAttack(_unit))
                 {
                     float reach = UnitAttack.GetApproachRadius(attacker.GetFirstWeapon(), attacker, _unit);
-                    if (CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange)
-                        && walk > moveRange)
+                    bool inReach = UnitCommand.IsUnitCloseEnough(_unit.Position, attacker.Position,
+                        attacker.EyePosition, reach, needLOS: false, ignoreBlockerRadius: 0f);
+                    if (!inReach
+                        && !(CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange)
+                             && walk <= moveRange))
                     {
-                        Tts.Speak(Loc.T("combat.too_far_to_attack"));
-                        return true; // handled (no command issued); the unit stays put rather than burning both actions
+                        Tts.Speak(Loc.T("combat.too_far_to_attack"), interrupt: true);
+                        return InteractOutcome.RefusedSpoken; // no command issued; the unit stays put
                     }
                 }
             }
-            return new ClickUnitHandler().OnClick(view.gameObject, view.transform.position, 0);
+            return new ClickUnitHandler().OnClick(view.gameObject, view.transform.position, 0)
+                ? InteractOutcome.Started : InteractOutcome.NotSupported;
         }
     }
 }

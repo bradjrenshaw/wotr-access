@@ -332,6 +332,7 @@
   "bind.explore.secondaryRight": "Secondary cursor right",
   "bind.explore.interact": "Interact at cursor",
   "bind.explore.pause": "Toggle pause",
+  "bind.game.skipCutscene": "Skip cutscene",
   "bind.explore.cancelTargeting": "Cancel targeting or open game menu",
   "bind.party.selectAll": "Select whole party",
   "bind.party.select1": "Select party member 1",

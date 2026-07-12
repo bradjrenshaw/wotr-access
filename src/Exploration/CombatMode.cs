@@ -145,8 +145,23 @@ namespace WrathAccess.Exploration
             if (cur == _lastTurn) return;
             _lastTurn = cur;
             if (cur != null)
-                Tts.Speak(Message.Localized("ui", cur.IsPlayersEnemy ? "combat.turn_enemy" : "combat.turn",
-                    new { name = cur.CharacterName }).Resolve());
+            {
+                // Two invisible-by-ear states get surfaced with the turn cue, because both make the
+                // unit "act on its own" the moment its turn starts: an AI-controlled party member
+                // (Ctrl+D) has its whole turn played by the game brain, and a PENDING ORDER from an
+                // earlier turn (multi-turn orders are vanilla TB design) resumes automatically.
+                string key = cur.IsPlayersEnemy ? "combat.turn_enemy"
+                    : !cur.IsDirectlyControllable ? "combat.turn_ai"
+                    : "combat.turn";
+                Tts.Speak(Message.Localized("ui", key, new { name = cur.CharacterName }).Resolve());
+                if (!cur.IsPlayersEnemy && cur.IsDirectlyControllable && !cur.Commands.Empty)
+                {
+                    var action = DescribeAction(cur);
+                    Tts.Speak(action != null
+                        ? Message.Localized("ui", "combat.pending_order", new { action }).Resolve()
+                        : Message.Localized("ui", "combat.pending_order_generic").Resolve());
+                }
+            }
         }
 
         /// <summary>

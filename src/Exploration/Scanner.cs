@@ -640,10 +640,17 @@ namespace WrathAccess.Exploration
                 if (!reachable) { Speak(Loc.T("scan.cant_reach", new { name })); return; }
             }
             EnsureSelection();
-            if (target.Interact())
-                Speak(Loc.T("scan.interacting", new { name = string.IsNullOrEmpty(target.Name) ? Loc.T("scan.item_fallback") : target.Name }));
-            else
-                Speak(Loc.T("scan.cant_interact", new { name }));
+            switch (target.Interact())
+            {
+                case InteractOutcome.Started:
+                    Speak(Loc.T("scan.interacting", new { name = string.IsNullOrEmpty(target.Name) ? Loc.T("scan.item_fallback") : target.Name }));
+                    break;
+                case InteractOutcome.RefusedSpoken:
+                    break; // the item already spoke its refusal — don't talk over it
+                default:
+                    Speak(Loc.T("scan.cant_interact", new { name }));
+                    break;
+            }
         }
 
         // Walk to the shared cursor — the point planted by Home or moved by the tile-view overlay. Routes

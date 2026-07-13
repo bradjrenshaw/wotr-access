@@ -1,3 +1,4 @@
+using System.Collections.Generic; // List (convert submenu)
 using Kingmaker;
 using Kingmaker.Controllers.Clicks.Handlers; // ClickWithSelectedAbilityHandler
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
@@ -47,6 +48,13 @@ namespace WrathAccess.Exploration
             var ability = AbilityOf(slot);
             if (ability == null) { vm.OnMainClick(); return; } // items/unknown kinds: fall back for now
 
+            // Variant containers (hexes like Evil Eye) and uncastable spells with conversions
+            // (metamagic fallbacks): the game's own main click opens the convert FLYOUT instead of
+            // casting — a variant parent's cast command is a silent no-op (the Evil Eye repro:
+            // "casting on enemy", nothing happens). Mirror the flyout as a choice submenu; picking
+            // an entry aims/casts THAT variant. Checked BEFORE IsPossibleActive, like the game does.
+            if (WantsConvertMenu(slot, ability) && OpenConvertMenu(slot)) return;
+
             // Mirror MechanicActionBarSlotAbility.OnClick: a regular ability only aims/casts when it's actually
             // castable now. Otherwise route through OnMainClick — which plays the can't-use sound and raises
             // the game's reason (spoken by WarningReader) — instead of aiming/issuing a command the game won't
@@ -62,6 +70,36 @@ namespace WrathAccess.Exploration
             if (slot is MechanicActionBarSlotAbility a) return a.Ability;
             if (slot is MechanicActionBarSlotSpell s) return s.Spell;
             return null;
+        }
+
+        // The exact conditions ActionBarSlotVM.OnMainClick uses to open the flyout instead of casting.
+        private static bool WantsConvertMenu(MechanicActionBarSlot slot, AbilityData ability)
+        {
+            if (slot is MechanicActionBarSlotMemorizedSpell) return !slot.IsPossibleActive();
+            if (slot is MechanicActionBarSlotSpontaneousSpell sp) return sp.GetResource() > 0 && !slot.IsPossibleActive();
+            if (slot is MechanicActionBarSlotAbility) return ability.Blueprint.HasVariants;
+            return false;
+        }
+
+        // The game's flyout content, as a submenu: GetConvertedAbilityData → one mechanic slot per
+        // variant/conversion. False when there's nothing to offer (callers fall through).
+        private static bool OpenConvertMenu(MechanicActionBarSlot slot)
+        {
+            var conv = slot.GetConvertedAbilityData();
+            if (conv == null || conv.Count == 0) return false;
+            var subs = new List<MechanicActionBarSlot>(conv.GetMechanicSlots(slot.Unit));
+            var labels = new List<string>();
+            foreach (var s in subs) labels.Add(s.GetTitle());
+            WrathAccess.Screens.ChoiceSubmenuScreen.Open(slot.GetTitle(), labels, 0, i =>
+            {
+                var sub = subs[i];
+                var subAbility = AbilityOf(sub);
+                if (subAbility == null) { sub.OnClick(); return; } // activatable variants: the slot's own click
+                if (!sub.IsPossibleActive()) { Tts.Speak(Loc.T("action.cant_use"), interrupt: true); return; }
+                if (subAbility.TargetAnchor == AbilityTargetAnchor.Owner) { CastOnSelf(subAbility); return; }
+                Begin(subAbility, sub.GetTitle());
+            });
+            return true;
         }
 
         private static void Begin(AbilityData ability, string announceName)

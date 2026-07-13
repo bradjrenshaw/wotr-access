@@ -59,7 +59,20 @@ namespace WrathAccess.Exploration
             // castable now. Otherwise route through OnMainClick — which plays the can't-use sound and raises
             // the game's reason (spoken by WarningReader) — instead of aiming/issuing a command the game won't
             // run (a dead, piling-up queue, e.g. Charge with no valid charge).
-            if (!slot.IsPossibleActive()) { vm.OnMainClick(); return; }
+            if (!slot.IsPossibleActive())
+            {
+                // The invisible refusal reason for touch spells: the caster already HOLDS this spell's
+                // charge (uses read fine, availability is false). Explain it, with the way out.
+                var held = slot.Unit?.Get<Kingmaker.UnitLogic.Parts.UnitPartTouch>();
+                if (held != null && held.Ability != null && held.Ability.StickyTouch?.Blueprint == ability.Blueprint)
+                {
+                    Tts.Speak(Loc.T("touch.holding_blocked",
+                        new { name = slot.Unit.CharacterName, spell = held.Ability.Data.Name }), interrupt: true);
+                    return;
+                }
+                vm.OnMainClick();
+                return;
+            }
 
             if (ability.TargetAnchor == AbilityTargetAnchor.Owner) { CastOnSelf(ability); return; } // self/no target
             Begin(ability, slot.GetTitle()); // targeted: enter aim; player picks via cursor (Enter) / scanner (I)

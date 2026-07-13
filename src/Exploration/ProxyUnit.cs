@@ -85,6 +85,32 @@ namespace WrathAccess.Exploration
         {
             var view = _unit.View;
             if (view == null) return InteractOutcome.NotSupported;
+
+            // A held touch charge turns the interact keys into the DELIVER keys for valid targets —
+            // the sighted equivalent is the plain deliver-cursor click (the deliver ability is
+            // deliberately hidden from the action bar, so there's no slot to press). Invalid targets
+            // and ground actions keep their normal behaviour. Turn-based gates the walk like attacks.
+            var touch = TouchCharge.Held(out var holder);
+            if (touch != null && TouchCharge.CanDeliverTo(touch, _unit))
+            {
+                if (CombatMode.InTurnBased && holder == CombatMode.CurrentUnit && holder != _unit)
+                {
+                    float treach = touch.Ability.Data.GetApproachDistance(_unit);
+                    bool inReach = UnitCommand.IsUnitCloseEnough(_unit.Position, holder.Position,
+                        holder.EyePosition, treach, needLOS: false, ignoreBlockerRadius: 0f);
+                    if (!inReach
+                        && !(CombatMode.TryApproach(_unit.Position, treach, out float twalk, out float tmove)
+                             && twalk <= tmove))
+                    {
+                        Tts.Speak(Loc.T("combat.too_far_to_cast"), interrupt: true);
+                        return InteractOutcome.RefusedSpoken;
+                    }
+                }
+                TouchCharge.Deliver(holder, touch, _unit);
+                Tts.Speak(Loc.T("touch.delivering",
+                    new { spell = touch.Ability.Data.Name, name = _unit.CharacterName }), interrupt: true);
+                return InteractOutcome.RefusedSpoken; // we spoke the outcome ourselves
+            }
             // Turn-based: pre-compute the approach path to the attack's reach (so the command has a route to
             // walk — without it the game's mouse-driven prediction never ran and the unit wouldn't move).
             // But REFUSE the attack when attack range can't be reached within the MOVE action — whether the

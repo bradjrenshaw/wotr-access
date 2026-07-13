@@ -81,6 +81,14 @@ namespace WrathAccess.Exploration
             var pts = ComputePath(targetPos, reach);
             moveActionMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false);
             if (pts == null || pts.Count == 0) return false; // already in reach, or no route at all
+            // ENDPOINT test — the same check the game's click validation applies (PathVisualizer.
+            // IsCurrentPathForPoint): an A* approach path completes at the CLOSEST ATTAINABLE node when
+            // no in-reach node is available (allies crowding a melee target, clearance-tight doorways,
+            // reach beyond the 6x-speed path cap) — its LENGTH can fit the budget while its END still
+            // stands short of acting range. Walking it strands the unit doing nothing, silently, and
+            // parks a pending order for next turn. Short-of-reach endpoints report as unreachable.
+            var end = pts[pts.Count - 1];
+            if (Owlcat.Runtime.Core.Utils.GeometryUtils.MechanicsDistance(end, targetPos) > reach) return false;
             for (int i = 1; i < pts.Count; i++) walkMeters += Vector3.Distance(pts[i - 1], pts[i]);
             return true;
         }
@@ -98,6 +106,7 @@ namespace WrathAccess.Exploration
             actionsState.ApproachPoint = point;
             actionsState.ApproachRadius = approachRadius; // 0.3 ~= exact (move); the attack reach for an approach
             actionsState.NeedLOS = false;
+            actionsState.IgnoreBlockerId = 0; // don't inherit a stale hover value (vanilla commands pass 0 too)
             pv.CalculatePathForCommand(cu, actionsState, updateActionsState: true);
 
             var path = pv.CurrentPathForUnit(cu.View);
@@ -177,10 +186,17 @@ namespace WrathAccess.Exploration
             if (screen == null || screen.Key != "ctx.ingame") return;
             // Real-time-with-pause: report what the selected character(s) are doing (turn-based instead
             // gives the acting unit's action economy below).
-            if (!InTurnBased) { Tts.Speak(SelectedActionsLine(), interrupt: true); return; }
-            var line = StatusLine();
-            if (line == null) { Tts.Speak(Message.Localized("ui", "combat.no_active_turn").Resolve(), interrupt: true); return; }
-            Tts.Speak(line, interrupt: true);
+            if (!InTurnBased) Tts.Speak(SelectedActionsLine(), interrupt: true);
+            else
+            {
+                var line = StatusLine();
+                Tts.Speak(line ?? Message.Localized("ui", "combat.no_active_turn").Resolve(), interrupt: true);
+            }
+            // A held touch charge shapes what the unit can do (its spell won't recast; the interact
+            // keys deliver) — part of the status, queued after the main line.
+            var touch = TouchCharge.Held(out _);
+            if (touch != null)
+                Tts.Speak(Loc.T("touch.holding_status", new { spell = touch.Ability.Data.Name }));
         }
 
         // "{name}, {action}" for each selected, controllable character (idle when they've nothing queued),

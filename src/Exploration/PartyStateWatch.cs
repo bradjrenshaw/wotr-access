@@ -20,8 +20,16 @@ namespace WrathAccess.Exploration
         private static int _ctx;
         private static bool _hold, _stop, _stealth, _ai;
 
+        // Held touch charges announced so far: unit id -> spell name. A lingering charge blocks
+        // recasting its spell and — out of combat — never expires; sighted players see a glowing
+        // hand. Announce once per hold, and only when the holder is command-idle (a running command
+        // means the auto-delivery is still in flight and will clear it silently).
+        private static readonly System.Collections.Generic.Dictionary<string, string> _held
+            = new System.Collections.Generic.Dictionary<string, string>();
+
         public static void Tick()
         {
+            TickTouchCharges();
             var sel = Game.Instance?.UI?.SelectionManager;
             if (sel == null) return;
             bool hold = sel.IsHold();
@@ -43,6 +51,23 @@ namespace WrathAccess.Exploration
             if (stop != _stop) { _stop = stop; if (stop) Tts.Speak(Loc.T("party.stopped")); }
             if (stealth != _stealth) { _stealth = stealth; Tts.Speak(Loc.T(stealth ? "party.stealth_on" : "party.stealth_off")); }
             if (ai != _ai) { _ai = ai; Tts.Speak(Loc.T(ai ? "party.ai_on" : "party.ai_off")); }
+        }
+
+        private static void TickTouchCharges()
+        {
+            var party = Game.Instance?.Player?.Party;
+            if (party == null) return;
+            foreach (var u in party)
+            {
+                if (u == null) continue;
+                var part = u.Get<Kingmaker.UnitLogic.Parts.UnitPartTouch>();
+                string spell = part != null && part.Ability != null ? part.Ability.Data.Name : null;
+                if (spell == null) { _held.Remove(u.UniqueId); continue; }
+                if (!u.Commands.Empty) continue; // delivery in flight — let it finish quietly
+                if (_held.TryGetValue(u.UniqueId, out var prev) && prev == spell) continue;
+                _held[u.UniqueId] = spell;
+                Tts.Speak(Loc.T("touch.holding", new { name = u.CharacterName, spell }));
+            }
         }
     }
 }

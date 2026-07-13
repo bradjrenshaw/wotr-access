@@ -243,6 +243,10 @@
   "preset.standard": "Standard",
   "preset.concise": "Concise",
   "preset.custom": "Custom",
+  "preset.default_rtwp": "Default Realtime With Pause",
+  "preset.default_tb": "Default Turn Based",
+  "preset.nothing": "Nothing",
+  "log.preset": "Preset",
 
   "sounds.title": "Sounds",
   "taxonomy.poi": "Points of interest",

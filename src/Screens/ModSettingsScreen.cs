@@ -249,10 +249,14 @@ namespace WrathAccess.Screens
             }
             else if (key == "log")
             {
-                // The shared log message-type tree, configured once for all overlays.
+                // The shared log message-type tree, configured once for all overlays — with a preset
+                // dropdown up top (same idiom as the UI verbosity presets) for the 90% cases.
                 var d = SystemDefaults("log");
                 if (d != null)
+                {
+                    b.AddItem(ControlId.Structural(k + "preset"), BuildLogPresetDropdown(d));
                     foreach (var s in d.Children) ModSettingNodes.Emit(b, s, k);
+                }
             }
             else if (key == "exploration")
             {
@@ -310,6 +314,63 @@ namespace WrathAccess.Screens
             // "Custom" is a derived display state, not a choice — mark it virtual.
             return ModSettingNodes.ChoiceDropdown(L("ui.verbosity", "Verbosity"), labels, Current, Apply,
                 selectableCount: VerbosityPresets.Length);
+        }
+
+        // Log presets — explicit NAMED sets (no automatic mode switching yet, user spec 2026-07-08):
+        // - Default Realtime With Pause: combat + magic silenced (the events system speaks those),
+        //   saving throws off, every other message type on.
+        // - Default Turn Based: everything on.
+        // - Nothing: everything off.
+        // Same derived-state idiom as the verbosity dropdown: the current selection is computed from
+        // the live toggles; hand-edits read back as "Custom". Only the on/off toggles are touched.
+        private static NodeVtable BuildLogPresetDropdown(CategorySetting logRoot)
+        {
+            // Group key ("" = root-level, i.e. Other messages) -> toggle.
+            var toggles = new List<KeyValuePair<string, BoolSetting>>();
+            foreach (var s in logRoot.Children)
+            {
+                if (s is BoolSetting rb) toggles.Add(new KeyValuePair<string, BoolSetting>("", rb));
+                else if (s is CategorySetting sub)
+                    foreach (var c in sub.Children)
+                        if (c is BoolSetting gb) toggles.Add(new KeyValuePair<string, BoolSetting>(sub.Key, gb));
+            }
+
+            bool RtwpValue(string group, BoolSetting t)
+                => group != "combat" && group != "magic" && !(group == "checks" && t.Key == "saves");
+
+            var labels = new List<string>
+            {
+                L("preset.default_rtwp", "Default Realtime With Pause"),
+                L("preset.default_tb", "Default Turn Based"),
+                L("preset.nothing", "Nothing"),
+                L("preset.custom", "Custom"),
+            };
+
+            int Current()
+            {
+                bool rtwp = true, all = true, none = true;
+                foreach (var t in toggles)
+                {
+                    bool v = t.Value.Get();
+                    if (v != RtwpValue(t.Key, t.Value)) rtwp = false;
+                    if (!v) all = false;
+                    if (v) none = false;
+                }
+                return rtwp ? 0 : all ? 1 : none ? 2 : 3;
+            }
+
+            void Apply(int idx)
+            {
+                if (idx < 0 || idx > 2) return; // choosing Custom = keep as-is
+                ModSettings.Batch(() =>
+                {
+                    foreach (var t in toggles)
+                        t.Value.Set(idx == 0 ? RtwpValue(t.Key, t.Value) : idx == 1);
+                });
+            }
+
+            return ModSettingNodes.ChoiceDropdown(L("log.preset", "Preset"), labels, Current, Apply,
+                selectableCount: 3);
         }
 
         private static CategorySetting SystemDefaults(string key)

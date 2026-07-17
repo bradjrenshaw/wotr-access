@@ -34,6 +34,7 @@ namespace WrathAccess.Exploration.Overlays
         public override void Tick(float dt, Overlay overlay)
         {
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !CombatMode.InTurnBased) { _has = false; _armed = false; return; }
+            if (Targeting.Aiming) { _has = false; _armed = false; return; } // aiming: the AoE preview owns cursor stops
             if (WrathAccess.UI.Navigation.HasFocus) return; // HUD owns the arrows — freeze, don't fire
 
             var p = overlay.Cursor.Position;

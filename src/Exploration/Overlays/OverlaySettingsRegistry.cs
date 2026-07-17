@@ -30,6 +30,7 @@ namespace WrathAccess.Exploration.Overlays
             () => new FogSystem(),
             () => new ObjectCueSystem(),
             () => new PathInfoSystem(),
+            () => new AoePreviewSystem(),
             () => new LogSystem(),
             () => new GlobalMapSonarSystem(), // WorldMap-scoped: sweeps map points under the engaged overlay
         };
@@ -79,7 +80,7 @@ namespace WrathAccess.Exploration.Overlays
         // The invisible Default overlay's out-of-box composition (which systems are on). Stored as
         // defaults.<system>.enabled, user-editable from the Sonar/Log/Exploration tabs.
         private static readonly HashSet<string> DefaultOn =
-            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "log", "worldmap_sonar" };
+            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "aoe", "log", "worldmap_sonar" };
 
         private static readonly Dictionary<string, Overlay> _objects = new Dictionary<string, Overlay>();
 

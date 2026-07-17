@@ -157,11 +157,15 @@ namespace WrathAccess.Exploration
                         wantApproach = true;
                     else
                     {
+                        CombatMode.CancelPathReservation(); // no command follows the computed path
                         Tts.Speak(Loc.T("combat.too_far_to_cast"), interrupt: true);
                         return;
                     }
                 }
             }
+
+            // In-reach cast: no path was computed, so drop any stale reservations before issuing.
+            if (CombatMode.InTurnBased && !wantApproach) CombatMode.CancelPathReservation();
 
             // Let the game validate + cast (OnClick: GetTarget, restrictions incl. mount delegation, the cast
             // command, pointer-mode clear). On refusal it raises IWarningNotificationUIHandler with the exact
@@ -175,6 +179,7 @@ namespace WrathAccess.Exploration
                     if (cmd != null && cmd.Ability != null && cmd.Ability.Blueprint == ability.Blueprint)
                         WrathAccess.Patches.TouchApproachPatch.Enable(cmd);
                 }
+                CombatMode.NoteIssuedCommand(caster);
                 Tts.Speak(unit != null ? Loc.T("target.cast_on", new { name = unit.CharacterName }) : Loc.T("target.cast"), interrupt: true);
             }
         }

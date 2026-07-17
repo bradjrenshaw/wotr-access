@@ -4,8 +4,10 @@ using Kingmaker.Blueprints.Root.Strings; // UIStrings (game-localized TB texts)
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.PubSubSystem; // EventBus, IMessageModalUIHandler
 using Kingmaker.TurnBasedMode; // PathVisualizer, ActionsState
+using Kingmaker.TurnBasedMode.Controllers; // CombatAction (prediction state machine)
 using Kingmaker.UI; // MessageModalBase
 using Kingmaker.UnitLogic.Commands; // UnitUseAbility / UnitAttack / UnitMoveTo (live action)
+using Kingmaker.UnitLogic.Commands.Base; // UnitCommand
 using TurnBased.Controllers; // CombatController, TurnController
 using UnityEngine; // Vector3
 
@@ -38,9 +40,23 @@ namespace WrathAccess.Exploration
         /// </summary>
         public static Vector3? PathEndpointToward(Vector3 point, float approachRadius = 0.3f)
         {
-            var pts = ComputePath(point, approachRadius);
+            var pts = ComputePath(point, approachRadius, updateActionsState: true); // commit path: a real move follows
             if (pts == null || pts.Count == 0) return null;
             return pts[pts.Count - 1];
+        }
+
+        /// <summary>Drop any movement RESERVATIONS our path computations wrote into the acting unit's
+        /// turn state (SetPrediction WillBeUsed/WillBeLost). The game's completion accounting
+        /// (UpdateCurrentStates) converts lingering predictions into REAL activity losses when the
+        /// next command finishes — a stale reservation from a refused order would silently forfeit
+        /// the standard action's attacks and abilities. Call after every refusal that follows a
+        /// TryApproach/PathEndpointToward whose command was never issued.</summary>
+        public static void CancelPathReservation()
+        {
+            var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
+            var cu = CurrentUnit;
+            if (turn == null || cu == null || GetActionsStatesMethod == null) return;
+            (GetActionsStatesMethod.Invoke(turn, new object[] { cu }) as ActionsState)?.Clear();
         }
 
         /// <summary>
@@ -53,7 +69,12 @@ namespace WrathAccess.Exploration
         {
             lengthMeters = endGapMeters = moveActionMeters = totalMeters = 0f;
             var cu = CurrentUnit;
-            var pts = ComputePath(point, 0.3f);
+            // PREVIEW ONLY — updateActionsState: false is load-bearing. With true, every cursor stop
+            // would write movement RESERVATIONS (SetPrediction WillBeUsed) into the live turn state,
+            // and the game's completion accounting converts stale ones into REAL losses: sweep the
+            // cursor, take one step, and the standard action's attacks/abilities read Lost — every
+            // spell greyed for the turn (user repro, 2026-07-08).
+            var pts = ComputePath(point, 0.3f, updateActionsState: false);
             if (cu == null || pts == null || pts.Count == 0) return false;
             for (int i = 1; i < pts.Count; i++) lengthMeters += Vector3.Distance(pts[i - 1], pts[i]);
             var end = pts[pts.Count - 1];
@@ -78,7 +99,7 @@ namespace WrathAccess.Exploration
             walkMeters = moveActionMeters = 0f;
             var cu = CurrentUnit;
             if (cu == null) return false;
-            var pts = ComputePath(targetPos, reach);
+            var pts = ComputePath(targetPos, reach, updateActionsState: true); // commit path: the approach command walks it
             moveActionMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false);
             if (pts == null || pts.Count == 0) return false; // already in reach, or no route at all
             // ENDPOINT test — the same check the game's click validation applies (PathVisualizer.
@@ -93,7 +114,7 @@ namespace WrathAccess.Exploration
             return true;
         }
 
-        private static System.Collections.Generic.List<Vector3> ComputePath(Vector3 point, float approachRadius)
+        private static System.Collections.Generic.List<Vector3> ComputePath(Vector3 point, float approachRadius, bool updateActionsState)
         {
             if (!InTurnBased) return null;
             var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
@@ -103,15 +124,97 @@ namespace WrathAccess.Exploration
 
             var actionsState = GetActionsStatesMethod.Invoke(turn, new object[] { cu }) as ActionsState;
             if (actionsState == null) return null;
+            // Compute from a CLEAN slate, the way the game's own prediction loop does (it calls
+            // ActionsState.Clear() before every recompute). Without this, a lingering WillBeUsed on the
+            // Move action — which completed partial moves NEVER clear — makes UpdateVisualPath's leg
+            // attribution charge the whole walk to the STANDARD action, whose WillBeUsed prediction
+            // cascades "ability will be lost" and greys every spell at the next command conversion.
+            if (updateActionsState) actionsState.Clear();
             actionsState.ApproachPoint = point;
             actionsState.ApproachRadius = approachRadius; // 0.3 ~= exact (move); the attack reach for an approach
             actionsState.NeedLOS = false;
             actionsState.IgnoreBlockerId = 0; // don't inherit a stale hover value (vanilla commands pass 0 too)
-            pv.CalculatePathForCommand(cu, actionsState, updateActionsState: true);
+            pv.CalculatePathForCommand(cu, actionsState, updateActionsState);
 
             var path = pv.CurrentPathForUnit(cu.View);
             if (path == null || path.vectorPath == null || path.vectorPath.Count == 0) return null;
             return path.vectorPath;
+        }
+
+        /// <summary>
+        /// Write the turn-state predictions for a command OUR flow just issued — the exact writes the
+        /// game's mouse-prediction loop performs for a hovered command (TurnController.
+        /// UpdateActionPredictions, "Handle Selected Command"). That loop is suppressed while the mod
+        /// runs (TurnPredictionPatch: it derives phantom commands from the parked OS mouse and poisons
+        /// the turn state), so without this call nothing would mark the standard action Used when a
+        /// cast or attack completes and the action bar would stay optimistically enabled. Call after
+        /// every successful command issue in turn-based; movement predictions for the approach walk are
+        /// already written by ComputePath (commit mode) — plain moves need nothing more.
+        /// </summary>
+        public static void NoteIssuedCommand(UnitEntityData unit)
+        {
+            if (!InTurnBased || unit == null || unit != CurrentUnit) return;
+            var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
+            if (turn == null || GetActionsStatesMethod == null) return;
+            var s = GetActionsStatesMethod.Invoke(turn, new object[] { unit }) as ActionsState;
+            if (s == null) return;
+            var cmd = unit.Commands.GetCommand(UnitCommand.CommandType.Standard)
+                ?? unit.Commands.GetCommand(UnitCommand.CommandType.Move)
+                ?? unit.Commands.GetCommand(UnitCommand.CommandType.Swift)
+                ?? unit.Commands.GetCommand(UnitCommand.CommandType.Free);
+            if (cmd == null || cmd is UnitMoveTo) return;
+
+            var usage = CombatAction.UsageType.None;
+            var activity = CombatAction.ActivityType.Move;
+            bool fullRound = false;
+            Kingmaker.UI.IUIDataProvider ability = null;
+            if (cmd is UnitUseAbility ua)
+            {
+                fullRound = cmd.IsFullRoundAbility();
+                ability = ua.Ability;
+                usage = ua.Ability.SourceItem == null
+                    ? CombatAction.UsageType.UseAbility : CombatAction.UsageType.UseItem;
+                activity = CombatAction.ActivityType.Ability;
+                // A sticky-touch cast leaves a held charge whose delivery is a free action.
+                var touch = unit.Get<Kingmaker.UnitLogic.Parts.UnitPartTouch>();
+                if (ua.Ability.Blueprint.StickyTouch != null
+                    && (touch == null || touch.Ability.Blueprint != ua.Ability.Blueprint))
+                    s.Free.SetPrediction(CombatAction.UsageType.TouchDeliver,
+                        CombatAction.ActivityType.Ability, CombatAction.ActivityState.WillBeUsed, ability);
+            }
+            else if (cmd is UnitAttack)
+            {
+                fullRound = cmd.IsFullAttack();
+                usage = fullRound ? CombatAction.UsageType.FullAttack : CombatAction.UsageType.SingleAttack;
+                activity = CombatAction.ActivityType.Attack;
+                if (cmd.IsSpellCombatAttack() && s.Move.CanUse)
+                    s.Move.SetPrediction(CombatAction.UsageType.SpellCombatAttack,
+                        CombatAction.ActivityType.Attack, CombatAction.ActivityState.WillBeUsed);
+            }
+            else if (cmd is UnitInteractWithObject || cmd is UnitInteractWithUnit || cmd is UnitLootUnit)
+            {
+                usage = CombatAction.UsageType.InteractObject;
+                activity = CombatAction.ActivityType.Ability;
+            }
+
+            if (fullRound)
+            {
+                bool surprising = Game.Instance.TurnBasedCombatController.IsSurprising(unit);
+                if ((s.Move.CanUse || surprising) && s.Standard.CanUse)
+                {
+                    s.Move.SetPrediction(usage, activity, CombatAction.ActivityState.WillBeUsed, ability);
+                    s.Standard.SetPrediction(usage, activity, CombatAction.ActivityState.WillBeUsed, ability);
+                }
+                else s.Overused = true;
+            }
+            else
+            {
+                var type = cmd.Type;
+                if (cmd.IsIgnoreCooldown || cmd.IsFreeTouch()) type = UnitCommand.CommandType.Free;
+                else if (type == UnitCommand.CommandType.Move && !s.Move.CanUse && s.Standard.CanUse)
+                    type = UnitCommand.CommandType.Standard;
+                s.Use(type, usage, activity, ability, null);
+            }
         }
 
         /// <summary>
@@ -246,10 +349,16 @@ namespace WrathAccess.Exploration
             if (turn == null || cu == null) return null;
 
             string State(bool available) => Message.Localized("ui", available ? "combat.available" : "combat.used").Resolve();
+            // Two layers must agree for the standard action to actually be usable: the time/cooldown
+            // layer (HasStandardAction) AND the activity state machine the action bar gates on
+            // (TurnState.Standard.CanUseAbility — e.g. Lost after converting the standard into a second
+            // move). Reading only the cooldown said "standard available" while every spell was greyed.
+            var states = GetActionsStatesMethod?.Invoke(turn, new object[] { cu }) as ActionsState;
+            bool standardOk = cu.HasStandardAction() && (states == null || states.Standard.CanUseAbility);
             var sb = new System.Text.StringBuilder(Message.Localized("ui", "combat.status_actions", new
             {
                 name = cu.CharacterName,
-                standard = State(cu.HasStandardAction()),
+                standard = State(standardOk),
                 move = State(cu.HasMoveAction()),
                 swift = State(cu.HasSwiftAction()),
             }).Resolve());

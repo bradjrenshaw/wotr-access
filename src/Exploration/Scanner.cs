@@ -677,7 +677,7 @@ namespace WrathAccess.Exploration
             if (CombatMode.InTurnBased)
             {
                 var ep = CombatMode.PathEndpointToward(dest);
-                if (!ep.HasValue) { Speak(Loc.T("scan.no_path_cursor")); return; }
+                if (!ep.HasValue) { CombatMode.CancelPathReservation(); Speak(Loc.T("scan.no_path_cursor")); return; }
                 dest = ep.Value;
             }
 

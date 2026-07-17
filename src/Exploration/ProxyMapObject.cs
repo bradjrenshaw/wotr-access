@@ -269,8 +269,10 @@ namespace WrathAccess.Exploration
                 EventBus.RaiseEvent<ILockpickUIHandler>(h => h.HandleLockpickRequest(view, false));
                 return InteractOutcome.Started;
             }
-            return ClickMapObjectHandler.Interact(view.gameObject, units, forceOvertipInteractions: true)
-                ? InteractOutcome.Started : InteractOutcome.NotSupported;
+            if (CombatMode.InTurnBased) CombatMode.CancelPathReservation(); // clean slate before issuing
+            bool started = ClickMapObjectHandler.Interact(view.gameObject, units, forceOvertipInteractions: true);
+            if (started) CombatMode.NoteIssuedCommand(CombatMode.CurrentUnit);
+            return started ? InteractOutcome.Started : InteractOutcome.NotSupported;
         }
 
         // Mirrors AreaTransitionController.StartAreaTransition: move the party to the exit in formation,

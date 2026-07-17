@@ -102,11 +102,15 @@ namespace WrathAccess.Exploration
                         && !(CombatMode.TryApproach(_unit.Position, treach, out float twalk, out float tmove)
                              && twalk <= tmove))
                     {
+                        CombatMode.CancelPathReservation(); // no command follows the computed path
                         Tts.Speak(Loc.T("combat.too_far_to_cast"), interrupt: true);
                         return InteractOutcome.RefusedSpoken;
                     }
+                    // In reach: no path was computed, so drop any stale reservations before issuing.
+                    if (inReach) CombatMode.CancelPathReservation();
                 }
                 TouchCharge.Deliver(holder, touch, _unit);
+                CombatMode.NoteIssuedCommand(holder);
                 Tts.Speak(Loc.T("touch.delivering",
                     new { spell = touch.Ability.Data.Name, name = _unit.CharacterName }), interrupt: true);
                 return InteractOutcome.RefusedSpoken; // we spoke the outcome ourselves
@@ -130,13 +134,17 @@ namespace WrathAccess.Exploration
                         && !(CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange)
                              && walk <= moveRange))
                     {
+                        CombatMode.CancelPathReservation(); // no command follows the computed path
                         Tts.Speak(Loc.T("combat.too_far_to_attack"), interrupt: true);
                         return InteractOutcome.RefusedSpoken; // no command issued; the unit stays put
                     }
+                    // In reach: no path was computed, so drop any stale reservations before issuing.
+                    if (inReach) CombatMode.CancelPathReservation();
                 }
             }
-            return new ClickUnitHandler().OnClick(view.gameObject, view.transform.position, 0)
-                ? InteractOutcome.Started : InteractOutcome.NotSupported;
+            bool started = new ClickUnitHandler().OnClick(view.gameObject, view.transform.position, 0);
+            if (started) CombatMode.NoteIssuedCommand(CombatMode.CurrentUnit);
+            return started ? InteractOutcome.Started : InteractOutcome.NotSupported;
         }
     }
 }

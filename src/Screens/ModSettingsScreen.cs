@@ -24,8 +24,8 @@ namespace WrathAccess.Screens
         public static void CloseMenu() { s_open = false; }
 
         public override string Key => "overlay.modsettings";
-        public override string ScreenName => Message.Localized("ui", "screen.settings").Resolve();
-        public override int Layer => 37; // above the mod-menu launcher (35), so it stacks on top of it
+        public override string ScreenName => Message.Localized("ui", "screen.all_settings").Resolve();
+        public override int Layer => 39; // above the basic settings screen (37), so "All settings" stacks on top
         public override bool IsActive() => s_open;
 
         private int _active; // the selected category tab (view state)
@@ -281,7 +281,7 @@ namespace WrathAccess.Screens
             ("Concise", "preset.concise", new[] { "role", "tooltip", "position" }),
         };
 
-        private static NodeVtable BuildVerbosityDropdown(CategorySetting annRoot)
+        internal static NodeVtable BuildVerbosityDropdown(CategorySetting annRoot, string labelOverride = null)
         {
             var visible = annRoot.Children.OfType<CategorySetting>().Where(c => !c.Hidden)
                 .Select(c => (Key: c.Key, Enabled: c.Get<BoolSetting>("enabled")))
@@ -312,8 +312,8 @@ namespace WrathAccess.Screens
             }
 
             // "Custom" is a derived display state, not a choice — mark it virtual.
-            return ModSettingNodes.ChoiceDropdown(L("ui.verbosity", "Verbosity"), labels, Current, Apply,
-                selectableCount: VerbosityPresets.Length);
+            return ModSettingNodes.ChoiceDropdown(labelOverride ?? L("ui.verbosity", "Verbosity"),
+                labels, Current, Apply, selectableCount: VerbosityPresets.Length);
         }
 
         // Log presets — explicit NAMED sets (no automatic mode switching yet, user spec 2026-07-08):
@@ -323,7 +323,7 @@ namespace WrathAccess.Screens
         // - Nothing: everything off.
         // Same derived-state idiom as the verbosity dropdown: the current selection is computed from
         // the live toggles; hand-edits read back as "Custom". Only the on/off toggles are touched.
-        private static NodeVtable BuildLogPresetDropdown(CategorySetting logRoot)
+        internal static NodeVtable BuildLogPresetDropdown(CategorySetting logRoot, string labelOverride = null)
         {
             // Group key ("" = root-level, i.e. Other messages) -> toggle.
             var toggles = new List<KeyValuePair<string, BoolSetting>>();
@@ -369,11 +369,11 @@ namespace WrathAccess.Screens
                 });
             }
 
-            return ModSettingNodes.ChoiceDropdown(L("log.preset", "Preset"), labels, Current, Apply,
-                selectableCount: 3);
+            return ModSettingNodes.ChoiceDropdown(labelOverride ?? L("log.preset", "Preset"),
+                labels, Current, Apply, selectableCount: 3);
         }
 
-        private static CategorySetting SystemDefaults(string key)
+        internal static CategorySetting SystemDefaults(string key)
             => ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>(key);
 
         // ---- overlays: live from the registry; Customize/Reset just render differently next frame ----
@@ -576,6 +576,12 @@ namespace WrathAccess.Screens
             string nk = k + node.Key + ".";
             b.BeginGroup(ControlId.Structural(nk + "group"), GraphNodes.Group(() => L(node.LocKey, node.Label)));
 
+            // Two independent switches ahead of the pick: Listed (participates in scanner lists /
+            // review cycles) and Play sound (the sonar pings it). The Sound dropdown below only
+            // chooses the voice.
+            EmitSwitch(b, nk + "listed", WrathAccess.Exploration.ScanEnabled.EnabledSetting(node.Key));
+            EmitSwitch(b, nk + "sndon", WrathAccess.Exploration.ScanEnabled.SoundEnabledSetting(node.Key));
+
             var sound = WrathAccess.Exploration.ScanSounds.SoundSetting(node.Key);
             if (sound is ChoiceSetting plainSound)
                 b.AddItem(ControlId.Structural(nk + "sound"),
@@ -602,6 +608,16 @@ namespace WrathAccess.Screens
 
             foreach (var child in node.Children) EmitEntityNode(b, child, nk);
             b.EndGroup();
+        }
+
+        // A Listed/Play-sound switch: plain toggle for categories, inherit-aware for subcategories.
+        private static void EmitSwitch(GraphBuilder b, string key, Setting s)
+        {
+            if (s is BoolSetting bs)
+                b.AddItem(ControlId.Structural(key),
+                    GraphNodes.Toggle(() => bs.Label, bs.Get, () => bs.Set(!bs.Get())));
+            else if (s is NullableBoolSetting nb)
+                b.AddItem(ControlId.Structural(key), ModSettingNodes.OverrideToggle(nb));
         }
 
     }

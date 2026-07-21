@@ -24,10 +24,12 @@ namespace WrathAccess.Exploration.Announce
         private static readonly (string part, Opt[] opts)[] Parts =
         {
             ("name",         new[] { new Opt("enabled", true) }),
+            ("interaction",  new[] { new Opt("enabled", true) }),
             ("type",         new[] { new Opt("enabled", true) }),
             ("action",       new[] { new Opt("enabled", true) }),
             ("hp",           new[] { new Opt("enabled", true) }),
             ("condition",    new[] { new Opt("enabled", true) }),
+            ("check",        new[] { new Opt("enabled", true) }),
             ("object_state", new[] { new Opt("enabled", true) }),
             ("spatial",      new[] { new Opt("enabled", true), new Opt("distance", true),
                                      new Opt("direction", true), new Opt("height", true),
@@ -39,17 +41,19 @@ namespace WrathAccess.Exploration.Announce
         {
             switch (cls)
             {
-                case ScanClass.Unit: return new[] { "name", "type", "action", "hp", "condition", "spatial" };
+                case ScanClass.Unit: return new[] { "name", "interaction", "type", "action", "hp", "condition", "spatial" };
                 case ScanClass.Marker: return new[] { "name", "spatial" };
-                default: return new[] { "name", "type", "object_state", "spatial" }; // Object
+                default: return new[] { "name", "type", "check", "object_state", "spatial" }; // Object
             }
         }
 
         // English fallbacks (real labels come from the "settings" locale table by these keys).
         private static readonly Dictionary<string, string> PartLabel = new Dictionary<string, string>
         {
-            { "name", "Name" }, { "type", "Type" }, { "action", "Action" }, { "hp", "Health" },
-            { "condition", "Condition" }, { "object_state", "Object state" }, { "spatial", "Location" },
+            { "name", "Name" }, { "interaction", "Interaction" }, { "type", "Type" },
+            { "action", "Action" }, { "hp", "Health" },
+            { "condition", "Condition" }, { "check", "Skill check" },
+            { "object_state", "Object state" }, { "spatial", "Location" },
         };
         private static readonly Dictionary<string, string> OptLabel = new Dictionary<string, string>
         {

@@ -57,11 +57,17 @@ namespace WrathAccess.Exploration
         protected override string AnnounceNode => _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
             : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : ScanTaxonomy.UnitsNeutrals;
 
-        // name, type (faction), current action (casting/attacking/moving), then either a terminal
-        // condition (dead/unconscious) OR hp (+ in-combat). The action part self-skips when idle.
+        // name, interaction (talk/interactive — how the unit answers the interact keys), type (faction),
+        // current action (casting/attacking/moving), then either a terminal condition (dead/unconscious)
+        // OR hp (+ in-combat). The action part self-skips when idle.
         protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
         {
-            foreach (var p in NameAndType(_unit.CharacterName, FactionWord())) yield return p;
+            bool hasName = !string.IsNullOrEmpty(_unit.CharacterName);
+            // Mirrors NameAndType's rule: with no real name the faction word plays the name role.
+            yield return new Announce.NamePart(hasName ? _unit.CharacterName : FactionWord());
+            var interact = InteractionKey();
+            if (interact != null) yield return new Announce.InteractionPart(interact);
+            if (hasName) yield return new Announce.TypePart(FactionWord());
             yield return new Announce.ActionPart(CombatMode.DescribeAction(_unit));
 
             var state = _unit.State;
@@ -78,6 +84,31 @@ namespace WrathAccess.Exploration
             => _unit.IsPlayerFaction ? Loc.T("scan.faction.party")
              : _unit.IsPlayersEnemy ? Loc.T("scan.faction.enemy")
              : Loc.T("scan.faction.neutral");
+
+        // The ui-table key for how this unit answers the interact keys right now, or null when it
+        // wouldn't respond. Asks the game the exact question its click handler asks —
+        // UnitPartInteractions.SelectClickInteraction for the unit that would initiate — so the readout
+        // can never promise more than a click delivers (conditions, cutscene disables, per-initiator
+        // rules all apply). Combat suppresses it: the click path refuses interactions mid-fight.
+        private string InteractionKey()
+        {
+            if (_unit.State.IsDead || _unit.IsInCombat || _unit.IsPlayerFaction) return null;
+            var part = _unit.Get<Kingmaker.UnitLogic.Parts.UnitPartInteractions>();
+            if (part == null) return null;
+            var initiator = Kingmaker.Game.Instance?.UI?.SelectionManager?.GetNearestSelectedUnit(_unit.Position)
+                ?? Kingmaker.Game.Instance?.Player?.MainCharacter.Value;
+            if (initiator == null || initiator.IsInCombat) return null;
+            var inter = part.SelectClickInteraction(initiator);
+            if (inter == null) return null;
+            // Dialogue and barks are both "talk" to the player (every spoken response); scripted
+            // action/cutscene interactions read "interactive".
+            var src = inter is Kingmaker.UnitLogic.Interaction.SpawnerInteractionPart.Wrapper w
+                ? (object)w.Source
+                : inter is Kingmaker.AreaLogic.Etudes.EtudeBracketOverrideUnitInteraction e ? e.Source : inter;
+            var n = src.GetType().Name;
+            return n.Contains("Dialog") || n.Contains("Bark") || n.Contains("Companion")
+                ? "scan.interact.talk" : "scan.interact.interactive";
+        }
 
         // Same as clicking the unit: the handler selects/talks/attacks/loots as appropriate and derives
         // the acting unit itself (nearest selected + main-player-preferred).

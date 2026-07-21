@@ -21,6 +21,17 @@ namespace WrathAccess.Exploration.Announce
         public override Message Render(ScanAnnounceContext ctx) => Message.Raw(_type);
     }
 
+    /// <summary>How a unit responds to the interact keys right now ("talk" / "interactive") — the
+    /// click interaction the game itself would select for the current party. Absent when the unit
+    /// has none (scenery crowd, disabled during cutscenes, combat).</summary>
+    internal sealed class InteractionPart : ScanAnnouncement
+    {
+        private readonly string _uiKey; // "scan.interact.talk" / "scan.interact.interactive"
+        public InteractionPart(string uiKey) { _uiKey = uiKey; }
+        public override string Key => "interaction";
+        public override Message Render(ScanAnnounceContext ctx) => Message.Localized("ui", _uiKey);
+    }
+
     /// <summary>A unit's current health ("HP x of y").</summary>
     internal sealed class HpPart : ScanAnnouncement
     {
@@ -49,6 +60,18 @@ namespace WrathAccess.Exploration.Announce
         public ConditionPart(string uiKey) { _uiKey = uiKey; }
         public override string Key => "condition";
         public override Message Render(ScanAnnounceContext ctx) => Message.Localized("ui", _uiKey);
+    }
+
+    /// <summary>An object's skill-check tag — the same text the sighted overtip shows (skill name, plus
+    /// the DC when the author didn't hide it), or the passed/failed state once a once-only check has
+    /// resolved. Pre-localized (game string or ui key resolved by the proxy).</summary>
+    internal sealed class CheckPart : ScanAnnouncement
+    {
+        private readonly string _text;
+        public CheckPart(string text) { _text = text; }
+        public override string Key => "check";
+        public override Message Render(ScanAnnounceContext ctx)
+            => string.IsNullOrEmpty(_text) ? Message.Empty : Message.Raw(_text);
     }
 
     /// <summary>An object's state flags (open / restricted / trapped), pre-localized and comma-joined.</summary>

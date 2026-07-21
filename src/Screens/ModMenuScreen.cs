@@ -49,7 +49,7 @@ namespace WrathAccess.Screens
         {
             // Settings / the wizard open ON TOP (higher layer) and return here when closed; the launcher
             // stays open beneath them. (We don't close it on pick — the layering is the back-stack.)
-            Item(b, 1, "menu.settings", ModSettingsScreen.Open);
+            Item(b, 1, "menu.settings", BasicSettingsScreen.Open);
             Item(b, 2, "menu.help", HelpScreen.Open);
             Item(b, 3, "menu.setup_wizard", SetupWizardScreen.Open);
             Link(b, 4, "menu.discord", DiscordUrl, "menu.opening_discord");

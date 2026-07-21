@@ -124,6 +124,7 @@ namespace WrathAccess.Exploration
         public static string Resolve(string nodeKey)
         {
             if (nodeKey == null) return null; // items with no sound node (the old loop's entry guard)
+            if (!ScanEnabled.SoundEnabled(nodeKey)) return null; // Play sound off (separate from the pick)
             var setting = SoundSetting(nodeKey);
             string id = setting is NullableChoiceSetting nc ? nc.EffectiveId
                 : setting is ChoiceSetting c ? c.ValueId : null;

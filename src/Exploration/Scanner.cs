@@ -271,6 +271,10 @@ namespace WrathAccess.Exploration
             {
                 var node = ScanTaxonomy.Get(key);
                 if (node == null) continue;
+                // Disabled entity types don't participate in discovery (this list, the category's All,
+                // Everything) — the user said "I don't care about these". An item's OTHER nodes still
+                // list it (a dead enemy stays a corpse-container with enemies off).
+                if (!ScanEnabled.Enabled(node.Key)) continue;
                 // The leaf's own list, plus its parent category's "All" (so "All units" sees every faction).
                 if (_byNode.TryGetValue(node.Key, out var nl) && !nl.Contains(item)) nl.Add(item);
                 var cat = node.IsCategory ? node : node.Parent;

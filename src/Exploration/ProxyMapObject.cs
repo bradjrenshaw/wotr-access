@@ -227,8 +227,35 @@ namespace WrathAccess.Exploration
         protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
         {
             foreach (var p in NameAndType(RealName(), TypeWord())) yield return p;
+            var check = CheckText();
+            if (check != null) yield return new Announce.CheckPart(check);
             var states = StateWords();
             if (states.Count > 0) yield return new Announce.ObjectStatePart(states);
+        }
+
+        // The skill-check tag sighted players read off the overtip — mirrors EntityOvertipVM exactly:
+        // an unresolved InteractionSkillCheckPart speaks the game's own check text (skill name + DC
+        // unless the author set HideDC); a resolved once-only check speaks passed/failed; an ARMED
+        // discovered trap speaks the disarm skill (Trickery), like the trap overtip. Brackets are the
+        // overtip's visual framing — stripped for speech.
+        private string CheckText()
+        {
+            var sc = _obj.Get<InteractionSkillCheckPart>();
+            if (sc != null)
+            {
+                if (sc.AlreadyUsed && sc.Settings.OnlyCheckOnce)
+                    return Loc.T(sc.CheckPassed ? "object.check_passed" : "object.check_failed");
+                var t = Kingmaker.UI.Common.UIUtility.GetSkillCheckText(sc);
+                return string.IsNullOrEmpty(t) ? null : t.Trim('[', ']');
+            }
+            var trap = _obj.Get<DisableTrapInteractionPart>();
+            if (trap != null && trap.Owner != null && trap.Owner.TrapActive)
+            {
+                var entry = Kingmaker.Blueprints.Root.BlueprintRoot.Instance.LocalizedTexts.Stats.Entries
+                    .FirstOrDefault(k => k.Stat == Kingmaker.EntitySystem.Stats.StatType.SkillThievery);
+                if (entry != null) return entry.Text;
+            }
+            return null;
         }
 
         // open / restricted / trapped — the same flags the old Extra joined.

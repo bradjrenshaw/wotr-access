@@ -21,30 +21,37 @@ namespace WrathAccess.Speech
 
         public SpeechConfig(CategorySetting tree, SpeechConfig baseConfig = null) { Tree = tree; _base = baseConfig; }
 
-        /// <summary>The chosen handler key ("auto" = best available). The default config's handler is a
-        /// plain choice; an inheriting config's is a NullableChoiceSetting whose EffectiveId already
-        /// resolves through the base.</summary>
-        public string HandlerKey
+        /// <summary>The chosen OUTPUT id ("auto" / a screen-reader name / "sapi" / "clipboard"). The
+        /// default config's output is a plain choice; an inheriting config's is a NullableChoiceSetting
+        /// whose EffectiveId already resolves through the base.</summary>
+        public string OutputId
         {
             get
             {
-                var plain = Tree?.Get<ChoiceSetting>("handler");
-                if (plain != null) return plain.Current?.Id ?? "auto";
-                var nullable = Tree?.Get<NullableChoiceSetting>("handler");
-                return nullable?.EffectiveId ?? "auto";
+                var plain = Tree?.Get<ChoiceSetting>("output");
+                if (plain != null) return plain.Current?.Id ?? SpeechOutputs.Auto;
+                var nullable = Tree?.Get<NullableChoiceSetting>("output");
+                return nullable?.EffectiveId ?? SpeechOutputs.Auto;
             }
         }
 
-        // The resolved, loaded handler for this config (load-on-demand + auto/fallback via SpeechManager).
-        private ISpeechHandler Handler => SpeechManager.ResolveHandler(HandlerKey);
+        // The resolved, loaded handler for this config's output (load-on-demand + fallback via
+        // SpeechManager; the output→engine mapping is SpeechOutputs' routing table).
+        private ISpeechHandler Handler => SpeechManager.ResolveHandler(SpeechOutputs.HandlerKeyFor(OutputId));
 
-        // This handler's params for this config (null for paramless handlers like clipboard). The default
-        // config returns its raw subtree; an inheriting config returns a RESOLVED snapshot — each setting is
-        // its explicit override if set, else the value inherited from the base config — so the handler reads
-        // plain settings and never sees "inherit".
+        /// <summary>The engine key the output currently resolves to ("prism"/"sapi"/"clipboard") — what
+        /// the settings UI uses to show only the params that apply (Auto resolving to SAPI on a
+        /// screen-reader-less machine correctly reveals the SAPI settings).</summary>
+        public string ResolvedHandlerKey => Handler?.Key;
+
+        // The handler's params for this config. Prism outputs get a synthesized fixed-backend subtree
+        // (the output IS the backend pick); paramful outputs (SAPI) read the config's own subtree — the
+        // default config's raw, an inheriting config's RESOLVED snapshot (explicit override else the
+        // base's value), so the handler reads plain settings and never sees "inherit".
         private CategorySetting Params(ISpeechHandler h)
         {
             if (h == null) return null;
+            if (h.Key == "prism") return SpeechOutputs.PrismParamsFor(OutputId);
             var mine = Tree?.Get<CategorySetting>(h.Key);
             return _base == null ? mine : Resolve(mine, _base.Tree?.Get<CategorySetting>(h.Key), h);
         }

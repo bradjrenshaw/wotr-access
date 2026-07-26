@@ -79,8 +79,10 @@ namespace WrathAccess.Exploration.Overlays
 
         // The invisible Default overlay's out-of-box composition (which systems are on). Stored as
         // defaults.<system>.enabled, user-editable from the Sonar/Log/Exploration tabs.
+        // worldmap_sonar defaults OFF (2026-07-22): it sweeps every location on the map at once — the
+        // old setup wizard's sonar step turned it off as its recommendation; now it just starts off.
         private static readonly HashSet<string> DefaultOn =
-            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "aoe", "log", "worldmap_sonar" };
+            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "aoe", "log" };
 
         private static readonly Dictionary<string, Overlay> _objects = new Dictionary<string, Overlay>();
 
@@ -117,8 +119,10 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("announce_rooms") == null)
                 cursorCat.Add(new BoolSetting("announce_rooms", "Announce room changes", true,
                     "overlay.cursor.announce_rooms"));
-            BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "tiled", 15, "continuous", 18);
-            BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "none", 15, "continuous", 45);
+            // Continuous is the primary development target and the intended mode for most players
+            // (2026-07-22) — tiled remains a settings choice, no longer the default.
+            BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "continuous", 15, "continuous", 18);
+            BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "continuous", 30, "continuous", 45);
 
             // The world-map tiled cursor's tile size, in MILES (== world units on the global map). Lives on
             // the in-area grid system's defaults — beside "Tile size (feet)" on the Exploration tab — but
@@ -309,6 +313,9 @@ namespace WrathAccess.Exploration.Overlays
         {
             var choices = sys.SupportedModes.Select(OverlayModes.Choice).ToList();
             var def = DefaultOn.Contains(sys.Key) ? OverlayMode.Continuous : OverlayMode.Off;
+            // The two densest audio systems start in When-moving (2026-07-22): a parked cursor stays
+            // quiet, moving it gives the spatial picture — the least overwhelming out-of-box mix.
+            if (sys.Key == "sonar" || sys.Key == "walltones") def = OverlayMode.WhenMoving;
             if (!sys.SupportedModes.Contains(def)) def = sys.SupportedModes.Count > 0 ? sys.SupportedModes[0] : OverlayMode.Off;
             // "Active when", NOT "mode": this is the audio playback gate (Off / When moving /
             // Continuous), and it shared a loc key with the cursor slots' "Movement mode" — the JSON

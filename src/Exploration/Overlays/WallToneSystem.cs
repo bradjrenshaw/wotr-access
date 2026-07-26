@@ -18,7 +18,7 @@ namespace WrathAccess.Exploration.Overlays
         public override string Name => "Wall tones";
         public override string Key => "walltones";
 
-        private float Range => Int("range", 10) * Geo.MetresPerFoot;
+        private float Range => Int("range", 15) * Geo.MetresPerFoot;
 
         private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left }; // N,S,E,W
         private string ToneSet => ChoiceId("tone_set", "1");
@@ -31,7 +31,7 @@ namespace WrathAccess.Exploration.Overlays
 
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
-            cat.Add(new WrathAccess.Settings.IntSetting("range", "Range (feet)", 10, 1, 40, 1, "overlay.walltones.range"));
+            cat.Add(new WrathAccess.Settings.IntSetting("range", "Range (feet)", 15, 1, 40, 1, "overlay.walltones.range"));
             cat.Add(new WrathAccess.Settings.ChoiceSetting("tone_set", "Tone set",
                 new[]
                 {

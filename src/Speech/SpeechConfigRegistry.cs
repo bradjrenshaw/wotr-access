@@ -31,6 +31,8 @@ namespace WrathAccess.Speech
             foreach (var id in Ids()) BuildConfig(id);
             ModSettings.Reindex();
             ModSettings.ReapplyUnknown();
+            // Pre-refactor files stored a handler (+ prism backend) per config; convert to an output pick.
+            foreach (var id in Ids()) SpeechManager.MigrateLegacy(ConfigCat(id));
         }
 
         public static IReadOnlyList<string> Ids() => IdList();
@@ -91,9 +93,9 @@ namespace WrathAccess.Speech
                 cat.Add(name);
             }
             cat.LabelProvider = () => name.Get(); // the menu node reads the live name
-            // The shared config schema (handler choice + each handler's params), inherit-aware: every
-            // setting follows the default config (SpeechManager.Default) until the user overrides it.
-            if (cat.Get<ChoiceSetting>("handler") == null && cat.Get<NullableChoiceSetting>("handler") == null)
+            // The shared config schema (output choice + the SAPI params), inherit-aware: every setting
+            // follows the default config (SpeechManager.Default) until the user overrides it.
+            if (cat.Get<ChoiceSetting>("output") == null && cat.Get<NullableChoiceSetting>("output") == null)
                 SpeechManager.BuildConfigSchema(cat, SpeechManager.Default?.Tree);
         }
 

@@ -24,13 +24,16 @@ namespace WrathAccess.Exploration
             // All toggles labelled by their QUESTION ("Listed" / "Play sound") — they render inside
             // their taxonomy node's group, whose header already names the entity type.
             ModSettings.Root.Add(BuildTree("scan_enabled", "Listed entity types", "scanner.listed_types",
-                "Listed", "scanner.listed"));
+                "Listed", "scanner.listed", null));
+            // Ally pings default OFF (the old setup wizard's recommended baseline, now just the sane
+            // default): your party is always next to you, so sweeping it floods every dense scene.
             ModSettings.Root.Add(BuildTree("scan_sound", "Sounding entity types", "scanner.sounding_types",
-                "Play sound", "scanner.play_sound"));
+                "Play sound", "scanner.play_sound",
+                node => node == ScanTaxonomy.UnitsParty ? (bool?)false : null));
         }
 
         private static CategorySetting BuildTree(string rootKey, string rootLabel, string rootLoc,
-            string label, string loc)
+            string label, string loc, System.Func<string, bool?> childDefault)
         {
             var root = new CategorySetting(rootKey, rootLabel, localizationKey: rootLoc);
             foreach (var cat in ScanTaxonomy.Categories)
@@ -39,7 +42,8 @@ namespace WrathAccess.Exploration
                 var catEnabled = new BoolSetting(cat.Key, label, true, loc);
                 root.Add(catEnabled);
                 foreach (var child in cat.Children)
-                    root.Add(new NullableBoolSetting(ChildKey(child.Key), label, catEnabled, loc));
+                    root.Add(new NullableBoolSetting(ChildKey(child.Key), label, catEnabled, loc,
+                        childDefault?.Invoke(child.Key)));
             }
             return root;
         }

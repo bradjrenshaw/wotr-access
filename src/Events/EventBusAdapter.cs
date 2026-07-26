@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using Kingmaker.ElementsSystem;           // ContextData (the scoped GameLogDisabled flag)
 using Kingmaker.EntitySystem.Entities;   // UnitEntityData
 using Kingmaker.PubSubSystem;             // EventBus, IDamageHandler, IUnitBuffHandler, IUnitHandler, IRulebookHandler
+using Kingmaker.RuleSystem;               // RulebookEvent (DisableBattleLog)
 using Kingmaker.RuleSystem.Rules;         // RuleDealStatDamage
 using Kingmaker.RuleSystem.Rules.Damage;  // RuleDealDamage
+using Kingmaker.UI.Models.Log;            // GameLogDisabled
 using Kingmaker.UnitLogic.Buffs;          // Buff
 
 namespace WrathAccess.Events
@@ -40,9 +43,18 @@ namespace WrathAccess.Events
         /// (before <see cref="EventDispatcher.Tick"/>, so the reconciled events flush this frame).</summary>
         public static void Tick() => _instance?.Reconcile();
 
+        // The game's own "don't narrate this" contract, checked AT CAPTURE TIME (our handlers run
+        // synchronously inside rule application, where these flags are live): the scoped
+        // GameLogDisabled context (cutscene spell executions, scripted DealDamage/kills wrap
+        // themselves in it) plus the per-rule DisableBattleLog (cutscene attacks flag the rule; it
+        // also folds in the initiator unit's own flag). The game's combat log gates on exactly these —
+        // it's why cutscenes are silent there while our event speech used to read the whole fight.
+        private static bool LogSuppressed(RulebookEvent rule = null)
+            => (bool)ContextData<GameLogDisabled>.Current || (rule != null && rule.DisableBattleLog);
+
         public void HandleDamageDealt(RuleDealDamage dealDamage)
         {
-            if (dealDamage?.Target != null && dealDamage.Result > 0)
+            if (dealDamage?.Target != null && dealDamage.Result > 0 && !LogSuppressed(dealDamage))
                 EventDispatcher.Raise(new DamageEvent(dealDamage.Target, dealDamage.Result));
         }
 
@@ -51,14 +63,15 @@ namespace WrathAccess.Events
         // a no-op heal (target at full, IsFake, interrupted) stays silent.
         public void HandleHealing(RuleHealDamage healDamage)
         {
-            if (healDamage?.Target != null && healDamage.Value > 0)
+            if (healDamage?.Target != null && healDamage.Value > 0 && !LogSuppressed(healDamage))
                 EventDispatcher.Raise(new HealEvent(healDamage.Target, healDamage.Value));
         }
 
         // IUnitHandler — death fires once per unit; the other members are no-ops we just have to carry.
+        // (No rule here; the ambient flag covers scripted kills — UnitLifeController wraps them.)
         public void HandleUnitDeath(UnitEntityData unit)
         {
-            if (unit != null) EventDispatcher.Raise(new UnitDeathEvent(unit));
+            if (unit != null && !LogSuppressed()) EventDispatcher.Raise(new UnitDeathEvent(unit));
         }
         public void HandleUnitDestroyed(UnitEntityData unit) { }
         public void HandleUnitSpawned(UnitEntityData unit) { }
@@ -69,18 +82,22 @@ namespace WrathAccess.Events
         public void OnEventAboutToTrigger(RuleDealStatDamage evt) { }
         public void OnEventDidTrigger(RuleDealStatDamage evt)
         {
-            if (evt?.Target != null && !evt.Immune && evt.Result > 0)
+            if (evt?.Target != null && !evt.Immune && evt.Result > 0 && !LogSuppressed(evt))
                 EventDispatcher.Raise(new StatDamageEvent(evt.Target, evt.Stat.Type, evt.Result, evt.IsDrain));
         }
 
+        // The suppression check must live HERE (capture time), not in Reconcile — the scoped flag is
+        // only on the stack while the cutscene ability is executing; Reconcile runs a frame later.
         public void HandleBuffDidAdded(Buff buff)
         {
+            if (LogSuppressed()) return;
             var key = KeyOf(buff);
             if (key != null) _frameAdds[key.Value] = buff;
         }
 
         public void HandleBuffDidRemoved(Buff buff)
         {
+            if (LogSuppressed()) return;
             var key = KeyOf(buff);
             if (key != null) _frameRemoves[key.Value] = buff;
         }

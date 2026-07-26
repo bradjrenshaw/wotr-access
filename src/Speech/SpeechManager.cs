@@ -18,7 +18,7 @@ namespace WrathAccess.Speech
         /// choice id; the loc key is "choice.inherit"). The default config never uses it — it's the base.</summary>
 
         private static bool _initialized;
-        private static ChoiceSetting _handlerSetting;          // the DEFAULT config's handler choice
+        private static ChoiceSetting _outputSetting;           // the DEFAULT config's output choice
         private static readonly HashSet<ISpeechHandler> _loaded = new HashSet<ISpeechHandler>();
 
         /// <summary>The default speech config — the root Speech settings; everything speaks through it.</summary>
@@ -31,42 +31,44 @@ namespace WrathAccess.Speech
             new ClipboardHandler(),
         };
 
-        /// <summary>Build the DEFAULT config into the Speech category (handler dropdown + each handler's
+        /// <summary>Build the DEFAULT config into the Speech category (output dropdown + the SAPI
         /// params), and adopt it as <see cref="Default"/>.</summary>
         public static void RegisterSettings(CategorySetting speechCategory)
         {
             BuildConfigSchema(speechCategory);
-            _handlerSetting = speechCategory.Get<ChoiceSetting>("handler");
-            if (_handlerSetting != null) _handlerSetting.Changed += OnDefaultHandlerChanged;
+            _outputSetting = speechCategory.Get<ChoiceSetting>("output");
+            if (_outputSetting != null) _outputSetting.Changed += OnDefaultOutputChanged;
             Default = new SpeechConfig(speechCategory);
         }
 
-        /// <summary>The schema every speech config shares: a "handler" choice + one subnode per handler
-        /// holding that handler's params. The default config (<paramref name="inheritFrom"/> null) gets plain
-        /// settings; an additional config gets INHERIT-aware ones — every setting can follow the default
-        /// config (<see cref="Inherit"/>) until overridden — wired to <paramref name="inheritFrom"/>'s
-        /// matching subtree as the source. Resolution happens in <see cref="SpeechConfig"/>, so handlers
-        /// stay inherit-agnostic.</summary>
+        /// <summary>The schema every speech config shares (the OUTPUT model, 2026-07-22): a "Speech
+        /// output" choice — who speaks: Auto / detected screen readers / SAPI / Clipboard (see
+        /// <see cref="SpeechOutputs"/>) — plus the SAPI params subtree (screen-reader outputs have no
+        /// params; the screen reader owns its own voice). The default config (<paramref name="inheritFrom"/>
+        /// null) gets plain settings; an additional config gets INHERIT-aware ones. Hidden legacy
+        /// carriers ("handler", "prism.backend") capture pre-refactor saved values for
+        /// <see cref="MigrateLegacy"/>.</summary>
         public static void BuildConfigSchema(CategorySetting into, CategorySetting inheritFrom = null)
         {
             bool inherit = inheritFrom != null;
 
-            var handlerChoices = new List<Choice> { new Choice("auto", "Auto", "speech.auto") };
-            foreach (var handler in Handlers)
-                handlerChoices.Add(new Choice(handler.Key, handler.Label, handler.LocalizationKey));
+            var outputChoices = SpeechOutputs.Choices();
             if (inherit)
             {
-                // An additional config's handler inherits the default config's until overridden.
-                var nc = new NullableChoiceSetting("handler", "Speech handler", handlerChoices,
-                    localizationKey: "speech.handler");
-                nc.ResolveInherited = () => inheritFrom.Get<ChoiceSetting>("handler")?.ValueId ?? "auto";
+                // An additional config's output inherits the default config's until overridden.
+                var nc = new NullableChoiceSetting("output", "Speech output", outputChoices,
+                    localizationKey: "speech.output");
+                nc.ResolveInherited = () => inheritFrom.Get<ChoiceSetting>("output")?.ValueId ?? SpeechOutputs.Auto;
                 into.Add(nc);
             }
             else
             {
-                into.Add(new ChoiceSetting("handler", "Speech handler", handlerChoices, "auto", "speech.handler"));
+                into.Add(new ChoiceSetting("output", "Speech output", outputChoices, SpeechOutputs.Auto,
+                    "speech.output"));
             }
 
+            // The only output with params is SAPI (subtree key unchanged from the handler era, so
+            // existing voice/rate/volume settings carry over untouched).
             foreach (var handler in Handlers)
             {
                 var sub = new CategorySetting(handler.Key, handler.Label, localizationKey: "speech." + handler.Key);
@@ -76,6 +78,29 @@ namespace WrathAccess.Speech
                     handler.BuildSettings(sub);
                 if (sub.Children.Count > 0) into.Add(sub);
             }
+
+            // Legacy migration carriers: the pre-refactor file stored "handler" (+ "prism.backend").
+            // StringSettings absorb those saved values (a ChoiceSetting would reject unknown ids);
+            // MigrateLegacy converts them to an output pick once, then blanks them.
+            into.Add(new StringSetting("handler", "Legacy handler", "") { Hidden = true });
+            into.Add(new StringSetting("prism.backend", "Legacy prism backend", "") { Hidden = true });
+        }
+
+        /// <summary>Convert a config's pre-refactor saved handler/backend into an output pick (run once
+        /// per config after settings load; no-op when no legacy value was in the file).</summary>
+        public static void MigrateLegacy(CategorySetting tree)
+        {
+            var legacyHandler = tree?.Get<StringSetting>("handler");
+            var legacyBackend = tree?.Get<StringSetting>("prism.backend");
+            string handler = legacyHandler?.Get();
+            if (string.IsNullOrEmpty(handler)) return;
+            string output = SpeechOutputs.FromLegacy(handler, legacyBackend?.Get());
+            var plain = tree.Get<ChoiceSetting>("output");
+            if (plain != null) plain.Set(output);
+            else tree.Get<NullableChoiceSetting>("output")?.SetExplicit(output);
+            legacyHandler.Set("");
+            legacyBackend?.Set("");
+            Main.Log?.Log("[speech] migrated legacy handler '" + handler + "' -> output '" + output + "'.");
         }
 
         // Translate a handler's normal param schema into inherit-aware settings: each int becomes a
@@ -109,15 +134,17 @@ namespace WrathAccess.Speech
             }
         }
 
-        /// <summary>Activate the default config's handler now (after settings load) so the first utterance
-        /// is instant.</summary>
+        /// <summary>Activate the default config's output now (after settings load) so the first utterance
+        /// is instant. Runs the legacy handler→output migration first (default config; additional
+        /// configs migrate in <see cref="SpeechConfigRegistry"/> when built).</summary>
         public static void Initialize()
         {
+            // Migrate BEFORE arming the change announcement — a legacy conversion is a load, not a
+            // user action, and must not speak "output changed" at boot.
+            if (Default?.Tree != null) MigrateLegacy(Default.Tree);
             _initialized = true;
-            var prismBackend = Default?.Tree?.Get<CategorySetting>("prism")?.Get<ChoiceSetting>("backend")?.Current?.Id;
-            Main.Log?.Log("[speech] default handler setting = " + (Default?.HandlerKey ?? "?")
-                + ", prism backend = " + (prismBackend ?? "?"));
-            ResolveHandler(Default?.HandlerKey ?? "auto");
+            Main.Log?.Log("[speech] default output = " + (Default?.OutputId ?? "?"));
+            ResolveHandler(SpeechOutputs.HandlerKeyFor(Default?.OutputId ?? SpeechOutputs.Auto));
         }
 
         public static bool Ready => _initialized && Default != null;
@@ -189,40 +216,40 @@ namespace WrathAccess.Speech
             return false;
         }
 
-        private static void OnDefaultHandlerChanged(string key)
+        private static void OnDefaultOutputChanged(string outputId)
         {
             if (!_initialized) return; // pre-init writes are just the settings file loading
-            var handler = ResolveHandler(key);
+            var handler = ResolveHandler(SpeechOutputs.HandlerKeyFor(outputId));
             if (handler != null)
-                Default.Output(Message.Localized("ui", "speech.handler_changed", new { handler = handler.Label }).Resolve());
+            {
+                var label = _outputSetting?.Current?.Label ?? outputId;
+                Default.Output(Message.Localized("ui", "speech.handler_changed", new { handler = label }).Resolve());
+            }
         }
 
-        /// <summary>Panic recovery (bound to a global hotkey): force the default speech config back to Prism on
-        /// the best available backend, re-loading it fresh so a stuck handler or backend can't keep us silent.
-        /// If Prism genuinely can't load, resolution falls through to the first working handler — so this always
-        /// restores whatever voice IS available. Safe to call any time (no-op before speech is ready).</summary>
+        /// <summary>Panic recovery (bound to a global hotkey): force the default speech config back to the
+        /// Auto output (your screen reader, best available), re-loading Prism fresh so a stuck engine or
+        /// backend can't keep us silent. If Prism genuinely can't load, resolution falls through to the
+        /// first working handler — so this always restores whatever voice IS available. Safe to call any
+        /// time (no-op before speech is ready).</summary>
         public static void ResetToPrism()
         {
             if (!Ready) return;
-            var handlerSetting = Default.Tree?.Get<ChoiceSetting>("handler");
-            bool willAnnounceViaChange = handlerSetting != null && handlerSetting.ValueId != "prism";
+            var outputSetting = Default.Tree?.Get<ChoiceSetting>("output");
+            bool willAnnounceViaChange = outputSetting != null && outputSetting.ValueId != SpeechOutputs.Auto;
 
-            // Clear any broken backend selection back to auto (best available).
-            Default.Tree?.Get<CategorySetting>("prism")?.Get<ChoiceSetting>("backend")?.Set(PrismAuto);
             // Drop the loaded Prism handler so it re-Detects/Loads cleanly (rebuilding its backend from scratch).
             ReloadHandlerFresh("prism");
 
-            handlerSetting?.Set("prism"); // persist; fires OnDefaultHandlerChanged (which resolves + announces) IF it changed
+            outputSetting?.Set(SpeechOutputs.Auto); // persist; fires OnDefaultOutputChanged IF it changed
             if (!willAnnounceViaChange)
             {
-                // Already set to Prism, so the change event won't fire — resolve + announce ourselves.
-                var h = ResolveHandler("prism");
+                // Already on Auto, so the change event won't fire — resolve + announce ourselves.
+                var h = ResolveHandler("auto");
                 Default.Output(Message.Localized("ui", "speech.reset_prism", new { handler = h?.Label ?? "none" }).Resolve(), interrupt: true);
             }
-            Main.Log?.Log("[speech] reset-to-prism requested.");
+            Main.Log?.Log("[speech] reset-to-auto-output requested.");
         }
-
-        private const string PrismAuto = "auto"; // PrismHandler's auto-backend id
 
         // Force a handler to reload on next resolve: drop it from the loaded set and unload it.
         private static void ReloadHandlerFresh(string key)

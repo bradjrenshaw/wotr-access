@@ -171,16 +171,21 @@ namespace WrathAccess.Screens
             }
             else if (key == "speech")
             {
-                // The DEFAULT config (handler dropdown + each handler's subtree) first, then the advanced
-                // "Additional speech configurations" group — each config a clone of the same schema with
-                // Rename/Remove, and an Add button at the bottom. All live from the registry.
+                // The DEFAULT config (output dropdown + the params of the output it RESOLVES to) first,
+                // then the advanced "Additional speech configurations" group — each config a clone of
+                // the same schema with Rename/Remove, and an Add button at the bottom. All live from
+                // the registry; picking a different output re-renders the params next frame.
                 var speech = ModSettings.Root.Get<CategorySetting>("speech");
                 if (speech != null)
+                {
+                    var resolved = WrathAccess.Speech.SpeechManager.Default?.ResolvedHandlerKey;
                     foreach (var s in speech.Children)
                     {
                         if (s is CategorySetting cs && cs.Key == "additional") continue; // rendered specially below
+                        if (EmitParamsInline(b, s, resolved, k)) continue;
                         ModSettingNodes.Emit(b, s, k);
                     }
+                }
 
                 b.BeginGroup(ControlId.Structural(k + "additional"),
                     GraphNodes.Group(() => L("speech.additional", "Additional speech configurations")));
@@ -531,13 +536,31 @@ namespace WrathAccess.Screens
         private static CategorySetting SpeechConfigCat(string id)
             => ModSettings.Root.Get<CategorySetting>("speech")?.Get<CategorySetting>("additional")?.Get<CategorySetting>(id);
 
-        // One config = a group (the cloned handler/params schema; the hidden name is skipped) + Rename/Remove.
+        // Render an output's param subtree FLAT beside the output dropdown — only when it applies to
+        // the output the config currently resolves to (SAPI knobs while NVDA speaks are hidden).
+        // Returns true when the setting was a param subtree (applicable or not) so the caller skips it.
+        internal static bool EmitParamsInline(GraphBuilder b, Setting s, string resolvedHandlerKey, string prefix)
+        {
+            if (!(s is CategorySetting pc)
+                || (pc.Key != "prism" && pc.Key != "sapi" && pc.Key != "clipboard")) return false;
+            if (pc.Key == resolvedHandlerKey)
+                foreach (var c in pc.Children)
+                    ModSettingNodes.Emit(b, c, prefix + pc.Key + "."); // keys keep the subtree path (stable ids)
+            return true;
+        }
+
+        // One config = a group (the cloned output/params schema; the hidden name is skipped) + Rename/Remove.
         private static void EmitSpeechConfig(GraphBuilder b, CategorySetting cc, string id, string k)
         {
             string ck = k + "cfg." + id + ".";
+            var resolved = WrathAccess.Speech.SpeechConfigRegistry.Get(id)?.ResolvedHandlerKey;
             b.BeginGroup(ControlId.Structural(ck + "group"), GraphNodes.Group(
                 () => WrathAccess.Speech.SpeechConfigRegistry.Name(id)));
-            foreach (var s in cc.Children) ModSettingNodes.Emit(b, s, ck); // the hidden "name" is skipped
+            foreach (var s in cc.Children)
+            {
+                if (EmitParamsInline(b, s, resolved, ck)) continue;
+                ModSettingNodes.Emit(b, s, ck); // the hidden "name" is skipped
+            }
             b.AddItem(ControlId.Structural(ck + "rename"),
                 GraphNodes.Button(() => L("speech.config.rename", "Rename"), () => RenameSpeechConfig(id)));
             b.AddItem(ControlId.Structural(ck + "remove"),

@@ -19,23 +19,24 @@ namespace WrathAccess.Speech
         private IntPtr _backend = IntPtr.Zero;
         private PrismNative.BackendFeatures _backendFeatures;
         private string _currentBackend = AutoBackend; // last backend applied from a config (apply-on-change)
-        private static List<Choice> _backendChoices;   // enumerated once (the registry probe is expensive)
+        private static List<string> _backendNames;    // enumerated once (the registry probe is expensive)
 
         public string Key => "prism";
         public string Label => "Prism";
         public string LocalizationKey => "speech.prism";
 
-        public void BuildSettings(CategorySetting into)
-        {
-            into.Add(new ChoiceSetting("backend", "Backend", BackendChoices(), AutoBackend, "speech.prism.backend"));
-        }
+        // No user-facing params: the backend is fixed by the OUTPUT the config picked (SpeechOutputs
+        // synthesizes the {"backend": name} params per speak). The old per-config Backend dropdown is
+        // gone — Prism is an engine now, not a choice.
+        public void BuildSettings(CategorySetting into) { }
 
-        // Enumerate prism's registry once and keep only backends whose engine is actually available on
-        // this machine (SupportedAtRuntime filters out the obviously-irrelevant, e.g. JAWS with no JAWS).
-        private static List<Choice> BackendChoices()
+        /// <summary>Enumerate prism's registry once and keep only backends whose engine is actually
+        /// available on this machine (SupportedAtRuntime filters out the obviously-irrelevant, e.g.
+        /// JAWS with no JAWS). Feeds the output list (<see cref="SpeechOutputs"/>).</summary>
+        public static IReadOnlyList<string> ProbeBackendNames()
         {
-            if (_backendChoices != null) return _backendChoices;
-            var choices = new List<Choice> { new Choice(AutoBackend, "Auto (Best Available)", "speech.backend_auto") };
+            if (_backendNames != null) return _backendNames;
+            var names = new List<string>();
             try
             {
                 var probeCtx = PrismNative.Init(IntPtr.Zero);
@@ -55,7 +56,7 @@ namespace WrathAccess.Speech
                             {
                                 var features = (PrismNative.BackendFeatures)PrismNative.BackendGetFeatures(backend);
                                 if ((features & PrismNative.BackendFeatures.SupportedAtRuntime) != 0)
-                                    choices.Add(new Choice(name, name)); // backend names are product names — not translated
+                                    names.Add(name); // backend names are product names — not translated
                             }
                             finally { PrismNative.BackendFree(backend); }
                         }
@@ -63,10 +64,9 @@ namespace WrathAccess.Speech
                     finally { PrismNative.Shutdown(probeCtx); }
                 }
             }
-            catch (DllNotFoundException) { /* prism.dll missing — the bare Auto choice remains */ }
+            catch (DllNotFoundException) { /* prism.dll missing — no screen-reader outputs */ }
             catch (Exception ex) { Main.Log?.Warning("[speech] Prism backend enumeration failed: " + ex.Message); }
-            _backendChoices = choices;
-            return _backendChoices;
+            return _backendNames = names;
         }
 
         public bool Detect()

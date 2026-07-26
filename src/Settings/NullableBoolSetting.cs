@@ -16,10 +16,17 @@ namespace WrathAccess.Settings
         public BoolSetting Fallback { get; }
         public bool? LocalValue { get; private set; }
 
-        public NullableBoolSetting(string key, string label, BoolSetting fallback, string localizationKey = "")
+        // The out-of-box state: null = inherit (the norm); an explicit value makes the override itself
+        // the default (e.g. ally sonar pings default OFF while the units category defaults on).
+        private readonly bool? _default;
+
+        public NullableBoolSetting(string key, string label, BoolSetting fallback, string localizationKey = "",
+            bool? defaultValue = null)
             : base(key, label, localizationKey)
         {
             Fallback = fallback;
+            _default = defaultValue;
+            LocalValue = defaultValue;
         }
 
         public bool IsOverridden => LocalValue.HasValue;
@@ -37,7 +44,12 @@ namespace WrathAccess.Settings
         /// <summary>Toggle the resolved value (writing an explicit override).</summary>
         public void ToggleExplicit() => SetExplicit(!Resolved);
 
-        public override void ResetToDefault() => Reset(); // default = no override (follow the global)
+        public override void ResetToDefault()
+        {
+            if (LocalValue == _default) return;
+            LocalValue = _default; // usually inherit; an explicit construction default restores itself
+            ModSettings.MarkDirty();
+        }
 
         /// <summary>Clear the override so it follows the global fallback again.</summary>
         public void Reset()

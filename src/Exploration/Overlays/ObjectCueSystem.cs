@@ -40,7 +40,12 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !ShouldPlay(overlay)) { _inside = null; _spoken = null; _baselined = false; return; }
+            // Control-gated like every other audio system: during cutscenes/dialogue the cursor is
+            // parked while scripted units stream under it — without the gate the intro cutscene fires
+            // hundreds of enter/exit blips. Resetting the baseline also swallows the state churn, so
+            // control's return doesn't replay it.
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl)
+                { _inside = null; _spoken = null; _baselined = false; return; }
 
             var c = overlay.Cursor.Position;
             ScanItem inside = null;

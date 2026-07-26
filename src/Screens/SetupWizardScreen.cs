@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using Kingmaker.UI; // UISoundType
-using WrathAccess.Exploration; // ScanSounds, ScanTaxonomy (sonar include toggles)
 using WrathAccess.Settings;
 using WrathAccess.Speech;
 using WrathAccess.UI;
@@ -26,10 +25,12 @@ namespace WrathAccess.Screens
     {
         public SetupWizardScreen() { Wrap = true; }
 
-        private enum Step { Backend, HandlerSettings, Navigation, WallTones, Sonar, EventFeedback, EnemyVoice, AllyVoice, UnitlessVoice }
+        // Speech-focused since 2026-07-22 (tester feedback): the movement / wall-tones / sonar steps are
+        // GONE — their recommendations are now plain defaults (ally pings off, world-map sonar off; see
+        // ScanEnabled / OverlaySettingsRegistry.DefaultOn) and their tunables live in the settings menu.
+        private enum Step { Backend, HandlerSettings, EventFeedback, EnemyVoice, AllyVoice, UnitlessVoice }
 
         private static bool s_open;
-        private static bool s_sonarInit;  // apply the sonar phase's recommended defaults once per wizard open
         private static Step s_step;
 
         public override string Key => "ctx.setupwizard";
@@ -38,7 +39,7 @@ namespace WrathAccess.Screens
         public override bool Exclusive => true; // owns the keyboard while open
         public override bool IsActive() => s_open;
 
-        public static void Open() { s_open = true; s_sonarInit = false; s_step = Step.Backend; }
+        public static void Open() { s_open = true; s_step = Step.Backend; }
         private static void Close()
         {
             s_open = false;
@@ -57,9 +58,6 @@ namespace WrathAccess.Screens
             {
                 case Step.Backend: return Loc.T("wizard.speech.backend_title");
                 case Step.HandlerSettings: return Loc.T("wizard.speech.settings_title", new { name = SelectedHandlerLabel() });
-                case Step.Navigation: return Loc.T("wizard.nav.title");
-                case Step.WallTones: return Loc.T("wizard.walltones.title");
-                case Step.Sonar: return Loc.T("wizard.sonar.title");
                 case Step.EventFeedback: return Loc.T("wizard.events.title");
                 case Step.EnemyVoice: return Loc.T("wizard.events.enemy_voice_title");
                 case Step.AllyVoice: return Loc.T("wizard.events.ally_voice_title");
@@ -105,9 +103,6 @@ namespace WrathAccess.Screens
             {
                 case Step.Backend: BuildBackendStep(b, k); break;
                 case Step.HandlerSettings: BuildHandlerSettingsStep(b, k); break;
-                case Step.Navigation: BuildNavigationStep(b, k); break;
-                case Step.WallTones: BuildWallTonesStep(b, k); break;
-                case Step.Sonar: BuildSonarStep(b, k); break;
                 case Step.EventFeedback: BuildEventFeedbackStep(b, k); break;
                 case Step.EnemyVoice: BuildVoiceStep(b, k, EnemySlot, "wizard.events.enemy_voice_help"); break;
                 case Step.AllyVoice: BuildVoiceStep(b, k, AllySlot, "wizard.events.ally_voice_help"); break;
@@ -127,41 +122,35 @@ namespace WrathAccess.Screens
             switch (step)
             {
                 case Step.Backend: return SelectedHandlerLabel();
-                case Step.Navigation:
-                    var m = PrimaryMode();
-                    return m == "continuous" ? Loc.T("wizard.nav.continuous")
-                         : m == "tiled" ? Loc.T("wizard.nav.tiled") : "";
                 case Step.EventFeedback: return Loc.T("wizard.events." + CurrentMode());
                 default: return "";
             }
         }
 
-        // ---- Step 1: choose the speech engine (select + sample) ----
+        // ---- Step 1: choose the speech output — who speaks (select + sample) ----
 
         private static void BuildBackendStep(GraphBuilder b, string k)
         {
             b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.speech.backend_help")));
-            b.BeginStop(k + "options"); // the engine list is its own Tab-stop after the help text
-            foreach (var h in SpeechManager.Handlers)
+            b.BeginStop(k + "options"); // the output list is its own Tab-stop after the help text
+            foreach (var choice in WrathAccess.Speech.SpeechOutputs.Choices())
             {
-                if (!CanUse(h)) continue; // only engines that actually load on this machine
-                var handler = h;          // capture for the live closures
-                b.AddItem(ControlId.Structural(k + "engine:" + h.Key),
+                var c = choice; // capture for the live closures
+                b.AddItem(ControlId.Structural(k + "engine:" + c.Id),
                     GraphNodes.ChoiceOption(
-                        () => handler.Label,
-                        () => HandlerChoice()?.ValueId == handler.Key,
-                        () => SelectBackend(handler.Key)));
+                        () => c.Label,
+                        () => OutputChoice()?.ValueId == c.Id,
+                        () => SelectOutput(c)));
             }
         }
 
-        private static void SelectBackend(string key)
+        private static void SelectOutput(WrathAccess.Settings.Choice c)
         {
-            HandlerChoice()?.Set(key); // selects "like normal" — writes the default config's handler
-            var h = SpeechManager.ResolveHandler(key);
-            // The sample IS the feedback: interrupt purges the generic handler-changed confirm (and any
-            // backlog from rapid switching), so you hear THIS engine demonstrate itself right where you
+            OutputChoice()?.Set(c.Id); // selects "like normal" — writes the default config's output
+            // The sample IS the feedback: interrupt purges the generic output-changed confirm (and any
+            // backlog from rapid switching), so you hear THIS output demonstrate itself right where you
             // chose it. (Clipboard has no audio — its "sample" lands on the clipboard, which is its nature.)
-            Tts.Speak(Loc.T("wizard.speech.sample", new { name = h?.Label ?? key }), interrupt: true);
+            Tts.Speak(Loc.T("wizard.speech.sample", new { name = c.Label }), interrupt: true);
         }
 
         // ---- Step 2: that engine's own settings (the real controls) ----
@@ -175,131 +164,6 @@ namespace WrathAccess.Screens
                 return;
             }
             foreach (var s in sub.Children) ModSettingNodes.Emit(b, s, k);
-        }
-
-        // ---- Step 3: exploration movement (one choice → several cursor settings) ----
-
-        private static void BuildNavigationStep(GraphBuilder b, string k)
-        {
-            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.nav.help")));
-            b.BeginStop(k + "options");
-            b.AddItem(ControlId.Structural(k + "continuous"), GraphNodes.ChoiceOption(
-                () => Loc.T("wizard.nav.continuous"), () => PrimaryMode() == "continuous", ApplyContinuous));
-            b.AddItem(ControlId.Structural(k + "tiled"), GraphNodes.ChoiceOption(
-                () => Loc.T("wizard.nav.tiled"), () => PrimaryMode() == "tiled", ApplyTiled));
-        }
-
-        // Continuous: both cursors glide. In-area — primary 15 ft/s, secondary 30 ft/s. World map — both
-        // glide too, primary 8 mi/s, secondary 45 mi/s.
-        private static void ApplyContinuous() => ModSettings.Batch(() =>
-        {
-            SetMode("primary", "continuous"); SetSpeed("primary", 15);
-            SetMode("secondary", "continuous"); SetSpeed("secondary", 30);
-            SetWorldMapMode("primary", "continuous"); SetWorldMapSpeed("primary", 8);
-            SetWorldMapMode("secondary", "continuous"); SetWorldMapSpeed("secondary", 45);
-        });
-
-        // Tiled: primary steps a grid (speed unused), secondary glides. In-area — secondary 15 ft/s. World
-        // map — primary steps a 2-mile grid, secondary glides at 8 mi/s.
-        private static void ApplyTiled() => ModSettings.Batch(() =>
-        {
-            SetMode("primary", "tiled");
-            SetMode("secondary", "continuous"); SetSpeed("secondary", 15);
-            SetWorldMapMode("primary", "tiled"); SetWorldMapTileSize(2);
-            SetWorldMapMode("secondary", "continuous"); SetWorldMapSpeed("secondary", 8);
-        });
-
-        // The Default overlay's cursor slots (defaults.cursor.<slot>, see OverlaySettingsRegistry): a mode
-        // write re-resolves the Default overlay live and speed is read live, so this applies immediately and
-        // persists. We touch only the Default overlay — any custom overlays are left alone.
-        private static string PrimaryMode()
-            => ModSettings.GetSetting<ChoiceSetting>("defaults.cursor.primary.mode")?.ValueId;
-
-        private static void SetMode(string slot, string mode)
-            => ModSettings.GetSetting<ChoiceSetting>("defaults.cursor." + slot + ".mode")?.Set(mode);
-
-        private static void SetSpeed(string slot, int feet)
-            => ModSettings.GetSetting<IntSetting>("defaults.cursor." + slot + ".speed")?.Set(feet);
-
-        // The same Default-overlay cursor slots also carry the SEPARATE world-map cursor settings (read live
-        // by GlobalMapCursor): movement type + glide speed in miles/sec; the tiled tile size lives on the
-        // grid system. Writes apply immediately and persist, just like the in-area pair above.
-        private static void SetWorldMapMode(string slot, string mode)
-            => ModSettings.GetSetting<ChoiceSetting>("defaults.cursor." + slot + ".worldmap_mode")?.Set(mode);
-
-        private static void SetWorldMapSpeed(string slot, int miles)
-            => ModSettings.GetSetting<IntSetting>("defaults.cursor." + slot + ".worldmap_speed")?.Set(miles);
-
-        private static void SetWorldMapTileSize(int miles)
-            => ModSettings.GetSetting<IntSetting>("defaults.grid.worldmap_cell_size")?.Set(miles);
-
-        // ---- Step: wall tones (a simplified subset of the Exploration wall-tones settings) ----
-
-        // The real Default-overlay wall-tone settings, just the two that matter for a first pass: the mode
-        // and the range (the "distance" out to which a wall is sounded). Bound live (same controls and
-        // labels as the Exploration tab) — no preset, so the user simply turns it on and picks a distance.
-        private static void BuildWallTonesStep(GraphBuilder b, string k)
-        {
-            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.walltones.help")));
-            b.BeginStop(k + "options");
-            var mode = ModSettings.GetSetting<ChoiceSetting>("defaults.walltones.mode");
-            var range = ModSettings.GetSetting<IntSetting>("defaults.walltones.range");
-            if (mode != null) ModSettingNodes.Emit(b, mode, k);
-            if (range != null) ModSettingNodes.Emit(b, range, k);
-        }
-
-        // ---- Step: sonar (enable + which unit factions / the world map are swept) ----
-
-        // The sonar's per-faction "include" is really its taxonomy node's sound (non-silent = swept), so each
-        // include toggle flips the node between its default faction sound and Silent. Enabled / world-map are
-        // the plain overlay-enable flags. We apply the recommended starting set ONCE on first entry (allies and
-        // the world map off — they're the noisy ones; see the help text), then bind live so the user can tune.
-        private void BuildSonarStep(GraphBuilder b, string k)
-        {
-            if (!s_sonarInit) { ApplySonarDefaults(); s_sonarInit = true; }
-            b.AddItem(ControlId.Structural(k + "help"), GraphNodes.Text(() => Loc.T("wizard.sonar.help")));
-            b.BeginStop(k + "options");
-            b.AddItem(ControlId.Structural(k + "enabled"), SonarFlagToggle("wizard.sonar.enabled", "defaults.sonar.mode"));
-            b.AddItem(ControlId.Structural(k + "enemy"), SonarIncludeToggle("wizard.sonar.enemy", ScanTaxonomy.UnitsEnemies));
-            b.AddItem(ControlId.Structural(k + "neutral"), SonarIncludeToggle("wizard.sonar.neutral", ScanTaxonomy.UnitsNeutrals));
-            b.AddItem(ControlId.Structural(k + "ally"), SonarIncludeToggle("wizard.sonar.ally", ScanTaxonomy.UnitsParty));
-            b.AddItem(ControlId.Structural(k + "worldmap"), SonarFlagToggle("wizard.sonar.worldmap", "defaults.worldmap_sonar.mode"));
-        }
-
-        // The wizard's recommended sonar baseline: sonar on, enemies + neutrals swept, allies and world-map
-        // locations off (those flood the densest scenes / the whole map).
-        private static void ApplySonarDefaults() => ModSettings.Batch(() =>
-        {
-            ModSettings.GetSetting<ChoiceSetting>("defaults.sonar.mode")?.Set("continuous");
-            SetSonarInclude(ScanTaxonomy.UnitsEnemies, true);
-            SetSonarInclude(ScanTaxonomy.UnitsNeutrals, true);
-            SetSonarInclude(ScanTaxonomy.UnitsParty, false);
-            ModSettings.GetSetting<ChoiceSetting>("defaults.worldmap_sonar.mode")?.Set("off");
-        });
-
-        // A simplified on/off over the system's play mode (on => Continuous, off => Off); the full
-        // Off / When moving / Continuous choice lives on the Exploration/Sonar tabs.
-        private static NodeVtable SonarFlagToggle(string labelKey, string modePath)
-        {
-            var s = ModSettings.GetSetting<ChoiceSetting>(modePath);
-            return GraphNodes.Toggle(() => Loc.T(labelKey),
-                () => s != null && s.ValueId != "off",
-                () => s?.Set(s.ValueId == "off" ? "continuous" : "off"));
-        }
-
-        // A faction-include toggle: included == the taxonomy node sounds (resolves to a non-silent stem).
-        private static NodeVtable SonarIncludeToggle(string labelKey, string nodeKey)
-            => GraphNodes.Toggle(() => Loc.T(labelKey),
-                () => ScanSounds.Resolve(nodeKey) != null,
-                () => SetSonarInclude(nodeKey, ScanSounds.Resolve(nodeKey) == null));
-
-        // Turn a unit-faction node's sonar sound on (its default faction stem) or off (Silent).
-        private static void SetSonarInclude(string nodeKey, bool on)
-        {
-            string id = on ? (ScanTaxonomy.Get(nodeKey)?.DefaultSound ?? ScanTaxonomy.Silent) : ScanTaxonomy.Silent;
-            var setting = ScanSounds.SoundSetting(nodeKey);
-            if (setting is ChoiceSetting c) c.Set(id);
-            else if (setting is NullableChoiceSetting nc) nc.SetExplicit(id);
         }
 
         // ---- Step: event feedback (one mode choice → events + log + SAPI voices). "Events" not "combat":
@@ -401,8 +265,10 @@ namespace WrathAccess.Screens
                     if (existing == id) return id;
             id = SpeechConfigRegistry.Add();
             SpeechConfigRegistry.SetName(id, Loc.T(nameKey));
-            // An additional config's handler is a NullableChoiceSetting (inherits the default config).
-            SpeechConfigRegistry.Get(id)?.Tree?.Get<NullableChoiceSetting>("handler")?.SetExplicit("sapi");
+            // An additional config's output is a NullableChoiceSetting (inherits the default config).
+            // SAPI: the positional voices need render-to-audio, which only SAPI supports.
+            SpeechConfigRegistry.Get(id)?.Tree?.Get<NullableChoiceSetting>("output")?.SetExplicit(
+                WrathAccess.Speech.SpeechOutputs.Sapi);
             slot?.Set(id);
             return id;
         }
@@ -442,9 +308,6 @@ namespace WrathAccess.Screens
         {
             var steps = new List<Step> { Step.Backend };
             if (HasHandlerSettings()) steps.Add(Step.HandlerSettings);
-            steps.Add(Step.Navigation);
-            steps.Add(Step.WallTones);
-            steps.Add(Step.Sonar);
             steps.Add(Step.EventFeedback);
             // tune the three SAPI voices — enemy, ally, and the sourceless (unitless) voice
             if (CurrentMode() == "positional") { steps.Add(Step.EnemyVoice); steps.Add(Step.AllyVoice); steps.Add(Step.UnitlessVoice); }
@@ -489,22 +352,18 @@ namespace WrathAccess.Screens
 
         // ---- helpers ----
 
-        private static ChoiceSetting HandlerChoice() => SpeechManager.Default?.Tree?.Get<ChoiceSetting>("handler");
+        private static ChoiceSetting OutputChoice() => SpeechManager.Default?.Tree?.Get<ChoiceSetting>("output");
 
-        private static bool CanUse(ISpeechHandler h)
-        {
-            try { return h.Detect(); } catch { return false; }
-        }
+        // The chosen output's display label (the output list is already availability-filtered).
+        private static string SelectedHandlerLabel() => OutputChoice()?.Current?.Label ?? "";
 
-        // The concrete engine the default config resolves to (resolves "auto" to a real handler).
-        private static string SelectedHandlerLabel()
-            => SpeechManager.ResolveHandler(SpeechManager.Default?.HandlerKey)?.Label
-               ?? HandlerChoice()?.Current?.Label ?? "";
-
+        // The chosen output's params subtree (SAPI's voice/rate/volume; screen-reader outputs have
+        // none, so the settings step drops out for them).
         private static CategorySetting SelectedHandlerParams()
         {
-            var h = SpeechManager.ResolveHandler(SpeechManager.Default?.HandlerKey);
-            return h != null ? SpeechManager.Default?.Tree?.Get<CategorySetting>(h.Key) : null;
+            var output = SpeechManager.Default?.OutputId;
+            return output == WrathAccess.Speech.SpeechOutputs.Sapi
+                ? SpeechManager.Default?.Tree?.Get<CategorySetting>("sapi") : null;
         }
 
         private static bool HasHandlerSettings()

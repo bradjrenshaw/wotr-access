@@ -168,6 +168,7 @@ namespace WrathAccess.Screens
             Register(new ModSettingsScreen()); // the full tabbed browser ("All settings"), stacks above; layer 39
             Register(new SetupWizardScreen()); // first-run setup wizard (speech engine + its settings), layer 36
             Register(new GammaScreen()); // first-launch brightness/gamma calibration (boot-time, before main menu), layer 40
+            Register(new TermsOfUseScreen()); // the license window (first launch + menu License entry); below launcher/wizard, layer 34
             // ModKeyCaptureScreen + ModTextEntryScreen are no longer registered — both are CHILD screens
             // pushed on the current screen via their static Open(...) (key capture / text entry overlays).
             // TooltipScreen is no longer registered — each tooltip page is a CHILD screen pushed on the

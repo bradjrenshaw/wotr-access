@@ -115,29 +115,41 @@ namespace WrathAccess.Screens
                 b.PopContext();
             }
 
-            // Mode switch — mirrors the game's "Detailed description" button. Reads the GAME view's
-            // live mode (reflected below) and flips it via the game's own SwitchMode — no shadow state.
-            bool detailed = IsDetailed();
-            b.BeginStop("mode").AddItem(ControlId.Structural(k + "mode"), GraphNodes.Toggle(
-                () => (string)UIStrings.Instance.CharGen.DetailedDescription,
-                IsDetailed,
-                ToggleDetailed));
+            // LEVEL-UP is a THIRD view mode (ClassDetailedViewMode.Levelup): the game HIDES its
+            // "Detailed description" button entirely and shows the info panel + the progression grid
+            // instead. Mirror that — rendering the toggle here left a dead control that always read
+            // "off" (the reported bug: mode is Levelup, never Mechanic, and SwitchMode no-ops).
+            bool levelup = IsLevelupMode();
+
+            // Mode switch — mirrors the game's "Detailed description" button (chargen modes only).
+            // Reads the GAME view's live mode (reflected below) and flips it via the game's own
+            // SwitchMode — no shadow state.
+            bool detailed = !levelup && IsDetailed();
+            if (!levelup)
+                b.BeginStop("mode").AddItem(ControlId.Structural(k + "mode"), GraphNodes.Toggle(
+                    () => (string)UIStrings.Instance.CharGen.DetailedDescription,
+                    IsDetailed,
+                    ToggleDetailed));
 
             // The details, keyed per class + archetype + mode so any change re-keys them.
             string dk = k + "detail:" + (cls?.GetHashCode() ?? 0) + ":"
-                + (Phase.SelectedArchetypeVM.Value?.GetHashCode() ?? 0) + ":" + (detailed ? "M" : "S") + ":";
+                + (Phase.SelectedArchetypeVM.Value?.GetHashCode() ?? 0) + ":"
+                + (levelup ? "L" : detailed ? "M" : "S") + ":";
             b.BeginStop("details").PushContext(Loc.T("chargen.details"), role: null, positions: false);
             if (cls != null)
             {
+                // Level-up's panel content is the selection's info template (the same InfoVM the
+                // game's InfoSectionView binds) — identical to Short's source.
                 if (detailed) EmitMechanic(b, dk);
                 else EmitShort(b, dk);
             }
             b.PopContext();
 
-            // The progression grid + auto-levelup, in Mechanic mode only — their OWN Tab-stops after
-            // the details (the grid is a big table; burying it at the bottom of the details vertical
-            // makes it undiscoverable by Tab).
-            if (cls != null && detailed) EmitProgression(b, dk);
+            // The progression grid + auto-levelup — their OWN Tab-stops after the details (the grid
+            // is a big table; burying it at the bottom of the details vertical makes it
+            // undiscoverable by Tab). Shown in Mechanic mode AND in level-up (the game's Levelup
+            // panel always includes the progression, scrolled to the level being taken).
+            if (cls != null && (detailed || levelup)) EmitProgression(b, dk);
         }
 
         // The game's on-screen info panel (InfoSectionView ← ReactiveTooltipTemplate) is HOVER-fed:
@@ -172,6 +184,17 @@ namespace WrathAccess.Screens
             var tplArch = TplField(TplArchFields, tpl, "Archetype");
             if (!ReferenceEquals(tplClass, cls) || !ReferenceEquals(tplArch, arch))
                 Phase.UpdateTooltipTemplate(hover: false);
+        }
+
+        // Is the game's class-detail view in its Level-up mode (no Short/Mechanic split, no toggle)?
+        private bool IsLevelupMode()
+        {
+            if (ViewModeField == null || ViewModeEnum == null) return false;
+            var view = ActiveClassDetailView();
+            if (view == null) return false;
+            var rp = ViewModeField.GetValue(view);
+            var cur = rp?.GetType().GetProperty("Value")?.GetValue(rp);
+            return cur != null && cur.Equals(System.Enum.Parse(ViewModeEnum, "Levelup"));
         }
 
         // The current detail mode, READ from the game's own class-detail view (its m_ViewMode reactive —

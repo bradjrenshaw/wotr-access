@@ -136,8 +136,12 @@ namespace WrathAccess.Exploration.Overlays
             var volumes = ModSettingsRegistry.EnsureCategory("audio.volumes", "Audio/System volumes", "audio.volumes");
             foreach (var proto in Prototypes)
                 if (proto is AudioSystem && volumes.GetByKey(proto.Key) == null)
-                    volumes.Add(new IntSetting(proto.Key, proto.Name + " volume", 40, 0, 100, 5,
-                        "audio.volumes." + proto.Key)); // 40% default — the mod sounds were too loud at 100% (master stays 100%)
+                    // 40% default — the mod sounds were too loud at 100% (master stays 100%). Wall
+                    // tones 60%: the normalized files (-20 dB RMS sustained vs -16 one-shots,
+                    // 2026-07-27) sit right at that setting by ear.
+                    volumes.Add(new IntSetting(proto.Key, proto.Name + " volume",
+                        proto.Key == "walltones" ? 60 : 40, 0, 100, 5,
+                        "audio.volumes." + proto.Key));
 
             // The audio listener anchor (the "virtual head" — see ListenerAnchor): where the game's
             // 3D audio is heard from. Default = the same reference the sonification pans from, so

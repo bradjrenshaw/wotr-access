@@ -94,27 +94,71 @@ namespace WrathAccess.Exploration
         /// path to walk (already within reach, or unreachable); callers treat that as "no move needed / can't
         /// move", and only act on the returned lengths when it's true.
         /// </summary>
-        public static bool TryApproach(Vector3 targetPos, float reach, out float walkMeters, out float moveActionMeters)
+        /// <summary>
+        /// True when walking would forfeit the unit's STANDARD action, making any walk-then-act order
+        /// illegal: <c>HasStandardAction()</c> is "standard unspent AND move cooldown within budget",
+        /// and with a RESTRICTED move action — surprise round (<c>IsSurprising</c>), staggered — that
+        /// budget is ZERO, so any movement at all voids the standard. The game enforces this by
+        /// force-finishing the queued command as "Success" the moment the unit arrives (no refusal, no
+        /// log line — the silent turn-burn of the Camellia/centipede surprise-round repro). Gate the
+        /// order up front and refuse aloud instead.
+        /// </summary>
+        public static bool MoveThenActBlocked(UnitEntityData unit)
+            => unit != null && (unit.UsedStandardAction() || unit.IsMoveActionRestricted());
+
+        public static bool TryApproach(Vector3 targetPos, float reach, out float walkMeters, out float moveActionMeters,
+            bool needLOS = false, bool requireStandardAfter = true)
         {
             walkMeters = moveActionMeters = 0f;
             var cu = CurrentUnit;
             if (cu == null) return false;
-            var pts = ComputePath(targetPos, reach, updateActionsState: true); // commit path: the approach command walks it
+            if (requireStandardAfter && MoveThenActBlocked(cu)) return false; // the walk would void the action
+            // Aim the path a MARGIN inside the acting radius. The A* ending condition accepts the FIRST
+            // node inside the radius — a knife-edge endpoint (the Camellia/centipede repro landed 9mm
+            // in) — while the unit's actual stop drifts centimetres off the path end (stop tolerance,
+            // TB smooth modifier). Arriving a hair OUTSIDE, the command's own IsUnitCloseEnough re-test
+            // fails forever, it can never start, and the game's approach fallback force-finishes it as
+            // "Success" — silently ending the turn. A path that ends well inside reach survives the
+            // drift. Commit mode: the issued command walks this path.
+            var pts = ComputePath(targetPos, Mathf.Max(0.3f, reach - ApproachMargin),
+                updateActionsState: true, needLOS: needLOS);
+            if (!EndpointReachable(pts, targetPos, reach, needLOS))
+            {
+                // The margin can exclude the only valid firing spot (nothing closer is walkable). Retry
+                // at the exact radius, but still demand a sliver of slack at the end — accepting a
+                // boundary-exact endpoint just reissues the doomed command the margin exists to prevent.
+                pts = ComputePath(targetPos, reach, updateActionsState: true, needLOS: needLOS);
+                if (!EndpointReachable(pts, targetPos, reach - 0.1f, needLOS)) return false;
+            }
             moveActionMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false);
-            if (pts == null || pts.Count == 0) return false; // already in reach, or no route at all
-            // ENDPOINT test — the same check the game's click validation applies (PathVisualizer.
-            // IsCurrentPathForPoint): an A* approach path completes at the CLOSEST ATTAINABLE node when
-            // no in-reach node is available (allies crowding a melee target, clearance-tight doorways,
-            // reach beyond the 6x-speed path cap) — its LENGTH can fit the budget while its END still
-            // stands short of acting range. Walking it strands the unit doing nothing, silently, and
-            // parks a pending order for next turn. Short-of-reach endpoints report as unreachable.
-            var end = pts[pts.Count - 1];
-            if (Owlcat.Runtime.Core.Utils.GeometryUtils.MechanicsDistance(end, targetPos) > reach) return false;
             for (int i = 1; i < pts.Count; i++) walkMeters += Vector3.Distance(pts[i - 1], pts[i]);
             return true;
         }
 
-        private static System.Collections.Generic.List<Vector3> ComputePath(Vector3 point, float approachRadius, bool updateActionsState)
+        /// <summary>How far inside the acting radius an approach path aims (metres) — must exceed the
+        /// unit's worst-case stop drift from the path end plus the path smoother's displacement.</summary>
+        private const float ApproachMargin = 0.5f;
+
+        /// <summary>The distance-AND-LOS test the command itself applies on arrival (UnitCommand.
+        /// IsUnitCloseEnough): an A* approach path completes at the CLOSEST ATTAINABLE node when no
+        /// satisfying node is reachable (allies crowding a melee target, clearance-tight doorways, reach
+        /// beyond the 6x-speed path cap, no firing position with sight of the target) — such an end can
+        /// sit within pure-distance reach while lacking LOS. Walking it strands the unit and burns the
+        /// turn, so test what the command will test: distance, and sight from the endpoint's eye.</summary>
+        private static bool EndpointReachable(System.Collections.Generic.List<Vector3> pts, Vector3 targetPos,
+            float reach, bool needLOS)
+        {
+            if (pts == null || pts.Count == 0) return false; // no route at all
+            var end = pts[pts.Count - 1];
+            if (Owlcat.Runtime.Core.Utils.GeometryUtils.MechanicsDistance(end, targetPos) > reach) return false;
+            return !needLOS || !Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar.LineOfSightGeometry
+                .Instance.HasObstacle(
+                    end + Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar.LineOfSightGeometry.EyeShift,
+                    targetPos);
+        }
+
+        private static System.Collections.Generic.List<Vector3> ComputePath(Vector3 point, float approachRadius,
+            bool updateActionsState, bool needLOS = false)
         {
             if (!InTurnBased) return null;
             var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
@@ -132,7 +176,10 @@ namespace WrathAccess.Exploration
             if (updateActionsState) actionsState.Clear();
             actionsState.ApproachPoint = point;
             actionsState.ApproachRadius = approachRadius; // 0.3 ~= exact (move); the attack reach for an approach
-            actionsState.NeedLOS = false;
+            // MUST match the command that will walk this path: UnitAttack always requires LOS, abilities
+            // unless ILineOfSightIgnore. A no-LOS path to a ranged target behind a wall ends at a spot
+            // the command can't fire from — it gives up instantly and the turn auto-ends (Camellia repro).
+            actionsState.NeedLOS = needLOS;
             actionsState.IgnoreBlockerId = 0; // don't inherit a stale hover value (vanilla commands pass 0 too)
             pv.CalculatePathForCommand(cu, actionsState, updateActionsState);
 
@@ -234,9 +281,10 @@ namespace WrathAccess.Exploration
         private static UnitEntityData _lastTurn;
         private static TurnController _trackedTurn;
         private static UnitEntityData _trackedUnit;
+        private static bool _spokeSurpriseRound;
         public static void TickTurn()
         {
-            if (!InTurnBased) { _lastTurn = null; _trackedTurn = null; _trackedUnit = null; return; }
+            if (!InTurnBased) { _lastTurn = null; _trackedTurn = null; _trackedUnit = null; _spokeSurpriseRound = false; return; }
 
             var turn = Game.Instance?.TurnBasedCombatController?.CurrentTurn;
             // The tracked turn finished (reached Ended, or was disposed/replaced between frames).
@@ -258,6 +306,14 @@ namespace WrathAccess.Exploration
             _lastTurn = cur;
             if (cur != null)
             {
+                // Surprise round: the game shows it only as the initiative tracker's round header —
+                // invisible by ear — yet it changes the rules (each surpriser gets ONE action: move OR
+                // act). Announce the game's own localized label once, ahead of the round's first turn cue.
+                if (!_spokeSurpriseRound && cur.IsSurprising())
+                {
+                    _spokeSurpriseRound = true;
+                    Tts.Speak((string)UIStrings.Instance.TurnBasedTexts.SurpriseRound);
+                }
                 // Two invisible-by-ear states get surfaced with the turn cue, because both make the
                 // unit "act on its own" the moment its turn starts: an AI-controlled party member
                 // (Ctrl+D) has its whole turn played by the game brain, and a PENDING ORDER from an

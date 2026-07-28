@@ -1,5 +1,6 @@
 using System.Collections.Generic; // List (convert submenu)
 using Kingmaker;
+using Kingmaker.Blueprints; // GetComponent extension for blueprints (ILineOfSightIgnore probe)
 using Kingmaker.Controllers.Clicks.Handlers; // ClickWithSelectedAbilityHandler
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UI.MVVM._VM.ActionBar; // ActionBarSlotVM
@@ -146,13 +147,24 @@ namespace WrathAccess.Exploration
                 && ability.Blueprint.StickyTouch != null)
             {
                 float reach = ability.GetApproachDistance(unit);
-                // The command system's own "am I in range" test (same statics UnitCommand.Start uses).
+                // The command system's own "am I in range" test (same statics UnitCommand.Start uses),
+                // including its LOS rule (UnitUseAbility: LOS unless the ability opts out) so the
+                // populated path ends somewhere the cast can actually happen.
+                bool los = ability.Blueprint
+                    .GetComponent<Kingmaker.UnitLogic.Abilities.Components.TargetCheckers.ILineOfSightIgnore>() == null;
                 bool inReach = UnitCommand.IsUnitCloseEnough(unit.Position, caster.Position,
-                    caster.EyePosition, reach, needLOS: false, ignoreBlockerRadius: 0f);
+                    caster.EyePosition, reach, needLOS: los, ignoreBlockerRadius: 0f);
                 if (!inReach)
                 {
+                    // No time for both the walk and the cast (surprise round, staggered, standard
+                    // spent): refuse with the action-economy reason, not "too far".
+                    if (CombatMode.MoveThenActBlocked(caster))
+                    {
+                        Tts.Speak(Loc.T("combat.cant_move_and_act"), interrupt: true);
+                        return; // no path computed, nothing to cancel
+                    }
                     // TryApproach also POPULATES the path, so the issued command has a route to walk.
-                    if (CombatMode.TryApproach(unit.Position, reach, out float walk, out float moveRange)
+                    if (CombatMode.TryApproach(unit.Position, reach, out float walk, out float moveRange, needLOS: los)
                         && walk <= moveRange)
                         wantApproach = true;
                     else

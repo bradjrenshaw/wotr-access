@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Kingmaker.Blueprints; // GetComponent extension for blueprints (ILineOfSightIgnore probe)
 using Kingmaker.Controllers.Clicks.Handlers; // ClickUnitHandler
 using Kingmaker.EntitySystem.Entities; // UnitEntityData
 using Kingmaker.UnitLogic.Commands; // UnitAttack (approach radius)
@@ -127,10 +128,25 @@ namespace WrathAccess.Exploration
                 if (CombatMode.InTurnBased && holder == CombatMode.CurrentUnit && holder != _unit)
                 {
                     float treach = touch.Ability.Data.GetApproachDistance(_unit);
+                    // Same LOS rule the deliver command applies (UnitUseAbility: LOS unless the ability
+                    // opts out) — reach without sight isn't reach, and the path must end where the
+                    // command can actually act.
+                    bool tlos = touch.Ability.Blueprint
+                        .GetComponent<Kingmaker.UnitLogic.Abilities.Components.TargetCheckers.ILineOfSightIgnore>() == null;
                     bool inReach = UnitCommand.IsUnitCloseEnough(_unit.Position, holder.Position,
-                        holder.EyePosition, treach, needLOS: false, ignoreBlockerRadius: 0f);
+                        holder.EyePosition, treach, needLOS: tlos, ignoreBlockerRadius: 0f);
+                    // A touch delivered the round it was CAST is a free action (UnitCommand.IsFreeTouch →
+                    // IsIgnoreCooldown), so the walk needn't leave a standard action alive; a charge held
+                    // from an earlier round costs the standard again and gets the full economy gate.
+                    bool freeTouch = holder.Get<Kingmaker.UnitLogic.Parts.UnitPartTouch>()?.IsCastedInThisRound ?? false;
+                    if (!inReach && !freeTouch && CombatMode.MoveThenActBlocked(holder))
+                    {
+                        Tts.Speak(Loc.T("combat.cant_move_and_act"), interrupt: true);
+                        return InteractOutcome.RefusedSpoken; // no path computed, nothing to cancel
+                    }
                     if (!inReach
-                        && !(CombatMode.TryApproach(_unit.Position, treach, out float twalk, out float tmove)
+                        && !(CombatMode.TryApproach(_unit.Position, treach, out float twalk, out float tmove,
+                                needLOS: tlos, requireStandardAfter: !freeTouch)
                              && twalk <= tmove))
                     {
                         CombatMode.CancelPathReservation(); // no command follows the computed path
@@ -159,10 +175,21 @@ namespace WrathAccess.Exploration
                 if (attacker != null && attacker.View != null && attacker.CanAttack(_unit))
                 {
                     float reach = UnitAttack.GetApproachRadius(attacker.GetFirstWeapon(), attacker, _unit);
+                    // UnitAttack ALWAYS requires line of sight (its ctor sets NeedLoS) — check reach and
+                    // compute the approach the same way, so a ranged target behind a wall either gets a
+                    // path to a firing position or an honest refusal (a sightless path made the command
+                    // give up on the spot and auto-end the turn — the Camellia/centipede repro).
                     bool inReach = UnitCommand.IsUnitCloseEnough(_unit.Position, attacker.Position,
-                        attacker.EyePosition, reach, needLOS: false, ignoreBlockerRadius: 0f);
+                        attacker.EyePosition, reach, needLOS: true, ignoreBlockerRadius: 0f);
+                    // Out of reach + no time for both the walk and the swing (surprise round, staggered,
+                    // standard already spent): refuse with the action-economy reason, not "too far".
+                    if (!inReach && CombatMode.MoveThenActBlocked(attacker))
+                    {
+                        Tts.Speak(Loc.T("combat.cant_move_and_act"), interrupt: true);
+                        return InteractOutcome.RefusedSpoken; // no path computed, nothing to cancel
+                    }
                     if (!inReach
-                        && !(CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange)
+                        && !(CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange, needLOS: true)
                              && walk <= moveRange))
                     {
                         CombatMode.CancelPathReservation(); // no command follows the computed path

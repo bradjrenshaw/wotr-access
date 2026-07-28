@@ -145,7 +145,15 @@ namespace WrathAccess.Exploration
             Cat("unexplored", "Unexplored space", ScanClass.Object, Silent);
 
             Cat("scenery", "Scenery", ScanClass.Object, Silent);
-            Cat("poi", "Points of interest", ScanClass.Marker, Silent);
+            // The game's curated local-map markers, split by their designer-assigned LocalMapMarkType
+            // (quest = VeryImportantThing, exits = Exit, loot = Loot; units + generic Poi land in
+            // their own buckets). All default silent, assignable in Sounds.
+            Cat("poi", "Points of interest", ScanClass.Marker, Silent,
+                Sub("quest", "Quest", Silent),
+                Sub("exits", "Exits", Silent),
+                Sub("loot", "Loot", Silent),
+                Sub("units", "People", Silent),
+                Sub("other", "Other", Silent));
         }
 
         // ---- builders ----

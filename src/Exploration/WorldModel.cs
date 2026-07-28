@@ -77,7 +77,7 @@ namespace WrathAccess.Exploration
             }
             foreach (var m in LocalMapModel.Markers)
             {
-                if (m == null) continue;
+                if (m == null || ProxyMarker.IsNoise(m)) continue; // party dots / destination flag
                 try { if (!LocalMapModel.IsInCurrentArea(m.GetPosition())) continue; } catch { continue; }
                 if (!_items.ContainsKey(m)) Ensure(m, () => new ProxyMarker(m));
                 _present.Add(m);

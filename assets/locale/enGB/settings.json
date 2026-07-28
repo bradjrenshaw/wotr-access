@@ -271,6 +271,12 @@
 
   "sounds.title": "Sounds",
   "taxonomy.poi": "Points of interest",
+  "taxonomy.poi.all": "All points of interest",
+  "taxonomy.poi.quest": "Quest",
+  "taxonomy.poi.exits": "Exits",
+  "taxonomy.poi.loot": "Loot",
+  "taxonomy.poi.units": "People",
+  "taxonomy.poi.other": "Other",
   "taxonomy.units": "Units",
   "taxonomy.units.all": "All units",
   "taxonomy.units.party": "Party",

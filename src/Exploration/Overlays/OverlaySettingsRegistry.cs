@@ -172,6 +172,19 @@ namespace WrathAccess.Exploration.Overlays
             if (audio.GetByKey("listener_height") == null)
                 audio.Add(new IntSetting("listener_height", "Listener height (feet)", 35, 0, 80, 5,
                     "audio.listener_height"));
+            // Wwise's global stereo panning rule (game audio; the game itself never sets it, so
+            // vanilla = Speakers). Headphones = constant-power panning, audibly wider positioning.
+            if (audio.GetByKey("panning") == null)
+                audio.Add(new ChoiceSetting("panning", "Stereo panning profile",
+                    new System.Collections.Generic.List<Choice>
+                    {
+                        new Choice("speakers", "Speakers (game default)", "audio.panning.speakers"),
+                        new Choice("headphones", "Headphones (wider stereo)", "audio.panning.headphones"),
+                    }, "speakers", "audio.panning"));
+            // Keep running + audible while alt-tabbed (vanilla pauses and suspends the sound engine).
+            if (audio.GetByKey("background_audio") == null)
+                audio.Add(new BoolSetting("background_audio",
+                    "Keep audio when the game is in the background", false, "audio.background_audio"));
         }
 
         private static CategorySetting BuildSlotSettings(string path, string labelPath, string locKey,

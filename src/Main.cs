@@ -157,6 +157,7 @@ namespace WrathAccess
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
             FocusMode.Tick(); // re-acquire the hotkey-suppression scope if the game rebuilt its keyboard
             WrathAccess.Audio.WwiseAudio.Tick(); // generate+load our Wwise bank once the engine is up
+            WrathAccess.Audio.WwiseRuntimeConfig.Tick(); // apply panning rule + background-audio options
             InputManager.Tick();
             // First-run experience: the instant we reach the main menu (after the boot "loaded" readout),
             // open the setup wizard — but only until it's been shown once (wizard.completed, set on dismissal).

@@ -37,12 +37,41 @@ namespace WrathAccess.Screens
         public override void Build(GraphBuilder b)
         {
             b.BeginStop("tree");
+
+            // General cues — the fixed one-shots outside the sonar taxonomy, each played at the same
+            // volume its own system uses (control pair rides the master only; fog/object pairs have
+            // their system volumes).
+            b.BeginGroup(ControlId.Structural("gloss:general"),
+                GraphNodes.Group(() => Loc.T("glossary.general")));
+            CueButton(b, "control_gained", () => OverlayAudio.Master);
+            CueButton(b, "control_lost", () => OverlayAudio.Master);
+            CueButton(b, "fog_enter", () => SystemVolume("fog"));
+            CueButton(b, "fog_exit", () => SystemVolume("fog"));
+            CueButton(b, "object_enter", () => SystemVolume("object"));
+            CueButton(b, "object_exit", () => SystemVolume("object"));
+            b.EndGroup();
+
             b.BeginGroup(ControlId.Structural("gloss:sonar"),
                 GraphNodes.Group(() => Loc.T("glossary.sonar")));
             foreach (var cat in ScanTaxonomy.Categories) EmitCategory(b, cat);
             foreach (var cat in GlobalMapTaxonomy.Categories) EmitCategory(b, cat);
             b.EndGroup();
         }
+
+        // A general-cue play button: <stem>.wav at the ASSET ROOT (unlike the sonar's interactables
+        // subfolder), volume computed live so it always matches what the real system would play.
+        private static void CueButton(GraphBuilder b, string stem, System.Func<float> volume)
+        {
+            b.AddItem(ControlId.Structural("gloss:cue:" + stem),
+                GraphNodes.Button(() => Loc.T("glossary." + stem),
+                    () => WrathAccess.Audio.AudioEngines.NAudio.Play2D(
+                        Path.Combine(OverlayAudio.Dir, stem + ".wav"), volume()),
+                    sound: null));
+        }
+
+        private static float SystemVolume(string sys)
+            => (ModSettings.GetSetting<IntSetting>("audio.volumes." + sys)?.Get() ?? 40) / 100f
+               * OverlayAudio.Master;
 
         // One taxonomy category. Leaf categories (Doors, Exits, Traps, …) are flat buttons, shown
         // only when their pick resolves to a sound. Branch categories (Units, Containers, World map)

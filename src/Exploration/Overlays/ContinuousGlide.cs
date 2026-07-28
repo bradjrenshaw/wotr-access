@@ -49,7 +49,15 @@ namespace WrathAccess.Exploration.Overlays
             var cur = overlay.Cursor.Position;
             var dir = new Vector3(dx, 0f, dz).normalized;
             var intended = cur + dir * (Speed * dt);
-            overlay.Cursor.Position = ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
+            var traced = ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
+            // Re-project onto the walkable surface: the trace's unobstructed result keeps the INPUT Y
+            // (the navmesh linecast never re-snaps height), so gliding up a ramp left the cursor's Y
+            // fossilized at wherever it was last planted — path-dependent heights on one slope, and a
+            // stale feed to the slope indicator. Seeding the sample with the current Y keeps genuine
+            // multi-level geometry honest (nearest tier wins; ascend/descend still switch tiers).
+            var s = NavmeshProbe.Sample(traced.x, traced.z, traced.y);
+            if (s.OnNavmesh) traced.y = s.Point.y;
+            overlay.Cursor.Position = traced;
         }
     }
 }

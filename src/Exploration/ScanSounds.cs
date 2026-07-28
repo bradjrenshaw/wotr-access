@@ -125,6 +125,15 @@ namespace WrathAccess.Exploration
         {
             if (nodeKey == null) return null; // items with no sound node (the old loop's entry guard)
             if (!ScanEnabled.SoundEnabled(nodeKey)) return null; // Play sound off (separate from the pick)
+            return ResolveAssigned(nodeKey);
+        }
+
+        /// <summary>The node's ASSIGNED sound (the pick, inheritance resolved) regardless of the
+        /// Play-sound switch — reference material (the audio glossary shows what a sound IS even for a
+        /// type the user has muted).</summary>
+        public static string ResolveAssigned(string nodeKey)
+        {
+            if (nodeKey == null) return null;
             var setting = SoundSetting(nodeKey);
             string id = setting is NullableChoiceSetting nc ? nc.EffectiveId
                 : setting is ChoiceSetting c ? c.ValueId : null;

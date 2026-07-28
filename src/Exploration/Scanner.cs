@@ -384,13 +384,19 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Party: return p == ScanTaxonomy.UnitsParty;
                 case ReviewGroup.Enemies: return p == ScanTaxonomy.UnitsEnemies;
                 case ReviewGroup.Neutrals: return p == ScanTaxonomy.UnitsNeutrals;
-                case ReviewGroup.Poi: return p == ScanTaxonomy.Poi;
+                case ReviewGroup.Poi: return IsPoi(p);
                 case ReviewGroup.Unexplored: return p == ScanTaxonomy.Unexplored;
                 default: return p != ScanTaxonomy.UnitsParty && p != ScanTaxonomy.UnitsEnemies
                     && p != ScanTaxonomy.UnitsNeutrals && p != ScanTaxonomy.Scenery
-                    && p != ScanTaxonomy.Poi && p != ScanTaxonomy.Unexplored;
+                    && !IsPoi(p) && p != ScanTaxonomy.Unexplored;
             }
         }
+
+        // POI markers carry SUBCATEGORY primaries since the taxonomy split (poi.quest / poi.units / …)
+        // — a bare == Poi check let every marker leak into the Others cycle (M read "Terendelev" off
+        // her People marker) and left the B cycle matching only the curated AreaDetails points.
+        private static bool IsPoi(string primary)
+            => primary == ScanTaxonomy.Poi || primary.StartsWith(ScanTaxonomy.Poi + ".", System.StringComparison.Ordinal);
 
         private static string ReviewGroupLabel(ReviewGroup g)
         {

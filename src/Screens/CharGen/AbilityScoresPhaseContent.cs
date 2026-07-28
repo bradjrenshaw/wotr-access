@@ -68,13 +68,17 @@ namespace WrathAccess.Screens
                         Stepper(5, alloc, raise: false, tooltip),
                     });
             }
-            sheet.Finish();
-
-            // The race ability-bonus chooser only exists for races that let you pick where the +2 goes.
+            // The race ability-bonus chooser only exists for races that let you pick where the +2
+            // goes. It must live INSIDE the sheet (its own region) — the sheet is raw-mode cell nav,
+            // and a loose menu AddItem after Finish() emits but never wires into the arrow path
+            // (regression from the graph migration: present in the tree, unreachable by ear).
             if (Phase.RaceBonusAvailable != null && Phase.RaceBonusAvailable.Value)
-                b.AddItem(ControlId.Structural(k + "racebonus"),
-                    CharGenNodes.SequentialSelector("Racial ability bonus",
-                        () => Phase.RaceBonusSelector != null ? Phase.RaceBonusSelector.Value : null));
+            {
+                sheet.Region(null);
+                sheet.Line(CharGenNodes.SequentialSelector(Loc.T("chargen.racial_bonus"),
+                    () => Phase.RaceBonusSelector != null ? Phase.RaceBonusSelector.Value : null));
+            }
+            sheet.Finish();
         }
 
         private KeyValuePair<int, NodeVtable> Cell(int col, Func<string> value,

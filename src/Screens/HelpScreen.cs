@@ -41,6 +41,8 @@ namespace WrathAccess.Screens
         {
             b.AddItem(ControlId.Structural("help:docs"),
                 GraphNodes.Button(() => Loc.T("menu.read_docs"), OpenDocs));
+            b.AddItem(ControlId.Structural("help:glossary"),
+                GraphNodes.Button(() => Loc.T("menu.audio_glossary"), GlossaryScreen.Open));
         }
 
         // Prefer the docs bundled inside the mod folder (Main.ModDir/docs); fall back to the hosted site.

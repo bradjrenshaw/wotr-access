@@ -17,6 +17,26 @@ namespace WrathAccess.Patches
     /// mod is the sole author of predictions: movement via <c>CombatMode.ComputePath</c> (commit mode),
     /// actions via <c>CombatMode.NoteIssuedCommand</c> after each command we issue.
     /// </summary>
+    /// <summary>
+    /// Companion to <see cref="TurnPredictionPatch"/>: with the prediction loop dead, the smart
+    /// cursor's <c>m_AttackMode</c> is never updated and stays at its default — <c>SingleAttack</c>
+    /// (enum 0). <c>GetEnabledFullAttack</c> reads that mode for the un-moved current unit, so every
+    /// keyboard-flow attack silently became a single attack: Rapid Shot, Haste and iterative attacks
+    /// never fired. The mode is purely the mouse UI's downgrade dial; the RULES restrictions live
+    /// elsewhere and still apply (<c>UsedOneMoveAction</c> → single, staggered → single, …). While
+    /// the mod is enabled, answer "full attack allowed" and let the rules engine decide.
+    /// </summary>
+    [HarmonyPatch(typeof(TurnController), "GetEnabledFullAttack")]
+    internal static class FullAttackModePatch
+    {
+        private static bool Prefix(ref bool __result)
+        {
+            if (!Main.Enabled) return true;
+            __result = true;
+            return false;
+        }
+    }
+
     [HarmonyPatch(typeof(TurnController), "UpdateActionPredictions")]
     internal static class TurnPredictionPatch
     {

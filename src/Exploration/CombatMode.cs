@@ -113,31 +113,17 @@ namespace WrathAccess.Exploration
             var cu = CurrentUnit;
             if (cu == null) return false;
             if (requireStandardAfter && MoveThenActBlocked(cu)) return false; // the walk would void the action
-            // Aim the path a MARGIN inside the acting radius. The A* ending condition accepts the FIRST
-            // node inside the radius — a knife-edge endpoint (the Camellia/centipede repro landed 9mm
-            // in) — while the unit's actual stop drifts centimetres off the path end (stop tolerance,
-            // TB smooth modifier). Arriving a hair OUTSIDE, the command's own IsUnitCloseEnough re-test
-            // fails forever, it can never start, and the game's approach fallback force-finishes it as
-            // "Success" — silently ending the turn. A path that ends well inside reach survives the
-            // drift. Commit mode: the issued command walks this path.
-            var pts = ComputePath(targetPos, Mathf.Max(0.3f, reach - ApproachMargin),
-                updateActionsState: true, needLOS: needLOS);
-            if (!EndpointReachable(pts, targetPos, reach, needLOS))
-            {
-                // The margin can exclude the only valid firing spot (nothing closer is walkable). Retry
-                // at the exact radius, but still demand a sliver of slack at the end — accepting a
-                // boundary-exact endpoint just reissues the doomed command the margin exists to prevent.
-                pts = ComputePath(targetPos, reach, updateActionsState: true, needLOS: needLOS);
-                if (!EndpointReachable(pts, targetPos, reach - 0.1f, needLOS)) return false;
-            }
+            // The game's own approach radius, unmodified: the A* ending condition stops at the first
+            // node inside reach, which IS vanilla's positioning rule (units close to maximum range and
+            // no further — walking deeper would change tactical exposure). A knife-edge endpoint is
+            // fine: the command re-tests reach at arrival and passed even a 9mm-inside endpoint in the
+            // Camellia/centipede trace. Commit mode: the issued command walks this path.
+            var pts = ComputePath(targetPos, reach, updateActionsState: true, needLOS: needLOS);
+            if (!EndpointReachable(pts, targetPos, reach, needLOS)) return false;
             moveActionMeters = cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false);
             for (int i = 1; i < pts.Count; i++) walkMeters += Vector3.Distance(pts[i - 1], pts[i]);
             return true;
         }
-
-        /// <summary>How far inside the acting radius an approach path aims (metres) — must exceed the
-        /// unit's worst-case stop drift from the path end plus the path smoother's displacement.</summary>
-        private const float ApproachMargin = 0.5f;
 
         /// <summary>The distance-AND-LOS test the command itself applies on arrival (UnitCommand.
         /// IsUnitCloseEnough): an A* approach path completes at the CLOSEST ATTAINABLE node when no

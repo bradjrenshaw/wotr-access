@@ -9,8 +9,12 @@ namespace WrathAccess.Exploration.Overlays
     {
         public static void HeldVector(MovementSlot slot, out int dx, out int dz)
         {
-            bool primary = slot == MovementSlot.Primary;
             dx = 0; dz = 0;
+            // The explore.cursor* actions are SHARED across in-area / local map / world map (one
+            // binding set); only the in-area overlay modes read them through here, so gate on the
+            // in-area context — the map cursors poll the same actions with their own screen gates.
+            if (WrathAccess.Screens.ScreenManager.Current?.Key != "ctx.ingame") return;
+            bool primary = slot == MovementSlot.Primary;
             if (InputManager.Held(primary ? "explore.cursorUp" : "explore.secondaryUp")) dz += 1;       // +Z = north
             if (InputManager.Held(primary ? "explore.cursorDown" : "explore.secondaryDown")) dz -= 1;
             if (InputManager.Held(primary ? "explore.cursorRight" : "explore.secondaryRight")) dx += 1; // +X = east

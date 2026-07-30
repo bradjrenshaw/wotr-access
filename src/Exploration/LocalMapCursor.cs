@@ -58,7 +58,7 @@ namespace WrathAccess.Exploration
             => Game.Instance?.Player?.MainCharacter.Value?.Position ?? Vector3.zero;
 
         // Per-frame movement + the cue/narration. InputManager.Held respects the claim chain, so the
-        // localmap.cursor* keys only read held while the map screen's category owns them.
+        // shared explore.cursor* keys only read held while this screen's declaration owns them.
         public static void Tick(float dt)
         {
             if (WrathAccess.Screens.ScreenManager.Current?.Key != WrathAccess.Screens.LocalMapScreen.ScreenKey)
@@ -69,8 +69,10 @@ namespace WrathAccess.Exploration
             }
 
             bool continuous = false, tiled = false;
-            MoveSlot("localmap.cursor", MovementSlot.Primary, dt, _primaryTiled, ref continuous, ref tiled);
-            MoveSlot("localmap.secondary", MovementSlot.Secondary, dt, _secondaryTiled, ref continuous, ref tiled);
+            // The SHARED explore.cursor* actions (one binding set across in-area / maps); the screen
+            // gate above decides who consumes them here.
+            MoveSlot("explore.cursor", MovementSlot.Primary, dt, _primaryTiled, ref continuous, ref tiled);
+            MoveSlot("explore.secondary", MovementSlot.Secondary, dt, _secondaryTiled, ref continuous, ref tiled);
 
             var inside = MarkerAt(Position);
 

@@ -145,15 +145,9 @@ namespace WrathAccess.Exploration
             Cat("unexplored", "Unexplored space", ScanClass.Object, Silent);
 
             Cat("scenery", "Scenery", ScanClass.Object, Silent);
-            // The game's curated local-map markers, split by their designer-assigned LocalMapMarkType
-            // (quest = VeryImportantThing, exits = Exit, loot = Loot; units + generic Poi land in
-            // their own buckets). All default silent, assignable in Sounds.
-            Cat("poi", "Points of interest", ScanClass.Marker, Silent,
-                Sub("quest", "Quest", Silent),
-                Sub("exits", "Exits", Silent),
-                Sub("loot", "Loot", Silent),
-                Sub("units", "People", Silent),
-                Sub("other", "Other", Silent));
+            // NOTE: the poi category is GONE from the in-area taxonomy — the game's local-map markers
+            // are annotations, not world objects, and live on the MAP screen now (LocalMapReview).
+            // ProxyMarker still stamps poi.* primaries for the map's own announcements/filters.
         }
 
         // ---- builders ----

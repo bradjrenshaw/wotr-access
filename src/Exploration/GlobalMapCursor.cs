@@ -43,7 +43,7 @@ namespace WrathAccess.Exploration
         public static Vector3 Position => _pos ?? GlobalMapModel.TravelerPos;
 
         // Per-frame movement + the object enter/leave cue. InputManager.Held respects the claim chain, so the
-        // worldmap.cursor* keys read as held only while the cursor (not the focused list) owns the arrows.
+        // shared explore.cursor* keys read as held only while the cursor (not the focused list) owns the arrows.
         public static void Tick(float dt)
         {
             // Tied to the engaged overlay (Ctrl+O): the cursor runs only when an overlay is active on the
@@ -61,8 +61,10 @@ namespace WrathAccess.Exploration
             // `continuous` = a slot glided this frame; `tiled` = a tiled slot is held (stepping cadence is
             // managed inside). Held slots are additive.
             bool continuous = false, tiled = false;
-            MoveSlot("worldmap.cursor", "primary", dt, _primaryTiled, ref continuous, ref tiled);
-            MoveSlot("worldmap.secondary", "secondary", dt, _secondaryTiled, ref continuous, ref tiled);
+            // The SHARED explore.cursor* actions (one binding set across in-area / maps); this cursor's
+            // screen gate above decides who consumes them here.
+            MoveSlot("explore.cursor", "primary", dt, _primaryTiled, ref continuous, ref tiled);
+            MoveSlot("explore.secondary", "secondary", dt, _secondaryTiled, ref continuous, ref tiled);
 
             var inside = NearestWithin();
 

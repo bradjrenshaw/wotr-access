@@ -277,6 +277,19 @@ namespace WrathAccess
         private static void OpenWindow(ServiceWindowsType type)
             => EventBus.RaiseEvent(delegate(INewServiceWindowUIHandler h) { h.HandleOpenWindowOfType(type); });
 
+        // One physical key, per-screen behaviour: the shared Exploration actions dispatch to whichever
+        // context is on top — in-area, the local map screen, or the world map — so the SAME binding set
+        // (and the same rebinds) drives all three. A context without a sink simply ignores the key.
+        // (Sinks keep their own gates too — Scanner requires ctx.ingame etc. — belt and braces.)
+        private static Action Route(Action inArea = null, Action localMap = null, Action worldMap = null)
+            => () =>
+            {
+                var key = WrathAccess.Screens.ScreenManager.Current?.Key;
+                if (key == "ctx.ingame") inArea?.Invoke();
+                else if (key == WrathAccess.Screens.LocalMapScreen.ScreenKey) localMap?.Invoke();
+                else if (key == "ctx.globalmap") worldMap?.Invoke();
+            };
+
         // Flip the game's real-time-with-pause <-> turn-based combat mode. We only flip the EnableTurnBasedMode
         // setting — the game's GameSettingsController hooks its OnValueChanged and applies every state change
         // (combat mode switch, etc.), so we mirror the game's own toggle exactly rather than driving state.
@@ -490,9 +503,12 @@ namespace WrathAccess
                 .AddBinding(KeyCode.LeftArrow, shift: true).AddBinding(KeyCode.A, shift: true).Grouped("cursor");
             InputManager.Register("explore.secondaryRight", "Secondary cursor right", InputCategory.Exploration)
                 .AddBinding(KeyCode.RightArrow, shift: true).AddBinding(KeyCode.D, shift: true).Grouped("cursor");
-            // Our "left click": interact with the thing under the cursor.
+            // Our "left click": interact with the thing under the cursor. On the map screens, Enter is
+            // the cursor's commit: local map plants the in-area cursor, world map acts on the point.
             InputManager.Register("explore.interact", "Interact at cursor", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.InteractAtCursor)
+                Route(inArea: WrathAccess.Exploration.Scanner.InteractAtCursor,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.SyncWorldCursor,
+                      worldMap: WrathAccess.Exploration.GlobalMapCursor.Interact))
                 .AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter);
             // The game's pause toggle, matching its own Space binding. (A move queued while paused only
             // walks once unpaused.)
@@ -501,13 +517,17 @@ namespace WrathAccess
             // Y: "where am I" — the location's name (current section when it has one), indoors, and the
             // leader's compass region within the section's map bounds.
             InputManager.Register("explore.whereAmI", "Where am I", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.AnnounceWhereAmI).AddBinding(KeyCode.Z);
+                Route(inArea: WrathAccess.Exploration.Scanner.AnnounceWhereAmI,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.WhereAmI)).AddBinding(KeyCode.Z);
             // X: describe the focused scanner object (its asset description); Shift+X: describe the
             // current room — our OWN authored descriptions, distinct from the game's examine text.
+            // The map has no scanner target, so both describe the room at the map cursor there.
             InputManager.Register("explore.describe", "Describe scanner target", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.DescribeTarget).AddBinding(KeyCode.X);
+                Route(inArea: WrathAccess.Exploration.Scanner.DescribeTarget,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.DescribeRoom)).AddBinding(KeyCode.X);
             InputManager.Register("explore.describeRoom", "Describe room", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.DescribeRoom).AddBinding(KeyCode.X, shift: true);
+                Route(inArea: WrathAccess.Exploration.Scanner.DescribeRoom,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.DescribeRoom)).AddBinding(KeyCode.X, shift: true);
             // Space: skip the current cutscene (the game's own skip — its Enter binding; we use Space so
             // Enter-after-dialogue can't blow through a scene). InGame so it's live while a cutscene holds
             // control; in normal play the Exploration Space (pause) shadows it.
@@ -608,28 +628,44 @@ namespace WrathAccess
                 WrathAccess.Exploration.CombatMode.AnnounceStatus).AddBinding(KeyCode.R).Grouped("combat");
 
             // Exploration scanner: a categorized, distance-sorted list of things in the current area.
+            // On the world map the same keys browse its point list (the map screens Route by context).
             InputManager.Register("scan.itemNext", "Next item", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.NextItem).AddBinding(KeyCode.PageDown).Repeating().Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Scanner.NextItem,
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.NextItem))
+                .AddBinding(KeyCode.PageDown).Repeating().Grouped("scanner");
             InputManager.Register("scan.itemPrev", "Previous item", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.PrevItem).AddBinding(KeyCode.PageUp).Repeating().Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Scanner.PrevItem,
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.PrevItem))
+                .AddBinding(KeyCode.PageUp).Repeating().Grouped("scanner");
             InputManager.Register("scan.categoryNext", "Next category", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.NextCategory).AddBinding(KeyCode.PageDown, ctrl: true).Repeating().Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Scanner.NextCategory,
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.NextCategory))
+                .AddBinding(KeyCode.PageDown, ctrl: true).Repeating().Grouped("scanner");
             InputManager.Register("scan.categoryPrev", "Previous category", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Scanner.PrevCategory,
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.PrevCategory))
+                .AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("scanner");
             InputManager.Register("scan.subcategoryNext", "Next subcategory", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.NextSubcategory).AddBinding(KeyCode.PageDown, shift: true).Repeating().Grouped("scanner");
             InputManager.Register("scan.subcategoryPrev", "Previous subcategory", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.PrevSubcategory).AddBinding(KeyCode.PageUp, shift: true).Repeating().Grouped("scanner");
             // Home and Slash: plant the movement cursor ON the review target (the explicit opt-in jump).
             InputManager.Register("scan.cursorToItem", "Move cursor to review target", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.CursorToSelected)
+                Route(inArea: WrathAccess.Exploration.Scanner.CursorToSelected,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.JumpToReview,
+                      worldMap: WrathAccess.Exploration.GlobalMapCursor.JumpToReview))
                 .AddBinding(KeyCode.Home).AddBinding(KeyCode.Slash).Grouped("scanner");
             InputManager.Register("scan.announceCursor", "Announce cursor position", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.AnnounceCursor).AddBinding(KeyCode.K).Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Scanner.AnnounceCursor,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.Announce,
+                      worldMap: WrathAccess.Exploration.GlobalMapCursor.Announce))
+                .AddBinding(KeyCode.K).Grouped("scanner");
             InputManager.Register("scan.announceParty", "Announce party", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.AnnounceParty).AddBinding(KeyCode.K, shift: true).Grouped("scanner");
             InputManager.Register("scan.interact", "Interact with item", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.InteractSelected).AddBinding(KeyCode.I).Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Scanner.InteractSelected,
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.Interact))
+                .AddBinding(KeyCode.I).Grouped("scanner");
             // Inspect: open the game's unit Inspect window (only if the unit actually has one). Y inspects the
             // review-cursor unit; ' inspects the unit the movement cursor is over. (Where am I moved to X.)
             InputManager.Register("inspect.review", "Inspect review-cursor unit", InputCategory.Exploration,
@@ -637,7 +673,9 @@ namespace WrathAccess
             InputManager.Register("inspect.cursor", "Inspect unit under cursor", InputCategory.Exploration,
                 WrathAccess.Exploration.Inspect.AtCursor).AddBinding(KeyCode.Quote).Grouped("scanner");
             InputManager.Register("scan.moveToCursor", "Move to cursor", InputCategory.Exploration,
-                WrathAccess.Exploration.Scanner.MoveToCursor).AddBinding(KeyCode.Backspace).Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Scanner.MoveToCursor,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.MoveParty))
+                .AddBinding(KeyCode.Backspace).Grouped("scanner");
             InputManager.Register("scan.debugShowAll", "Toggle show all (debug)", InputCategory.Exploration,
                 WrathAccess.Exploration.Scanner.ToggleDebugShowAll).AddBinding(KeyCode.F11).Grouped("scanner");
             InputManager.Register("scan.debugDumpNames", "Dump object names to log (debug)", InputCategory.Exploration,
@@ -694,151 +732,19 @@ namespace WrathAccess
             InputManager.Register("window.map", "Open map", InputCategory.Windows,
                 () => OpenWindow(ServiceWindowsType.LocalMap)).AddBinding(KeyCode.L, ctrl: true);
 
-            // World-map scanner (InputCategory.WorldMap — isolated from the in-area scanner): a categorised,
-            // nearest-first browse of the map's revealed points. Same physical keys as the in-area scanner,
-            // but they only fire on the world-map screen, routed to the separate world-map systems.
-            InputManager.Register("worldmap.scanNext", "Next point", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.NextItem).AddBinding(KeyCode.PageDown).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.scanPrev", "Previous point", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.PrevItem).AddBinding(KeyCode.PageUp).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.catNext", "Next category", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.NextCategory).AddBinding(KeyCode.PageDown, ctrl: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.catPrev", "Previous category", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.PrevCategory).AddBinding(KeyCode.PageUp, ctrl: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.interact", "Travel to / enter point", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.Interact).AddBinding(KeyCode.I).Grouped("worldmap");
-            // World-map review cursor (single-key cycles, like the in-area Comma/Period/N/M/B): b = all
-            // points nearest-first, m = the current location's connected points; Shift reverses.
-            InputManager.Register("worldmap.reviewAllNext", "Next point (review)", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.AllNext).AddBinding(KeyCode.B).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.reviewAllPrev", "Previous point (review)", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.AllPrev).AddBinding(KeyCode.B, shift: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.reviewConnNext", "Next connected point", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.ConnectedNext).AddBinding(KeyCode.M).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.reviewConnPrev", "Previous connected point", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.ConnectedPrev).AddBinding(KeyCode.M, shift: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.reviewReachNext", "Next reachable location", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.ReachableNext).AddBinding(KeyCode.N).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.reviewReachPrev", "Previous reachable location", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.ReachablePrev).AddBinding(KeyCode.N, shift: true).Repeating().Grouped("worldmap");
-
-            // Ctrl+O cycles overlays here too (the in-area overlay.cycle is in the Exploration category, which
-            // the world-map screen doesn't claim) — same OverlayManager, now engaged on the world map.
-            InputManager.Register("worldmap.cycleOverlay", "Cycle overlay", InputCategory.WorldMap,
-                OverlayManager.Cycle).AddBinding(KeyCode.O, ctrl: true).Grouped("worldmap");
-
-            // World-map army cycles (. = enemy/demon, , = ally/crusader); Shift reverses. Inert until the
-            // crusade is active (Act 2+) — no armies on the Act-1 map, so these just report "no ... armies".
-            InputManager.Register("worldmap.armyEnemyNext", "Next enemy army", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.EnemyNext).AddBinding(KeyCode.Period).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.armyEnemyPrev", "Previous enemy army", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.EnemyPrev).AddBinding(KeyCode.Period, shift: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.armyAllyNext", "Next ally army", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.AllyNext).AddBinding(KeyCode.Comma).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.armyAllyPrev", "Previous ally army", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapScanner.AllyPrev).AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("worldmap");
-
-            // World-map MOVEMENT cursor (WASD/arrows; no press handlers — GlobalMapCursor polls the held
-            // vector each frame). Enter acts on a point under it, C recenters, K reads it, / jumps to review.
-            InputManager.Register("worldmap.cursorUp", "Move cursor up", InputCategory.WorldMap)
-                .AddBinding(KeyCode.UpArrow).AddBinding(KeyCode.W).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.cursorDown", "Move cursor down", InputCategory.WorldMap)
-                .AddBinding(KeyCode.DownArrow).AddBinding(KeyCode.S).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.cursorLeft", "Move cursor left", InputCategory.WorldMap)
-                .AddBinding(KeyCode.LeftArrow).AddBinding(KeyCode.A).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.cursorRight", "Move cursor right", InputCategory.WorldMap)
-                .AddBinding(KeyCode.RightArrow).AddBinding(KeyCode.D).Repeating().Grouped("worldmap");
-            // Secondary cursor (Shift+WASD/arrows): the same cursor point at the secondary slot's speed.
-            InputManager.Register("worldmap.secondaryUp", "Secondary cursor up", InputCategory.WorldMap)
-                .AddBinding(KeyCode.UpArrow, shift: true).AddBinding(KeyCode.W, shift: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.secondaryDown", "Secondary cursor down", InputCategory.WorldMap)
-                .AddBinding(KeyCode.DownArrow, shift: true).AddBinding(KeyCode.S, shift: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.secondaryLeft", "Secondary cursor left", InputCategory.WorldMap)
-                .AddBinding(KeyCode.LeftArrow, shift: true).AddBinding(KeyCode.A, shift: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.secondaryRight", "Secondary cursor right", InputCategory.WorldMap)
-                .AddBinding(KeyCode.RightArrow, shift: true).AddBinding(KeyCode.D, shift: true).Repeating().Grouped("worldmap");
-            InputManager.Register("worldmap.cursorInteract", "Act on cursor", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapCursor.Interact).AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter).Grouped("worldmap");
-            InputManager.Register("worldmap.cursorRecenter", "Cursor to party", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapCursor.Recenter).AddBinding(KeyCode.C).Grouped("worldmap");
-            InputManager.Register("worldmap.cursorAnnounce", "Read cursor", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapCursor.Announce).AddBinding(KeyCode.K).Grouped("worldmap");
-            InputManager.Register("worldmap.cursorToReview", "Cursor to review point", InputCategory.WorldMap,
-                WrathAccess.Exploration.GlobalMapCursor.JumpToReview).AddBinding(KeyCode.Slash).Grouped("worldmap");
-            // Escape → game menu, as an input action so it works while the cursor (unfocused) owns the keys
-            // (the screen's GetActions Back only fires when focused) — mirrors the in-game screen.
+            // ---- World map: like the local map, the world-map screen REUSES the shared Exploration
+            // actions (movement, PageUp/Down browse, review cycles, I travel, Enter/K/C//) — Route()d
+            // to the GlobalMap systems by screen. Only Escape stays world-map-specific: it opens the
+            // game menu even while the unfocused cursor owns the keys (the screen's GetActions Back
+            // only fires when focused) — mirrors the in-game screen.
             InputManager.Register("worldmap.escape", "Open menu", InputCategory.WorldMap,
                 () => Kingmaker.PubSubSystem.EventBus.RaiseEvent(delegate (Kingmaker.PubSubSystem.IEscMenuHandler h) { h.HandleOpen(); }))
                 .AddBinding(KeyCode.Escape).Grouped("worldmap");
 
-            // ---- Local map screen (InputCategory.LocalMap — isolated from Exploration, mirrors the
-            // world-map block above): the standard action vocabulary, routed to the map systems. ----
-            // Movement cursor (WASD/arrows; no press handlers — LocalMapCursor polls the held vector).
-            InputManager.Register("localmap.cursorUp", "Move map cursor up", InputCategory.LocalMap)
-                .AddBinding(KeyCode.UpArrow).AddBinding(KeyCode.W).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.cursorDown", "Move map cursor down", InputCategory.LocalMap)
-                .AddBinding(KeyCode.DownArrow).AddBinding(KeyCode.S).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.cursorLeft", "Move map cursor left", InputCategory.LocalMap)
-                .AddBinding(KeyCode.LeftArrow).AddBinding(KeyCode.A).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.cursorRight", "Move map cursor right", InputCategory.LocalMap)
-                .AddBinding(KeyCode.RightArrow).AddBinding(KeyCode.D).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.secondaryUp", "Secondary map cursor up", InputCategory.LocalMap)
-                .AddBinding(KeyCode.UpArrow, shift: true).AddBinding(KeyCode.W, shift: true).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.secondaryDown", "Secondary map cursor down", InputCategory.LocalMap)
-                .AddBinding(KeyCode.DownArrow, shift: true).AddBinding(KeyCode.S, shift: true).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.secondaryLeft", "Secondary map cursor left", InputCategory.LocalMap)
-                .AddBinding(KeyCode.LeftArrow, shift: true).AddBinding(KeyCode.A, shift: true).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.secondaryRight", "Secondary map cursor right", InputCategory.LocalMap)
-                .AddBinding(KeyCode.RightArrow, shift: true).AddBinding(KeyCode.D, shift: true).Repeating().Grouped("localmap");
-            // Review cycles — the in-area keys, over the MAP's content (markers live here now).
-            InputManager.Register("localmap.reviewPartyNext", "Review next party member", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Party, 1))
-                .AddBinding(KeyCode.Comma).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewPartyPrev", "Review previous party member", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Party, -1))
-                .AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewEnemyNext", "Review next enemy", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Enemies, 1))
-                .AddBinding(KeyCode.Period).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewEnemyPrev", "Review previous enemy", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Enemies, -1))
-                .AddBinding(KeyCode.Period, shift: true).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewNeutralNext", "Review next neutral", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Neutrals, 1))
-                .AddBinding(KeyCode.N).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewNeutralPrev", "Review previous neutral", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Neutrals, -1))
-                .AddBinding(KeyCode.N, shift: true).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewMarkerNext", "Review next point of interest", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, 1))
-                .AddBinding(KeyCode.B).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewMarkerPrev", "Review previous point of interest", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, -1))
-                .AddBinding(KeyCode.B, shift: true).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewExitNext", "Review next exit", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Exits, 1))
-                .AddBinding(KeyCode.M).Repeating().Grouped("localmap");
-            InputManager.Register("localmap.reviewExitPrev", "Review previous exit", InputCategory.LocalMap,
-                () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Exits, -1))
-                .AddBinding(KeyCode.M, shift: true).Repeating().Grouped("localmap");
-            // Actions on the map cursor.
-            InputManager.Register("localmap.syncCursor", "Set world cursor here", InputCategory.LocalMap,
-                WrathAccess.Exploration.LocalMapCursor.SyncWorldCursor)
-                .AddBinding(KeyCode.Return).AddBinding(KeyCode.KeypadEnter).Grouped("localmap");
-            InputManager.Register("localmap.moveParty", "Move party here", InputCategory.LocalMap,
-                WrathAccess.Exploration.LocalMapCursor.MoveParty).AddBinding(KeyCode.Backspace).Grouped("localmap");
-            InputManager.Register("localmap.cursorRecenter", "Map cursor to party", InputCategory.LocalMap,
-                WrathAccess.Exploration.LocalMapCursor.Recenter).AddBinding(KeyCode.C).Grouped("localmap");
-            InputManager.Register("localmap.cursorAnnounce", "Read map cursor", InputCategory.LocalMap,
-                WrathAccess.Exploration.LocalMapCursor.Announce).AddBinding(KeyCode.K).Grouped("localmap");
-            InputManager.Register("localmap.cursorToReview", "Map cursor to review point", InputCategory.LocalMap,
-                WrathAccess.Exploration.LocalMapCursor.JumpToReview)
-                .AddBinding(KeyCode.Slash).AddBinding(KeyCode.Home).Grouped("localmap");
-            InputManager.Register("localmap.whereAmI", "Where is the map cursor", InputCategory.LocalMap,
-                WrathAccess.Exploration.LocalMapCursor.WhereAmI).AddBinding(KeyCode.Z).Grouped("localmap");
-            InputManager.Register("localmap.describeRoom", "Describe room at map cursor", InputCategory.LocalMap,
-                WrathAccess.Exploration.LocalMapCursor.DescribeRoom).AddBinding(KeyCode.X).Grouped("localmap");
-            // Escape closes the window even while the (unfocused) cursor owns the keys.
+            // ---- Local map screen: the map REUSES the shared Exploration actions (movement, review,
+            // Enter/Backspace, K/Z/X, Home//), Route()d to the map systems by whichever screen is up —
+            // one binding set, one mental model. Only the window-close key is map-specific: Escape must
+            // CLOSE the window (not open the game menu), even while the unfocused cursor owns the keys.
             InputManager.Register("localmap.escape", "Close map", InputCategory.LocalMap,
                 WrathAccess.Screens.LocalMapScreen.Close).AddBinding(KeyCode.Escape).Grouped("localmap");
 
@@ -856,8 +762,12 @@ namespace WrathAccess
                 () => { }).AddBinding(KeyCode.F1, shift: true).Grouped("overlays"); // polled via InputManager.Held
             InputManager.Register("overlay.holdSonar", "Sonar: play while held", InputCategory.Exploration,
                 () => { }).AddBinding(KeyCode.F2, shift: true).Grouped("overlays"); // polled via InputManager.Held
+            // C is "cursor back to the party" in every context: the in-area overlay cursor, and each
+            // map screen's own cursor (Route by screen — one binding, one mental model).
             InputManager.Register("overlay.recenter", "Overlay: recenter on player", InputCategory.Exploration,
-                OverlayManager.Recenter).AddBinding(KeyCode.C).Grouped("overlays");
+                Route(inArea: OverlayManager.Recenter,
+                      localMap: WrathAccess.Exploration.LocalMapCursor.Recenter,
+                      worldMap: WrathAccess.Exploration.GlobalMapCursor.Recenter)).AddBinding(KeyCode.C).Grouped("overlays");
             InputManager.Register("overlay.announce", "Overlay: announce cursor", InputCategory.Exploration,
                 OverlayManager.AnnounceCurrent).AddBinding(KeyCode.Keypad5).Grouped("overlays");
             InputManager.Register("overlay.descend", "Overlay: follow surface down", InputCategory.Exploration,
@@ -868,26 +778,42 @@ namespace WrathAccess
             // The review cursor: cycle nearby things by group — closest first from the movement cursor,
             // which NEVER moves (look around while holding position). Shift = cycle backward. The landing
             // becomes the scanner selection, so I interacts with it and Home plants the cursor on it.
+            // The same keys review each MAP's content on the map screens (Route): local map = party /
+            // units / markers, world map = armies / reachable / connected / all points.
             InputManager.Register("review.nextParty", "Review next party member", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Party, 1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Party, 1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Party, 1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.AllyNext))
                 .AddBinding(KeyCode.Comma).Repeating().Grouped("review");
             InputManager.Register("review.prevParty", "Review previous party member", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Party, -1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Party, -1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Party, -1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.AllyPrev))
                 .AddBinding(KeyCode.Comma, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.nextEnemy", "Review next enemy", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Enemies, 1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Enemies, 1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Enemies, 1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.EnemyNext))
                 .AddBinding(KeyCode.Period).Repeating().Grouped("review");
             InputManager.Register("review.prevEnemy", "Review previous enemy", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Enemies, -1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Enemies, -1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Enemies, -1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.EnemyPrev))
                 .AddBinding(KeyCode.Period, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.nextNeutral", "Review next neutral", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Neutrals, 1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Neutrals, 1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Neutrals, 1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.ReachableNext))
                 .AddBinding(KeyCode.N).Repeating().Grouped("review");
             InputManager.Register("review.prevNeutral", "Review previous neutral", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Neutrals, -1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Neutrals, -1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Neutrals, -1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.ReachablePrev))
                 .AddBinding(KeyCode.N, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.nextOther", "Review next object", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, 1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, 1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Exits, 1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.ConnectedNext))
                 .AddBinding(KeyCode.M).Repeating().Grouped("review");
             // L / Shift+L: cycle the unexplored-space frontier (where the map can still grow). Then
             // Slash plants the cursor there as with any reviewed thing; the review cue tones as usual.
@@ -898,8 +824,20 @@ namespace WrathAccess
                 () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Unexplored, -1))
                 .AddBinding(KeyCode.L, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.prevOther", "Review previous object", InputCategory.Exploration,
-                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, -1))
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, -1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Exits, -1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.ConnectedPrev))
                 .AddBinding(KeyCode.M, shift: true).Repeating().Grouped("review");
+            // B / Shift+B: points of interest — MAP-ONLY content (annotations, not world objects): the
+            // local map's marker cycle, the world map's all-points cycle. Nothing in-area by design.
+            InputManager.Register("review.nextPoi", "Review next point of interest", InputCategory.Exploration,
+                Route(localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, 1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.AllNext))
+                .AddBinding(KeyCode.B).Repeating().Grouped("review");
+            InputManager.Register("review.prevPoi", "Review previous point of interest", InputCategory.Exploration,
+                Route(localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, -1),
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.AllPrev))
+                .AddBinding(KeyCode.B, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.nextExit", "Review next room exit", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleRoomExits(1))
                 .AddBinding(KeyCode.V).Repeating().Grouped("review");

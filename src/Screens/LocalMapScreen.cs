@@ -34,8 +34,10 @@ namespace WrathAccess.Screens
         public override bool StartUnfocused => true; // the map cursor owns WASD/arrows from the start
         public override bool AllowsTypeahead => false; // letters are map hotkeys (b/m/n/k/c…), not search
 
-        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.LocalMap };
-        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.LocalMap, InputCategory.UI };
+        // The movement/review/action keys are the SHARED Exploration actions (Route()d to the map
+        // systems by screen); LocalMap holds only the Escape→close key.
+        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.Exploration, InputCategory.LocalMap };
+        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.Exploration, InputCategory.LocalMap, InputCategory.UI };
         public override IReadOnlyList<InputCategory> InputCategories
             => Navigation.HasFocus ? Focused : Unfocused;
 

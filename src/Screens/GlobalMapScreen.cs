@@ -33,14 +33,15 @@ namespace WrathAccess.Screens
         public override bool IsActive() => GlobalMapModel.Active;
 
         // Starts unfocused: arrows/WASD drive the movement cursor and Tab enters the lists — like the in-game
-        // screen. Category order flips with focus; the scanner/review/cursor letter+page keys are WorldMap-only.
+        // screen. Category order flips with focus. The scanner/review/cursor keys are the SHARED Exploration
+        // actions (Route()d to the world-map systems by screen); WorldMap holds only the Escape→menu key.
         public override bool StartUnfocused => true;
-        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.WorldMap, InputCategory.Windows };
-        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.WorldMap, InputCategory.UI, InputCategory.Windows };
+        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.Exploration, InputCategory.WorldMap, InputCategory.Windows };
+        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.Exploration, InputCategory.WorldMap, InputCategory.UI, InputCategory.Windows };
         // Without control (a world-map book event / dialogue), drop Windows so the service-window hotkeys go
-        // dead there too, exactly as they do in an area (see InGameScreen). WorldMap/UI stay for browsing.
-        private static readonly IReadOnlyList<InputCategory> FocusedNoControl = new[] { InputCategory.UI, InputCategory.WorldMap };
-        private static readonly IReadOnlyList<InputCategory> UnfocusedNoControl = new[] { InputCategory.WorldMap, InputCategory.UI };
+        // dead there too, exactly as they do in an area (see InGameScreen). Exploration/WorldMap/UI stay.
+        private static readonly IReadOnlyList<InputCategory> FocusedNoControl = new[] { InputCategory.UI, InputCategory.Exploration, InputCategory.WorldMap };
+        private static readonly IReadOnlyList<InputCategory> UnfocusedNoControl = new[] { InputCategory.Exploration, InputCategory.WorldMap, InputCategory.UI };
         public override IReadOnlyList<InputCategory> InputCategories
         {
             get

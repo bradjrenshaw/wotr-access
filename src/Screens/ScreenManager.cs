@@ -148,7 +148,7 @@ namespace WrathAccess.Screens
             Register(new SpellbookScreen()); // spellbook window (known spells + add to action bar), navigable; layer 10
             Register(new JournalScreen()); // journal window (grouped quests + objectives), navigable; layer 10
             Register(new EncyclopediaScreen()); // encyclopedia window (chapters + page text + child links), navigable; layer 10
-            RegisterServiceWindow("Map", Loc.T("screen.map"), ServiceWindowsType.LocalMap);
+            Register(new LocalMapScreen()); // accessible map (own cursor + marker review); layer 10
 
             // Overlays (can sit on top of a context/window). Settings lives on the
             // shared CommonVM, so this same screen also covers the in-game pause menu.

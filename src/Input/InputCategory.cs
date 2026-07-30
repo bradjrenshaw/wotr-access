@@ -38,5 +38,10 @@ namespace WrathAccess.Input
         /// screen ONLY while its editing field is focused, so WASD drive the field cursor there and stay free
         /// for navigation/typeahead on the screen's other tab stops.</summary>
         Formation,
+        /// <summary>The local map service window: its own movement cursor / review / travel keys. A
+        /// SEPARATE category from <see cref="Exploration"/> so the map systems are fully isolated from
+        /// the in-area ones — the same physical keys (WASD, comma/period/N/M/B, Enter/Backspace) route
+        /// to whichever screen is up (mirrors <see cref="WorldMap"/>). Declared by the map screen.</summary>
+        LocalMap,
     }
 }

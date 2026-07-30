@@ -75,13 +75,9 @@ namespace WrathAccess.Exploration
                 if (!_items.ContainsKey(ae)) Ensure(ae, () => new ProxyAreaEffect(ae));
                 _present.Add(ae);
             }
-            foreach (var m in LocalMapModel.Markers)
-            {
-                if (m == null || ProxyMarker.IsNoise(m)) continue; // party dots / destination flag
-                try { if (!LocalMapModel.IsInCurrentArea(m.GetPosition())) continue; } catch { continue; }
-                if (!_items.ContainsKey(m)) Ensure(m, () => new ProxyMarker(m));
-                _present.Add(m);
-            }
+            // The game's local-map markers are NOT world-model items any more: they're annotations, not
+            // world objects (testers kept trying to interact with them). The MAP screen is their home
+            // now — LocalMapReview reads LocalMapModel.Markers directly.
             foreach (var d in AreaDetails.Current)
             {
                 var entry = d; // capture per-iteration for the factory closure (only built when new)

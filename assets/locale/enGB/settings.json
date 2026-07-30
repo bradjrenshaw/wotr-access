@@ -337,6 +337,7 @@
   "input.ui": "Menus",
   "input.explore": "Exploration",
   "input.worldmap": "World map",
+  "input.localmap": "Local map",
   "input.formation": "Formation editor",
   "rebind.stolen": "{combo} was unbound from {other}",
   "bind.toggle_focus": "Toggle focus mode",

@@ -48,12 +48,15 @@ namespace WrathAccess.Exploration.Overlays
                 // component consults: cursor movement is gated on it in Overlay.Tick (so it can't drift during
                 // a cutscene), while the audio systems decide for themselves (today: they keep playing).
                 var key = ScreenManager.Current.Key;
-                return key == "ctx.ingame" || key == "ctx.globalmap";
+                return key == "ctx.ingame" || key == "ctx.globalmap"
+                    || key == WrathAccess.Screens.LocalMapScreen.ScreenKey; // map screen: same systems, ears on the map cursor
             }
         }
 
         /// <summary>Which context the engaged overlay runs in right now — drives Overlay's per-system scope
-        /// filter (in-area systems on "ctx.ingame", world-map systems on "ctx.globalmap").</summary>
+        /// filter (in-area systems on "ctx.ingame", world-map systems on "ctx.globalmap"). The map screen
+        /// counts as IN-AREA: it's the same space and the same systems, just heard from the map cursor
+        /// (the Cursor read-override the screen registers).</summary>
         internal static OverlayScope CurrentScope =>
             ScreenManager.Current != null && ScreenManager.Current.Key == "ctx.globalmap"
                 ? OverlayScope.WorldMap : OverlayScope.InArea;

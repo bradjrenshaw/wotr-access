@@ -12,7 +12,9 @@ namespace WrathAccess.Exploration
     /// living neutrals / everything else in the taxonomy (loot incl. corpses, doors, exits, search
     /// points, traps, mechanisms — scenery excluded) / points of interest (their own cycle, and
     /// excluded from Others since markers often duplicate entities — same logic as the All bucket).</summary>
-    internal enum ReviewGroup { Party, Enemies, Neutrals, Others, Poi, Unexplored }
+    // POI review moved to the MAP screen (LocalMapReview): markers are annotations, not world objects —
+    // reviewing them in-area invited interaction attempts that could never work.
+    internal enum ReviewGroup { Party, Enemies, Neutrals, Others, Unexplored }
 
     /// <summary>
     /// The scanner: a categorized, distance-sorted list of things in the current area, browsed with
@@ -384,7 +386,6 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Party: return p == ScanTaxonomy.UnitsParty;
                 case ReviewGroup.Enemies: return p == ScanTaxonomy.UnitsEnemies;
                 case ReviewGroup.Neutrals: return p == ScanTaxonomy.UnitsNeutrals;
-                case ReviewGroup.Poi: return IsPoi(p);
                 case ReviewGroup.Unexplored: return p == ScanTaxonomy.Unexplored;
                 default: return p != ScanTaxonomy.UnitsParty && p != ScanTaxonomy.UnitsEnemies
                     && p != ScanTaxonomy.UnitsNeutrals && p != ScanTaxonomy.Scenery
@@ -405,7 +406,6 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Party: return Loc.T("taxonomy.units.party");
                 case ReviewGroup.Enemies: return Loc.T("taxonomy.units.enemies");
                 case ReviewGroup.Neutrals: return Loc.T("taxonomy.units.neutrals");
-                case ReviewGroup.Poi: return Loc.T("taxonomy.poi");
                 case ReviewGroup.Unexplored: return Loc.T("taxonomy.unexplored");
                 default: return Loc.T("review.others");
             }
@@ -779,7 +779,7 @@ namespace WrathAccess.Exploration
         }
 
         // 3x3 grid over the map bounds -> center or a compass word (+Z = north, like Geo's compass).
-        private static string RegionWord(float fx, float fz)
+        internal static string RegionWord(float fx, float fz)
         {
             int col = fx < 1f / 3f ? -1 : fx > 2f / 3f ? 1 : 0;
             int row = fz < 1f / 3f ? -1 : fz > 2f / 3f ? 1 : 0;

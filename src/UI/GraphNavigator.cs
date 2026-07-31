@@ -569,6 +569,10 @@ namespace WrathAccess.UI
 
         private void TypeChar(char c)
         {
+            // A fresh search remembers the column you're on — every result lands there (row changes,
+            // column doesn't). Captured before the first result moves focus to a primary.
+            if (!_search.HasBuffer)
+                _searchColumn = _graph?.CurrentNode?.Vtable?.Column ?? -1;
             RebuildSearchScope();
             if (_searchNodes.Count > 0)
             {
@@ -597,18 +601,24 @@ namespace WrathAccess.UI
         private void RebuildSearchScope()
         {
             _searchNodes.Clear();
-            // The searchable scope is the focused node's Tab-stop.
+            // The searchable scope is the focused node's Tab-stop. Tabular rows contribute ONE result
+            // — the primary (metadata cells all match the row's name, so without this every row
+            // appeared once per column and result-arrows stepped through cells, not rows).
             var node = _graph?.CurrentNode;
             if (node == null || _graph.Current == null) return;
             foreach (var n in _graph.Current.Order)
-                if (Equals(n.StopKey, node.StopKey) && !n.Vtable.ExcludeFromSearch)
+                if (Equals(n.StopKey, node.StopKey) && !n.Vtable.ExcludeFromSearch && n.Vtable.Column <= 0)
                     _searchNodes.Add(n);
         }
+
+        // The tabular column focus was on when the search began: results land ON THE MATCHED ROW at
+        // this column, so searching never yanks you out of the column you were scanning.
+        private int _searchColumn = -1;
 
         private void SearchFocusNodeResult(int index)
         {
             if (index < 0 || index >= _searchNodes.Count) return;
-            if (!_graph.Focus(_searchNodes[index].Id)) return;
+            if (!_graph.FocusAtColumn(_searchNodes[index].Id, _searchColumn)) return;
             var node = _graph.CurrentNode;
             WrathAccess.UiSound.Hover();
             Speak(ComposeMove(_lastSpokenNode, node, entry: false), interrupt: true);
@@ -624,6 +634,7 @@ namespace WrathAccess.UI
             _searchNodes.Clear();
             _searchFocusId = null;
             _searchHeldDir = 0;
+            _searchColumn = -1;
             if (announce && had) Speak(Loc.T("search.cleared"), interrupt: true);
         }
     }

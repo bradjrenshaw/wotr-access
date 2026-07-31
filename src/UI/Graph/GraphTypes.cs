@@ -138,6 +138,12 @@ namespace WrathAccess.UI.Graph
         /// <summary>Set when this node's announcements already include its list position (the adapter's
         /// composed element messages do), so the announcer doesn't append the auto-stamped one.</summary>
         public bool SpeaksOwnPosition;
+
+        /// <summary>The node's LOGICAL COLUMN in a tabular row (0 = the row's primary), or -1 when not
+        /// tabular. Stamped by GraphSheet; the engine uses it to PRESERVE the column when focus jumps
+        /// non-directionally — the reconcile fallback after a row vanishes, and type-ahead landings —
+        /// by sliding along the destination row's Left/Right edges to the same column.</summary>
+        public int Column = -1;
     }
 
     /// <summary>A directed edge to another node, with an optional spoken transition line (a "lane
@@ -238,6 +244,10 @@ namespace WrathAccess.UI.Graph
 
         /// <summary>If set, focus jumps here on the next render when present (consumed either way).</summary>
         public ControlId NextSuggestedMove;
+
+        /// <summary>The logical column focus last sat on in a tabular row (see NodeVtable.Column), or
+        /// -1. The reconcile fallback slides to this column when the focused row vanished.</summary>
+        public int LastColumn = -1;
 
         /// <summary>Remembered position per Tab-stop: where Tab lands when cycling back into a stop.</summary>
         public readonly Dictionary<object, ControlId> StopMemory = new Dictionary<object, ControlId>();

@@ -38,6 +38,8 @@ namespace WrathAccess.UI
         private Func<string> _rowName; // the current row's primary label (for vertical edge labels)
         private Func<string> _prevRowName;
         private object _rowRef;        // the current row's domain object (identity keys), or null
+        private Action _rowActivate;   // the primary's Enter/Backspace, inherited by the row's cells
+        private Action _rowSecondary;
 
         public GraphSheet(GraphBuilder b, string keyPrefix)
         {
@@ -114,6 +116,11 @@ namespace WrathAccess.UI
             _rowName = primary.Announcements != null && primary.Announcements.Count > 0
                 ? primary.Announcements[0].Text : null;
 
+            // The row IS its associated element: remember the primary's activations so every cell in
+            // the row answers Enter/Backspace like the element itself (inherited in EmitCell).
+            _rowActivate = primary.OnActivate;
+            _rowSecondary = primary.OnSecondary;
+
             EmitCell(primary, 0);
         }
 
@@ -138,6 +145,16 @@ namespace WrathAccess.UI
 
         private void EmitCell(NodeVtable vt, int col)
         {
+            // A row is ONE logical thing spread across cells: Enter/Backspace on any cell trigger the
+            // row's associated element (the column-0 primary) unless the cell defines its own — so
+            // acting doesn't require walking back to column 0 first.
+            if (col > 0)
+            {
+                if (vt.OnActivate == null) vt.OnActivate = _rowActivate;
+                if (vt.OnSecondary == null) vt.OnSecondary = _rowSecondary;
+            }
+            vt.Column = col; // tabular position — the engine preserves it across row-vanish/type-ahead jumps
+
             // Identity keys when the row has a domain object: stable across reorders/removals (the
             // primary also carries the reference for tier-1 follow); positional only for static lines.
             string skey = _rowRef != null

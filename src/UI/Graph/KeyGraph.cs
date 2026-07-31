@@ -96,7 +96,10 @@ namespace WrathAccess.UI.Graph
                     if (render.Nodes.TryGetValue(old, out structural)) resolved = structural.Id;
                 }
 
-                // Fallback: nearest survivor walking the previous order backward.
+                // Fallback: nearest survivor walking the previous order backward. The order interleaves
+                // row cells, so when a whole row vanished (an equipped item's row) the walk lands on
+                // the previous row's LAST cell — a different column. Slide along that row to the column
+                // focus was on, so acting on rows in sequence keeps your place in the table.
                 if (resolved == null && state.KeyOrder != null)
                 {
                     int oldIndex = IndexOf(state.KeyOrder, old);
@@ -106,7 +109,7 @@ namespace WrathAccess.UI.Graph
                             GraphNode survivor;
                             if (render.Nodes.TryGetValue(state.KeyOrder[i], out survivor))
                             {
-                                resolved = survivor.Id;
+                                resolved = SlideToColumn(render, survivor.Id, state.LastColumn);
                                 break;
                             }
                         }
@@ -124,7 +127,43 @@ namespace WrathAccess.UI.Graph
 
             state.CurKey = resolved;
             RememberStop(render, state, resolved);
+            RememberColumn(render, state, resolved);
             state.KeyOrder = ComputeOrder(render);
+        }
+
+        // Track the tabular column focus sits on (nodes outside tables leave it untouched, so a detour
+        // through a header row or another stop doesn't forget the working column).
+        private static void RememberColumn(GraphRender render, GraphState state, ControlId key)
+        {
+            var node = render.NodeAt(key);
+            if (node != null && node.Vtable != null && node.Vtable.Column >= 0)
+                state.LastColumn = node.Vtable.Column;
+        }
+
+        /// <summary>From <paramref name="start"/>, walk its row's Left/Right edges to the cell at
+        /// <paramref name="prefCol"/> — or the nearest cell BELOW it in a sparse row. Returns
+        /// <paramref name="start"/> unchanged when either side isn't tabular (Column &lt; 0) or the
+        /// column already matches. Horizontal edges never leave a row, so the walk can't escape it.</summary>
+        internal static ControlId SlideToColumn(GraphRender render, ControlId start, int prefCol)
+        {
+            var node = render.NodeAt(start);
+            if (node == null || prefCol < 0) return start;
+            int col = node.Vtable != null ? node.Vtable.Column : -1;
+            if (col < 0 || col == prefCol) return start;
+
+            var dir = col < prefCol ? GraphDir.Right : GraphDir.Left;
+            var cur = node;
+            while (cur.Vtable.Column != prefCol)
+            {
+                Transition t;
+                if (!cur.Transitions.TryGetValue(dir, out t) || t == null) break;
+                var next = render.NodeAt(t.Destination);
+                if (next == null || next.Vtable == null || next.Vtable.Column < 0) break;
+                if (dir == GraphDir.Right && next.Vtable.Column > prefCol) break;     // sparse: stop below pref
+                if (dir == GraphDir.Left && next.Vtable.Column < prefCol) { cur = next; break; } // overshot: nearest below
+                cur = next;
+            }
+            return cur.Id;
         }
 
         /// <summary>
@@ -182,6 +221,19 @@ namespace WrathAccess.UI.Graph
         {
             _state.CurKey = node.Id;
             if (node.StopKey != null) _state.StopMemory[node.StopKey] = node.Id;
+            if (node.Vtable != null && node.Vtable.Column >= 0) _state.LastColumn = node.Vtable.Column;
+        }
+
+        /// <summary>Focus <paramref name="id"/> slid to <paramref name="prefCol"/> within its row (the
+        /// type-ahead landing: match the row, land on the column you were working in).</summary>
+        public bool FocusAtColumn(ControlId id, int prefCol)
+        {
+            if (id == null || !Rerender()) return false;
+            var target = SlideToColumn(_current, id, prefCol);
+            var node = _current.NodeAt(target);
+            if (node == null) return false;
+            SetCurrent(node);
+            return true;
         }
 
         // ---- navigation operations ----

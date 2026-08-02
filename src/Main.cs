@@ -473,6 +473,11 @@ namespace WrathAccess
             // the search buffer (the SPACE key is reserved, not the action), so F1 still reads tooltips.
             InputManager.Register("ui.tooltip", "Read tooltip", InputCategory.UI)
                 .AddBinding(KeyCode.Space).AddBinding(KeyCode.F1);
+            // Backslash: keyboard drag-and-drop — pick up the focused item, then place it on a slot
+            // (the sighted drag; closing the screen clears any held item). Controls that participate
+            // declare OnDrag; elsewhere the key reports there's nothing to drag.
+            InputManager.Register("ui.drag", "Pick up / place item (drag)", InputCategory.UI)
+                .AddBinding(KeyCode.Backslash);
             // Home/End jump to the first/last item: a list's ends, a tree's current depth's ends, a
             // FlowSheet's very first/last cell regardless of region (and a live search's first/last hit).
             InputManager.Register("ui.home", "Jump to first item", InputCategory.UI).AddBinding(KeyCode.Home);

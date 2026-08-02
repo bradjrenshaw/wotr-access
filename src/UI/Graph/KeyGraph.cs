@@ -607,6 +607,16 @@ namespace WrathAccess.UI.Graph
             return true;
         }
 
+        /// <summary>Run the focused control's drag behavior. False = it has none.</summary>
+        public bool Drag()
+        {
+            if (!Rerender()) return false;
+            var node = CurrentNode;
+            if (node?.Vtable.OnDrag == null) return false;
+            node.Vtable.OnDrag();
+            return true;
+        }
+
         /// <summary>If the focused control adjusts horizontally (a slider), adjust and return true;
         /// false = the caller should navigate instead.</summary>
         public bool TryAdjust(int sign, bool large)

@@ -33,8 +33,13 @@ namespace WrathAccess.UI
         /// <summary>One stash item: name with its visible badges folded in (magic / notable / unusable /
         /// new), the item's tooltip on Space, Enter = the sighted double-click quick action (Equip
         /// equipment / Use usables, else the menu), Backspace = the full context menu (each entry gated
-        /// by the same VM predicate the game's view checks, evaluated at open).</summary>
-        public static NodeVtable InventoryItem(ItemSlotVM slot, IEnumerable<NodeAnnouncement> extraParts = null)
+        /// by the same VM predicate the game's view checks, evaluated at open), Backslash = drag
+        /// pick-up/return (<see cref="ItemDrag"/>). <paramref name="offHand"/> (the doll's current
+        /// off-hand slot) adds an "Equip in off hand" menu entry when that slot would accept the item —
+        /// the quick-equip router hard-sends two-handed-blueprint weapons to the main hand, so a Titan
+        /// Fighter's second greatsword (or any deliberate off-hand equip) needs this slot-direct path.</summary>
+        public static NodeVtable InventoryItem(ItemSlotVM slot, IEnumerable<NodeAnnouncement> extraParts = null,
+            Func<EquipSlotVM> offHand = null)
         {
             Func<string> label = () =>
             {
@@ -58,22 +63,36 @@ namespace WrathAccess.UI
                 {
                     if (slot.IsEquipment) Equip(slot);
                     else if (slot.IsUsable) Use(slot);
-                    else OpenStashMenu(slot, label());
+                    else OpenStashMenu(slot, label(), offHand);
                 },
-                OnSecondary = () => OpenStashMenu(slot, label()),
+                OnSecondary = () => OpenStashMenu(slot, label(), offHand),
                 OnTooltip = () => OpenItemTooltip(slot),
+                OnDrag = () => ItemDrag.OnStashItem(slot),
             };
         }
 
         // The live context-menu set — mirrors InventorySlotPCView.CreateContextMenu, each entry gated by
         // the same VM predicate, evaluated now (a non-applicable action just isn't listed).
-        private static void OpenStashMenu(ItemSlotVM slot, string title)
+        private static void OpenStashMenu(ItemSlotVM slot, string title, Func<EquipSlotVM> offHand = null)
         {
             var labels = new List<string>();
             var runs = new List<Action>();
             void Add(bool when, string label, Action run) { if (when) { labels.Add(label); runs.Add(run); } }
 
             Add(slot.IsEquipment, Menu.Equip, () => Equip(slot));
+            // Slot-direct off-hand equip, gated by the SLOT's own wielder-aware validation (the same
+            // check the mouse drag uses) — listed only when the off-hand would genuinely take it.
+            var oh = offHand?.Invoke();
+            Add(oh != null && slot.HasItem && oh.ItemSlot != null && slot.Item.Value != null
+                    && oh.ItemSlot.CanInsertItem(slot.Item.Value),
+                Loc.T("item.equip_offhand"),
+                () =>
+                {
+                    var item = slot.Item.Value;
+                    if (item == null || !oh.InsertItem(item)) return;
+                    Kingmaker.UI.UISoundController.Instance?.PlayItemSound(Kingmaker.UI.SlotAction.Put, item, equipSound: true);
+                    Refresh();
+                });
             Add(slot.IsUsable, Menu.Use, () => Use(slot));
             Add(slot.IsUsableWhileCan, Menu.UseWhileCan, () => UseWhileCan(slot));
             Add(slot.IsScroll, slot.CopyItemLabel, () => CopyScroll(slot));
@@ -114,6 +133,7 @@ namespace WrathAccess.UI
                 OnActivate = () => { if (hasItem() && slot.TryUnequip()) Refresh(); },
                 OnSecondary = () => { if (hasItem()) OpenEquipMenu(slot, label()); },
                 OnTooltip = () => { if (hasItem()) OpenItemTooltip(slot); },
+                OnDrag = () => ItemDrag.OnEquipSlot(slot, slotName),
             };
         }
 

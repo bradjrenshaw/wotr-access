@@ -273,6 +273,14 @@ namespace WrathAccess.UI
                     Speak(Loc.T("nav.no_tooltip"));
                     return true;
                 }
+                case "ui.drag":
+                {
+                    var node = _graph?.CurrentNode;
+                    if (node == null) return false;
+                    if (node.Vtable.OnDrag != null) { _graph.Drag(); return true; }
+                    Speak(Loc.T("drag.no_target"));
+                    return true;
+                }
                 default:
                     return false;
             }

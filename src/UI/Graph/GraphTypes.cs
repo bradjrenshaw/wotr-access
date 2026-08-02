@@ -109,6 +109,11 @@ namespace WrathAccess.UI.Graph
         /// behavior (speak, or open the drill-in tooltip reader), so the core stays game-agnostic.</summary>
         public Action OnTooltip;
 
+        /// <summary>Optional. Drag/drop participation (Backslash) — pick up here, or place the held
+        /// thing here. The action owns the whole pick-up/place state machine (see ItemDrag); the core
+        /// only dispatches.</summary>
+        public Action OnDrag;
+
         /// <summary>Optional. Horizontal value adjust (a slider): sign is -1 (decrease) / +1 (increase),
         /// large requests a coarse step. When set, left/right do NOT navigate.</summary>
         public Action<int, bool> OnAdjust;

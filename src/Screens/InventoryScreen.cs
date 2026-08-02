@@ -38,6 +38,11 @@ namespace WrathAccess.Screens
                    || cur == ServiceWindowsType.SmartItem;
         }
 
+        // Any keyboard-drag held item is dropped mentally, not mechanically, when the window opens or
+        // closes — the item never left its slot until placed, so clearing state is all "drop" means.
+        public override void OnPush() => ItemDrag.Clear();
+        public override void OnPop() => ItemDrag.Clear();
+
         public override IEnumerable<ElementAction> GetActions()
         {
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"),
@@ -212,7 +217,7 @@ namespace WrathAccess.Screens
                         {
                             new NodeAnnouncement(type),
                             new NodeAnnouncement(qty),
-                        }),
+                        }, offHand: () => vm.DollVM?.CurrentSet?.Value?.Secondary),
                         s, type, qty, weight, cost);
                 }
             if (!any) sheet.Line(GraphNodes.Text(() => Loc.T("inv.no_items")));

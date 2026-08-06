@@ -88,12 +88,19 @@ namespace WrathAccess.Exploration
             Tts.Speak(_selected.Describe(from), interrupt: true);
         }
 
-        // Units as the shared world model knows them (the same proxies the in-area scanner reviews),
-        // filtered by the game's own visibility — the map shows what the player is entitled to know.
+        // Units as the shared world model knows them (the same proxies the in-area scanner reviews).
+        // The MAP reviews what's been DISCOVERED, not what's currently in sight: gate on the game's
+        // persistent per-unit reveal flag (the same one its own unit map markers key on —
+        // AddLocalMapMarker.IsVisible), with NO distance/LOS restriction, unlike the in-area cycles.
+        // A revealed-but-fogged unit reports its last-known (current) position, as the map would.
         private static void AddUnits(string primary)
         {
             foreach (var it in WorldModel.Items)
-                if (it.Primary == primary && it.IsVisible) _cycle.Add(it);
+            {
+                if (it.Primary != primary) continue;
+                var u = it.TargetUnit;
+                if (u != null ? u.IsRevealed : it.IsVisible) _cycle.Add(it);
+            }
         }
 
         private static string GroupWord(Group g)

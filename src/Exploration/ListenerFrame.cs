@@ -21,8 +21,8 @@ namespace WrathAccess.Exploration
         private const float TurnSpeed = 90f; // continuous turn, degrees/second (tuned by ear)
 
         /// <summary>Continuous turning: Q/E poll as held (the movement-key pattern — the claim chain
-        /// gates them), rotating smoothly; crossing into a new 8-point sector announces it, so turning
-        /// narrates itself without spamming. Ticked from the frame loop.</summary>
+        /// gates them), rotating smoothly; crossing into a new 8-point sector announces it and pings
+        /// the NORTH cue, so turning narrates itself without spamming. Ticked from the frame loop.</summary>
         public static void Tick(float dt)
         {
             int dir = 0;
@@ -30,10 +30,16 @@ namespace WrathAccess.Exploration
             if (WrathAccess.Input.InputManager.Held("explore.turnRight")) dir += 1;
             if (dir == 0) return;
 
-            int before = Sector();
+            // Fire exactly ON the 45° lines (floor-based: the interval index changes the moment the
+            // facing crosses a multiple) — NOT at the rounded-sector midpoints, which fired the
+            // "north" events 22.5° early and put the north cue audibly off to one side.
+            int before = GridIndex();
             SetFacing(Facing + dir * TurnSpeed * dt);
-            if (Sector() != before)
+            if (GridIndex() != before)
+            {
                 Tts.Speak(Loc.T("facing.now", new { dir = Geo.DirectionWord(Facing) }), interrupt: true);
+                PlayNorthCue();
+            }
         }
 
         /// <summary>Shift+Q/E: snap to the NEXT 45° multiple in that direction and announce it.</summary>
@@ -46,6 +52,23 @@ namespace WrathAccess.Exploration
             float next = dir > 0 ? Mathf.Floor(cur + 1f) : Mathf.Ceil(cur - 1f);
             SetFacing(next * 45f);
             Tts.Speak(Loc.T("facing.now", new { dir = Geo.DirectionWord(Facing) }), interrupt: true);
+            PlayNorthCue();
+        }
+
+        // The compass ping (user-designed): every cardinal/intercardinal crossed while turning plays
+        // compass_north.wav positioned AT WORLD NORTH in the rotated ear frame — a one-sound answer to
+        // "where is north relative to me right now" (left of you at east facing, darkened-behind at
+        // south, dead ahead again when you come back around).
+        private const float NorthCueDistance = 6f;  // metres — far enough for a pure-bearing pan
+        private const float NorthCuePanWidth = 1.5f;
+
+        private static void PlayNorthCue()
+        {
+            float dx = 0f, dz = NorthCueDistance; // due north of the head, in world terms
+            ToEar(ref dx, ref dz);
+            WrathAccess.Audio.AudioEngines.NAudio.PlaySpatial(
+                System.IO.Path.Combine(Overlays.OverlayAudio.Dir, "compass_north.wav"),
+                Overlays.OverlayAudio.Master * 0.8f, dx, dz, NorthCuePanWidth);
         }
 
         private static void SetFacing(float f)
@@ -55,7 +78,7 @@ namespace WrathAccess.Exploration
             Facing = f;
         }
 
-        private static int Sector() => Mathf.RoundToInt(Facing / 45f) % 8;
+        private static int GridIndex() => Mathf.FloorToInt(Facing / 45f) % 8;
 
         /// <summary>A WORLD ear delta (east, north) rotated into the LISTENER frame (right, ahead) —
         /// apply before any spatial pan so sounds sit around the head, not around the map.</summary>

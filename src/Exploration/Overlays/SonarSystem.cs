@@ -83,8 +83,10 @@ namespace WrathAccess.Exploration.Overlays
             // movement cursor — a deliberate "this thing, relative to where you looked" cue. One-shot.
             var np = item.NearestPoint(from);
             float dx = np.x - from.x, dz = np.z - from.z;
+            float dist = Mathf.Sqrt(dx * dx + dz * dz);
+            ListenerFrame.ToEar(ref dx, ref dz); // pan in the facing's frame
             AudioEngines.NAudio.PlaySpatial(Path.Combine(OverlayAudio.Dir, stem + ".wav"),
-                VolumeFor(Mathf.Sqrt(dx * dx + dz * dz)), dx, dz, PanWidthM);
+                VolumeFor(dist), dx, dz, PanWidthM);
         }
 
         // The sweep's distance→volume curve (reads the live ref-distance + system volume settings).

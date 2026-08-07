@@ -147,14 +147,9 @@ namespace WrathAccess.Exploration.Overlays
             // 3D audio is heard from. Default = the same reference the sonification pans from, so
             // game audio and our sounds share one spatial frame; "camera" is the vanilla behaviour.
             var audio = ModSettingsRegistry.EnsureCategory("audio", "Audio", "category.audio");
-            if (audio.GetByKey("engine") == null)
-                audio.Add(new ChoiceSetting("engine", "Sound playback",
-                    new System.Collections.Generic.List<Choice>
-                    {
-                        new Choice("classic", "Classic (flat stereo panning)", "audio.engine.classic"),
-                        new Choice("wwise", "Game audio engine (3D, occlusion-capable)", "audio.engine.wwise"),
-                    }, "classic", "audio.engine"));
-            // Classic-engine spatial cues (see Spatializer), each toggleable so they can be A/B'd by ear.
+            // (The audio.engine classic/wwise choice is GONE — the Wwise path was retired; NAudio is
+            // the one engine. An orphaned persisted value is ignored harmlessly.)
+            // Spatial cues (see Spatializer), each toggleable so they can be A/B'd by ear.
             if (audio.GetByKey("itd") == null)
                 audio.Add(new BoolSetting("itd", "Sharpen left/right (time-delay panning)", true, "audio.itd"));
             if (audio.GetByKey("front_back_filter") == null)

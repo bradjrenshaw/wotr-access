@@ -7,11 +7,12 @@ namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
     /// Directional <b>wall tones</b>: four looping sounds whose volumes rise as a wall nears in that
-    /// cardinal direction. Each frame it traces the navmesh in each direction and turns the distance-to-wall
-    /// into a 0..1 volume, then hands the four (hit, volume) pairs to the active audio engine's wall-tone
-    /// voices — NAudio spatializes them with a fixed compass pan (E/W hard L/R, N/S centred), Wwise places
-    /// 3D emitters at the hit points. Self-gates on <see cref="OverlayManager.Active"/> (mutes when a menu's
-    /// up); releases its voices on exit.
+    /// direction — RELATIVE TO THE LISTENER'S FACING (user decision): the "north" voice is always
+    /// AHEAD (centred), "south" behind (rear-filtered), "east"/"west" right/left — so the four pans
+    /// stay fixed in ear space and only the TRACE directions rotate with <see cref="ListenerFrame"/>.
+    /// At the default north facing this is exactly the historical compass behaviour. Each frame it
+    /// traces the navmesh in each direction and turns the distance-to-wall into a 0..1 volume.
+    /// Self-gates on <see cref="OverlayManager.Active"/>; releases its voices on exit.
     /// </summary>
     internal sealed class WallToneSystem : AudioSystem
     {
@@ -20,11 +21,10 @@ namespace WrathAccess.Exploration.Overlays
 
         private float Range => Int("range", 15) * Geo.MetresPerFoot;
 
-        private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left }; // N,S,E,W
+        private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left }; // ahead, behind, right, left
         private string ToneSet => ChoiceId("tone_set", "1");
 
         private IWallTones _tones;
-        private IAudioEngine _engineUsed; // the engine _tones was built from — rebuild on a live engine swap
         private string _setUsed;
         private readonly Vector3[] _hits = new Vector3[4];
         private readonly float[] _vols = new float[4];
@@ -45,7 +45,7 @@ namespace WrathAccess.Exploration.Overlays
         public override void OnExit(Overlay overlay)
         {
             _tones?.Dispose();
-            _tones = null; _engineUsed = null; _setUsed = null;
+            _tones = null; _setUsed = null;
         }
 
         public override void Tick(float dt, Overlay overlay)
@@ -54,18 +54,22 @@ namespace WrathAccess.Exploration.Overlays
             // over a scripted scene. Mute (don't dispose) so they resume seamlessly when control returns.
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { Mute(); return; }
 
-            // (Re)build the voices on first use, when the user picks a different tone set, or when the audio
-            // engine is swapped live (Audio.Engine returns a different cached instance).
-            var engine = AudioEngines.Active;
-            if (_tones == null || !ReferenceEquals(_engineUsed, engine) || _setUsed != ToneSet)
+            // (Re)build the voices on first use or when the user picks a different tone set.
+            if (_tones == null || _setUsed != ToneSet)
             {
                 _tones?.Dispose();
-                _engineUsed = engine; _setUsed = ToneSet;
-                _tones = engine.CreateWallTones(ToneSet);
+                _setUsed = ToneSet;
+                _tones = AudioEngines.NAudio.CreateWallTones(ToneSet);
             }
 
             var c = overlay.Cursor.Position;
             float v = EffectiveVolume;
+
+            // The four trace directions in WORLD space this frame: the relative set (ahead/behind/
+            // right/left) rotated by the facing. Voice pans are fixed in ear space, so this is the
+            // whole rotation story for wall tones.
+            float fr = ListenerFrame.Facing * Mathf.Deg2Rad;
+            float cf = Mathf.Cos(fr), sf = Mathf.Sin(fr);
 
             // Nearest node once per frame, reused for the 4 direction Linecasts. A FRESH query (no cross-frame
             // hint): the hint short-circuited the game's y/area node selection, which drifted the trace near
@@ -74,7 +78,9 @@ namespace WrathAccess.Exploration.Overlays
             NNInfo node = ObstacleAnalyzer.GetNearestNode(c);
             for (int i = 0; i < 4; i++)
             {
-                _hits[i] = TraceFrom(c, node, c + DirVecs[i] * Range);
+                var rel = DirVecs[i];
+                var dir = new Vector3(rel.x * cf + rel.z * sf, 0f, -rel.x * sf + rel.z * cf);
+                _hits[i] = TraceFrom(c, node, c + dir * Range);
                 _vols[i] = Curve(c, _hits[i]) * v;
             }
             _tones.Update(_hits, _vols);

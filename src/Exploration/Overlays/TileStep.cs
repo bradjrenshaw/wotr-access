@@ -42,6 +42,8 @@ namespace WrathAccess.Exploration.Overlays
             if (!OverlayManager.Active) { _holding = false; return; }
             CursorKeys.HeldVector(_slot, out int dx, out int dz);
             if (dx == 0 && dz == 0) { _holding = false; return; }
+            // W steps toward the facing; the GRID stays world-aligned (a 45° facing walks diagonals).
+            ListenerFrame.StepToWorld(ref dx, ref dz);
 
             // A diagonal tile is sqrt(2) longer than a cardinal one; stretch the repeat interval to
             // match so held-diagonal GROUND speed equals cardinal (the step itself stays on-grid).

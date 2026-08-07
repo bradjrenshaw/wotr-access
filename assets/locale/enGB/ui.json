@@ -498,6 +498,8 @@
   "localmap.group.neutrals": "neutral units",
   "localmap.group.markers": "points of interest",
   "localmap.group.exits": "exits",
+  "camera.compass": "Camera facing {dir}, {yaw} degrees. Compass needle {needle} degrees from map north.",
+  "facing.now": "Facing {dir}",
   "item.equip_offhand": "Equip in off hand",
   "drag.picked": "Picked up {name}. Backslash on a slot places it.",
   "drag.placed": "{name} placed: {slot}",

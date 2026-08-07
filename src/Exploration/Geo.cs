@@ -58,6 +58,14 @@ namespace WrathAccess.Exploration
             return Loc.T("geo." + Compass[Mathf.RoundToInt(deg / 45f) % 8]);
         }
 
+        /// <summary>A world yaw (degrees, 0 = north = +Z, 90 = east) as its 8-point compass word — for
+        /// FACINGS (camera, future cursor orientation), where Bearing's two-point form doesn't fit.</summary>
+        public static string DirectionWord(float deg)
+        {
+            deg %= 360f; if (deg < 0f) deg += 360f;
+            return Loc.T("geo." + Compass[Mathf.RoundToInt(deg / 45f) % 8]);
+        }
+
         /// <summary>"above"/"below" only past the game's own 1.5 height threshold; else null.</summary>
         public static string Vertical(Vector3 from, Vector3 to)
         {

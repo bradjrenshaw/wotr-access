@@ -49,7 +49,10 @@ namespace WrathAccess.Exploration
             var anchor = (choice == "cursor" && Cursor.Has)
                 ? Cursor.Position.Value
                 : Overlays.Cursor.PlayerPosition; // the TB-aware reference (acting unit in turn-based)
-            listener.transform.SetPositionAndRotation(anchor + Vector3.up * HeightMetres, Quaternion.identity);
+            // The ears face the LISTENER's facing (default north): game audio — voice barks, ambience,
+            // combat — pans in the same rotatable frame as the mod's own sounds.
+            listener.transform.SetPositionAndRotation(anchor + Vector3.up * HeightMetres,
+                Quaternion.Euler(0f, ListenerFrame.Facing, 0f));
         }
     }
 }

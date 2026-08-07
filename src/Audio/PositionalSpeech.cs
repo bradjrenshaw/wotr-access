@@ -28,6 +28,7 @@ namespace WrathAccess.Audio
             var p = worldPos.Value;
             float dx = p.x - from.x, dz = p.z - from.z;
             float dist = Mathf.Sqrt(dx * dx + dz * dz);
+            WrathAccess.Exploration.ListenerFrame.ToEar(ref dx, ref dz); // pan in the facing's frame
             float refDist = RefDistFeet * Geo.MetresPerFoot;
             float panWidth = PanWidthFeet * Geo.MetresPerFoot;
             float vol = Mathf.Clamp(refDist / (refDist + dist), MinVol, 1f);

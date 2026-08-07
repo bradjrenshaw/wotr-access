@@ -156,8 +156,7 @@ namespace WrathAccess
             }
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
             FocusMode.Tick(); // re-acquire the hotkey-suppression scope if the game rebuilt its keyboard
-            WrathAccess.Audio.WwiseAudio.Tick(); // generate+load our Wwise bank once the engine is up
-            WrathAccess.Audio.WwiseRuntimeConfig.Tick(); // apply panning rule + background-audio options
+            WrathAccess.Audio.WwiseRuntimeConfig.Tick(); // apply panning rule + background-audio options (game audio)
             InputManager.Tick();
             // First-run experience: the instant we reach the main menu (after the boot "loaded" readout),
             // open the setup wizard — but only until it's been shown once (wizard.completed, set on dismissal).
@@ -182,6 +181,7 @@ namespace WrathAccess
             // paused (the game-scaled dt is 0 when paused, which froze continuous-mode movement).
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
             // wall tones, fog/object cues) read the fresh position.
+            WrathAccess.Exploration.ListenerFrame.Tick(UnityEngine.Time.unscaledDeltaTime); // continuous Q/E turning, before the systems that read Facing
             OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime); // also drives the world-map sonar (a WorldMap overlay system)
             WrathAccess.Exploration.GlobalMapCursor.Tick(UnityEngine.Time.unscaledDeltaTime); // world-map cursor; gated on the engaged overlay
             WrathAccess.Audio.SpatialSources.Tick(); // re-spatialise live one-shots against the cursors just moved above
@@ -720,6 +720,23 @@ namespace WrathAccess
                 WrathAccess.Exploration.CameraControls.RotateRight).AddBinding(KeyCode.E, alt: true).Repeating().Grouped("camera");
             InputManager.Register("camera.follow", "Follow selected character", InputCategory.Exploration,
                 WrathAccess.Exploration.CameraControls.Follow).AddBinding(KeyCode.F, alt: true).Grouped("camera");
+            // Alt+C (Alt+F is taken by follow): read the game's spinning HUD compass — camera facing in
+            // the world frame + the widget's needle offset from map north. Orientation groundwork for
+            // the future rotatable cursor/listener.
+            InputManager.Register("camera.compass", "Read compass (camera facing)", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.AnnounceCompass).AddBinding(KeyCode.C, alt: true).Grouped("camera");
+            // Q/E: turn the LISTENER's facing CONTINUOUSLY while held (person-frame: "turn right" =
+            // facing yaw increases; independent of the camera). No handler — ListenerFrame.Tick polls
+            // the held state each frame. Shift+Q/E snap to the next 45° step. Movement, spatial pans,
+            // wall tones and the game-audio ears all rotate with it; bearings stay world-aligned.
+            InputManager.Register("explore.turnLeft", "Turn listener left", InputCategory.Exploration)
+                .AddBinding(KeyCode.Q).Grouped("cursor");
+            InputManager.Register("explore.turnRight", "Turn listener right", InputCategory.Exploration)
+                .AddBinding(KeyCode.E).Grouped("cursor");
+            InputManager.Register("explore.turnLeft45", "Turn listener left 45 degrees", InputCategory.Exploration,
+                WrathAccess.Exploration.ListenerFrame.StepLeft).AddBinding(KeyCode.Q, shift: true).Repeating().Grouped("cursor");
+            InputManager.Register("explore.turnRight45", "Turn listener right 45 degrees", InputCategory.Exploration,
+                WrathAccess.Exploration.ListenerFrame.StepRight).AddBinding(KeyCode.E, shift: true).Repeating().Grouped("cursor");
 
             // Service-window hotkeys (InputCategory.Windows): open character sheet / inventory / spellbook /
             // journal directly. Live in an area (while we have control) AND on the world map, via the game's

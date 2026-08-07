@@ -35,8 +35,14 @@ namespace WrathAccess.Exploration
         public static void PanDown() => Invoke(PanDownM);
         public static void PanLeft() => Invoke(PanLeftM);
         public static void PanRight() => Invoke(PanRightM);
-        public static void RotateLeft() => Invoke(RotLeftM);
-        public static void RotateRight() => Invoke(RotRightM);
+
+        // DELIBERATELY CROSSED (user decision, sighted-verified): the game labels rotation by what the
+        // SCENE does on screen — its RotateRight SUBTRACTS camera yaw (world spins right, the camera
+        // itself turns left). By ear there is no scene, only a viewpoint, so our keys speak PERSON
+        // terms: "turn right" = facing yaw increases (north → east) = the game's RotateLeft, and vice
+        // versa. The future rotatable cursor/listener must use this same person-frame convention.
+        public static void RotateLeft() => Invoke(RotRightM);
+        public static void RotateRight() => Invoke(RotLeftM);
 
         private static void Invoke(MethodInfo m)
         {
@@ -72,6 +78,33 @@ namespace WrathAccess.Exploration
                 foreach (var u in sel)
                     if (u != null) return u;
             return Game.Instance?.Player?.MainCharacter.Value;
+        }
+
+        /// <summary>
+        /// Read the game's HUD compass (the widget sighted players watch spin as the camera turns):
+        /// the camera's facing in OUR world frame (0° = north = +Z — the frame every spoken bearing
+        /// uses), plus the widget's own needle angle, which is measured from MAP north (the camera's
+        /// per-area default = <c>LocalMapRotation</c>; the widget reads 0 when the camera is reset).
+        /// Groundwork for cursor FACING/rotation: this is the orientation vocabulary a rotatable
+        /// listener will speak.
+        /// </summary>
+        public static void AnnounceCompass()
+        {
+            var rig = Rig;
+            var area = Game.Instance?.CurrentlyLoadedArea;
+            if (rig == null || area == null) return;
+            float yaw = rig.transform.eulerAngles.y;
+            // The widget's exact formula (IngameMenuVM.RotateCamera): camera yaw minus the area's map
+            // rotation, i.e. degrees away from the camera's home orientation.
+            float needle = yaw - area.LocalMapRotation;
+            needle %= 360f; if (needle < 0f) needle += 360f;
+            float world = yaw % 360f; if (world < 0f) world += 360f;
+            Tts.Speak(Loc.T("camera.compass", new
+            {
+                dir = Geo.DirectionWord(world),
+                yaw = UnityEngine.Mathf.RoundToInt(world),
+                needle = UnityEngine.Mathf.RoundToInt(needle),
+            }), interrupt: true);
         }
     }
 }

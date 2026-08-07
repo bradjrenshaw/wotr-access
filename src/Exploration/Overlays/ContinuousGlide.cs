@@ -45,6 +45,7 @@ namespace WrathAccess.Exploration.Overlays
             CursorKeys.HeldVector(_slot, out int ix, out int iz);
             float dx = ix, dz = iz;
             if (dx == 0f && dz == 0f) return;
+            ListenerFrame.InputToWorld(ref dx, ref dz); // W = forward of the facing (default north)
 
             var cur = overlay.Cursor.Position;
             var dir = new Vector3(dx, 0f, dz).normalized;

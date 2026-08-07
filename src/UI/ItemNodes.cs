@@ -109,13 +109,22 @@ namespace WrathAccess.UI
 
         /// <summary>One equipment-doll slot as a line — "Slot: item (badges)" / "Slot: empty". Enter
         /// unequips (the double-click action); Backspace = the full slot menu; Space = the item's tooltip.
-        /// Empty slots read but carry no actions (equipping happens from the stash item's Equip).</summary>
-        public static NodeVtable EquipSlot(string slotName, EquipSlotVM slot)
+        /// Empty slots read but carry no actions (equipping happens from the stash item's Equip).
+        /// <paramref name="primaryForFake"/> (the off-hand only): the game GHOSTS the main hand's
+        /// two-handed/double weapon into the empty off-hand slot (EquipSlotVM's fake item — what
+        /// sighted players see occupying both hands), so read that instead of "empty".</summary>
+        public static NodeVtable EquipSlot(string slotName, EquipSlotVM slot, EquipSlotVM primaryForFake = null)
         {
             Func<bool> hasItem = () => slot != null && slot.HasItem;
             Func<string> label = () =>
             {
-                if (!hasItem()) return slotName + ": " + Loc.T("slot.empty");
+                if (!hasItem())
+                {
+                    var w = primaryForFake?.Item.Value as Kingmaker.Items.ItemEntityWeapon;
+                    if (w != null && (w.HoldInTwoHands || w.Blueprint.Double))
+                        return slotName + ": " + (w.Name ?? "") + " " + Loc.T("slot.both_hands");
+                    return slotName + ": " + Loc.T("slot.empty");
+                }
                 var name = slot.DisplayName.Value;
                 if (string.IsNullOrEmpty(name)) name = slot.Item.Value?.Name ?? "item";
                 var flags = new List<string>();

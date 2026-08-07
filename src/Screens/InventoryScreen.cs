@@ -123,7 +123,9 @@ namespace WrathAccess.Screens
 
             var set = doll.CurrentSet?.Value;
             EmitSlot(b, uk, Loc.T("slot.primary_hand"), set?.Primary);
-            EmitSlot(b, uk, Loc.T("slot.secondary_hand"), set?.Secondary);
+            // The off-hand reads the main hand's ghosted two-handed/double weapon instead of "empty"
+            // (what the sighted doll shows — a falchion visibly occupies both hand slots).
+            EmitSlot(b, uk, Loc.T("slot.secondary_hand"), set?.Secondary, set?.Primary);
             EmitSlot(b, uk, Loc.T("slot.armor"), doll.Armor);
             EmitSlot(b, uk, Loc.T("slot.head"), doll.Head);
             EmitSlot(b, uk, Loc.T("slot.neck"), doll.Neck);
@@ -142,10 +144,11 @@ namespace WrathAccess.Screens
             b.PopContext();
         }
 
-        private static void EmitSlot(GraphBuilder b, string uk, string name, EquipSlotVM slot)
+        private static void EmitSlot(GraphBuilder b, string uk, string name, EquipSlotVM slot,
+            EquipSlotVM primaryForFake = null)
         {
             if (slot != null)
-                b.AddItem(ControlId.Structural(uk + "slot:" + name), ItemNodes.EquipSlot(name, slot));
+                b.AddItem(ControlId.Structural(uk + "slot:" + name), ItemNodes.EquipSlot(name, slot, primaryForFake));
         }
 
         // Party-wide readout: carry weight + load status (with the encumbrance breakdown tooltip) and

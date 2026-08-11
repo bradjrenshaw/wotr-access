@@ -125,6 +125,13 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("wall_slide") == null)
                 cursorCat.Add(new BoolSetting("wall_slide", "Slide along walls", false,
                     "overlay.cursor.wall_slide"));
+            // OPT-IN first-direction priority steering (user-designed): diagonals move normally in
+            // the open; on the first wall contact the FIRST-held key becomes the goal (retried every
+            // frame — the cursor turns INTO a gap the moment it opens) while the second key follows
+            // the wall. More precise than wall sliding for threading small openings.
+            if (cursorCat.GetByKey("direction_priority") == null)
+                cursorCat.Add(new BoolSetting("direction_priority", "First-held direction has priority", false,
+                    "overlay.cursor.direction_priority"));
             // Continuous is the primary development target and the intended mode for most players
             // (2026-07-22) — tiled remains a settings choice, no longer the default.
             BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "continuous", 15, "continuous", 18);

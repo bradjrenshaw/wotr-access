@@ -37,6 +37,21 @@ namespace WrathAccess.Exploration.Overlays
             WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
                 "defaults.cursor.wall_slide")?.Get() ?? false;
 
+        // Opt-in first-direction priority steering (user-designed): diagonals move normally in the
+        // OPEN, but on the first wall contact the FIRST-held key becomes the goal — the second key
+        // wall-follows, and the instant the goal direction opens the cursor turns INTO the gap
+        // (instead of diagonally overshooting it). Releasing/changing the held keys resets to free.
+        private static bool DirectionPriority =>
+            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
+                "defaults.cursor.direction_priority")?.Get() ?? false;
+
+        // Priority-steering state, per slot (this mode instance IS per-slot): which INPUT axis was
+        // held first (0 = x/east-west, 1 = z/north-south), whether we're wall-following, and last
+        // frame's held axes for change detection.
+        private int _prioAxis = -1;
+        private bool _wallFollow;
+        private bool _prevHx, _prevHz;
+
         public override void OnEnter(Overlay overlay)
         {
             // Make sure the shared cursor is planted (so move-to-cursor has a point); the getter already
@@ -49,31 +64,65 @@ namespace WrathAccess.Exploration.Overlays
             if (!OverlayManager.Active) return;            // menu up / focus off → don't move
 
             CursorKeys.HeldVector(_slot, out int ix, out int iz);
-            float dx = ix, dz = iz;
-            if (dx == 0f && dz == 0f) return;
-            ListenerFrame.InputToWorld(ref dx, ref dz); // W = forward of the facing (default north)
-
-            var cur = overlay.Cursor.Position;
-            var dir = new Vector3(dx, 0f, dz).normalized;
+            if (ix == 0 && iz == 0) { _prioAxis = -1; _wallFollow = false; _prevHx = _prevHz = false; return; }
+            TrackPriority(ix != 0, iz != 0);
             float step = Speed * dt;
+
+            // First-direction priority steering (opt-in), only meaningful with BOTH axes held:
+            // diagonal while the way is open; first wall contact arms wall-following — from then on
+            // the priority axis is tried EVERY frame (turning into the gap the moment it opens),
+            // else the second axis follows the wall.
+            if (DirectionPriority && ix != 0 && iz != 0)
+            {
+                if (!_wallFollow)
+                {
+                    if (TryMove(ix, iz, step, overlay, slide: false)) return;
+                    _wallFollow = true;
+                }
+                bool prioX = _prioAxis != 1; // unset/x → x leads (both-same-frame picks x, arbitrary)
+                if (TryMove(prioX ? ix : 0, prioX ? 0 : iz, step, overlay, slide: false)) return;
+                TryMove(prioX ? 0 : ix, prioX ? iz : 0, step, overlay, slide: false);
+                return;
+            }
+
+            // Normal path: combined vector, wall-slide honoured; blocked diagonals fall back to the
+            // free axis (holding two directions is explicit intent for both — don't discard the open
+            // half because the other is walled). Single-direction into a wall still dead-stops.
+            if (TryMove(ix, iz, step, overlay, slide: WallSlide)) return;
+            if (ix != 0 && iz != 0 && !WallSlide)
+            {
+                var moved = TryMove(ix, 0, step, overlay, slide: false)
+                         || TryMove(0, iz, step, overlay, slide: false);
+            }
+        }
+
+        // Which INPUT axis was held first (the priority axis for the steering mode). Promotes the
+        // survivor when the priority key is released; resets when everything is released.
+        private void TrackPriority(bool hx, bool hz)
+        {
+            if (_prioAxis == 0 && !hx) _prioAxis = hz ? 1 : -1;
+            else if (_prioAxis == 1 && !hz) _prioAxis = hx ? 0 : -1;
+            else if (_prioAxis == -1) _prioAxis = hx && !hz ? 0 : (hz && !hx ? 1 : (hx ? 0 : -1));
+            // Any change in the held set drops wall-following back to free movement.
+            if (hx != _prevHx || hz != _prevHz) _wallFollow = false;
+            _prevHx = hx; _prevHz = hz;
+        }
+
+        /// <summary>Attempt one glide step along the given INPUT vector (rotated by the listener
+        /// facing). Moves the cursor and returns true when the trace made real progress.</summary>
+        private bool TryMove(float inDx, float inDz, float step, Overlay overlay, bool slide)
+        {
+            if (inDx == 0f && inDz == 0f) return false;
+            ListenerFrame.InputToWorld(ref inDx, ref inDz); // W = forward of the facing (default north)
+            var cur = overlay.Cursor.Position;
+            var dir = new Vector3(inDx, 0f, inDz).normalized;
             var intended = cur + dir * step;
-            // Wall slide (opt-in): a blocked glide slides along the wall's tangent — the same trace the
-            // game's direct-control movement uses — funnelling through doorways instead of dead-stopping.
-            var traced = WallSlide
+            // Wall slide: blocked motion slides along the wall's tangent — the same trace the game's
+            // direct-control movement uses — funnelling through doorways instead of dead-stopping.
+            var traced = slide
                 ? ObstacleAnalyzer.TraceAlongNavmeshWithWallSlide(cur, intended)
                 : ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
-
-            // DEFAULT-mode diagonal fallback: holding two directions is explicit intent for BOTH, but
-            // the combined ray dies at zero distance against a wall on either axis — discarding the
-            // free half (hold south-east beside an east wall: nothing moves, though south is open).
-            // When the diagonal makes no progress, walk the free axis instead. Single-direction input
-            // into a wall still dead-stops — the deliberate "bumped into it" cue.
-            if (!WallSlide && dx != 0f && dz != 0f && (traced - cur).sqrMagnitude < 1e-6f)
-            {
-                var tx = ObstacleAnalyzer.TraceAlongNavmesh(cur, cur + new Vector3(dir.x, 0f, 0f).normalized * step);
-                var tz = ObstacleAnalyzer.TraceAlongNavmesh(cur, cur + new Vector3(0f, 0f, dir.z).normalized * step);
-                traced = (tx - cur).sqrMagnitude >= (tz - cur).sqrMagnitude ? tx : tz;
-            }
+            if ((traced - cur).sqrMagnitude < 1e-6f) return false;
             // Re-project onto the walkable surface: the trace's unobstructed result keeps the INPUT Y
             // (the navmesh linecast never re-snaps height), so gliding up a ramp left the cursor's Y
             // fossilized at wherever it was last planted — path-dependent heights on one slope, and a
@@ -82,6 +131,7 @@ namespace WrathAccess.Exploration.Overlays
             var s = NavmeshProbe.Sample(traced.x, traced.z, traced.y);
             if (s.OnNavmesh) traced.y = s.Point.y;
             overlay.Cursor.Position = traced;
+            return true;
         }
     }
 }

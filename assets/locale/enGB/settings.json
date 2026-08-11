@@ -449,6 +449,7 @@
   "overlay.cursor.announce_rooms": "Announce room changes",
   "overlay.cursor.wall_slide": "Slide along walls",
   "overlay.cursor.direction_priority": "First-held direction has priority",
+  "overlay.cursor.review_reset": "Cursor movement resets review cycles",
   "bind.buffer.bufferNext": "Buffer: next buffer",
   "bind.buffer.bufferPrev": "Buffer: previous buffer",
   "bind.buffer.itemNext": "Buffer: next line",

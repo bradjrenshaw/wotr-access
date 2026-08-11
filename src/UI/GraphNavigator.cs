@@ -403,11 +403,20 @@ namespace WrathAccess.UI
             if (land == null || !_graph.Focus(land.Id)) return true;
 
             var node = _graph.CurrentNode;
-            WrathAccess.UiSound.Hover();
+            PlayHover(node);
             Speak(ComposeMove(_lastSpokenNode, node, entry: false), interrupt: true);
             _lastSpokenKey = node.Id;
             _lastSpokenNode = node;
             return true;
+        }
+
+        // The landed node's own hover sound when it declares one (game views assign per-control
+        // hover types in code — dialogue answers, tutorial windows), else the default.
+        private static void PlayHover(WrathAccess.UI.Graph.GraphNode node)
+        {
+            var custom = node?.Vtable?.HoverSound;
+            if (custom != null) { try { custom(); } catch { } }
+            else WrathAccess.UiSound.Hover();
         }
 
         private bool JumpEdge(bool first)
@@ -442,7 +451,7 @@ namespace WrathAccess.UI
         {
             var node = result.To;
             if (node == null) return;
-            WrathAccess.UiSound.Hover();
+            PlayHover(node);
             Speak(ComposeMove(result.From, node, entry: false, transitionLabel: result.TransitionLabel, regionEntry: regionEntry), interrupt: true);
             _lastSpokenKey = node.Id;
             _lastSpokenNode = node;
@@ -628,7 +637,7 @@ namespace WrathAccess.UI
             if (index < 0 || index >= _searchNodes.Count) return;
             if (!_graph.FocusAtColumn(_searchNodes[index].Id, _searchColumn)) return;
             var node = _graph.CurrentNode;
-            WrathAccess.UiSound.Hover();
+            PlayHover(node);
             Speak(ComposeMove(_lastSpokenNode, node, entry: false), interrupt: true);
             _lastSpokenKey = node.Id;
             _lastSpokenNode = node;

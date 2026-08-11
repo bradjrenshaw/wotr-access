@@ -123,6 +123,11 @@ namespace WrathAccess.UI.Graph
         /// Asynchronous/game-driven changes ride the Live announcement watch instead.</summary>
         public Func<string> StateText;
 
+        /// <summary>Optional. Plays this control's hover sound when focus lands on it, replacing the
+        /// navigator's default. A plain action so the core stays game-agnostic (some game views
+        /// assign non-default hover sounds in code, e.g. dialogue answers).</summary>
+        public Action HoverSound;
+
         /// <summary>Optional. The text type-ahead matches against; null = the first announcement part
         /// (the label). (A cell whose label is a bare number can search as its row's name, etc.)</summary>
         public Func<string> SearchText;

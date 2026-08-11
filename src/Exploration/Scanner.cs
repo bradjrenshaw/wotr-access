@@ -434,11 +434,35 @@ namespace WrathAccess.Exploration
         // selection-moving action clears it (I "can't interact", Home/Slash plant the cursor on it).
         private static ScanItem _selectionOverride;
 
-        private static void DoCycleRoomExits(int dir)
+        // Opt-in (Exploration → Cursor): once the movement cursor has travelled past a small threshold,
+        // the next cycle key starts over nearest-first instead of continuing from the old position —
+        // "I moved; now show me what's close" without hand-stepping back through a stale cycle.
+        private static bool ReviewResetOnMove =>
+            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
+                "defaults.cursor.review_reset")?.Get() ?? false;
+
+        private const float ReviewResetDistance = 0.25f; // metres of cursor travel that forgets the cycle
+        private static Vector3 _lastCycleFrom;
+        private static bool _hasCycleFrom;
+
+        // The cycle's continue-from target: the cached selection, unless reset-on-move is enabled and
+        // the reference point has drifted since the cycle STARTED — then null (enter at the nearest).
+        // The baseline moves only on reset, never per press: re-anchoring it every press let it creep
+        // along with the gliding cursor, so cycling WHILE moving never accumulated enough drift to fire.
+        private static ScanItem CycleContinueFrom(Vector3 refPos)
         {
             var prev = Selected;
-            Rebuild();
+            bool drifted = _hasCycleFrom
+                && (refPos - _lastCycleFrom).sqrMagnitude > ReviewResetDistance * ReviewResetDistance;
+            if (!_hasCycleFrom || drifted) { _lastCycleFrom = refPos; _hasCycleFrom = true; }
+            return ReviewResetOnMove && drifted ? null : prev;
+        }
+
+        private static void DoCycleRoomExits(int dir)
+        {
             var refPos = ScanFrom;
+            var prev = CycleContinueFrom(refPos);
+            Rebuild();
             var room = RoomMap.RoomAt(refPos);
             var emptyMsg = Loc.T("scan.category_empty", new { label = Loc.T("taxonomy.exits") });
             if (room == null) { Speak(emptyMsg); return; }
@@ -535,10 +559,12 @@ namespace WrathAccess.Exploration
 
         private static void DoCycleReview(ReviewGroup group, int dir)
         {
-            var prev = Selected; // the cached selection — ScanItem identities are stable in WorldModel
+            var refPos = ScanFrom;
+            // The cached selection — ScanItem identities are stable in WorldModel. Read BEFORE the
+            // override clear (a V-cycle opening can be the continue-from point too).
+            var prev = CycleContinueFrom(refPos);
             _selectionOverride = null;
             Rebuild();
-            var refPos = ScanFrom;
             // Same rule as the sonar (ScanItem.DetectableFrom): cycle anything a party member can see right
             // now, plus remembered things under fog that have a clear line of sight from the cursor — so a
             // chest behind a wall isn't offered until you'd actually have a straight path to it. (Room exits,

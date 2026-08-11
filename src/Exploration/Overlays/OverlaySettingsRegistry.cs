@@ -132,6 +132,12 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("direction_priority") == null)
                 cursorCat.Add(new BoolSetting("direction_priority", "First-held direction has priority", false,
                     "overlay.cursor.direction_priority"));
+            // OPT-IN review-cycle reset: once the cursor moves past a small threshold (0.5 m), the next
+            // review key (Comma/Period/N/M/B/L/V) starts over at the nearest thing instead of
+            // continuing a stale cycle from wherever you last reviewed.
+            if (cursorCat.GetByKey("review_reset") == null)
+                cursorCat.Add(new BoolSetting("review_reset", "Cursor movement resets review cycles", false,
+                    "overlay.cursor.review_reset"));
             // Continuous is the primary development target and the intended mode for most players
             // (2026-07-22) — tiled remains a settings choice, no longer the default.
             BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "continuous", 15, "continuous", 18);

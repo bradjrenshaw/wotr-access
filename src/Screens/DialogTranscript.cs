@@ -44,6 +44,9 @@ namespace WrathAccess.Screens
                     GraphNodes.DisabledPart(enabled),
                 },
                 SearchText = () => AnswerText(vm),
+                // The game's DialogAnswerView assigns BuildingHover (81) in code — dialogue choices
+                // hover with their own sound, not the default button hover. Mirror it.
+                HoverSound = () => WrathAccess.UiSound.Play(Kingmaker.UI.UISoundType.BuildingHover),
                 OnActivate = () => { if (enabled()) vm.OnChooseAnswer(); },
                 OnTooltip = () => TooltipScreen.FollowLinks(AnswerText(vm),
                     (id, keys) => WrathAccess.UI.Proxies.DialogLinks.ResolveSkillCheck(

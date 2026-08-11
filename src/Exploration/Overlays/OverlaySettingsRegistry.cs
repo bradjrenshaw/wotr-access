@@ -119,6 +119,12 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("announce_rooms") == null)
                 cursorCat.Add(new BoolSetting("announce_rooms", "Announce room changes", true,
                     "overlay.cursor.announce_rooms"));
+            // OPT-IN wall sliding for the glide (user decision — off by default): a blocked glide slides
+            // along the wall's tangent instead of dead-stopping, funnelling through doorways — the game's
+            // own TraceAlongNavmeshWithWallSlide, the trace its direct-control unit movement uses.
+            if (cursorCat.GetByKey("wall_slide") == null)
+                cursorCat.Add(new BoolSetting("wall_slide", "Slide along walls", false,
+                    "overlay.cursor.wall_slide"));
             // Continuous is the primary development target and the intended mode for most players
             // (2026-07-22) — tiled remains a settings choice, no longer the default.
             BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "continuous", 15, "continuous", 18);

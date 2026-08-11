@@ -31,6 +31,12 @@ namespace WrathAccess.Exploration.Overlays
 
         private float Speed => (_settings?.Get<IntSetting>("speed")?.Get() ?? 15) * Geo.MetresPerFoot;
 
+        // Opt-in wall sliding (Exploration → Cursor), read live — a GLOBAL cursor behaviour, not a
+        // per-slot/per-overlay knob, so it lives on the shared defaults.cursor category.
+        private static bool WallSlide =>
+            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
+                "defaults.cursor.wall_slide")?.Get() ?? false;
+
         public override void OnEnter(Overlay overlay)
         {
             // Make sure the shared cursor is planted (so move-to-cursor has a point); the getter already
@@ -49,8 +55,25 @@ namespace WrathAccess.Exploration.Overlays
 
             var cur = overlay.Cursor.Position;
             var dir = new Vector3(dx, 0f, dz).normalized;
-            var intended = cur + dir * (Speed * dt);
-            var traced = ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
+            float step = Speed * dt;
+            var intended = cur + dir * step;
+            // Wall slide (opt-in): a blocked glide slides along the wall's tangent — the same trace the
+            // game's direct-control movement uses — funnelling through doorways instead of dead-stopping.
+            var traced = WallSlide
+                ? ObstacleAnalyzer.TraceAlongNavmeshWithWallSlide(cur, intended)
+                : ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
+
+            // DEFAULT-mode diagonal fallback: holding two directions is explicit intent for BOTH, but
+            // the combined ray dies at zero distance against a wall on either axis — discarding the
+            // free half (hold south-east beside an east wall: nothing moves, though south is open).
+            // When the diagonal makes no progress, walk the free axis instead. Single-direction input
+            // into a wall still dead-stops — the deliberate "bumped into it" cue.
+            if (!WallSlide && dx != 0f && dz != 0f && (traced - cur).sqrMagnitude < 1e-6f)
+            {
+                var tx = ObstacleAnalyzer.TraceAlongNavmesh(cur, cur + new Vector3(dir.x, 0f, 0f).normalized * step);
+                var tz = ObstacleAnalyzer.TraceAlongNavmesh(cur, cur + new Vector3(0f, 0f, dir.z).normalized * step);
+                traced = (tx - cur).sqrMagnitude >= (tz - cur).sqrMagnitude ? tx : tz;
+            }
             // Re-project onto the walkable surface: the trace's unobstructed result keeps the INPUT Y
             // (the navmesh linecast never re-snaps height), so gliding up a ramp left the cursor's Y
             // fossilized at wherever it was last planted — path-dependent heights on one slope, and a

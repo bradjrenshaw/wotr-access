@@ -447,6 +447,7 @@
   "sound.control_lost": "Control lost",
 
   "overlay.cursor.announce_rooms": "Announce room changes",
+  "overlay.cursor.wall_slide": "Slide along walls",
   "bind.buffer.bufferNext": "Buffer: next buffer",
   "bind.buffer.bufferPrev": "Buffer: previous buffer",
   "bind.buffer.itemNext": "Buffer: next line",

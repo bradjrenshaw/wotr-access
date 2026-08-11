@@ -122,13 +122,26 @@ namespace WrathAccess.Exploration
         public virtual Vector3 NearestPoint(Vector3 from) => ScanBounds.NearestOnCircleXZ(Position, Footprint, from);
 
         /// <summary>Is <paramref name="point"/> inside this thing's footprint (XZ)? — "the cursor is on it",
-        /// using the real shape (a wall's rectangle, not a circle).</summary>
+        /// using the real shape (a wall's rectangle, not a circle). Things standing OFF the walkable
+        /// mesh (wall-hugging furniture — their ground is carved, so the strict footprint is a
+        /// millimetres-wide or unreachable target for the navmesh-locked cursor; the inn's personal
+        /// chest: nearest reachable point 0.69m from centre vs a 0.70m footprint) additionally count
+        /// as "at the cursor" within a small reach. Gated on the thing's CENTRE being off-mesh — the
+        /// closest-point test false-negatives on exactly the chest repro, because the mesh boundary
+        /// grazes the footprint edge inside the probe's snap tolerance. On-mesh things keep strict
+        /// edges: you can genuinely stand on them.</summary>
         public bool Contains(Vector3 point)
         {
             var np = NearestPoint(point);
             float dx = np.x - point.x, dz = np.z - point.z;
-            return dx * dx + dz * dz < 1e-4f;
+            float d2 = dx * dx + dz * dz;
+            if (d2 < 1e-4f) return true;
+            if (d2 > AtReach * AtReach) return false;
+            return !NavmeshProbe.Sample(Position.x, Position.z, point.y).OnNavmesh;
         }
+
+        // How far past the footprint the cursor still counts as "at" an off-mesh thing (metres).
+        private const float AtReach = 0.5f;
 
         /// <summary>
         /// The PRIMARY <see cref="ScanTaxonomy"/> node — the single, state-aware role this thing sounds as

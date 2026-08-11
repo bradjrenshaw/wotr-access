@@ -119,8 +119,11 @@ namespace WrathAccess.UI.Graph
             if (!string.IsNullOrEmpty(role)) anns.Add(NodeAnnouncement.Static(role));
             var node = new GraphNode
             {
-                // Stable synthetic identity (label-pathed) so cross-render chain diffs match up.
-                Id = ControlId.Structural("ctx:" + (parent?.Id.StructuralKey ?? "") + "/" + label),
+                // Stable synthetic identity so cross-render chain diffs match up — SCOPED BY THE STOP:
+                // a purely label-pathed id collided for same-named contexts on different stops (two
+                // "Corpse of Mongrel" loot lists), so the announcer's prefix diff thought focus never
+                // left the first one and tabbing spoke just the bare item.
+                Id = ControlId.Structural("ctx:" + _stopKey + ":" + (parent?.Id.StructuralKey ?? "") + "/" + label),
                 Vtable = new NodeVtable { Announcements = anns },
                 Parent = parent,
                 Focusable = false,

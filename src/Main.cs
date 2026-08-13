@@ -866,6 +866,11 @@ namespace WrathAccess
             InputManager.Register("review.prevExit", "Review previous room exit", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleRoomExits(-1))
                 .AddBinding(KeyCode.V, shift: true).Repeating().Grouped("review");
+            // Semicolon = ping the review target from the movement cursor: one of four sight/route
+            // cues (blocked sight / sighted-but-unreachable / route-around / straight line).
+            InputManager.Register("review.ping", "Ping review object", InputCategory.Exploration,
+                Route(inArea: WrathAccess.Exploration.Scanner.PingReview))
+                .AddBinding(KeyCode.Semicolon).Grouped("review");
         }
     }
 }

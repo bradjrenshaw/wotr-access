@@ -44,16 +44,35 @@ namespace WrathAccess.Speech
         /// screen-reader-less machine correctly reveals the SAPI settings).</summary>
         public string ResolvedHandlerKey => Handler?.Key;
 
-        // The handler's params for this config. Prism outputs get a synthesized fixed-backend subtree
-        // (the output IS the backend pick); paramful outputs (SAPI) read the config's own subtree — the
-        // default config's raw, an inheriting config's RESOLVED snapshot (explicit override else the
-        // base's value), so the handler reads plain settings and never sees "inherit".
+        // The handler's params for this config: the config's own subtree — the default config's raw,
+        // an inheriting config's RESOLVED snapshot (explicit override else the base's value), so the
+        // handler reads plain settings and never sees "inherit". Prism additionally gets the backend
+        // pick synthesized from the OUTPUT (the output IS the backend), merged with a VALUE SNAPSHOT
+        // of the user params — real settings must never be re-parented out of the saved tree
+        // (FullPath rides Parent), and the handler applies-on-change by value so a fresh snapshot
+        // per speak is correct and cheap.
         private CategorySetting Params(ISpeechHandler h)
         {
             if (h == null) return null;
-            if (h.Key == "prism") return SpeechOutputs.PrismParamsFor(OutputId);
             var mine = Tree?.Get<CategorySetting>(h.Key);
-            return _base == null ? mine : Resolve(mine, _base.Tree?.Get<CategorySetting>(h.Key), h);
+            var resolved = _base == null ? mine : Resolve(mine, _base.Tree?.Get<CategorySetting>(h.Key), h);
+            if (h.Key != "prism") return resolved;
+
+            string backend = SpeechOutputs.IsScreenReader(OutputId) ? OutputId : SpeechOutputs.Auto;
+            var cat = new CategorySetting("prism", "Prism");
+            cat.Add(new ChoiceSetting("backend", "Backend", SpeechOutputs.BackendChoiceList(backend), backend));
+            if (resolved != null)
+                foreach (var c in resolved.Children)
+                    switch (c)
+                    {
+                        case IntSetting i:
+                            cat.Add(new IntSetting(i.Key, i.Label, i.Get(), i.Min, i.Max, i.Step));
+                            break;
+                        case ChoiceSetting ch:
+                            cat.Add(new ChoiceSetting(ch.Key, ch.Label, ch.Choices, ch.ValueId));
+                            break;
+                    }
+            return cat;
         }
 
         // Merge an inheriting config's param subtree over the base's: walk the base (canonical) subtree and,
@@ -82,7 +101,8 @@ namespace WrathAccess.Speech
         }
 
         /// <summary>Can speech through this config be positioned in the world (handler renders to PCM)?
-        /// SAPI yes, Prism/clipboard no. The "use positional" CHOICE is a separate, event-side option.</summary>
+        /// SAPI yes; Prism when the bound backend implements speak-to-memory (OneCore — screen readers
+        /// don't); clipboard no. The "use positional" CHOICE is a separate, event-side option.</summary>
         public bool SupportsPositional => Handler?.SupportsAudioRender ?? false;
 
         public bool Speak(string text, bool interrupt = false)
@@ -107,9 +127,12 @@ namespace WrathAccess.Speech
         /// voice. Falls back to any render-capable handler when this config's can't render.</summary>
         public SpeechAudio RenderToAudio(string text)
         {
+            // Try the config's own handler first — its render call applies the config (Prism binds the
+            // config's backend there, so a stale SupportsAudioRender must not pre-filter) and returns
+            // null when it genuinely can't render — then fall back to any render-capable handler.
             var h = Handler;
-            if (h != null && h.SupportsAudioRender) return h.RenderToAudio(text, Params(h));
-            return SpeechManager.RenderToAudioFallback(text);
+            var audio = h?.RenderToAudio(text, Params(h));
+            return audio ?? SpeechManager.RenderToAudioFallback(text);
         }
     }
 }

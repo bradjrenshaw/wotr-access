@@ -174,30 +174,58 @@ namespace WrathAccess.Exploration
                 var attacker = CombatMode.CurrentUnit;
                 if (attacker != null && attacker.View != null && attacker.CanAttack(_unit))
                 {
-                    float reach = UnitAttack.GetApproachRadius(attacker.GetFirstWeapon(), attacker, _unit);
-                    // UnitAttack ALWAYS requires line of sight (its ctor sets NeedLoS) — check reach and
-                    // compute the approach the same way, so a ranged target behind a wall either gets a
-                    // path to a firing position or an honest refusal (a sightless path made the command
-                    // give up on the spot and auto-end the turn — the Camellia/centipede repro).
-                    bool inReach = UnitCommand.IsUnitCloseEnough(_unit.Position, attacker.Position,
-                        attacker.EyePosition, reach, needLOS: true, ignoreBlockerRadius: 0f);
-                    // Out of reach + no time for both the walk and the swing (surprise round, staggered,
-                    // standard already spent): refuse with the action-economy reason, not "too far".
-                    if (!inReach && CombatMode.MoveThenActBlocked(attacker))
+                    // Gate on the command the click factory will ACTUALLY issue: when an auto-use
+                    // ability (the action-bar "default attack", e.g. a cantrip) is set and available,
+                    // ClickUnitHandler.CreateCommand casts IT instead of UnitAttack — so reach and the
+                    // LOS rule come from the ABILITY, not the weapon (a melee-armed caster 25ft out
+                    // casts from where they stand; the weapon gate wrongly refused or walked them in).
+                    // Personal-range auto-use casts on the caster in place: nothing to approach.
+                    var auto = attacker.Brain.GetAvailableAutoUseAbility();
+                    bool inPlace = auto != null
+                        && auto.Range == Kingmaker.UnitLogic.Abilities.Blueprints.AbilityRange.Personal;
+                    if (!inPlace)
                     {
-                        Tts.Speak(Loc.T("combat.cant_move_and_act"), interrupt: true);
-                        return InteractOutcome.RefusedSpoken; // no path computed, nothing to cancel
+                        float reach; bool needLos; string tooFarKey;
+                        if (auto != null)
+                        {
+                            reach = auto.GetApproachDistance(_unit);
+                            // Same LOS rule the deliver command applies (UnitUseAbility: LOS unless
+                            // the ability opts out) — matches the touch-charge branch above.
+                            needLos = auto.Blueprint.GetComponent<
+                                Kingmaker.UnitLogic.Abilities.Components.TargetCheckers.ILineOfSightIgnore>() == null;
+                            tooFarKey = "combat.too_far_to_cast";
+                        }
+                        else
+                        {
+                            reach = UnitAttack.GetApproachRadius(attacker.GetFirstWeapon(), attacker, _unit);
+                            // UnitAttack ALWAYS requires line of sight (its ctor sets NeedLoS) — check
+                            // reach and compute the approach the same way, so a ranged target behind a
+                            // wall either gets a path to a firing position or an honest refusal (a
+                            // sightless path made the command give up on the spot and auto-end the
+                            // turn — the Camellia/centipede repro).
+                            needLos = true;
+                            tooFarKey = "combat.too_far_to_attack";
+                        }
+                        bool inReach = UnitCommand.IsUnitCloseEnough(_unit.Position, attacker.Position,
+                            attacker.EyePosition, reach, needLOS: needLos, ignoreBlockerRadius: 0f);
+                        // Out of reach + no time for both the walk and the swing (surprise round,
+                        // staggered, standard already spent): refuse with the action-economy reason.
+                        if (!inReach && CombatMode.MoveThenActBlocked(attacker))
+                        {
+                            Tts.Speak(Loc.T("combat.cant_move_and_act"), interrupt: true);
+                            return InteractOutcome.RefusedSpoken; // no path computed, nothing to cancel
+                        }
+                        if (!inReach
+                            && !(CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange, needLOS: needLos)
+                                 && walk <= moveRange))
+                        {
+                            CombatMode.CancelPathReservation(); // no command follows the computed path
+                            Tts.Speak(Loc.T(tooFarKey), interrupt: true);
+                            return InteractOutcome.RefusedSpoken; // no command issued; the unit stays put
+                        }
+                        // In reach: no path was computed, so drop any stale reservations before issuing.
+                        if (inReach) CombatMode.CancelPathReservation();
                     }
-                    if (!inReach
-                        && !(CombatMode.TryApproach(_unit.Position, reach, out float walk, out float moveRange, needLOS: true)
-                             && walk <= moveRange))
-                    {
-                        CombatMode.CancelPathReservation(); // no command follows the computed path
-                        Tts.Speak(Loc.T("combat.too_far_to_attack"), interrupt: true);
-                        return InteractOutcome.RefusedSpoken; // no command issued; the unit stays put
-                    }
-                    // In reach: no path was computed, so drop any stale reservations before issuing.
-                    if (inReach) CombatMode.CancelPathReservation();
                 }
             }
             bool started = new ClickUnitHandler().OnClick(view.gameObject, view.transform.position, 0);

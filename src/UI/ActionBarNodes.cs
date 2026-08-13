@@ -37,10 +37,16 @@ namespace WrathAccess.UI
                     }, live: true, kind: AnnouncementKinds.Value),
                     // Resource count for non-toggles (uses / casts / charges) — read at focus time.
                     new NodeAnnouncement(() => ResourceText(slot()), kind: AnnouncementKinds.Value),
+                    // The auto-use marker (the sighted slot's corner icon): this ability is the unit's
+                    // DEFAULT ATTACK — left-clicking/interacting with an enemy casts it instead of
+                    // swinging the weapon. Toggled by Backspace (the sighted right-click).
+                    new NodeAnnouncement(() => (slot()?.IsAutoUse ?? false) ? Loc.T("actionbar.auto_use") : null,
+                        kind: AnnouncementKinds.Selected),
                     GraphNodes.DisabledPart(enabled), // live (mounted Charge becoming usable announces)
                 },
                 SearchText = () => slot()?.GetTitle() ?? "",
                 OnActivate = () => Activate(vm),
+                OnSecondary = () => ToggleAutoUse(vm),
                 OnTooltip = () =>
                 {
                     var tpl = slot()?.GetTooltipTemplate();
@@ -82,6 +88,27 @@ namespace WrathAccess.UI
             if (s is MechanicActionBarSlotItem) return "charge";
             if (s is MechanicActionBarSlotAbility) return "use";
             return null;
+        }
+
+        // Backspace = the sighted plain right-click (ActionBarSlotPCView.OnRightClick →
+        // OnSupportClick → MechanicActionBarSlot.OnAutoUseToggle): set/clear this ability as the
+        // unit's default attack. The slot subclasses gate on IsSuitableForAutoUse and silently
+        // no-op otherwise — detect via the marker state and speak the result either way (a dead
+        // key would read as broken).
+        private static void ToggleAutoUse(ActionBarSlotVM vm)
+        {
+            var s = vm?.MechanicActionBarSlot;
+            if (s == null) return;
+            bool was = s.IsAutoUse;
+            vm.OnSupportClick();
+            bool now = s.IsAutoUse;
+            if (now == was)
+            {
+                Tts.Speak(Loc.T("actionbar.auto_use_refused"), interrupt: true);
+                return;
+            }
+            Tts.Speak(Loc.T(now ? "actionbar.auto_use_set" : "actionbar.auto_use_cleared",
+                new { name = s.GetTitle() }), interrupt: true);
         }
 
         private static void Activate(ActionBarSlotVM vm)

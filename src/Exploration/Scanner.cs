@@ -147,6 +147,19 @@ namespace WrathAccess.Exploration
             DoCycleReview(group, dir);
         }
 
+        /// <summary>Ping the review target (Semicolon): probe sight + route from the movement cursor
+        /// to the reviewed thing and play the matching cue — blocked sight, sighted-but-unreachable,
+        /// route-around, or straight line (PathProbe). Sound-only; the cycles' spoken line already
+        /// carries name/bearing/distance.</summary>
+        public static void PingReview()
+        {
+            if (!Active) return;
+            var sel = Selected;
+            if (sel == null) { Speak(Loc.T("scan.no_item")); return; }
+            var overlay = Overlays.OverlayManager.ActiveOverlay ?? Overlays.OverlaySettingsRegistry.DefaultOverlay;
+            overlay?.Get<Overlays.SonarSystem>()?.PlayPathCue(sel, ScanFrom);
+        }
+
         /// <summary>Cycle the review cursor through the CURRENT ROOM's exits (V / Shift+V): the room
         /// map's geometric openings to neighbouring rooms, plus door and area-transition items in this
         /// room (a closed door cuts the navmesh, so the door IS the exit there; transitions sit where
@@ -601,7 +614,7 @@ namespace WrathAccess.Exploration
         {
             if (item == null) return;
             var overlay = Overlays.OverlayManager.ActiveOverlay ?? Overlays.OverlaySettingsRegistry.DefaultOverlay;
-            overlay?.Get<Overlays.SonarSystem>()?.PlayReview(item, ScanFrom);
+            overlay?.Get<Overlays.SonarSystem>()?.PlayPathCue(item, ScanFrom);
         }
 
         // Point the scanner's browse position at this item so PageUp/Down continues from the review target

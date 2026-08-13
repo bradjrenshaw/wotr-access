@@ -30,8 +30,19 @@ namespace WrathAccess.Exploration.Overlays
 
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
-            cat.Add(new WrathAccess.Settings.ChoiceSetting("review_sound", "Review cursor sound",
-                ReviewSoundChoices(), ReviewSoundDefault(), "overlay.sonar.review_sound"));
+            // The review-cursor sounds, one per path-probe outcome (was a single stem dropdown):
+            // each outcome's sound is user-pickable from the root wavs, Silent mutes that outcome.
+            var review = new WrathAccess.Settings.CategorySetting("review_sounds", "Review cursor sounds",
+                includeInPath: true, localizationKey: "overlay.sonar.review_sounds");
+            review.Add(new WrathAccess.Settings.ChoiceSetting("straight", "Straight line",
+                ReviewSoundChoices(), StemDefault("review_straight"), "overlay.sonar.review.straight"));
+            review.Add(new WrathAccess.Settings.ChoiceSetting("path", "Path around",
+                ReviewSoundChoices(), StemDefault("review_path"), "overlay.sonar.review.path"));
+            review.Add(new WrathAccess.Settings.ChoiceSetting("unreachable", "Unreachable",
+                ReviewSoundChoices(), StemDefault("review_unreachable"), "overlay.sonar.review.unreachable"));
+            review.Add(new WrathAccess.Settings.ChoiceSetting("los", "Blocked sight",
+                ReviewSoundChoices(), StemDefault("review_los"), "overlay.sonar.review.los"));
+            cat.Add(review);
             cat.Add(new WrathAccess.Settings.IntSetting("ref_distance", "Reference distance (feet)", 10, 1, 60, 1, "overlay.sonar.ref_distance"));
             cat.Add(new WrathAccess.Settings.IntSetting("max_distance", "Maximum distance (feet)", 40, 10, 120, 5, "overlay.sonar.max_distance"));
             cat.Add(new WrathAccess.Settings.IntSetting("gap_min", "Minimum ping gap (ms)", 100, 30, 400, 10, "overlay.sonar.gap_min"));
@@ -62,25 +73,32 @@ namespace WrathAccess.Exploration.Overlays
             return choices;
         }
 
-        private static string ReviewSoundDefault()
+        // A per-outcome default: the shipped wav's stem when it exists, else Silent.
+        private static string StemDefault(string stem)
         {
-            try { if (File.Exists(Path.Combine(OverlayAudio.Dir, "review.wav"))) return "review"; }
+            try { if (File.Exists(Path.Combine(OverlayAudio.Dir, stem + ".wav"))) return stem; }
             catch { }
             return "silent";
         }
 
-        /// <summary>The review-cursor ping (the scanner's selection landing): the chosen root-level
-        /// sound positioned at the reviewed thing — same distance/pan model as the sweep, relative to
-        /// the given reference (the movement cursor). NOT gated on Enabled: it's selection feedback,
-        /// not part of the sweep; pick Silent to turn it off.</summary>
-        public void PlayReview(ScanItem item, Vector3 from)
+        /// <summary>The review ping (cycle/scanner landings and the explicit Semicolon ping): probe
+        /// sight + route from the reference to the reviewed thing and play the user's sound for the
+        /// outcome — blocked sight / sighted-but-unreachable / route-around / straight line —
+        /// positioned at the thing, same distance/pan model as the sweep, relative to the given
+        /// reference (the movement cursor; anchored there so it does NOT chase it). NOT gated on
+        /// Enabled: it's selection feedback, not part of the sweep; pick Silent per outcome to mute.</summary>
+        public void PlayPathCue(ScanItem item, Vector3 from)
         {
             if (item == null) return;
-            var stem = Settings?.Get<WrathAccess.Settings.ChoiceSetting>("review_sound")?.ValueId;
+            var info = PathProbe.Probe(from, item.Position);
+            string outcome = !info.HasLos ? "los"
+                : !info.HasPath ? "unreachable"
+                : info.IsStraight ? "straight"
+                : "path";
+            var stem = Settings?.Get<WrathAccess.Settings.CategorySetting>("review_sounds")
+                ?.Get<WrathAccess.Settings.ChoiceSetting>(outcome)?.ValueId
+                ?? "review_" + outcome; // no settings registered (shouldn't happen) → shipped default
             if (string.IsNullOrEmpty(stem) || stem == "silent") return;
-
-            // Anchored to the reference you reviewed from (the review cursor), so it does NOT chase the
-            // movement cursor — a deliberate "this thing, relative to where you looked" cue. One-shot.
             var np = item.NearestPoint(from);
             float dx = np.x - from.x, dz = np.z - from.z;
             float dist = Mathf.Sqrt(dx * dx + dz * dz);

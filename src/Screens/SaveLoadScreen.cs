@@ -36,6 +36,14 @@ namespace WrathAccess.Screens
                 : null;
         }
 
+        // Escape closes the window via the VM's own close contract (OnClose invokes the onClose the
+        // opener passed in — back to the main menu or the Esc menu, whichever spawned us).
+        public override IEnumerable<ElementAction> GetActions()
+        {
+            yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"),
+                _ => Vm()?.OnClose());
+        }
+
 
         public override void Build(GraphBuilder b)
         {

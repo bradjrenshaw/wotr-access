@@ -84,7 +84,7 @@ namespace WrathAccess.Exploration
             _selected = _cycle[_index];
             // Positional ping from the map cursor (same sonar voice as in-area review) + the readout.
             var overlay = Overlays.OverlayManager.ActiveOverlay ?? Overlays.OverlaySettingsRegistry.DefaultOverlay;
-            overlay?.Get<Overlays.SonarSystem>()?.PlayReview(_selected, from);
+            overlay?.Get<Overlays.SonarSystem>()?.PlayPathCue(_selected, from);
             Tts.Speak(_selected.Describe(from), interrupt: true);
         }
 

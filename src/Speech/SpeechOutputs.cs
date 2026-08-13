@@ -20,11 +20,10 @@ namespace WrathAccess.Speech
         public const string Clipboard = "clipboard";
 
         private static List<Choice> _choices;
-        // Synthesized per-output Prism params ({"backend": <name>}) — the handler contract passes a
-        // params subtree per speak; these stand in for the per-config backend setting that no longer
-        // exists. Cached: they're immutable and per-utterance allocation is off-limits.
-        private static readonly Dictionary<string, CategorySetting> _prismParams
-            = new Dictionary<string, CategorySetting>();
+        // Cached single-entry backend choice lists (feed the synthesized per-speak prism params in
+        // SpeechConfig — the wrapping settings are per-speak snapshots, but the lists are immutable).
+        private static readonly Dictionary<string, List<Choice>> _backendChoices
+            = new Dictionary<string, List<Choice>>();
 
         /// <summary>The pickable outputs, availability-filtered for this machine: Auto, then Prism's
         /// detected screen readers (SAPI-ish backends excluded — ours supersedes them), SAPI, Clipboard.
@@ -56,17 +55,12 @@ namespace WrathAccess.Speech
             return Auto; // auto = SpeechManager's detect-chain (prism first)
         }
 
-        /// <summary>The Prism params to pass for an output: a fixed backend pick for a named screen
-        /// reader, backend-auto for Auto, null for non-Prism outputs.</summary>
-        public static CategorySetting PrismParamsFor(string outputId)
+        /// <summary>The single-entry choice list for a backend pick ("auto" or a screen-reader name),
+        /// cached — <see cref="SpeechConfig"/> wraps it in a fresh per-speak ChoiceSetting.</summary>
+        public static List<Choice> BackendChoiceList(string backend)
         {
-            string backend = IsScreenReader(outputId) ? outputId : outputId == Auto ? "auto" : null;
-            if (backend == null) return null;
-            if (_prismParams.TryGetValue(backend, out var cached)) return cached;
-            var cat = new CategorySetting("prism", "Prism");
-            cat.Add(new ChoiceSetting("backend", "Backend",
-                new List<Choice> { new Choice(backend, backend) }, backend));
-            return _prismParams[backend] = cat;
+            if (_backendChoices.TryGetValue(backend, out var cached)) return cached;
+            return _backendChoices[backend] = new List<Choice> { new Choice(backend, backend) };
         }
 
         /// <summary>Map a legacy handler/backend pair (pre-refactor saved settings) to an output id.</summary>

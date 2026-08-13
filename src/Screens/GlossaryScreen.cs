@@ -51,6 +51,17 @@ namespace WrathAccess.Screens
             CueButton(b, "object_exit", () => SystemVolume("object"));
             b.EndGroup();
 
+            // The review path-ping cues (Semicolon on a review target): four mutually exclusive
+            // results of one sight+route probe — which one fires IS the information, so each entry
+            // carries its explanation as reference material, not just its name.
+            b.BeginGroup(ControlId.Structural("gloss:pathping"),
+                GraphNodes.Group(() => Loc.T("glossary.path_ping")));
+            PathCueButton(b, "review_straight");
+            PathCueButton(b, "review_path");
+            PathCueButton(b, "review_unreachable");
+            PathCueButton(b, "review_los");
+            b.EndGroup();
+
             b.BeginGroup(ControlId.Structural("gloss:sonar"),
                 GraphNodes.Group(() => Loc.T("glossary.sonar")));
             foreach (var cat in ScanTaxonomy.Categories) EmitCategory(b, cat);
@@ -67,6 +78,26 @@ namespace WrathAccess.Screens
                     () => WrathAccess.Audio.AudioEngines.NAudio.Play2D(
                         Path.Combine(OverlayAudio.Dir, stem + ".wav"), volume()),
                     sound: null));
+        }
+
+        // A path-ping cue button: name + spoken meaning, Enter plays it flat at the sonar volume —
+        // the same level the real ping uses right at the cursor. No UI click (it would mask the cue).
+        private static void PathCueButton(GraphBuilder b, string stem)
+        {
+            b.AddItem(ControlId.Structural("gloss:cue:" + stem),
+                new NodeVtable
+                {
+                    ControlType = ControlTypes.Button,
+                    Announcements = new List<NodeAnnouncement>
+                    {
+                        GraphNodes.LabelPart(() => Loc.T("glossary." + stem)),
+                        new NodeAnnouncement(() => Loc.T("glossary." + stem + ".desc"), live: false,
+                            kind: AnnouncementKinds.Value),
+                    },
+                    SearchText = () => Loc.T("glossary." + stem),
+                    OnActivate = () => WrathAccess.Audio.AudioEngines.NAudio.Play2D(
+                        Path.Combine(OverlayAudio.Dir, stem + ".wav"), SystemVolume("sonar")),
+                });
         }
 
         private static float SystemVolume(string sys)

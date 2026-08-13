@@ -25,10 +25,75 @@ namespace WrathAccess.Speech
         public string Label => "Prism";
         public string LocalizationKey => "speech.prism";
 
-        // No user-facing params: the backend is fixed by the OUTPUT the config picked (SpeechOutputs
-        // synthesizes the {"backend": name} params per speak). The old per-config Backend dropdown is
-        // gone — Prism is an engine now, not a choice.
-        public void BuildSettings(CategorySetting into) { }
+        // The backend itself is fixed by the OUTPUT the config picked (SpeechConfig synthesizes the
+        // "backend" param per speak; the old per-config Backend dropdown is gone — Prism is an engine,
+        // not a choice). These are the PER-CONFIG params applied at speak time, each gated on the
+        // bound backend's feature bits — OneCore honours all three; screen readers own their voice and
+        // rate and don't advertise the knobs, so the requests are skipped there. Defaults are the
+        // backends' own defaults (rate 50 = OneCore 1.0x, volume 100, voice untouched), so an
+        // untouched config sounds exactly as before.
+        public void BuildSettings(CategorySetting into)
+        {
+            into.Add(new IntSetting("rate", "Rate", 50, 0, 100, 5, "speech.prism.rate"));
+            into.Add(new IntSetting("volume", "Volume", 100, 0, 100, 5, "speech.prism.volume"));
+            into.Add(new ChoiceSetting("voice", "Voice", VoiceChoices(), "default", "speech.prism.voice"));
+        }
+
+        // All voices of every runtime-supported, voice-selectable Prism backend (OneCore in practice —
+        // SAPI-ish backends are excluded to match the outputs list; screen readers don't expose
+        // voices), deduped by name. "Default" = leave the backend's own voice untouched. Cached: the
+        // probe initializes real synth engines.
+        private static List<Settings.Choice> _voiceChoices;
+        private static List<Settings.Choice> VoiceChoices()
+        {
+            if (_voiceChoices != null) return _voiceChoices;
+            var choices = new List<Settings.Choice> { new Settings.Choice("default", "Default", "speech.voice.default") };
+            try
+            {
+                var ctx = PrismNative.Init(IntPtr.Zero);
+                if (ctx != IntPtr.Zero)
+                {
+                    try
+                    {
+                        int count = (int)PrismNative.RegistryCount(ctx).ToUInt64();
+                        for (int i = 0; i < count; i++)
+                        {
+                            var id = PrismNative.RegistryIdAt(ctx, (UIntPtr)(uint)i);
+                            var name = PrismNative.RegistryName(ctx, id);
+                            if (string.IsNullOrEmpty(name)
+                                || name.IndexOf("sapi", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+                            var backend = PrismNative.RegistryCreate(ctx, id);
+                            if (backend == IntPtr.Zero) continue;
+                            try
+                            {
+                                var features = (PrismNative.BackendFeatures)PrismNative.BackendGetFeatures(backend);
+                                if ((features & PrismNative.BackendFeatures.SupportedAtRuntime) == 0
+                                    || (features & PrismNative.BackendFeatures.SupportsSetVoice) == 0
+                                    || (features & PrismNative.BackendFeatures.SupportsCountVoices) == 0) continue;
+                                var initErr = PrismNative.BackendInitialize(backend);
+                                if (initErr != PrismNative.PrismError.Ok
+                                    && initErr != PrismNative.PrismError.AlreadyInitialized) continue;
+                                if (PrismNative.BackendCountVoices(backend, out var vc) != PrismNative.PrismError.Ok) continue;
+                                int voices = (int)vc.ToUInt64();
+                                for (int v = 0; v < voices; v++)
+                                {
+                                    var vn = PrismNative.BackendGetVoiceName(backend, (ulong)v);
+                                    if (string.IsNullOrEmpty(vn)) continue;
+                                    bool dup = false;
+                                    foreach (var c in choices) if (c.Id == vn) { dup = true; break; }
+                                    if (!dup) choices.Add(new Settings.Choice(vn, vn)); // voice product names — not translated
+                                }
+                            }
+                            finally { PrismNative.BackendFree(backend); }
+                        }
+                    }
+                    finally { PrismNative.Shutdown(ctx); }
+                }
+            }
+            catch (DllNotFoundException) { /* prism.dll missing — voice list stays Default-only */ }
+            catch (Exception ex) { Main.Log?.Warning("[speech] Prism voice enumeration failed: " + ex.Message); }
+            return _voiceChoices = choices;
+        }
 
         /// <summary>Enumerate prism's registry once and keep only backends whose engine is actually
         /// available on this machine (SupportedAtRuntime filters out the obviously-irrelevant, e.g.
@@ -149,21 +214,78 @@ namespace WrathAccess.Speech
         private void ApplyConfig(CategorySetting config)
         {
             var pref = config?.Get<ChoiceSetting>("backend")?.Current?.Id ?? AutoBackend;
-            if (pref == _currentBackend && _backend != IntPtr.Zero) return;
+            if (pref != _currentBackend || _backend == IntPtr.Zero)
+            {
+                var replacement = ResolveBackend(pref); // named if acquirable, else best; zero only if nothing works
+                if (replacement == IntPtr.Zero)
+                {
+                    Main.Log?.Error("[speech] PrismHandler: backend '" + pref + "' could not be acquired; keeping current backend.");
+                    _currentBackend = pref; // don't re-attempt the failed acquire on every utterance
+                    return;
+                }
+                if (_backend != IntPtr.Zero && _backend != replacement)
+                {
+                    try { PrismNative.BackendStop(_backend); } catch { }
+                    PrismNative.BackendFree(_backend);
+                }
+                SetActiveBackend(replacement, pref);
+            }
+            ApplyParams(config);
+        }
 
-            var replacement = ResolveBackend(pref); // named if acquirable, else best; zero only if nothing works
-            if (replacement == IntPtr.Zero)
+        // Last-applied params, value-diffed so repeated speaks with an unchanged config cost no native
+        // round-trips. Reset on backend rebind (a fresh backend starts at its own defaults).
+        private int _appliedRate = -1, _appliedVolume = -1;
+        private string _appliedVoice;
+
+        // Apply the config's rate/volume/voice to the bound backend, each gated on its feature bits —
+        // a screen reader that owns its own rate simply doesn't advertise the knob and the request is
+        // skipped. Voice matches by NAME at apply time (Prism voice ids are session-local indices).
+        private void ApplyParams(CategorySetting config)
+        {
+            if (_backend == IntPtr.Zero || config == null) return;
+            int rate = config.Get<IntSetting>("rate")?.Get() ?? 50;
+            int volume = config.Get<IntSetting>("volume")?.Get() ?? 100;
+            string voice = config.Get<ChoiceSetting>("voice")?.ValueId ?? "default";
+
+            if (rate != _appliedRate)
             {
-                Main.Log?.Error("[speech] PrismHandler: backend '" + pref + "' could not be acquired; keeping current backend.");
-                _currentBackend = pref; // don't re-attempt the failed acquire on every utterance
-                return;
+                if ((_backendFeatures & PrismNative.BackendFeatures.SupportsSetRate) != 0)
+                    try { PrismNative.BackendSetRate(_backend, rate / 100f); } catch { }
+                _appliedRate = rate;
             }
-            if (_backend != IntPtr.Zero && _backend != replacement)
+            if (volume != _appliedVolume)
             {
-                try { PrismNative.BackendStop(_backend); } catch { }
-                PrismNative.BackendFree(_backend);
+                if ((_backendFeatures & PrismNative.BackendFeatures.SupportsSetVolume) != 0)
+                    try { PrismNative.BackendSetVolume(_backend, volume / 100f); } catch { }
+                _appliedVolume = volume;
             }
-            SetActiveBackend(replacement, pref);
+            if (voice != _appliedVoice)
+            {
+                // "default" = leave the backend's own voice untouched (never force a pick).
+                if (voice != "default"
+                    && (_backendFeatures & PrismNative.BackendFeatures.SupportsSetVoice) != 0
+                    && (_backendFeatures & PrismNative.BackendFeatures.SupportsCountVoices) != 0)
+                    try { SetVoiceByName(voice); } catch { }
+                _appliedVoice = voice;
+            }
+        }
+
+        private void SetVoiceByName(string name)
+        {
+            if (PrismNative.BackendCountVoices(_backend, out var vc) != PrismNative.PrismError.Ok) return;
+            int count = (int)vc.ToUInt64();
+            for (int v = 0; v < count; v++)
+                if (PrismNative.BackendGetVoiceName(_backend, (ulong)v) == name)
+                {
+                    var err = PrismNative.BackendSetVoice(_backend, (UIntPtr)(ulong)v);
+                    if (err != PrismNative.PrismError.Ok)
+                        Main.Log?.Log("[speech] Prism set_voice '" + name + "' -> " + err);
+                    return;
+                }
+            // A voice picked for OneCore doesn't exist on e.g. NVDA — normal, keep the backend's own.
+            Main.Log?.Log("[speech] Prism voice '" + name + "' not found on backend '"
+                + (PrismNative.BackendName(_backend) ?? "?") + "'; keeping its current voice.");
         }
 
         public bool Speak(string text, bool interrupt, CategorySetting config)
@@ -219,10 +341,71 @@ namespace WrathAccess.Speech
             }
         }
 
-        // Prism's API has a SupportsSpeakToMemory feature flag, so a render path is possible later;
-        // the binding isn't ported yet.
-        public bool SupportsAudioRender => false;
-        public SpeechAudio RenderToAudio(string text, CategorySetting config) => null;
+        // Render-to-PCM (positional speech) rides prism_backend_speak_to_memory — OneCore implements
+        // it (synchronous, silence-trimmed float samples); screen readers don't. The property reflects
+        // the CURRENTLY bound backend (the render call itself re-applies the config first and returns
+        // null when that backend can't render, so callers fall back safely either way).
+        public bool SupportsAudioRender =>
+            _backend != IntPtr.Zero
+            && (_backendFeatures & PrismNative.BackendFeatures.SupportsSpeakToMemory) != 0;
+
+        public SpeechAudio RenderToAudio(string text, CategorySetting config)
+        {
+            ApplyConfig(config);
+            if (_backend == IntPtr.Zero
+                || (_backendFeatures & PrismNative.BackendFeatures.SupportsSpeakToMemory) == 0) return null;
+
+            // Accumulate defensively (the contract allows per-chunk delivery; OneCore sends one) and
+            // convert float [-1,1] to the 16-bit little-endian PCM SpeechAudio carries.
+            var chunks = new List<byte[]>();
+            int sampleRate = 0, channels = 0, totalBytes = 0;
+            PrismNative.AudioCallback cb = (userdata, samples, sampleCount, ch, sr) =>
+            {
+                int n = (int)sampleCount.ToUInt64();
+                if (n <= 0 || samples == IntPtr.Zero) return;
+                var floats = new float[n];
+                System.Runtime.InteropServices.Marshal.Copy(samples, floats, 0, n);
+                var pcm = new byte[n * 2];
+                for (int i = 0; i < n; i++)
+                {
+                    float f = floats[i];
+                    if (f > 1f) f = 1f; else if (f < -1f) f = -1f;
+                    short s = (short)(f * 32767f);
+                    pcm[2 * i] = (byte)(s & 0xFF);
+                    pcm[2 * i + 1] = (byte)((s >> 8) & 0xFF);
+                }
+                chunks.Add(pcm);
+                totalBytes += pcm.Length;
+                sampleRate = (int)sr.ToUInt64();
+                channels = (int)ch.ToUInt64();
+            };
+            try
+            {
+                var err = PrismNative.BackendSpeakToMemory(_backend, text, cb);
+                if (err != PrismNative.PrismError.Ok)
+                {
+                    Main.Log?.Log("[speech] Prism speak_to_memory -> " + err);
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Main.Log?.Error("[speech] Prism RenderToAudio failed: " + ex.Message);
+                return null;
+            }
+            finally { GC.KeepAlive(cb); }
+            if (totalBytes == 0 || sampleRate <= 0 || channels <= 0) return null;
+
+            byte[] all;
+            if (chunks.Count == 1) all = chunks[0];
+            else
+            {
+                all = new byte[totalBytes];
+                int off = 0;
+                foreach (var c in chunks) { Buffer.BlockCopy(c, 0, all, off, c.Length); off += c.Length; }
+            }
+            return new SpeechAudio { Pcm = all, SampleRate = sampleRate, Channels = channels, BitsPerSample = 16 };
+        }
 
         /// <summary>Build a ready-to-use backend for the preference — the named backend if it can be acquired,
         /// otherwise the best available (auto). Returns zero ONLY when nothing at all can be acquired. Does not
@@ -275,6 +458,7 @@ namespace WrathAccess.Speech
         {
             _backend = backend;
             _currentBackend = requested;
+            _appliedRate = _appliedVolume = -1; _appliedVoice = null; // fresh backend → re-apply params
             _backendFeatures = (PrismNative.BackendFeatures)PrismNative.BackendGetFeatures(_backend);
             Main.Log?.Log("[speech] PrismHandler backend acquired: " + (PrismNative.BackendName(_backend) ?? "<unknown>")
                 + " (requested=" + requested + ", features=0x" + ((ulong)_backendFeatures).ToString("X") + ")");

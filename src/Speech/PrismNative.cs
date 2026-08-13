@@ -40,6 +40,22 @@ namespace WrathAccess.Speech
             SupportsOutput = 1UL << 5,
             SupportsIsSpeaking = 1UL << 6,
             SupportsStop = 1UL << 7,
+            // Parameter knobs (prism.h bits 10-21). A backend advertises only what it implements —
+            // screen readers own their own voice/rate and don't expose these; OneCore does. (OneCore
+            // also advertises the pitch bits but its backend never implements set_pitch — upstream
+            // inaccuracy — so we don't surface pitch.)
+            SupportsSetVolume = 1UL << 10,
+            SupportsGetVolume = 1UL << 11,
+            SupportsSetRate = 1UL << 12,
+            SupportsGetRate = 1UL << 13,
+            SupportsSetPitch = 1UL << 14,
+            SupportsGetPitch = 1UL << 15,
+            SupportsRefreshVoices = 1UL << 16,
+            SupportsCountVoices = 1UL << 17,
+            SupportsGetVoiceName = 1UL << 18,
+            SupportsGetVoiceLanguage = 1UL << 19,
+            SupportsGetVoice = 1UL << 20,
+            SupportsSetVoice = 1UL << 21,
         }
 
         [DllImport(Dll, EntryPoint = "prism_init")]
@@ -95,6 +111,41 @@ namespace WrathAccess.Speech
 
         [DllImport(Dll, EntryPoint = "prism_backend_stop")]
         public static extern PrismError BackendStop(IntPtr backend);
+
+        // ---- parameter API (gate every call on the matching BackendFeatures bit) ----
+
+        [DllImport(Dll, EntryPoint = "prism_backend_set_volume")]
+        public static extern PrismError BackendSetVolume(IntPtr backend, float volume); // 0..1
+
+        [DllImport(Dll, EntryPoint = "prism_backend_set_rate")]
+        public static extern PrismError BackendSetRate(IntPtr backend, float rate); // 0..1 normalized
+
+        [DllImport(Dll, EntryPoint = "prism_backend_count_voices")]
+        public static extern PrismError BackendCountVoices(IntPtr backend, out UIntPtr count);
+
+        [DllImport(Dll, EntryPoint = "prism_backend_get_voice_name")]
+        private static extern PrismError BackendGetVoiceNameRaw(IntPtr backend, UIntPtr voiceId, out IntPtr name);
+
+        // Voice ids are session-local INDICES; the name string is borrowed — copy immediately.
+        public static string BackendGetVoiceName(IntPtr backend, ulong voiceId)
+            => BackendGetVoiceNameRaw(backend, (UIntPtr)voiceId, out var p) == PrismError.Ok ? Utf8FromPtr(p) : null;
+
+        [DllImport(Dll, EntryPoint = "prism_backend_set_voice")]
+        public static extern PrismError BackendSetVoice(IntPtr backend, UIntPtr voiceId);
+
+        /// <summary>prism_backend_speak_to_memory's sink: invoked synchronously (possibly once per
+        /// chunk) with FLOAT samples plus their format. The caller must keep the delegate alive
+        /// across the native call.</summary>
+        [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+        public delegate void AudioCallback(IntPtr userdata, IntPtr samples, UIntPtr sampleCount,
+            UIntPtr channels, UIntPtr sampleRate);
+
+        [DllImport(Dll, EntryPoint = "prism_backend_speak_to_memory", CallingConvention = CallingConvention.Cdecl)]
+        private static extern PrismError BackendSpeakToMemoryRaw(IntPtr backend, byte[] textUtf8,
+            AudioCallback callback, IntPtr userdata);
+
+        public static PrismError BackendSpeakToMemory(IntPtr backend, string text, AudioCallback callback)
+            => BackendSpeakToMemoryRaw(backend, Utf8(text), callback, IntPtr.Zero);
 
         private static byte[] Utf8(string s)
         {

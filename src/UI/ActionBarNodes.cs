@@ -40,7 +40,7 @@ namespace WrathAccess.UI
                     // The auto-use marker (the sighted slot's corner icon): this ability is the unit's
                     // DEFAULT ATTACK — left-clicking/interacting with an enemy casts it instead of
                     // swinging the weapon. Toggled by Backspace (the sighted right-click).
-                    new NodeAnnouncement(() => (slot()?.IsAutoUse ?? false) ? Loc.T("actionbar.auto_use") : null,
+                    new NodeAnnouncement(() => IsDefaultAttack(slot()) ? Loc.T("actionbar.auto_use") : null,
                         kind: AnnouncementKinds.Selected),
                     GraphNodes.DisabledPart(enabled), // live (mounted Charge becoming usable announces)
                 },
@@ -90,18 +90,29 @@ namespace WrathAccess.UI
             return null;
         }
 
+        // Is this slot's ability the unit's CURRENT default attack? The slot's own IsAutoUse property
+        // is ELIGIBILITY, not state — it reads true for every at-will ability whether or not it's the
+        // pick (live-probed: true with Brain.AutoUseAbility null), it feeds the sighted UI's "can
+        // auto-use" affordance. The state is the brain's: Brain.IsAutoUseAbility(the slot's ability).
+        private static bool IsDefaultAttack(MechanicActionBarSlot s)
+        {
+            var ability = s != null ? Exploration.AbilityTargeting.AbilityOf(s) : null;
+            var unit = s?.Unit;
+            return ability != null && unit != null && (unit.Brain?.IsAutoUseAbility(ability) ?? false);
+        }
+
         // Backspace = the sighted plain right-click (ActionBarSlotPCView.OnRightClick →
         // OnSupportClick → MechanicActionBarSlot.OnAutoUseToggle): set/clear this ability as the
         // unit's default attack. The slot subclasses gate on IsSuitableForAutoUse and silently
-        // no-op otherwise — detect via the marker state and speak the result either way (a dead
+        // no-op otherwise — detect via the BRAIN state and speak the result either way (a dead
         // key would read as broken).
         private static void ToggleAutoUse(ActionBarSlotVM vm)
         {
             var s = vm?.MechanicActionBarSlot;
             if (s == null) return;
-            bool was = s.IsAutoUse;
+            bool was = IsDefaultAttack(s);
             vm.OnSupportClick();
-            bool now = s.IsAutoUse;
+            bool now = IsDefaultAttack(s);
             if (now == was)
             {
                 Tts.Speak(Loc.T("actionbar.auto_use_refused"), interrupt: true);

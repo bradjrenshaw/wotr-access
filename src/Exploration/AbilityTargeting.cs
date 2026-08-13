@@ -79,7 +79,7 @@ namespace WrathAccess.Exploration
             Begin(ability, slot.GetTitle()); // targeted: enter aim; player picks via cursor (Enter) / scanner (I)
         }
 
-        private static AbilityData AbilityOf(MechanicActionBarSlot slot)
+        internal static AbilityData AbilityOf(MechanicActionBarSlot slot)
         {
             if (slot is MechanicActionBarSlotAbility a) return a.Ability;
             if (slot is MechanicActionBarSlotSpell s) return s.Spell;

@@ -159,6 +159,7 @@ namespace WrathAccess.Screens
             Register(new KeyBindCaptureScreen()); // key-binding capture, layer 27 (raw-input passthrough)
             Register(new TutorialScreen()); // modal tutorial popup (movement/camera etc.), layer 28
             Register(new MessageModalScreen()); // generic confirm/message modal, layer 30
+            Register(new CounterWindowScreen()); // stack-amount picker (Split/Drop/Move + vendor quantities), layer 31
             Register(new InfoWindowScreen()); // game Info window (item Details / glossary info), layer 30
             Register(new InspectScreen()); // game unit Inspect window (bestiary readout), layer 30
             Register(new LockpickScreen()); // lock/disable-device tool-choice window (skill/+5/+10/destroy), layer 30

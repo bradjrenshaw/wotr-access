@@ -119,7 +119,9 @@ namespace WrathAccess.Screens
                     any = true;
                     var s = slot;
                     Func<string> type = () => s.TypeName.Value;
-                    Func<string> qty = () => s.Count.Value > 1 ? s.Count.Value.ToString() : "1";
+                    // LIVE entity count, not the VM's Count reactive — it lags the deal by a beat
+                    // (the post-sale readout spoke the pre-sale number).
+                    Func<string> qty = () => (s.Item.Value?.Count ?? 0) > 1 ? s.Item.Value.Count.ToString() : "1";
                     Func<string> price = () => Price(s, buy);
                     sheet.Row(
                         GraphNodes.VendorItem(s, side, new[]

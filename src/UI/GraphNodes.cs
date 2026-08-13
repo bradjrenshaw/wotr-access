@@ -522,11 +522,15 @@ namespace WrathAccess.UI
                 Announcements = anns,
                 SearchText = label,
                 // Synchronous feedback after Enter: the row with its REMAINING quantity ("Longsword, 4").
-                // Null once the slot empties — the row vanishes and the differ announces the item focus
-                // lands on instead.
-                StateText = () => slot.HasItem
-                    ? label() + ", " + (slot.Count.Value > 1 ? slot.Count.Value.ToString() : "1")
-                    : null,
+                // The count reads the LIVE ItemEntity — the VM's Count reactive updates a beat after
+                // the deal, so it spoke the pre-sale number (tester repro). Null once the slot
+                // empties — the row vanishes and the differ announces the landing item instead.
+                StateText = () =>
+                {
+                    var item = slot.Item.Value;
+                    if (item == null) return null;
+                    return label() + ", " + (item.Count > 1 ? item.Count.ToString() : "1");
+                },
                 // Enter = move ONE (the slot routes by its collection); it plays the game's own sound.
                 OnActivate = () => slot.VendorTryMove(state: false, all: false),
                 // Backspace = the per-item menu (move the whole stack / information).

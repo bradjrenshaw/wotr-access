@@ -37,7 +37,7 @@ namespace WrathAccess.Audio
     ///    direction. Gain is a magnitude, so it can't tell front from back — that's the next channel's job.
     ///  - <b>north/south → timbre.</b> Stereo can't pan front/back, so sources <i>behind</i> the listener get a
     ///    high-shelf CUT ramping to −10 dB at due-south — darker/quieter = behind, bright = ahead (the audiogame
-    ///    convention). A shelf, not a lowpass mix: our cues are bright and narrowband (review.wav has ~no energy
+    ///    convention). A shelf, not a lowpass mix: our cues are bright and narrowband (the review cues have ~no energy
     ///    below 1 kHz), so a lowpass erases them and a parallel dry/wet blend comb-filters; a shelf darkens
     ///    broadband sounds and merely quietens bright ones, minimum-phase, nothing ever disappears.
     ///

@@ -122,7 +122,7 @@ namespace WrathAccess.Screens
                 : (dir > 0 ? 0 : members.Count - 1); // first / restart → first (next) or last (prev)
             _reviewed = members[idx];
             var off = _reviewed.GetOffset();
-            PlayAt(off, "review.wav"); // positional cue at the member's location (relative to origin)
+            PlayAt(off, "review_unreachable.wav"); // positional cue at the member's location (relative to origin)
             Tts.Speak(_reviewed.Unit.CharacterName + ", " + PositionStr(off), interrupt: true);
         }
 

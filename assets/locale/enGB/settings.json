@@ -445,7 +445,6 @@
   "overlay.sonar.review.path": "Path around",
   "overlay.sonar.review.unreachable": "Unreachable",
   "overlay.sonar.review.los": "Blocked sight",
-  "sound.review": "Review",
   "sound.review_los": "Review: blocked sight",
   "sound.review_unreachable": "Review: unreachable",
   "sound.review_path": "Review: path around",

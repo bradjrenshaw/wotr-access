@@ -50,8 +50,8 @@ namespace WrathAccess.Exploration.Overlays
             cat.Add(new WrathAccess.Settings.IntSetting("rest", "Rest between sweeps (ms)", 400, 0, 1500, 50, "overlay.sonar.rest"));
         }
 
-        // The review-sound dropdown: the wavs at the audio root (assets/audio/*.wav — where
-        // review.wav lives) plus Silent. User-dropped files appear under their raw stem.
+        // The review-sound dropdown: the wavs at the audio root (assets/audio/*.wav — where the
+        // review_*.wav cues live) plus Silent. User-dropped files appear under their raw stem.
         private static System.Collections.Generic.List<WrathAccess.Settings.Choice> ReviewSoundChoices()
         {
             var choices = new System.Collections.Generic.List<WrathAccess.Settings.Choice>

@@ -117,6 +117,13 @@ namespace WrathAccess.Screens
                     ModSettingsScreen.BuildVerbosityDropdown(annRoot,
                         L("basic.menu_verbosity", "Menu verbosity")));
             b.AddItem(ControlId.Structural(k + "ann.scandetail"), BuildScanDetailDropdown());
+            // The direction style for every spoken bearing (compass 8/16, short forms, relative,
+            // clock face) — the SAME Setting the full screen's Scan announcements/Location node
+            // edits, rendered verbatim (its label + choices carry their own localization).
+            var dirType = ModSettings.GetSetting<ChoiceSetting>("proxy_announce.spatial.direction_type");
+            if (dirType != null)
+                b.AddItem(ControlId.Structural(k + "ann.dirtype"),
+                    ModSettingNodes.ChoiceSettingDropdown(dirType));
             var log = ModSettingsScreen.SystemDefaults("log");
             if (log != null)
                 b.AddItem(ControlId.Structural(k + "ann.logpreset"),

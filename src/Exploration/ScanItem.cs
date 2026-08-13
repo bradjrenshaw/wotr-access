@@ -123,25 +123,49 @@ namespace WrathAccess.Exploration
 
         /// <summary>Is <paramref name="point"/> inside this thing's footprint (XZ)? — "the cursor is on it",
         /// using the real shape (a wall's rectangle, not a circle). Things standing OFF the walkable
-        /// mesh (wall-hugging furniture — their ground is carved, so the strict footprint is a
-        /// millimetres-wide or unreachable target for the navmesh-locked cursor; the inn's personal
-        /// chest: nearest reachable point 0.69m from centre vs a 0.70m footprint) additionally count
-        /// as "at the cursor" within a small reach. Gated on the thing's CENTRE being off-mesh — the
-        /// closest-point test false-negatives on exactly the chest repro, because the mesh boundary
-        /// grazes the footprint edge inside the probe's snap tolerance. On-mesh things keep strict
-        /// edges: you can genuinely stand on them.</summary>
+        /// mesh (wall-hugging furniture, stall-top wares — their ground is carved, so the strict
+        /// footprint is a millimetres-wide or unreachable target for the navmesh-locked cursor)
+        /// additionally count as "at the cursor" within a reach that SCALES to the actual gap between
+        /// their footprint and the nearest walkable point (the inn's chest: 0.44m; the marketplace
+        /// jug on its stall: 0.73m — a fixed margin kept losing this game of inches), floored at
+        /// <see cref="AtReach"/>, capped at <see cref="MaxReach"/>, plus a small tolerance so
+        /// standing exactly at the nearest walkable spot always registers. Gated on the thing's
+        /// CENTRE being off-mesh — the closest-point test false-negatives on exactly the chest
+        /// repro, because the mesh boundary grazes the footprint edge inside the probe's snap
+        /// tolerance. On-mesh things keep strict edges: you can genuinely stand on them.</summary>
         public bool Contains(Vector3 point)
         {
             var np = NearestPoint(point);
             float dx = np.x - point.x, dz = np.z - point.z;
             float d2 = dx * dx + dz * dz;
             if (d2 < 1e-4f) return true;
-            if (d2 > AtReach * AtReach) return false;
-            return !NavmeshProbe.Sample(Position.x, Position.z, point.y).OnNavmesh;
+            if (d2 > MaxReach * MaxReach) return false; // beyond any possible expansion — skip the probe
+            float reach = OffMeshReach(point.y);        // cached; 0 = centre walkable, strict edges
+            return reach > 0f && d2 <= reach * reach;
         }
 
-        // How far past the footprint the cursor still counts as "at" an off-mesh thing (metres).
+        // Off-mesh reach floor / ceiling (metres past the footprint). The ceiling keeps a wildly
+        // misplaced marker from claiming a whole room; within it, "as close as the mesh allows" wins.
         private const float AtReach = 0.5f;
+        private const float MaxReach = 2f;
+
+        // The cached off-mesh expansion: 0 when the centre is on walkable ground, else the XZ gap
+        // from the footprint edge to the nearest walkable point (+0.15m tolerance), clamped to
+        // [AtReach, MaxReach]. Cached per position — map objects never move (one probe each,
+        // lazily); a unit that wanders recomputes when it has moved.
+        private float _offMeshReach = -1f;
+        private Vector3 _offMeshReachAt;
+        private float OffMeshReach(float seedY)
+        {
+            var pos = Position;
+            if (_offMeshReach >= 0f && (pos - _offMeshReachAt).sqrMagnitude < 0.06f) return _offMeshReach;
+            _offMeshReachAt = pos;
+            var s = NavmeshProbe.Sample(pos.x, pos.z, seedY);
+            if (s.OnNavmesh) return _offMeshReach = 0f;
+            float gx = pos.x - s.Point.x, gz = pos.z - s.Point.z;
+            float gap = Mathf.Sqrt(gx * gx + gz * gz);
+            return _offMeshReach = Mathf.Clamp(gap - Footprint + 0.15f, AtReach, MaxReach);
+        }
 
         /// <summary>
         /// The PRIMARY <see cref="ScanTaxonomy"/> node — the single, state-aware role this thing sounds as

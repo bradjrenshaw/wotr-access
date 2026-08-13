@@ -96,6 +96,13 @@ namespace WrathAccess.Exploration.Announce
         public SpatialPart(Vector3 from, Vector3 measureTo, Vector3 posTo)
         { _from = from; _measureTo = measureTo; _posTo = posTo; }
 
+        /// <summary>An EXPLICIT position query (K's cursor readout, the party list, the Point-context
+        /// idle announce): the spatial sub-toggles and the direction type apply, but NOT the part's
+        /// per-node "enabled" gate — position is these readouts' whole job, so they mute via their
+        /// own keys/systems, not the list-readout toggle.</summary>
+        public static string Text(string nodeKey, Vector3 from, Vector3 to)
+            => new SpatialPart(from, to, to).Render(new ScanAnnounceContext(nodeKey ?? "")).Resolve();
+
         public override string Key => "spatial";
 
         public override Message Render(ScanAnnounceContext ctx)

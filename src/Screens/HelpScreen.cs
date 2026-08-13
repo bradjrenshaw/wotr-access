@@ -45,7 +45,8 @@ namespace WrathAccess.Screens
                 GraphNodes.Button(() => Loc.T("menu.audio_glossary"), GlossaryScreen.Open));
         }
 
-        // Prefer the docs bundled inside the mod folder (Main.ModDir/docs); fall back to the hosted site.
+        // Prefer the docs bundled inside the mod folder (Main.ModDir/docs); fall back to the hosted
+        // site. Opened DETACHED (ExternalUrl) so Steam doesn't count the browser as part of the game.
         private static void OpenDocs()
         {
             Tts.Speak(Loc.T("menu.opening_docs"));
@@ -54,12 +55,12 @@ namespace WrathAccess.Screens
                 var local = string.IsNullOrEmpty(Main.ModDir) ? null : Path.Combine(Main.ModDir, "docs", "index.html");
                 if (local != null && File.Exists(local))
                 {
-                    Application.OpenURL(new Uri(local).AbsoluteUri); // file:/// → default browser
+                    ExternalUrl.Open(local); // plain path → shell association → default browser
                     return;
                 }
             }
             catch (Exception e) { Main.Log?.Error("Open local docs failed: " + e.Message); }
-            Application.OpenURL(DocsUrl);
+            ExternalUrl.Open(DocsUrl);
         }
     }
 }

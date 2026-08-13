@@ -5,9 +5,9 @@ namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
     /// The continuous-space lens: describes the exact point under the cursor — direction, distance, and
-    /// vertical offset from the player (<see cref="Geo.Relative"/>). Point context, so it pairs with a
-    /// free-gliding cursor; the tiled readout is <see cref="GridSystem"/>'s job. (A future "vertical"
-    /// toggle would need <c>Geo.Relative</c> decomposed; raw coordinates are toggleable now.)
+    /// vertical offset from the player, through the spatial announcement part (so the direction type
+    /// and the distance/height sub-toggles apply). Point context, so it pairs with a free-gliding
+    /// cursor; the tiled readout is <see cref="GridSystem"/>'s job.
     /// </summary>
     internal sealed class SpatialSystem : OverlaySystem
     {
@@ -26,7 +26,7 @@ namespace WrathAccess.Exploration.Overlays
         public override IEnumerable<OverlayAnnouncement> Announce(OverlayContext ctx)
         {
             if (!Enabled || ctx.Want != AnnouncementContext.Point) yield break;
-            var text = Geo.Relative(ctx.Reference, ctx.Cursor);
+            var text = WrathAccess.Exploration.Announce.SpatialPart.Text(null, ctx.Reference, ctx.Cursor);
             if (Bool("raw", false)) text += "; " + Geo.Raw(ctx.Cursor);
             yield return new OverlayAnnouncement(AnnouncementContext.Point, Message.Raw(text));
         }

@@ -62,11 +62,12 @@ namespace WrathAccess.Screens
             => b.AddItem(ControlId.Structural("modmenu:" + labelKey),
                 GraphNodes.Button(() => Loc.T(labelKey), activate, position: GraphNodes.Position(index, EntryCount)));
 
-        // An external link: open it in the browser and say so, since the result is off-screen.
+        // An external link: open it in the browser (detached — see ExternalUrl) and say so, since the
+        // result is off-screen.
         private static void Link(GraphBuilder b, int index, string labelKey, string url, string speakKey)
             => Item(b, index, labelKey, () =>
             {
-                Application.OpenURL(url);
+                ExternalUrl.Open(url);
                 Tts.Speak(Loc.T(speakKey));
             });
     }

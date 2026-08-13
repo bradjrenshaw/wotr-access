@@ -776,7 +776,9 @@ namespace WrathAccess.Exploration
         private static void SpeakCursor()
         {
             if (!Cursor.Has) { Speak(Loc.T("scan.no_cursor")); return; }
-            Speak(Loc.T("scan.cursor_at", new { rel = Geo.Relative(Reference, Cursor.Position.Value) }));
+            // Through the spatial announcement part: the direction type + distance/height/coordinate
+            // sub-toggles all apply (coordinates now ride their debug toggle instead of always speaking).
+            Speak(Loc.T("scan.cursor_at", new { rel = Announce.SpatialPart.Text(null, Reference, Cursor.Position.Value) }));
         }
 
         // "Where am I": the game's own display name for the current location (AreaDisplayName prefers
@@ -840,7 +842,8 @@ namespace WrathAccess.Exploration
             var refPos = Reference;
             var parts = new List<string>();
             foreach (var m in members)
-                if (m != null) parts.Add(m.CharacterName + ", " + Geo.Relative(refPos, Geo.Live(m)));
+                if (m != null) parts.Add(m.CharacterName + ", "
+                    + Announce.SpatialPart.Text(ScanTaxonomy.UnitsParty, refPos, Geo.Live(m)));
             Speak(Loc.T("scan.party", new { list = string.Join("; ", parts.ToArray()) }));
         }
 

@@ -77,6 +77,26 @@ namespace WrathAccess.Exploration.Announce
                 }
             }
 
+            // The direction TYPE for every spoken bearing — a global spatial option beside the
+            // sub-toggles: world-aligned compass in 8/16 winds (full words or spoken-letter short
+            // forms like "n ne"), or egocentric styles measured from the listener's facing (relative
+            // words / clock face) for players who turn away from north. Rendered by Directions,
+            // consumed by Geo.Bearing — so every readout in the mod follows the one choice.
+            var spatialCat = ModSettingsRegistry.EnsureCategory(
+                "proxy_announce.spatial", "Scan announcements/Location", "/proxyann.spatial");
+            if (spatialCat.GetByKey("direction_type") == null)
+                spatialCat.Add(new ChoiceSetting("direction_type", "Direction type",
+                    new List<Choice>
+                    {
+                        new Choice("compass8", "Compass, 8 directions", "choice.dir.compass8"),
+                        new Choice("compass16", "Compass, 16 directions", "choice.dir.compass16"),
+                        new Choice("compass8short", "Compass, 8 directions, short", "choice.dir.compass8short"),
+                        new Choice("compass16short", "Compass, 16 directions, short", "choice.dir.compass16short"),
+                        new Choice("relative4", "Relative, 4 directions", "choice.dir.relative4"),
+                        new Choice("relative8", "Relative, 8 directions", "choice.dir.relative8"),
+                        new Choice("clock", "Clock face", "choice.dir.clock"),
+                    }, Directions.DefaultMode, "proxyann.direction_type"));
+
             // Per-entity-type overrides: a category per taxonomy node, holding one tri-state per part its
             // class offers (the whole-part "enabled", keyed by the part, labelled with the part). Only the
             // enabled flag is per-node; spatial sub-toggles stay global. node→category→global resolution

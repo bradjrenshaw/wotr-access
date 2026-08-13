@@ -8,8 +8,8 @@ namespace WrathAccess.Exploration
     /// Spatial readout helpers for the in-area scene. Distance uses the game's own rules metric
     /// (<see cref="GeometryUtils.MechanicsDistance"/> — horizontal, but counts large vertical gaps at
     /// half, so flying/upper-level things read correctly); bearing is the flat XZ compass (0°=N=+Z,
-    /// 90°=E=+X). See the exploration-world-model memory. The raw position vector is appended for now
-    /// (testing aid — likely trimmed later).
+    /// 90°=E=+X), rendered in the user's chosen direction style (<see cref="Directions"/>). See the
+    /// exploration-world-model memory. Composed spatial readouts live in Announce.SpatialPart.
     /// </summary>
     internal static class Geo
     {
@@ -42,29 +42,23 @@ namespace WrathAccess.Exploration
         // metres/feet conversion (unlike the in-area scene above). For world-map readouts only.
         public static string MilesStr(float units) => Loc.T("geo.miles", new { miles = Mathf.RoundToInt(units) });
 
-        private static readonly string[] Compass =
-            { "north", "northeast", "east", "southeast", "south", "southwest", "west", "northwest" };
-
         /// <summary>True when the two points coincide on the XZ plane (the "here" case).</summary>
         public static bool IsHere(Vector3 from, Vector3 to)
             => Mathf.Abs(to.x - from.x) < 0.05f && Mathf.Abs(to.z - from.z) < 0.05f;
 
+        /// <summary>The direction of <paramref name="to"/> from <paramref name="from"/>, rendered in
+        /// the user's chosen direction style (see <see cref="Directions"/>).</summary>
         public static string Bearing(Vector3 from, Vector3 to)
         {
-            float dx = to.x - from.x, dz = to.z - from.z;
             if (IsHere(from, to)) return Loc.T("geo.here");
+            float dx = to.x - from.x, dz = to.z - from.z;
             float deg = Mathf.Atan2(dx, dz) * Mathf.Rad2Deg; // 0 = +Z (north), 90 = +X (east)
-            if (deg < 0f) deg += 360f;
-            return Loc.T("geo." + Compass[Mathf.RoundToInt(deg / 45f) % 8]);
+            return Directions.Word(deg);
         }
 
-        /// <summary>A world yaw (degrees, 0 = north = +Z, 90 = east) as its 8-point compass word — for
-        /// FACINGS (camera, future cursor orientation), where Bearing's two-point form doesn't fit.</summary>
-        public static string DirectionWord(float deg)
-        {
-            deg %= 360f; if (deg < 0f) deg += 360f;
-            return Loc.T("geo." + Compass[Mathf.RoundToInt(deg / 45f) % 8]);
-        }
+        /// <summary>A world yaw (degrees, 0 = north = +Z, 90 = east) as a compass word — for FACINGS
+        /// (the listener, the camera), which are absolute (the relative/clock styles don't apply).</summary>
+        public static string DirectionWord(float deg) => Directions.CompassWord(deg);
 
         /// <summary>"above"/"below" only past the game's own 1.5 height threshold; else null.</summary>
         public static string Vertical(Vector3 from, Vector3 to)
@@ -76,20 +70,5 @@ namespace WrathAccess.Exploration
         }
 
         public static string Raw(Vector3 v) => Loc.T("geo.pos", new { x = v.x.ToString("0.0"), y = v.y.ToString("0.0"), z = v.z.ToString("0.0") });
-
-        /// <summary>"&lt;bearing&gt;, &lt;dist&gt; ft[, above/below], pos x y z" relative to a reference point.</summary>
-        public static string Relative(Vector3 from, Vector3 to) => Relative(from, to, to);
-
-        /// <summary>As <see cref="Relative(Vector3,Vector3)"/>, but bearing/distance/verticality measure to
-        /// <paramref name="measureTo"/> (the nearest part of a sized thing) while the reported "pos x y z"
-        /// stays <paramref name="posTo"/> (its centre — where the cursor snaps).</summary>
-        public static string Relative(Vector3 from, Vector3 measureTo, Vector3 posTo)
-        {
-            if (IsHere(from, measureTo)) return Loc.T("geo.here") + ", " + Raw(posTo);
-            var s = Bearing(from, measureTo) + ", " + FeetStr(Distance(from, measureTo));
-            var vert = Vertical(from, measureTo);
-            if (vert != null) s += ", " + vert;
-            return s + ", " + Raw(posTo);
-        }
     }
 }

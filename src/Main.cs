@@ -170,6 +170,7 @@ namespace WrathAccess
             }
             ScreenManager.Tick();
             WrathAccess.UI.Navigation.TickTypeahead(); // typed letters → type-ahead search (after dispatch)
+            ControlState.Tick(); // settle the debounced control state before its consumers below
             TickPause(); // announce the game's pause state whenever it changes (ours OR the game's own)
             TickControl(); // chime when a cutscene/scripted event takes or returns control of the party
             WrathAccess.Exploration.CombatMode.TickTurn(); // announce whose turn it is in turn-based combat
@@ -223,31 +224,24 @@ namespace WrathAccess
             _wasPaused = paused;
         }
 
-        // Chime when control of the party is lost to / regained from a cutscene or scripted event. The
-        // authoritative signal is Game.Instance.CutsceneLock.Active (set by the cutscene "Lock Controls"
-        // command) — the same flag the game uses to hide the HUD and stop camera-follow. Gated to being in a
-        // local area (menus leave the lock false, so opening windows never chimes); nullable baseline so we
-        // don't chime on the first sample or across area loads (entering mid-intro-cutscene chimes "gained"
-        // only when it ends).
-        private static bool _hadControl = true;   // last CHIMED state; default in control, so losing it (intro cutscene) chimes
-        private static bool _pendingControl = true;
-        private static float _pendingSince;
-        private const float ChimeDebounceSeconds = 0.5f; // a state must hold this long before we chime it
+        // Chime when control of the party is lost to / regained from a cutscene or scripted event —
+        // reacting to ControlState.Settled (the shared debounce that rides out the between-beat
+        // ClickEventsController blips). Gated to being in a local area (menus never chime). Nullable
+        // baseline SEEDED FROM THE RAW state on (re-)entry: across an area load the settled value can
+        // still be catching up to the already-true raw one, and a settled-value baseline would chime a
+        // phantom "gained" on every load. Entering mid-intro-cutscene thus baselines to no-control
+        // silently and chimes "gained" only when the cutscene ends.
+        private static bool? _hadControl; // last CHIMED state; null = re-baseline on next in-game frame
         private static void TickControl()
         {
             var game = Game.Instance;
-            if (game == null || game.RootUiContext == null || !game.RootUiContext.IsInGame) { _hadControl = true; _pendingControl = true; return; }
-            bool hasControl = ControlState.HasControl; // single source of truth — see ControlState
-            float now = UnityEngine.Time.unscaledTime;
-
-            // Debounce the chime: only act on a state held for ChimeDebounceSeconds, so the brief
-            // ClickEventsController blips between cutscene beats don't replay the chime (the audio stutter).
-            if (hasControl != _pendingControl) { _pendingControl = hasControl; _pendingSince = now; }
-            if (_hadControl != _pendingControl && now - _pendingSince >= ChimeDebounceSeconds)
-            {
-                WrathAccess.Audio.AudioEngines.NAudio.Play2D(System.IO.Path.Combine(OverlayAudio.Dir, _pendingControl ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
-                _hadControl = _pendingControl;
-            }
+            if (game == null || game.RootUiContext == null || !game.RootUiContext.IsInGame) { _hadControl = null; return; }
+            if (!_hadControl.HasValue) { _hadControl = ControlState.HasControl; return; }
+            bool settled = ControlState.Settled;
+            if (settled == _hadControl.Value) return;
+            WrathAccess.Audio.AudioEngines.NAudio.Play2D(System.IO.Path.Combine(OverlayAudio.Dir,
+                settled ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
+            _hadControl = settled;
         }
 
         // Game modes where a quick-save is sensible — normal play, paused, world/global map, kingdom, and

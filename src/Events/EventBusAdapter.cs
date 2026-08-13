@@ -106,14 +106,23 @@ namespace WrathAccess.Events
         {
             if (_frameAdds.Count == 0 && _frameRemoves.Count == 0) return;
 
+            // While the player has no (settled) control — cutscene, dialogue, rest — buff churn
+            // updates the active set SILENTLY: cutscene beats holster/swap weapons and re-materialize
+            // units, detaching and re-attaching restriction-bound activatable buffs (the repeated
+            // "gained/lost Power Attack" repro), state the player can't act on anyway. Tracking it
+            // mutely (rather than dropping it at capture) keeps _active accurate, so the first change
+            // AFTER control returns is judged against true state. Settled, not raw: the add half of a
+            // churn pair can land on a between-beat controller blip.
+            bool silent = !ControlState.Settled;
+
             // Gains: added this frame and not already active (HashSet.Add is false for a dup/refresh).
             foreach (var kv in _frameAdds)
-                if (_active.Add(kv.Key))
+                if (_active.Add(kv.Key) && !silent)
                     EventDispatcher.Raise(new BuffGainedEvent(kv.Value));
 
             // Losses: removed this frame, was active, and NOT re-added this frame (a re-add = refresh).
             foreach (var kv in _frameRemoves)
-                if (!_frameAdds.ContainsKey(kv.Key) && _active.Remove(kv.Key))
+                if (!_frameAdds.ContainsKey(kv.Key) && _active.Remove(kv.Key) && !silent)
                     EventDispatcher.Raise(new BuffLostEvent(kv.Value));
 
             _frameAdds.Clear();

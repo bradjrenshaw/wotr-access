@@ -31,6 +31,7 @@ namespace WrathAccess.Exploration
         public const string UnitsParty = "units.party";
         public const string UnitsEnemies = "units.enemies";
         public const string UnitsNeutrals = "units.neutrals";
+        public const string UnitsBystanders = "units.bystanders";
         public const string Containers = "containers";
         public const string ContainersChest = "containers.chest";
         public const string ContainersCorpse = "containers.corpse";
@@ -112,10 +113,15 @@ namespace WrathAccess.Exploration
 
         static ScanTaxonomy()
         {
+            // Neutrals split by what awaits a click (ProxyUnit classifies live via the game's own
+            // SelectClickInteraction): NEUTRALS = a real conversation or scripted interaction;
+            // BYSTANDERS = a one-liner bark or nothing — background crowd, silent on the sonar by
+            // default (large groups otherwise clutter it).
             Cat("units", "Units", ScanClass.Unit, Silent,
                 Sub("party", "Party", "units-ally"),
                 Sub("enemies", "Enemies", "units-enemy"),
-                Sub("neutrals", "Neutrals", "units-neutral"));
+                Sub("neutrals", "Neutrals", "units-neutral"),
+                Sub("bystanders", "Bystanders", Silent));
 
             Cat("containers", "Containers", ScanClass.Object, "loot-generic",
                 Sub("chest", "Chests", "loot-chest"),

@@ -91,6 +91,7 @@ namespace WrathAccess.Screens
                 {
                     ScanToggle(b, k, "units.enemies", "basic.scan.enemies", "Enemy units");
                     ScanToggle(b, k, "units.neutrals", "basic.scan.neutrals", "Neutral units");
+                    ScanToggle(b, k, "units.bystanders", "taxonomy.units.bystanders", "Bystanders");
                     ScanToggle(b, k, "units.party", "basic.scan.party", "Ally units");
                     ScanToggle(b, k, "containers", "taxonomy.containers", "Containers");
                     ScanToggle(b, k, "doors", "taxonomy.doors", "Doors");

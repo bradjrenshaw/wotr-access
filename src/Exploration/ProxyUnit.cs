@@ -23,10 +23,10 @@ namespace WrathAccess.Exploration
 
         public override UnitEntityData TargetUnit => _unit; // ability targeting picks this unit
 
-        // Primary node: faction while alive (the scanner's Party/Enemies/Neutrals split); a dead unit
-        // with loot is primarily a corpse-container (its relevance is the loot — the sonar follows the
-        // user's corpse sound, while Categories keeps it listed under its faction too); a dead empty
-        // unit drops out of the taxonomy (silent, no longer relevant).
+        // Primary node: faction while alive (the scanner's Party/Enemies/Neutrals/Bystanders split);
+        // a dead unit with loot is primarily a corpse-container (its relevance is the loot — the
+        // sonar follows the user's corpse sound, while Categories keeps it listed under its faction
+        // too); a dead empty unit drops out of the taxonomy (silent, no longer relevant).
         public override string Primary
         {
             get
@@ -34,8 +34,86 @@ namespace WrathAccess.Exploration
                 if (_unit.State.IsDead)
                     return _unit.IsDeadAndHasLoot ? ScanTaxonomy.ContainersCorpse : null;
                 return _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
-                    : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : ScanTaxonomy.UnitsNeutrals;
+                    : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : NeutralNode();
             }
+        }
+
+        // The neutral split: NEUTRALS have a real conversation or scripted interaction behind a
+        // click; BYSTANDERS just bark a one-liner, or nothing at all. Asks the game's own
+        // click-interaction selection (the same source InteractionKey reads) but WITHOUT the
+        // combat/dead gates, so an NPC doesn't demote to bystander mid-fight. Conditions apply —
+        // an NPC whose dialogue unlocks at a quest stage upgrades itself when it does. Cached
+        // briefly: Primary runs per sonar ping and the classification walks blueprint conditions.
+        private bool _significant;
+        private float _significantAt = float.NegativeInfinity;
+        private string NeutralNode()
+            => IsSignificantNeutral() ? ScanTaxonomy.UnitsNeutrals : ScanTaxonomy.UnitsBystanders;
+        private bool IsSignificantNeutral()
+        {
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _significantAt < 1.5f) return _significant;
+            _significantAt = now;
+            _significant = false;
+            try
+            {
+                var part = _unit.Get<Kingmaker.UnitLogic.Parts.UnitPartInteractions>();
+                var initiator = Kingmaker.Game.Instance?.Player?.MainCharacter.Value;
+                if (part == null || initiator == null) return false;
+                var inter = part.SelectClickInteraction(initiator);
+                if (inter == null) return false;
+                var src = inter is Kingmaker.UnitLogic.Interaction.SpawnerInteractionPart.Wrapper w
+                    ? (object)w.Source
+                    : inter is Kingmaker.AreaLogic.Etudes.EtudeBracketOverrideUnitInteraction e ? e.Source : inter;
+                _significant = ClassifySignificant(src);
+            }
+            catch { }
+            return _significant;
+        }
+
+        // The interaction SOURCE's verdict. Bark classes are barks outright; Actions-flavored
+        // interactions get their ActionList WALKED — the crowd idiom is a RandomAction whose
+        // weighted branches each ShowBark (a random one-liner pool, live-verified: Citizen/Peasant/
+        // Noble Survivors, Crusaders) and that's still just a bark. An empty dialog degrades to its
+        // NoDialogActions (mirroring DialogOnClick.IsAvailable/Interact).
+        private static bool ClassifySignificant(object src)
+        {
+            var name = src.GetType().Name;
+            if (name.Contains("Bark")) return false;
+            if (src is Kingmaker.UnitLogic.Interaction.SpawnerInteractionActions sia)
+                return !OnlyBarks(sia.Actions?.Get()?.Actions);
+            if (src is Kingmaker.UnitLogic.Interaction.ActionsOnClick aoc)
+                return !OnlyBarks(aoc.Actions);
+            if (src is Kingmaker.UnitLogic.Interaction.DialogOnClick doc
+                && (doc.Dialog == null || doc.Dialog.FirstCue.Cues.Count == 0))
+                return !OnlyBarks(doc.NoDialogActions);
+            return true; // real dialogs, companion overrides, anything unknown
+        }
+
+        // Is this action list PURE bark content — ShowBark leaves, possibly nested in RandomAction
+        // branches or Conditional arms? Any unrecognized action reads SIGNIFICANT (never bury a real
+        // script among the bystanders); a null/empty list carries no script at all.
+        private static bool OnlyBarks(Kingmaker.ElementsSystem.ActionList list)
+        {
+            if (list?.Actions == null) return true;
+            foreach (var a in list.Actions)
+            {
+                if (a == null) continue;
+                if (a is Kingmaker.Designers.EventConditionActionSystem.Actions.ShowBark) continue;
+                if (a is Kingmaker.Designers.EventConditionActionSystem.Actions.RandomAction ra)
+                {
+                    if (ra.Actions != null)
+                        foreach (var wa in ra.Actions) // ActionAndWeight (struct)
+                            if (!OnlyBarks(wa.Action)) return false;
+                    continue;
+                }
+                if (a is Kingmaker.Designers.EventConditionActionSystem.Actions.Conditional c)
+                {
+                    if (!OnlyBarks(c.IfTrue) || !OnlyBarks(c.IfFalse)) return false;
+                    continue;
+                }
+                return false; // unknown action type — treat as a real script (conservative)
+            }
+            return true;
         }
 
         // The unit's body radius (size-scaled) — what combat reach uses for edge-to-edge distance, so a
@@ -46,8 +124,8 @@ namespace WrathAccess.Exploration
         {
             get
             {
-                yield return _unit.IsPlayerFaction ? "units.party"
-                    : _unit.IsPlayersEnemy ? "units.enemies" : "units.neutrals";
+                yield return _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
+                    : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : NeutralNode();
                 // A lootable corpse is also a container (its faction stays its identity for browsing).
                 if (_unit.IsDeadAndHasLoot) yield return "containers.corpse";
             }
@@ -56,7 +134,7 @@ namespace WrathAccess.Exploration
         // Announce as the faction (stable) even when dead/looted — so a corpse reads "<name>, enemy,
         // dead", not as a container. (The sound Primary still flips to containers.corpse.)
         protected override string AnnounceNode => _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
-            : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : ScanTaxonomy.UnitsNeutrals;
+            : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : NeutralNode();
 
         // name, interaction (talk/interactive — how the unit answers the interact keys), type (faction),
         // current action (casting/attacking/moving), then either a terminal condition (dead/unconscious)
@@ -84,7 +162,8 @@ namespace WrathAccess.Exploration
         private string FactionWord()
             => _unit.IsPlayerFaction ? Loc.T("scan.faction.party")
              : _unit.IsPlayersEnemy ? Loc.T("scan.faction.enemy")
-             : Loc.T("scan.faction.neutral");
+             : IsSignificantNeutral() ? Loc.T("scan.faction.neutral")
+             : Loc.T("scan.faction.bystander");
 
         // The ui-table key for how this unit answers the interact keys right now, or null when it
         // wouldn't respond. Asks the game the exact question its click handler asks —

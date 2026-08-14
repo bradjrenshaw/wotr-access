@@ -8,13 +8,14 @@ using WrathAccess.Screens;
 
 namespace WrathAccess.Exploration
 {
-    /// <summary>The review cursor's cycle groups (Comma/Period/N/M/B): living party / living enemies /
-    /// living neutrals / everything else in the taxonomy (loot incl. corpses, doors, exits, search
-    /// points, traps, mechanisms — scenery excluded) / points of interest (their own cycle, and
-    /// excluded from Others since markers often duplicate entities — same logic as the All bucket).</summary>
+    /// <summary>The review cursor's cycle groups (Comma/Period/N/B/M/L): living party / living enemies /
+    /// living SIGNIFICANT neutrals (a real conversation or scripted interaction awaits) / living
+    /// BYSTANDERS (bark-only or silent background crowd) / everything else in the taxonomy (loot
+    /// incl. corpses, doors, exits, search points, traps, mechanisms — scenery excluded) /
+    /// unexplored frontier.</summary>
     // POI review moved to the MAP screen (LocalMapReview): markers are annotations, not world objects —
     // reviewing them in-area invited interaction attempts that could never work.
-    internal enum ReviewGroup { Party, Enemies, Neutrals, Others, Unexplored }
+    internal enum ReviewGroup { Party, Enemies, Neutrals, Bystanders, Others, Unexplored }
 
     /// <summary>
     /// The scanner: a categorized, distance-sorted list of things in the current area, browsed with
@@ -399,10 +400,11 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Party: return p == ScanTaxonomy.UnitsParty;
                 case ReviewGroup.Enemies: return p == ScanTaxonomy.UnitsEnemies;
                 case ReviewGroup.Neutrals: return p == ScanTaxonomy.UnitsNeutrals;
+                case ReviewGroup.Bystanders: return p == ScanTaxonomy.UnitsBystanders;
                 case ReviewGroup.Unexplored: return p == ScanTaxonomy.Unexplored;
                 default: return p != ScanTaxonomy.UnitsParty && p != ScanTaxonomy.UnitsEnemies
-                    && p != ScanTaxonomy.UnitsNeutrals && p != ScanTaxonomy.Scenery
-                    && !IsPoi(p) && p != ScanTaxonomy.Unexplored;
+                    && p != ScanTaxonomy.UnitsNeutrals && p != ScanTaxonomy.UnitsBystanders
+                    && p != ScanTaxonomy.Scenery && !IsPoi(p) && p != ScanTaxonomy.Unexplored;
             }
         }
 
@@ -419,6 +421,7 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Party: return Loc.T("taxonomy.units.party");
                 case ReviewGroup.Enemies: return Loc.T("taxonomy.units.enemies");
                 case ReviewGroup.Neutrals: return Loc.T("taxonomy.units.neutrals");
+                case ReviewGroup.Bystanders: return Loc.T("taxonomy.units.bystanders");
                 case ReviewGroup.Unexplored: return Loc.T("taxonomy.unexplored");
                 default: return Loc.T("review.others");
             }

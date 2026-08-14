@@ -63,7 +63,12 @@ namespace WrathAccess.Exploration
             {
                 case Group.Party: AddUnits(ScanTaxonomy.UnitsParty); break;
                 case Group.Enemies: AddUnits(ScanTaxonomy.UnitsEnemies); break;
-                case Group.Neutrals: AddUnits(ScanTaxonomy.UnitsNeutrals); break;
+                // The map's N is PEOPLE: significant neutrals AND bystanders together — on the map
+                // you're looking someone up, not filtering crowd noise (the in-area N/B split's job).
+                case Group.Neutrals:
+                    AddUnits(ScanTaxonomy.UnitsNeutrals);
+                    AddUnits(ScanTaxonomy.UnitsBystanders);
+                    break;
                 case Group.Markers: _cycle.AddRange(_markers); break;
                 case Group.Exits:
                     foreach (var m in _markers) if (m.Primary == "poi.exits") _cycle.Add(m);
@@ -92,14 +97,22 @@ namespace WrathAccess.Exploration
         // The MAP reviews what's been DISCOVERED, not what's currently in sight: gate on the game's
         // persistent per-unit reveal flag (the same one its own unit map markers key on —
         // AddLocalMapMarker.IsVisible), with NO distance/LOS restriction, unlike the in-area cycles.
-        // A revealed-but-fogged unit reports its last-known (current) position, as the map would.
+        // For NEUTRALS/BYSTANDERS, the "Neutral NPCs ignore fog of war" ENHANCEMENT decides whether
+        // being currently fogged hides them: on (default), a revealed person stays locatable at their
+        // live position — re-finding a met vendor shouldn't take a sighted-style area sweep; off =
+        // parity (the sighted map shows no fogged units at all). Party/enemies keep the plain
+        // revealed gate as before.
         private static void AddUnits(string primary)
         {
+            bool neutralish = primary == ScanTaxonomy.UnitsNeutrals || primary == ScanTaxonomy.UnitsBystanders;
+            bool throughFog = !neutralish || Enhancements.NeutralsIgnoreFog;
             foreach (var it in WorldModel.Items)
             {
                 if (it.Primary != primary) continue;
                 var u = it.TargetUnit;
-                if (u != null ? u.IsRevealed : it.IsVisible) _cycle.Add(it);
+                if (u == null) { if (it.IsVisible) _cycle.Add(it); continue; }
+                if (!u.IsRevealed) continue;
+                if (throughFog || it.IsVisible) _cycle.Add(it);
             }
         }
 

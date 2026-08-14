@@ -36,6 +36,7 @@ namespace WrathAccess.Screens
         private static readonly (string key, string label, string loc)[] Tabs =
         {
             ("audio", "Audio", "category.audio"),
+            ("enhancements", "Enhancements", "category.enhancements"),
             ("events", "Events", "category.events"),
             ("exploration", "Exploration", "category.exploration"),
             ("input", "Input", "category.input"),
@@ -262,6 +263,14 @@ namespace WrathAccess.Screens
                     b.AddItem(ControlId.Structural(k + "preset"), BuildLogPresetDropdown(d));
                     foreach (var s in d.Children) ModSettingNodes.Emit(b, s, k);
                 }
+            }
+            else if (key == "enhancements")
+            {
+                // Deliberate deviations from sighted parity that help blind players (each one a
+                // documented exception to the surface-only-what's-visible rule) — rendered generically.
+                var enh = ModSettings.Root.Get<CategorySetting>("enhancements");
+                if (enh != null)
+                    foreach (var s in enh.Children) ModSettingNodes.Emit(b, s, k);
             }
             else if (key == "exploration")
             {

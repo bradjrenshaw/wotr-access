@@ -138,6 +138,8 @@
   "overlay.log.crusade.resurrect": "Resurrections",
   "overlay.log.crusade.deaths": "Unit deaths",
 
+  "category.enhancements": "Enhancements",
+  "enh.neutrals_ignore_fog": "Neutral NPCs ignore fog of war",
   "category.speech": "Speech",
   "category.events": "Events",
   "event.settings": "Event settings",
@@ -296,6 +298,7 @@
   "taxonomy.units.party": "Party",
   "taxonomy.units.enemies": "Enemies",
   "taxonomy.units.neutrals": "Neutrals",
+  "taxonomy.units.bystanders": "Bystanders",
   "taxonomy.doors": "Doors",
   "taxonomy.doors.all": "All doors",
   "taxonomy.doors.open": "Open doors",
@@ -432,8 +435,8 @@
   "bind.review.nextOther": "Review next object",
   "bind.review.prevOther": "Review previous object",
 
-  "bind.review.nextPoi": "Review next point of interest",
-  "bind.review.prevPoi": "Review previous point of interest",
+  "bind.review.nextPoi": "Review next bystander or point of interest",
+  "bind.review.prevPoi": "Review previous bystander or point of interest",
   "bind.review.nextExit": "Review next room exit",
   "bind.review.prevExit": "Review previous room exit",
   "bind.review.ping": "Ping review object",

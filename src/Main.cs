@@ -387,6 +387,10 @@ namespace WrathAccess
             // per-part toggles + per-proxy-type overrides. Creates "proxy_announce" + "proxy_elem".
             WrathAccess.Exploration.Announce.ScanAnnounceRegistry.RegisterDefaults();
 
+            // Enhancements = deliberate deviations from sighted parity that materially help blind
+            // players — opt-outable, gathered under one category (see Enhancements).
+            WrathAccess.Enhancements.RegisterSettings();
+
             // Audio = settings-wide master volume (every overlay sound system scales by it).
             var audio = new WrathAccess.Settings.CategorySetting("audio", "Audio", localizationKey: "category.audio");
             audio.Add(new WrathAccess.Settings.IntSetting("master_volume", "Master volume", 100, 0, 100, 5, "audio.master_volume"));
@@ -844,14 +848,17 @@ namespace WrathAccess
                       localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Exits, -1),
                       worldMap: WrathAccess.Exploration.GlobalMapScanner.ConnectedPrev))
                 .AddBinding(KeyCode.M, shift: true).Repeating().Grouped("review");
-            // B / Shift+B: points of interest — MAP-ONLY content (annotations, not world objects): the
-            // local map's marker cycle, the world map's all-points cycle. Nothing in-area by design.
-            InputManager.Register("review.nextPoi", "Review next point of interest", InputCategory.Exploration,
-                Route(localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, 1),
+            // B / Shift+B: in-area = BYSTANDERS (bark-only / silent background neutrals — the
+            // significant ones stay on N); on the maps = points of interest (the local map's marker
+            // cycle, the world map's all-points cycle — annotations, not world objects).
+            InputManager.Register("review.nextPoi", "Review next bystander / point of interest", InputCategory.Exploration,
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Bystanders, 1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, 1),
                       worldMap: WrathAccess.Exploration.GlobalMapScanner.AllNext))
                 .AddBinding(KeyCode.B).Repeating().Grouped("review");
-            InputManager.Register("review.prevPoi", "Review previous point of interest", InputCategory.Exploration,
-                Route(localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, -1),
+            InputManager.Register("review.prevPoi", "Review previous bystander / point of interest", InputCategory.Exploration,
+                Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Bystanders, -1),
+                      localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Markers, -1),
                       worldMap: WrathAccess.Exploration.GlobalMapScanner.AllPrev))
                 .AddBinding(KeyCode.B, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.nextExit", "Review next room exit", InputCategory.Exploration,

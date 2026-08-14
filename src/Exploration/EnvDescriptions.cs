@@ -128,5 +128,21 @@ namespace WrathAccess.Exploration
             string body = Loc.T("desc." + best.key + ".body");
             return string.IsNullOrEmpty(title) ? body : title + ". " + body;
         }
+
+        /// <summary>The authored TITLE of a room — the first anchored description inside it that
+        /// carries a <c>desc.*.title</c> ("The Armory Hall"); null when the room has none. Feeds the
+        /// exits' short room names (<see cref="RoomMap.ShortName"/>).</summary>
+        public static string RoomTitle(RoomMap.Room room)
+        {
+            if (room == null || _rooms.Count == 0) return null;
+            foreach (var r in _rooms)
+            {
+                var rp = new Vector3(r.x, r.y, r.z);
+                if (!ReferenceEquals(RoomMap.RoomAt(rp), room)) continue;
+                var title = Loc.T("desc." + r.key + ".title");
+                if (!string.IsNullOrEmpty(title)) return title;
+            }
+            return null;
+        }
     }
 }

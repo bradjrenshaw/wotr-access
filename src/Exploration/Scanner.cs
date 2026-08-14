@@ -433,7 +433,9 @@ namespace WrathAccess.Exploration
         {
             private readonly RoomMap.Exit _exit;
             public RoomExitItem(RoomMap.Exit exit) { _exit = exit; }
-            public override string Name => Loc.T("exit.to_room", new { room = RoomMap.Describe(_exit.To) });
+            // Just the destination's short handle (authored title, else "Room N") — the V-cycle
+            // context already says these are exits; "Exit to Room 5, large hall" was noise.
+            public override string Name => RoomMap.ShortName(_exit.To);
             public override Vector3 Position => _exit.Position; // centre of the opening (cursor target)
             // Distance/bearing report the nearest part of the opening: the watershed boundary cells (the
             // complete threshold) when we have them, else the navmesh portal edges (e.g. a ramp the grid
@@ -537,13 +539,13 @@ namespace WrathAccess.Exploration
             if (target is RoomExitItem) _selectionOverride = target;
             else { _selectionOverride = null; SyncSelectionTo(target); }
             PlayReviewPing(target);
-            // Bare openings announce their destination themselves ("Exit to Room N…"); a door or
-            // transition item speaks the THING, so append where it leads (and its unexplored state).
+            // Bare openings announce their destination themselves ("The Armory Hall" / "Room 5");
+            // a door or transition item speaks the THING, so append where it leads (short handle).
             string leadsTo = "";
             if (!(target is RoomExitItem))
             {
                 var dest = ExitDestination(target.Position, room);
-                if (dest != null) leadsTo = ", " + Loc.T("exit.leads_to", new { room = RoomMap.Describe(dest) });
+                if (dest != null) leadsTo = ", " + Loc.T("exit.leads_to", new { room = RoomMap.ShortName(dest) });
             }
             Speak(target.Describe(refPos) + leadsTo + ", "
                 + Loc.T("nav.position", new { index = idx + 1, count = candidates.Count }));

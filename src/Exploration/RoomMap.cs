@@ -185,6 +185,16 @@ namespace WrathAccess.Exploration
             WrathAccess.Events.EventDispatcher.Raise(new WrathAccess.Events.RoomChangedEvent(room));
         }
 
+        /// <summary>The room's SHORT spoken handle — the authored title when a description anchor
+        /// with one lies inside it ("The Armory Hall"), else just "Room {id}". The exit readouts use
+        /// this; the full <see cref="Describe"/> (class word + unexplored state) stays for
+        /// where-am-I and room-change announcements, where the extra context is wanted.</summary>
+        public static string ShortName(Room room)
+        {
+            var title = EnvDescriptions.RoomTitle(room);
+            return !string.IsNullOrEmpty(title) ? title : Loc.T("where.room", new { id = room.Id });
+        }
+
         public static string Describe(Room room)
         {
             string s = Loc.T("where.room", new { id = room.Id }) + ", " + Loc.T("room.class." + room.ClassKey);

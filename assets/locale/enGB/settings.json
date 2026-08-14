@@ -65,6 +65,7 @@
   "overlay.slope.sensitivity": "Slope sensitivity (semitones/foot)",
   "overlay.slope.range": "Pitch range (semitones)",
   "overlay.walltones.range": "Range (feet)",
+  "overlay.walltones.split_obstacles": "Play different wall tones for obstacles",
   "overlay.object.announce_hover": "Announce hover when idle",
   "overlay.log.other": "Other messages",
 

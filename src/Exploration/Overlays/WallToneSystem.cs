@@ -11,9 +11,10 @@ namespace WrathAccess.Exploration.Overlays
     /// voice is always AHEAD (centred), "south" behind (rear-filtered), "east"/"west" right/left —
     /// so the pans stay fixed in ear space and only the TRACE directions rotate with
     /// <see cref="ListenerFrame"/>. Each frame it traces the navmesh in each direction, and
-    /// CLASSIFIES the hit via <see cref="WrathAccess.Exploration.BlockProbe"/> (floor-to-ceiling
-    /// collider = a WALL, tone set 1; shorter = an OBSTACLE — furniture, a stall, clutter, tone
-    /// set 2), falling back to a paired sight ray for colliderless geometry. Two voice banks
+    /// with the OPT-IN <c>split_obstacles</c> setting, CLASSIFIES the hit via
+    /// <see cref="WrathAccess.Exploration.BlockProbe"/> (floor-to-ceiling collider = a WALL, tone
+    /// set 1; shorter = an OBSTACLE — furniture, a stall, clutter, tone set 2), falling back to a
+    /// paired sight ray for colliderless geometry; off = the classic single bank. Two voice banks
     /// run at once; each direction feeds whichever bank its hit classifies into. Self-gates on
     /// <see cref="OverlayManager.Active"/>; releases its voices on exit.
     /// </summary>
@@ -23,6 +24,10 @@ namespace WrathAccess.Exploration.Overlays
         public override string Key => "walltones";
 
         private float Range => Int("range", 15) * Geo.MetresPerFoot;
+
+        // EXPERIMENTAL opt-in: classify hits and play obstacles on tone set 2. Off = the classic
+        // single bank (everything sounds as a wall; no per-frame classification cost).
+        private bool Split => Bool("split_obstacles", false);
 
         // How far past the navmesh stop the sight ray may reach and still call the hit a WALL —
         // covers the navmesh's agent-radius erosion plus the wall's thickness (live-measured in the
@@ -40,6 +45,8 @@ namespace WrathAccess.Exploration.Overlays
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
             cat.Add(new WrathAccess.Settings.IntSetting("range", "Range (feet)", 15, 1, 40, 1, "overlay.walltones.range"));
+            cat.Add(new WrathAccess.Settings.BoolSetting("split_obstacles", "Play different wall tones for obstacles", false,
+                "overlay.walltones.split_obstacles"));
         }
 
         public override void OnEnter(Overlay overlay) { }
@@ -57,8 +64,9 @@ namespace WrathAccess.Exploration.Overlays
             // over a scripted scene. Mute (don't dispose) so they resume seamlessly when control returns.
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { Mute(); return; }
 
+            bool split = Split;
             if (_walls == null) _walls = AudioEngines.NAudio.CreateWallTones("1");
-            if (_obstacles == null) _obstacles = AudioEngines.NAudio.CreateWallTones("2");
+            if (split && _obstacles == null) _obstacles = AudioEngines.NAudio.CreateWallTones("2");
 
             var c = overlay.Cursor.Position;
             float v = EffectiveVolume;
@@ -89,9 +97,10 @@ namespace WrathAccess.Exploration.Overlays
                 // threshold read "obstacle" because the fog ray escaped through the open door).
                 // No collider there (colliderless cuts, baked-out geometry) → fall back to the
                 // sight ray: blocked just past the stop = wall, clear = something you can see over.
-                bool wall = false;
-                if (vol > 0f)
+                bool wall = true; // single-bank mode: everything sounds on set 1
+                if (vol > 0f && split)
                 {
+                    wall = false;
                     var probe = WrathAccess.Exploration.BlockProbe.Find(c, _hits[i], dir);
                     if (probe.Kind == WrathAccess.Exploration.BlockProbe.Kind.Wall) wall = true;
                     else if (probe.Kind == WrathAccess.Exploration.BlockProbe.Kind.None)
@@ -106,7 +115,7 @@ namespace WrathAccess.Exploration.Overlays
                 _obstVols[i] = wall ? 0f : vol;
             }
             _walls.Update(_hits, _wallVols);
-            _obstacles.Update(_hits, _obstVols);
+            _obstacles?.Update(_hits, _obstVols); // null until split_obstacles is first enabled
         }
 
         // Inactive (menu up / disabled): keep the voices alive but silent, so they resume seamlessly.

@@ -433,8 +433,14 @@ namespace WrathAccess.Exploration
             //      unwalkable ground, and most navmesh stops there are clutter, not walls). The
             //      watershed below only lets a persistence saddle SPLIT rooms when the saddle is
             //      wall-backed, so clutter pinches stop shattering plazas into phantom rooms.
-            //      Height-gated per cell with the LOS convention (a wall counts iff its top reaches
-            //      eye height and its base isn't far overhead — stacked floors stay independent).
+            //      Height-gated per cell with the game's OWN LOS convention — TOP-ONLY: a wall
+            //      counts iff HeightMinMax.y (the top) reaches above eye height. LineOfSightGeometry
+            //      never reads the min (segment Height = HeightMinMax.y), and many areas author
+            //      blockers as flat outlines AT the wall top (min == max == top — 229/660 in the
+            //      Shield Maze), so a base-isn't-overhead check rejected a third of the maze's real
+            //      walls and fused its rooms into one mega-room (live repro 2026-08-14). Stacked
+            //      floors stay safe the same way the game's sight does: fog geometry is rebuilt per
+            //      area part.
             var nearWall = new bool[n];
             try
             {
@@ -463,7 +469,7 @@ namespace WrathAccess.Exploration
                                     int ci = nz * _w + nx;
                                     if (nearWall[ci] || !walk[ci]) continue;
                                     float cy = _cellY[ci];
-                                    if (hm.y >= cy + 1f && hm.x <= cy + 2.5f) nearWall[ci] = true;
+                                    if (hm.y >= cy + 1f) nearWall[ci] = true;
                                 }
                         }
                     }

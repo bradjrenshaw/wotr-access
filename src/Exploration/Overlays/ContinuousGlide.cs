@@ -45,11 +45,11 @@ namespace WrathAccess.Exploration.Overlays
             WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
                 "defaults.cursor.direction_priority")?.Get() ?? false;
 
-        // EXPERIMENTAL collision naming (on by default): a pure readout, so it lives with the other
+        // EXPERIMENTAL collision naming (opt-in): a pure readout, so it lives with the other
         // cursor behaviours on defaults.cursor, not under Enhancements.
         private static bool CollisionNames =>
             WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
-                "defaults.cursor.collision_names")?.Get() ?? true;
+                "defaults.cursor.collision_names")?.Get() ?? false;
 
         // Priority-steering state, per slot (this mode instance IS per-slot): which INPUT axis was
         // held first (0 = x/east-west, 1 = z/north-south), whether we're wall-following, and last

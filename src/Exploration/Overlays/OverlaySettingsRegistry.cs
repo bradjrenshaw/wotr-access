@@ -142,7 +142,7 @@ namespace WrathAccess.Exploration.Overlays
             // the blocking object's cleaned-up asset name (BlockProbe/CollisionNamer). Pure readout —
             // no game behaviour change — hence a cursor setting, not an Enhancement.
             if (cursorCat.GetByKey("collision_names") == null)
-                cursorCat.Add(new BoolSetting("collision_names", "Name blocking objects on collision", true,
+                cursorCat.Add(new BoolSetting("collision_names", "Name blocking objects on collision", false,
                     "overlay.cursor.collision_names"));
             // Continuous is the primary development target and the intended mode for most players
             // (2026-07-22) — tiled remains a settings choice, no longer the default.

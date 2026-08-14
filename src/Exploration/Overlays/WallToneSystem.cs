@@ -6,13 +6,16 @@ using WrathAccess.Audio; // Audio.Engine / IWallTones
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
-    /// Directional <b>wall tones</b>: four looping sounds whose volumes rise as a wall nears in that
-    /// direction — RELATIVE TO THE LISTENER'S FACING (user decision): the "north" voice is always
-    /// AHEAD (centred), "south" behind (rear-filtered), "east"/"west" right/left — so the four pans
-    /// stay fixed in ear space and only the TRACE directions rotate with <see cref="ListenerFrame"/>.
-    /// At the default north facing this is exactly the historical compass behaviour. Each frame it
-    /// traces the navmesh in each direction and turns the distance-to-wall into a 0..1 volume.
-    /// Self-gates on <see cref="OverlayManager.Active"/>; releases its voices on exit.
+    /// Directional <b>wall tones</b>: looping sounds whose volumes rise as a navmesh edge nears in
+    /// each of four directions — RELATIVE TO THE LISTENER'S FACING (user decision): the "north"
+    /// voice is always AHEAD (centred), "south" behind (rear-filtered), "east"/"west" right/left —
+    /// so the pans stay fixed in ear space and only the TRACE directions rotate with
+    /// <see cref="ListenerFrame"/>. Each frame it traces the navmesh in each direction, and
+    /// CLASSIFIES the hit via <see cref="WrathAccess.Exploration.BlockProbe"/> (floor-to-ceiling
+    /// collider = a WALL, tone set 1; shorter = an OBSTACLE — furniture, a stall, clutter, tone
+    /// set 2), falling back to a paired sight ray for colliderless geometry. Two voice banks
+    /// run at once; each direction feeds whichever bank its hit classifies into. Self-gates on
+    /// <see cref="OverlayManager.Active"/>; releases its voices on exit.
     /// </summary>
     internal sealed class WallToneSystem : AudioSystem
     {
@@ -21,31 +24,31 @@ namespace WrathAccess.Exploration.Overlays
 
         private float Range => Int("range", 15) * Geo.MetresPerFoot;
 
-        private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left }; // ahead, behind, right, left
-        private string ToneSet => ChoiceId("tone_set", "1");
+        // How far past the navmesh stop the sight ray may reach and still call the hit a WALL —
+        // covers the navmesh's agent-radius erosion plus the wall's thickness (live-measured in the
+        // Defender's Heart: true walls put the sight stop ~1.2-1.5m past the navmesh edge).
+        private const float WallSlack = 1.75f;
 
-        private IWallTones _tones;
-        private string _setUsed;
+        private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left }; // ahead, behind, right, left
+
+        private IWallTones _walls;      // tone set 1 — real walls (sight-blocked)
+        private IWallTones _obstacles;  // tone set 2 — navmesh-only blockage (furniture/clutter)
         private readonly Vector3[] _hits = new Vector3[4];
-        private readonly float[] _vols = new float[4];
+        private readonly float[] _wallVols = new float[4];
+        private readonly float[] _obstVols = new float[4];
 
         protected override void RegisterAudioSettings(WrathAccess.Settings.CategorySetting cat)
         {
             cat.Add(new WrathAccess.Settings.IntSetting("range", "Range (feet)", 15, 1, 40, 1, "overlay.walltones.range"));
-            cat.Add(new WrathAccess.Settings.ChoiceSetting("tone_set", "Tone set",
-                new[]
-                {
-                    new WrathAccess.Settings.Choice("1", "Set 1", "overlay.walltones.tone_set.1"),
-                    new WrathAccess.Settings.Choice("2", "Set 2", "overlay.walltones.tone_set.2"),
-                }, "1", "overlay.walltones.tone_set"));
         }
 
         public override void OnEnter(Overlay overlay) { }
 
         public override void OnExit(Overlay overlay)
         {
-            _tones?.Dispose();
-            _tones = null; _setUsed = null;
+            _walls?.Dispose();
+            _obstacles?.Dispose();
+            _walls = null; _obstacles = null;
         }
 
         public override void Tick(float dt, Overlay overlay)
@@ -54,13 +57,8 @@ namespace WrathAccess.Exploration.Overlays
             // over a scripted scene. Mute (don't dispose) so they resume seamlessly when control returns.
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { Mute(); return; }
 
-            // (Re)build the voices on first use or when the user picks a different tone set.
-            if (_tones == null || _setUsed != ToneSet)
-            {
-                _tones?.Dispose();
-                _setUsed = ToneSet;
-                _tones = AudioEngines.NAudio.CreateWallTones(ToneSet);
-            }
+            if (_walls == null) _walls = AudioEngines.NAudio.CreateWallTones("1");
+            if (_obstacles == null) _obstacles = AudioEngines.NAudio.CreateWallTones("2");
 
             var c = overlay.Cursor.Position;
             float v = EffectiveVolume;
@@ -76,22 +74,47 @@ namespace WrathAccess.Exploration.Overlays
             // walls (triangle edges) and shifted the L/R balance. Fresh-once is bit-identical to the original
             // per-direction TraceAlongNavmesh — same node, same Linecasts — just GetNearest run 1x not 4x.
             NNInfo node = ObstacleAnalyzer.GetNearestNode(c);
+            var los = Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar.LineOfSightGeometry.Instance;
+            var eye = Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar.LineOfSightGeometry.EyeShift;
             for (int i = 0; i < 4; i++)
             {
                 var rel = DirVecs[i];
                 var dir = new Vector3(rel.x * cf + rel.z * sf, 0f, -rel.x * sf + rel.z * cf);
                 _hits[i] = TraceFrom(c, node, c + dir * Range);
-                _vols[i] = Curve(c, _hits[i]) * v;
+                float vol = Curve(c, _hits[i]) * v;
+
+                // Classify the blockage. Primary: the collider probe at the navmesh stop —
+                // floor-to-ceiling collider = WALL, shorter = obstacle (height is a physical
+                // definition sight-lines through doorway gaps can't fool; live case: an alcove
+                // threshold read "obstacle" because the fog ray escaped through the open door).
+                // No collider there (colliderless cuts, baked-out geometry) → fall back to the
+                // sight ray: blocked just past the stop = wall, clear = something you can see over.
+                bool wall = false;
+                if (vol > 0f)
+                {
+                    var probe = WrathAccess.Exploration.BlockProbe.Find(c, _hits[i], dir);
+                    if (probe.Kind == WrathAccess.Exploration.BlockProbe.Kind.Wall) wall = true;
+                    else if (probe.Kind == WrathAccess.Exploration.BlockProbe.Kind.None)
+                    {
+                        float hx = _hits[i].x - c.x, hz = _hits[i].z - c.z;
+                        float d = Mathf.Sqrt(hx * hx + hz * hz);
+                        var sightEnd = c + dir * (d + WallSlack) + eye;
+                        wall = los == null || los.HasObstacle(c + eye, sightEnd);
+                    }
+                }
+                _wallVols[i] = wall ? vol : 0f;
+                _obstVols[i] = wall ? 0f : vol;
             }
-            _tones.Update(_hits, _vols);
+            _walls.Update(_hits, _wallVols);
+            _obstacles.Update(_hits, _obstVols);
         }
 
         // Inactive (menu up / disabled): keep the voices alive but silent, so they resume seamlessly.
         private void Mute()
         {
-            if (_tones == null) return;
-            for (int i = 0; i < _vols.Length; i++) _vols[i] = 0f;
-            _tones.Update(_hits, _vols);
+            for (int i = 0; i < 4; i++) { _wallVols[i] = 0f; _obstVols[i] = 0f; }
+            _walls?.Update(_hits, _wallVols);
+            _obstacles?.Update(_hits, _obstVols);
         }
 
         // ObstacleAnalyzer.TraceAlongNavmesh, but with a precomputed nearest node so the GetNearest query

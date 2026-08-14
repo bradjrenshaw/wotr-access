@@ -138,6 +138,12 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("review_reset") == null)
                 cursorCat.Add(new BoolSetting("review_reset", "Cursor movement resets review cycles", false,
                     "overlay.cursor.review_reset"));
+            // EXPERIMENTAL collision naming: releasing the movement keys while dead-stopped speaks
+            // the blocking object's cleaned-up asset name (BlockProbe/CollisionNamer). Pure readout —
+            // no game behaviour change — hence a cursor setting, not an Enhancement.
+            if (cursorCat.GetByKey("collision_names") == null)
+                cursorCat.Add(new BoolSetting("collision_names", "Name blocking objects on collision", true,
+                    "overlay.cursor.collision_names"));
             // Continuous is the primary development target and the intended mode for most players
             // (2026-07-22) — tiled remains a settings choice, no longer the default.
             BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "continuous", 15, "continuous", 18);

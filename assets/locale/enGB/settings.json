@@ -65,9 +65,6 @@
   "overlay.slope.sensitivity": "Slope sensitivity (semitones/foot)",
   "overlay.slope.range": "Pitch range (semitones)",
   "overlay.walltones.range": "Range (feet)",
-  "overlay.walltones.tone_set": "Tone set",
-  "overlay.walltones.tone_set.1": "Set 1",
-  "overlay.walltones.tone_set.2": "Set 2",
   "overlay.object.announce_hover": "Announce hover when idle",
   "overlay.log.other": "Other messages",
 
@@ -478,6 +475,7 @@
   "overlay.cursor.wall_slide": "Slide along walls",
   "overlay.cursor.direction_priority": "First-held direction has priority",
   "overlay.cursor.review_reset": "Cursor movement resets review cycles",
+  "overlay.cursor.collision_names": "Name blocking objects on collision",
   "bind.buffer.bufferNext": "Buffer: next buffer",
   "bind.buffer.bufferPrev": "Buffer: previous buffer",
   "bind.buffer.itemNext": "Buffer: next line",

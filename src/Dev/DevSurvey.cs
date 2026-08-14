@@ -263,6 +263,9 @@ namespace WrathAccess.Dev
             foreach (var f in fogs)
                 if (f != null) { f.IsCheatOffFog = true; f.enabled = false; }
             SetUiHidden(true);
+            // The camera follower re-scrolls to the followed unit every frame, silently undoing the
+            // scroll below (bit a live survey 2026-08-14) — release it before taking the camera.
+            Game.Instance.CameraController?.Follower?.Release();
             rig.SetRotation(yaw);
             if (rig.CameraZoom != null) rig.CameraZoom.CurrentNormalizePosition = zoom;
             rig.ScrollToImmediately(new Vector3(x, y, z));

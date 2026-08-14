@@ -12,7 +12,11 @@ namespace WrathAccess.Exploration
     /// rasterize the live A* recast navmesh to a grid, compute per-cell clearance (distance to the
     /// nearest wall), then persistence watershed — basins grow from clearance maxima and split where
     /// they meet across a pronounced dip (a doorway, or a doorless cave pinch; PERSIST is how deep the
-    /// dip must be). Small regions merge into their biggest neighbour; survivors are numbered stably
+    /// dip must be) — and, since 2026-08-14, only where the dip is WALL-BACKED: a fog-of-war blocker
+    /// polyline (the game's curated real walls) within WallBackR of the saddle. Navmesh clutter with
+    /// no wall behind it (market stalls, tables) never splits a room — the navmesh alone can't tell a
+    /// stall from a wall, but the fog geometry can. Small regions merge into their biggest neighbour;
+    /// survivors are numbered stably
     /// (sorted by centroid) and classified by area/elongation/clearance (passage / corridor / small
     /// room / room / large hall / stairs). Height-aware: cells never union across a height step
     /// (DyGate), and sloped cells (recast turns staircases into ramps) never union with flat ones —
@@ -38,6 +42,12 @@ namespace WrathAccess.Exploration
         private const float FurnitureMax = 12f;  // m^2 — interior obstacle islands up to this cast no clearance shadow
         private const float MaxCells = 1.7e6f;   // grid budget; coarsen the cell size beyond it
         private const float LevelGap = 3f;       // |y| beyond which a cell is "another floor"
+        // A persistence saddle may SPLIT two rooms only when a REAL wall (fog-of-war blocker
+        // polyline) lies within this range of it — a doorway's saddle sits within reach of its
+        // jambs, while a market-stall pinch in open ground has no wall near it and merges.
+        // Sized to half a wide doorway; verified live in the Defender's Heart (walls' sight-stop
+        // sits ~1.2-1.5m past the eroded navmesh edge, so 2m comfortably reaches the jamb).
+        private const float WallBackR = 2f;
 
         public sealed class Room
         {
@@ -417,8 +427,53 @@ namespace WrathAccess.Exploration
             Morph(sloped, 1, dilate: false); Morph(sloped, 1, dilate: true);
             for (int i = 0; i < n; i++) sloped[i] &= walk[i];
 
+            // 4.6) REAL-WALL mask: cells within WallBackR of a fog-of-war blocker polyline — the
+            //      game's designer-curated "this blocks sight" walls (furniture, stalls and crates
+            //      have none; live-verified in the Defender's Heart: every blocker sits on
+            //      unwalkable ground, and most navmesh stops there are clutter, not walls). The
+            //      watershed below only lets a persistence saddle SPLIT rooms when the saddle is
+            //      wall-backed, so clutter pinches stop shattering plazas into phantom rooms.
+            //      Height-gated per cell with the LOS convention (a wall counts iff its top reaches
+            //      eye height and its base isn't far overhead — stacked floors stay independent).
+            var nearWall = new bool[n];
+            try
+            {
+                int rr = Mathf.Max(1, Mathf.CeilToInt(WallBackR / _cell));
+                foreach (var blocker in Owlcat.Runtime.Visual.RenderPipeline.RendererFeatures.FogOfWar.FogOfWarBlocker.All)
+                {
+                    if (blocker == null) continue;
+                    var pts = blocker.Points;
+                    if (pts == null || pts.Length < 2) continue;
+                    var hm = blocker.HeightMinMax;
+                    int segs = blocker.Closed ? pts.Length : pts.Length - 1;
+                    for (int s = 0; s < segs; s++)
+                    {
+                        Vector2 p1 = pts[s], p2 = pts[(s + 1) % pts.Length];
+                        int steps = Mathf.Max(1, Mathf.CeilToInt((p2 - p1).magnitude / _cell));
+                        for (int st = 0; st <= steps; st++)
+                        {
+                            var p = Vector2.Lerp(p1, p2, (float)st / steps);
+                            int cgx = (int)((p.x - _x0) / _cell) + 1, cgz = (int)((p.y - _z0) / _cell) + 1;
+                            for (int oz = -rr; oz <= rr; oz++)
+                                for (int ox = -rr; ox <= rr; ox++)
+                                {
+                                    if (ox * ox + oz * oz > rr * rr) continue;
+                                    int nx = cgx + ox, nz = cgz + oz;
+                                    if (nx < 0 || nz < 0 || nx >= _w || nz >= _h) continue;
+                                    int ci = nz * _w + nx;
+                                    if (nearWall[ci] || !walk[ci]) continue;
+                                    float cy = _cellY[ci];
+                                    if (hm.y >= cy + 1f && hm.x <= cy + 2.5f) nearWall[ci] = true;
+                                }
+                        }
+                    }
+                }
+            }
+            catch (Exception e) { Main.Log?.Warning("[rooms] wall mask failed: " + e.Message); }
+
             // 5) Persistence watershed: visit cells by descending clearance; basins meeting across a
-            //    saddle merge unless BOTH rise at least Persist above it.
+            //    saddle merge unless BOTH rise at least Persist above it AND the saddle is
+            //    wall-backed (a real doorway/pinch between walls, not stall clutter).
             var order = new int[n];
             for (int i = 0; i < n; i++) order[i] = i;
             var keys = new float[n];
@@ -455,8 +510,10 @@ namespace WrathAccess.Exploration
                     if (sloped[j] != sloped[i] || Math.Abs(_cellY[j] - _cellY[i]) > DyGate) continue;
                     int r = find(j);
                     if (r == me) continue;
-                    // sloped basins always merge: one staircase = one region, however long
-                    if (sloped[i] || Math.Min(peak[r], peak[me]) - c < Persist)
+                    // sloped basins always merge: one staircase = one region, however long. A
+                    // persistence split must ALSO be wall-backed at the saddle — a pinch with no
+                    // real wall near it (stall shadows, market clutter) never cuts a room.
+                    if (sloped[i] || Math.Min(peak[r], peak[me]) - c < Persist || !nearWall[i])
                     {
                         float pk = Math.Max(peak[r], peak[me]);
                         parent[me] = r;

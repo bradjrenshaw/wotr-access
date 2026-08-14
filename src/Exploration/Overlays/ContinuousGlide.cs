@@ -45,12 +45,23 @@ namespace WrathAccess.Exploration.Overlays
             WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
                 "defaults.cursor.direction_priority")?.Get() ?? false;
 
+        // EXPERIMENTAL collision naming (on by default): a pure readout, so it lives with the other
+        // cursor behaviours on defaults.cursor, not under Enhancements.
+        private static bool CollisionNames =>
+            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
+                "defaults.cursor.collision_names")?.Get() ?? true;
+
         // Priority-steering state, per slot (this mode instance IS per-slot): which INPUT axis was
         // held first (0 = x/east-west, 1 = z/north-south), whether we're wall-following, and last
         // frame's held axes for change detection.
         private int _prioAxis = -1;
         private bool _wallFollow;
         private bool _prevHx, _prevHz;
+
+        // Collision naming (experimental enhancement): remember when the last held frame dead-stopped
+        // and in which world direction, so releasing the keys can name what was in the way.
+        private bool _blocked;
+        private Vector3 _blockedDir;
 
         public override void OnEnter(Overlay overlay)
         {
@@ -61,13 +72,36 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active) return;            // menu up / focus off → don't move
+            if (!OverlayManager.Active) { _blocked = false; return; } // menu up / focus off → don't move
 
             CursorKeys.HeldVector(_slot, out int ix, out int iz);
-            if (ix == 0 && iz == 0) { _prioAxis = -1; _wallFollow = false; _prevHx = _prevHz = false; return; }
+            if (ix == 0 && iz == 0)
+            {
+                _prioAxis = -1; _wallFollow = false; _prevHx = _prevHz = false;
+                // Keys just released against something → name what was in the way (experimental).
+                if (_blocked)
+                {
+                    _blocked = false;
+                    if (CollisionNames)
+                        CollisionNamer.Announce(overlay.Cursor.Position, _blockedDir);
+                }
+                return;
+            }
             TrackPriority(ix != 0, iz != 0);
-            float step = Speed * dt;
 
+            bool moved = Move(ix, iz, Speed * dt, overlay);
+            _blocked = !moved;
+            if (_blocked)
+            {
+                float wx = ix, wz = iz;
+                ListenerFrame.InputToWorld(ref wx, ref wz);
+                _blockedDir = new Vector3(wx, 0f, wz);
+            }
+        }
+
+        // One glide frame's movement resolution; true when the cursor made any progress.
+        private bool Move(int ix, int iz, float step, Overlay overlay)
+        {
             // First-direction priority steering (opt-in), only meaningful with BOTH axes held:
             // diagonal while the way is open; first wall contact arms wall-following — from then on
             // the priority axis is tried EVERY frame (turning into the gap the moment it opens),
@@ -76,24 +110,24 @@ namespace WrathAccess.Exploration.Overlays
             {
                 if (!_wallFollow)
                 {
-                    if (TryMove(ix, iz, step, overlay, slide: false)) return;
+                    if (TryMove(ix, iz, step, overlay, slide: false)) return true;
                     _wallFollow = true;
                 }
                 bool prioX = _prioAxis != 1; // unset/x → x leads (both-same-frame picks x, arbitrary)
-                if (TryMove(prioX ? ix : 0, prioX ? 0 : iz, step, overlay, slide: false)) return;
-                TryMove(prioX ? 0 : ix, prioX ? iz : 0, step, overlay, slide: false);
-                return;
+                if (TryMove(prioX ? ix : 0, prioX ? 0 : iz, step, overlay, slide: false)) return true;
+                return TryMove(prioX ? 0 : ix, prioX ? iz : 0, step, overlay, slide: false);
             }
 
             // Normal path: combined vector, wall-slide honoured; blocked diagonals fall back to the
             // free axis (holding two directions is explicit intent for both — don't discard the open
             // half because the other is walled). Single-direction into a wall still dead-stops.
-            if (TryMove(ix, iz, step, overlay, slide: WallSlide)) return;
+            if (TryMove(ix, iz, step, overlay, slide: WallSlide)) return true;
             if (ix != 0 && iz != 0 && !WallSlide)
             {
-                var moved = TryMove(ix, 0, step, overlay, slide: false)
-                         || TryMove(0, iz, step, overlay, slide: false);
+                return TryMove(ix, 0, step, overlay, slide: false)
+                    || TryMove(0, iz, step, overlay, slide: false);
             }
+            return false;
         }
 
         // Which INPUT axis was held first (the priority axis for the steering mode). Promotes the

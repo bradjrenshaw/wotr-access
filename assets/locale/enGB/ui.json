@@ -197,6 +197,8 @@
   "grid.walkable_up": "walkable, up {height}",
   "grid.walkable_down": "walkable, down {height}",
   "overlay.off": "Overlays off",
+  "collision.rise": "raised ground",
+  "collision.drop": "drop",
   "overlay.mode_set": "{system}: {mode}",
   "overlay.no_surface_above": "No surface above",
   "overlay.no_surface_below": "No surface below",

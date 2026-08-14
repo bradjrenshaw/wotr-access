@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ee46d5.js";
+            window.path_to_searchindex_js = "searchindex-c0ad5050.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-6d5d962f.js"></script>
@@ -209,7 +209,8 @@ keyboard from the game).</p>
 <tr><td>Arrow keys</td><td>Navigate the focused panel / adjust the focused control</td></tr>
 <tr><td>Tab / Shift+Tab</td><td>Next / previous region or panel</td></tr>
 <tr><td>Enter (or Keypad Enter)</td><td>Activate the focused control</td></tr>
-<tr><td>Backspace</td><td>Secondary action (e.g. clear a key binding)</td></tr>
+<tr><td>Backspace</td><td>Secondary action (right-click: clear a key binding, open an item’s menu, set an action-bar ability as your default attack)</td></tr>
+<tr><td>Backslash</td><td>Pick up / place the focused item (keyboard drag — e.g. move gear between equipment slots)</td></tr>
 <tr><td>Escape</td><td>Back / close</td></tr>
 <tr><td>Space (or F1)</td><td>Read tooltip / inline links</td></tr>
 <tr><td>Home / End</td><td>Jump to first / last item</td></tr>
@@ -224,13 +225,17 @@ keyboard from the game).</p>
 <tr><th>Key</th><th>Action</th></tr>
 </thead>
 <tbody>
-<tr><td>W A S D (or arrows)</td><td>Move the movement cursor</td></tr>
+<tr><td>W A S D (or arrows)</td><td>Move the movement cursor (relative to your facing)</td></tr>
 <tr><td>Shift + W A S D (or Shift+arrows)</td><td>Move the secondary cursor</td></tr>
+<tr><td>Q / E</td><td>Turn your facing left / right (continuous while held)</td></tr>
+<tr><td>Shift+Q / Shift+E</td><td>Turn your facing to the next 45° step</td></tr>
 <tr><td>Enter</td><td>Interact at the cursor (left-click)</td></tr>
 <tr><td>Backspace</td><td>Move the selected party to the cursor</td></tr>
 <tr><td>C</td><td>Recenter the cursor on the party leader</td></tr>
-<tr><td>Space</td><td>Toggle pause</td></tr>
-<tr><td>X</td><td>Where am I (area + current room)</td></tr>
+<tr><td>Space</td><td>Toggle pause; during a cutscene, skip it</td></tr>
+<tr><td>Z</td><td>Where am I (area, indoors, current room, whether the spot is unexplored, and rough map position)</td></tr>
+<tr><td>X</td><td>Describe the scanner target (the mod’s authored visual description of the review item, where one exists)</td></tr>
+<tr><td>Shift+X</td><td>Describe the current room (the mod’s authored room description, where one exists)</td></tr>
 <tr><td>Escape</td><td>Cancel targeting; otherwise open the game menu</td></tr>
 </tbody>
 </table>
@@ -248,6 +253,7 @@ keyboard from the game).</p>
 <tr><td>G</td><td>Stop</td></tr>
 <tr><td>Ctrl+S</td><td>Toggle stealth</td></tr>
 <tr><td>Ctrl+D</td><td>Toggle AI control</td></tr>
+<tr><td>Ctrl+R</td><td>Rest — arms camp placement; aim with the cursor and press Enter</td></tr>
 </tbody>
 </table>
 </div>
@@ -275,6 +281,7 @@ keyboard from the game).</p>
 <tr><td>Shift+Page Down / Shift+Page Up</td><td>Next / previous subcategory</td></tr>
 <tr><td>I</td><td>Interact with the review item</td></tr>
 <tr><td>Slash (or Home)</td><td>Move the movement cursor to the review item</td></tr>
+<tr><td>Semicolon</td><td>Ping the review item: one of four sounds for sight and route from the cursor (straight line / path around / unreachable / blocked sight — hear them in the audio glossary)</td></tr>
 <tr><td>K</td><td>Announce cursor position</td></tr>
 <tr><td>Shift+K</td><td>Announce party</td></tr>
 <tr><td>Y</td><td>Inspect the review-cursor unit</td></tr>
@@ -291,13 +298,17 @@ keyboard from the game).</p>
 <tbody>
 <tr><td>Comma</td><td>Next party member</td></tr>
 <tr><td>Period</td><td>Next enemy</td></tr>
-<tr><td>N</td><td>Next neutral unit</td></tr>
+<tr><td>N</td><td>Next neutral NPC (people a click gets a real conversation or interaction from)</td></tr>
+<tr><td>B</td><td>Next bystander (background NPCs with only a one-liner bark, or nothing)</td></tr>
 <tr><td>M</td><td>Next interactable / object</td></tr>
-<tr><td>B</td><td>Next point of interest</td></tr>
 <tr><td>V</td><td>Next room exit</td></tr>
+<tr><td>L</td><td>Next unexplored space (openings where the map can still be revealed)</td></tr>
 </tbody>
 </table>
 </div>
+<p>Every cycle landing plays the same four-way sight-and-route ping as Semicolon, so you always hear
+whether the thing is directly walkable-to. Points of interest are reviewed on the map screen (below),
+not in the area.</p>
 <h2 id="exploration--buffers"><a class="header" href="#exploration--buffers">Exploration — buffers</a></h2>
 <div class="table-wrapper">
 <table>
@@ -337,6 +348,7 @@ keyboard from the game).</p>
 <tbody>
 <tr><td>Alt + W A S D</td><td>Pan the camera</td></tr>
 <tr><td>Alt+Q / Alt+E</td><td>Rotate the camera left / right</td></tr>
+<tr><td>Alt+C</td><td>Read the compass (camera facing)</td></tr>
 <tr><td>Alt+F</td><td>Follow the selected character</td></tr>
 </tbody>
 </table>
@@ -353,11 +365,32 @@ keyboard from the game).</p>
 <tr><td>Ctrl+I</td><td>Inventory</td></tr>
 <tr><td>Ctrl+B</td><td>Spellbook</td></tr>
 <tr><td>Ctrl+J</td><td>Journal</td></tr>
+<tr><td>Ctrl+V</td><td>Map</td></tr>
+<tr><td>Ctrl+L</td><td>Log (past messages, grouped into channels)</td></tr>
 </tbody>
 </table>
 </div>
-<p>The encyclopedia and local map don’t have a shortcut yet — open them from the Windows panel of the
-in-game UI.</p>
+<p>The encyclopedia doesn’t have a shortcut yet — open it from the Windows panel of the in-game UI.</p>
+<h2 id="the-map-screen"><a class="header" href="#the-map-screen">The map screen</a></h2>
+<p><strong>Ctrl+V</strong> opens the accessible area map: your own faster map cursor over the whole area, plus the
+map’s curated markers. Movement and most review keys work as in the area; the differences:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Action</th></tr>
+</thead>
+<tbody>
+<tr><td>W A S D (or arrows)</td><td>Move the map cursor (faster than the area cursor)</td></tr>
+<tr><td>Comma / Period</td><td>Next party member / enemy</td></tr>
+<tr><td>N</td><td>Next person — neutral NPCs and bystanders together, including people you’ve met who are currently hidden by fog (see the Enhancements setting)</td></tr>
+<tr><td>B</td><td>Next map marker (quest points, exits, loot, people — the game’s points of interest)</td></tr>
+<tr><td>M</td><td>Next exit marker</td></tr>
+<tr><td>Slash (or Home)</td><td>Move the map cursor to the review item</td></tr>
+<tr><td>K</td><td>Read the map cursor</td></tr>
+<tr><td>Escape</td><td>Close the map</td></tr>
+</tbody>
+</table>
+</div>
 <h2 id="world-map"><a class="header" href="#world-map">World map</a></h2>
 <p>The world map has its own cursor, scanner, and sonar.</p>
 <div class="table-wrapper">

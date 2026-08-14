@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ee46d5.js";
+            window.path_to_searchindex_js = "searchindex-c0ad5050.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-6d5d962f.js"></script>
@@ -297,8 +297,20 @@ mod is positioned relative to this cursor — treat it like an audio camera.</p>
 <strong>Enter</strong> left-clicks it (attack, loot, open, …). <strong>Backspace</strong> moves your selected party members to
 the cursor. <strong>C</strong> snaps the cursor to the party leader. The cursor follows slopes and stairs
 automatically, so you never adjust its height by hand.</p>
+<p>Two optional movement aids live under <strong>Settings → Exploration → Cursor</strong>: <strong>Slide along walls</strong>
+makes a blocked glide slip along the wall’s surface (funnelling through doorways), and <strong>First-held
+direction has priority</strong> makes a held diagonal turn into a gap the moment it opens — hold the
+direction you actually want first, add the second to follow the wall.</p>
 <p>This game has fog of war: if none of your characters can see a spot, you won’t know what’s there. A
 sound marks the cursor entering or leaving fog of war.</p>
+<h3 id="facing"><a class="header" href="#facing">Facing</a></h3>
+<p>You have a facing, and movement is relative to it: <strong>W</strong> is always “forward”. Hold <strong>Q</strong> or <strong>E</strong> to
+turn continuously, or <strong>Shift+Q / Shift+E</strong> to snap to the next 45° step. Everything audible turns
+with you — cursor movement, sonar and wall-tone panning, even the game’s own voices and effects —
+while <strong>spoken directions stay compass words</strong> (north is north no matter which way you face), so you
+can always re-orient. As you turn, a chime marks world north each time your facing sweeps past a
+compass point, and <strong>Alt+C</strong> reads the camera’s compass heading. If you prefer readouts relative to
+your facing instead of the compass, switch the <strong>direction type</strong> (see below).</p>
 <h3 id="the-review-cursor"><a class="header" href="#the-review-cursor">The review cursor</a></h3>
 <p>The scanner cycles through everything visible to you. Use <strong>Page Up / Page Down</strong> to move through
 items in the current category and subcategory (by default, <em>Everything</em> in the area). <strong>Ctrl+Page
@@ -307,8 +319,22 @@ scanner item is the <strong>review cursor</strong>.</p>
 <p>Press <strong>I</strong> to interact with the review item (a left-click) — handy for targeting abilities and
 spells without moving the movement cursor. <strong>Slash</strong> jumps the movement cursor to the review cursor.</p>
 <p>You can also cycle the review cursor by kind, nearest first: <strong>Period</strong> for enemies, <strong>Comma</strong> for
-allies, <strong>M</strong> for interactables, <strong>N</strong> for neutral units, <strong>B</strong> for points of interest, <strong>V</strong> for
-room exits. Hold <strong>Shift</strong> to go backwards.</p>
+allies, <strong>M</strong> for interactables, <strong>N</strong> for neutral NPCs, <strong>B</strong> for bystanders, <strong>V</strong> for room exits,
+<strong>L</strong> for unexplored space. Hold <strong>Shift</strong> to go backwards. The N/B split separates the people worth
+talking to from the background crowd: <strong>neutrals</strong> (N) are NPCs a click gets a real conversation or
+scripted interaction from — quest-givers, vendors — while <strong>bystanders</strong> (B) only bark a one-liner,
+or nothing at all. An NPC whose conversation unlocks later moves from B to N when it does.</p>
+<p>Every cycle landing plays one of <strong>four sight-and-route sounds</strong>, telling you how the thing relates
+to your cursor: a <strong>straight line</strong> is walkable directly to it; a <strong>path around</strong> exists but bends;
+<strong>unreachable</strong> means you can see it but no walkable path leads there; <strong>blocked sight</strong> means a
+wall is between you and it. <strong>Semicolon</strong> replays the ping for the current review item on demand,
+and the audio glossary (Ctrl+M → Help → Audio glossary) plays all four with explanations. If you’d
+like the cycles to snap back to the nearest thing whenever you move, enable <strong>Cursor movement resets
+review cycles</strong> under Settings → Exploration → Cursor.</p>
+<p>Unexplored space (<strong>L</strong>) deserves a note: it cycles the openings where walkable ground you haven’t
+revealed yet borders ground you have — the places where the map can still grow. If you’re ever
+unsure where to go next, press <strong>L</strong>, jump the cursor there with <strong>Slash</strong>, and send your party with
+<strong>Backspace</strong>.</p>
 <h2 id="buffers"><a class="header" href="#buffers">Buffers</a></h2>
 <p>Buffers let you read a character’s details line by line without leaving what you’re doing. There are
 two: the <strong>selected unit</strong> buffer (the character you currently have selected) and the <strong>review
@@ -326,8 +352,24 @@ tones</strong> play a tone for each nearby wall in the four cardinal directions,
 closer. In multi-level areas, <strong>Ctrl+Comma</strong> and <strong>Ctrl+Period</strong> follow the surface up and down, and
 <strong>Keypad 5</strong> re-announces the overlay cursor.</p>
 <h2 id="where-you-are"><a class="header" href="#where-you-are">Where you are</a></h2>
-<p>Press <strong>X</strong> for “where am I” (your area and the part of it you’re standing in), <strong>K</strong> to hear the
-movement cursor’s exact position, and <strong>Shift+K</strong> to hear your party.</p>
+<p>Press <strong>Z</strong> for “where am I”: your area, whether you’re indoors, the room you’re standing in
+(noting if that spot is still unexplored), and roughly where you are on the map. Press <strong>X</strong> to hear
+the mod’s own hand-written visual description of the scanner object you’re focused on, and
+<strong>Shift+X</strong> for the description of the room your cursor is standing in, where one has been authored.
+<strong>K</strong> reads the movement cursor’s exact position, and <strong>Shift+K</strong> reads your party.</p>
+<p>Spoken directions default to the 8-point compass, but the <strong>Direction type</strong> dropdown (in the simple
+settings under Announcements) offers more: a 16-point compass for finer bearings, short spoken-letter
+forms (“ne”, “n ne”), directions <strong>relative to your facing</strong> (ahead / behind / left / right, in 4 or
+8 ways), or <strong>clock face</strong> (12 o’clock is dead ahead). The relative and clock styles follow your Q/E
+turning; the compass styles stay world-locked.</p>
+<h2 id="the-map"><a class="header" href="#the-map">The map</a></h2>
+<p><strong>Ctrl+V</strong> opens the accessible area map: a faster cursor you can sweep across the whole area, the
+map’s curated markers (quest points, exits, loot, people) on <strong>B</strong>, and the same review keys as the
+area. The map reviews what you’ve <strong>discovered</strong> rather than what’s currently in sight — and by
+default, people you have met stay locatable on it even while fog currently hides them (the “Neutral
+NPCs ignore fog of war” entry under <strong>Settings → Enhancements</strong>; turn it off for strict sighted
+parity). That’s the tool for re-finding a vendor in a big settlement: open the map, press <strong>N</strong>,
+jump the cursor there with <strong>Slash</strong>, close the map and send the party.</p>
 <h2 id="party-control-and-movement"><a class="header" href="#party-control-and-movement">Party control and movement</a></h2>
 <p>Press <strong>Ctrl+A</strong> to select the whole party, or <strong>Ctrl+1</strong>–<strong>Ctrl+6</strong> to select a single member
 (press the same number again to cycle to that member’s pet or mount). With the movement cursor over
@@ -349,12 +391,23 @@ announcements → Action</strong> in settings.</p>
 mode. Aim with either cursor: move the movement cursor onto a target and press <strong>Enter</strong>, or put the
 review cursor on a target and press <strong>I</strong>. <strong>Escape</strong> cancels targeting (when you’re not targeting,
 Escape opens the game menu instead).</p>
+<p>You can also set a <strong>default attack</strong>: press <strong>Backspace</strong> on an eligible action-bar ability (an
+at-will ability or cantrip, like Acid Splash) and attacking an enemy with Enter or I casts it
+instead of swinging your weapon — the same auto-use feature the sighted game offers on right-click.
+The slot announces “default attack” while one is set; Backspace again clears it.</p>
 <h2 id="your-character-windows"><a class="header" href="#your-character-windows">Your character windows</a></h2>
 <p>Open the main character screens directly, both in an area and on the world map: <strong>Ctrl+C</strong> for the
-character sheet, <strong>Ctrl+I</strong> for inventory, <strong>Ctrl+B</strong> for the spellbook, and <strong>Ctrl+J</strong> for the
-journal. Each toggles, so pressing the key again closes it, and you move around inside with the usual
-arrows, Tab, and Enter. The encyclopedia and local map don’t have a shortcut yet; open them from the
-Windows panel of the in-game UI.</p>
+character sheet, <strong>Ctrl+I</strong> for inventory, <strong>Ctrl+B</strong> for the spellbook, <strong>Ctrl+J</strong> for the journal,
+<strong>Ctrl+V</strong> for the map, and <strong>Ctrl+L</strong> for the log. Each toggles, so pressing the key again closes
+it, and you move around inside with the usual arrows, Tab, and Enter. The encyclopedia doesn’t have
+a shortcut yet; open it from the Windows panel of the in-game UI.</p>
+<h3 id="managing-items"><a class="header" href="#managing-items">Managing items</a></h3>
+<p>In the inventory, <strong>Enter</strong> on an item equips or uses it the default way, and <strong>Backspace</strong> opens
+its menu — equip to a specific slot (including <strong>Equip in off hand</strong>), drop, split, and so on.
+<strong>Backslash</strong> is a keyboard drag: press it on an item to pick it up, then press it again on a slot
+to place it there — the way to move gear directly between equipment slots. Splitting a stack (or
+dropping part of one) opens an <strong>amount window</strong>: focus lands on the slider, arrows adjust the
+count, and Enter on the action button confirms.</p>
 <h2 id="dialogue"><a class="header" href="#dialogue">Dialogue</a></h2>
 <p>Conversations are a transcript you read through: what has already been said, the current line, and
 your answer choices, including skill-check options. Choose an answer to continue; storybook passages
@@ -363,13 +416,15 @@ your answer choices, including skill-check options. Choose an answer to continue
 <p>A vendor window is a series of labelled panels you Tab between: your inventory, the store, your
 buying cart, your selling cart, the bulk-sell options, the running deal total, and close. <strong>Enter</strong>
 on an item moves it the sensible way for its panel (buying from the store, selling from your
-inventory, returning from a cart), and the deal button confirms the trade.</p>
+inventory, returning from a cart), <strong>Backspace</strong> offers moving the whole stack, and the deal button
+confirms the trade. Moving part of a stack opens the same amount window as splitting does.</p>
 <h2 id="looting"><a class="header" href="#looting">Looting</a></h2>
 <p>Containers and corpses open a loot window where you can take items one at a time or all at once. When
 you leave an area, the game may ask whether to collect any loot you left behind.</p>
 <h2 id="resting"><a class="header" href="#resting">Resting</a></h2>
-<p>Rest from the in-game menu bar — it behaves like a targeted action and asks you to place your camp —
-or open the rest screen to manage the camp itself: who cooks, who keeps watch, and so on.</p>
+<p>Press <strong>Ctrl+R</strong> (or choose Rest from the in-game menu bar) — it behaves like a targeted action and
+asks you to place your camp — or open the rest screen to manage the camp itself: who cooks, who
+keeps watch, and so on.</p>
 <h2 id="the-world-map"><a class="header" href="#the-world-map">The world map</a></h2>
 <p>Travelling between locations happens on the world map, which has its own cursor, scanner, and sonar.
 Use <strong>Page Up / Page Down</strong> to move through points and <strong>Ctrl+Page Up/Down</strong> to switch categories,
@@ -425,6 +480,11 @@ curves and all. It’s simplified by the camera angle, but worth keeping in mind
 area your characters can’t currently see. Press <strong>Ctrl+A</strong> to select the whole party, then
 <strong>Backspace</strong> to move everyone closer, revealing the hidden areas. If they aren’t moving, make sure
 the game is unpaused.</p>
+<p>This is a good moment to try <strong>L</strong> and <strong>Shift+L</strong>, which cycle <em>unexplored space</em>: the openings
+where walkable ground you haven’t revealed yet borders ground you have — in other words, the places
+you could go to push the map back. Each press names the opening (with its room, when known) and how
+far away it is. Press <strong>Slash</strong> to jump the cursor there, then <strong>Backspace</strong> to send the party.
+Whenever you’re unsure where to explore next, L is the answer.</p>
 <p>There’s nothing hidden in the starting room and only one way forward — head south. The room curves
 southwest, and once your characters pass a certain point a scripted rockfall occurs.</p>
 <p>Use the scanner, or press <strong>N</strong> to cycle neutral units, to find Anevia, trapped under fallen debris.
@@ -488,7 +548,10 @@ some turn-based actions.</p>
 the west and southwest (one has loot). The way forward then leads east and south.</p>
 <p>The <strong>rooms</strong> system can help with orientation. The mod marks regions of the map as rooms (you’ve
 probably heard it announce the cursor entering a new room). Press <strong>V</strong> to cycle room exits — doors
-get marked as exits later on — and <strong>X</strong> to hear which room your cursor is in.</p>
+get marked as exits later on — and <strong>Z</strong> for “where am I”, which includes the room your cursor is
+in. <strong>Shift+X</strong> speaks a hand-written description of the room, and <strong>X</strong> one of the scanner object
+you’re focused on, where they’ve been authored. And if you’ve lost the thread of the dungeon
+entirely, <strong>L</strong> cycles the unexplored openings that remain.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="how-the-game-works"><a class="header" href="#how-the-game-works">How the Game Works</a></h1>
 <p>If you’re new to this style of game, this chapter explains the big picture before the next two dig
@@ -750,6 +813,11 @@ cursor (Period cycles enemies) and press I. Your character closes to reach and a
 <li><strong>Use an ability or spell</strong> — Tab to the action bar, choose it, and the game enters targeting; aim
 with the movement cursor (Enter) or the review cursor (I).</li>
 </ul>
+<p>Two refinements worth knowing. A <strong>default attack</strong>: press Backspace on an eligible action-bar
+ability (an at-will ability or a cantrip) and your attack orders cast it instead of swinging — handy
+for casters who’d rather throw Acid Splash than poke with a dagger; Backspace again clears it. And
+<strong>touch spells</strong>: after casting a touch spell you hold the charge, and the interact keys (Enter on
+the cursor, I on the review target) deliver it to a valid target.</p>
 <p>How those orders play out depends on the mode.</p>
 <h3 id="commanding-in-real-time-with-pause"><a class="header" href="#commanding-in-real-time-with-pause">Commanding in real time with pause</a></h3>
 <p>Pause (Space), select a character, and queue their action — a move, an attack, a spell — then do the
@@ -768,8 +836,9 @@ cursor + I) or to cast from the action bar — or, if you don’t move, a full a
 swings. Press <strong>R</strong> at any point in the turn to hear the active character’s <strong>action economy</strong> — the
 standard, move, and swift actions still available and how much movement is left — so you know what you
 can still do before committing. When you’re finished, <strong>end your turn</strong> (Space skips/ends the turn in
-turn-based) and play passes to the next creature. Tab to the extra <strong>turn panel</strong> for the initiative order and turn-based
-actions such as ending your turn or taking a five-foot step.</p>
+turn-based) and play passes to the next creature. Tab to the extra <strong>turn panel</strong> for the initiative
+order and turn-based actions such as ending your turn or taking a five-foot step — and pressing
+Enter on a unit in the initiative list <strong>delays your turn</strong> until after that unit acts.</p>
 <h2 id="attacking"><a class="header" href="#attacking">Attacking</a></h2>
 <p>To attack, you roll a d20, add your attack bonus, and compare to the target’s <strong>Armor Class</strong>. Meet or
 beat it and you hit, then roll damage. A <strong>natural 20</strong> always hits and threatens a <strong>critical hit</strong> —
@@ -869,7 +938,8 @@ keyboard from the game).</p>
 <tr><td>Arrow keys</td><td>Navigate the focused panel / adjust the focused control</td></tr>
 <tr><td>Tab / Shift+Tab</td><td>Next / previous region or panel</td></tr>
 <tr><td>Enter (or Keypad Enter)</td><td>Activate the focused control</td></tr>
-<tr><td>Backspace</td><td>Secondary action (e.g. clear a key binding)</td></tr>
+<tr><td>Backspace</td><td>Secondary action (right-click: clear a key binding, open an item’s menu, set an action-bar ability as your default attack)</td></tr>
+<tr><td>Backslash</td><td>Pick up / place the focused item (keyboard drag — e.g. move gear between equipment slots)</td></tr>
 <tr><td>Escape</td><td>Back / close</td></tr>
 <tr><td>Space (or F1)</td><td>Read tooltip / inline links</td></tr>
 <tr><td>Home / End</td><td>Jump to first / last item</td></tr>
@@ -884,13 +954,17 @@ keyboard from the game).</p>
 <tr><th>Key</th><th>Action</th></tr>
 </thead>
 <tbody>
-<tr><td>W A S D (or arrows)</td><td>Move the movement cursor</td></tr>
+<tr><td>W A S D (or arrows)</td><td>Move the movement cursor (relative to your facing)</td></tr>
 <tr><td>Shift + W A S D (or Shift+arrows)</td><td>Move the secondary cursor</td></tr>
+<tr><td>Q / E</td><td>Turn your facing left / right (continuous while held)</td></tr>
+<tr><td>Shift+Q / Shift+E</td><td>Turn your facing to the next 45° step</td></tr>
 <tr><td>Enter</td><td>Interact at the cursor (left-click)</td></tr>
 <tr><td>Backspace</td><td>Move the selected party to the cursor</td></tr>
 <tr><td>C</td><td>Recenter the cursor on the party leader</td></tr>
-<tr><td>Space</td><td>Toggle pause</td></tr>
-<tr><td>X</td><td>Where am I (area + current room)</td></tr>
+<tr><td>Space</td><td>Toggle pause; during a cutscene, skip it</td></tr>
+<tr><td>Z</td><td>Where am I (area, indoors, current room, whether the spot is unexplored, and rough map position)</td></tr>
+<tr><td>X</td><td>Describe the scanner target (the mod’s authored visual description of the review item, where one exists)</td></tr>
+<tr><td>Shift+X</td><td>Describe the current room (the mod’s authored room description, where one exists)</td></tr>
 <tr><td>Escape</td><td>Cancel targeting; otherwise open the game menu</td></tr>
 </tbody>
 </table>
@@ -908,6 +982,7 @@ keyboard from the game).</p>
 <tr><td>G</td><td>Stop</td></tr>
 <tr><td>Ctrl+S</td><td>Toggle stealth</td></tr>
 <tr><td>Ctrl+D</td><td>Toggle AI control</td></tr>
+<tr><td>Ctrl+R</td><td>Rest — arms camp placement; aim with the cursor and press Enter</td></tr>
 </tbody>
 </table>
 </div>
@@ -935,6 +1010,7 @@ keyboard from the game).</p>
 <tr><td>Shift+Page Down / Shift+Page Up</td><td>Next / previous subcategory</td></tr>
 <tr><td>I</td><td>Interact with the review item</td></tr>
 <tr><td>Slash (or Home)</td><td>Move the movement cursor to the review item</td></tr>
+<tr><td>Semicolon</td><td>Ping the review item: one of four sounds for sight and route from the cursor (straight line / path around / unreachable / blocked sight — hear them in the audio glossary)</td></tr>
 <tr><td>K</td><td>Announce cursor position</td></tr>
 <tr><td>Shift+K</td><td>Announce party</td></tr>
 <tr><td>Y</td><td>Inspect the review-cursor unit</td></tr>
@@ -951,13 +1027,17 @@ keyboard from the game).</p>
 <tbody>
 <tr><td>Comma</td><td>Next party member</td></tr>
 <tr><td>Period</td><td>Next enemy</td></tr>
-<tr><td>N</td><td>Next neutral unit</td></tr>
+<tr><td>N</td><td>Next neutral NPC (people a click gets a real conversation or interaction from)</td></tr>
+<tr><td>B</td><td>Next bystander (background NPCs with only a one-liner bark, or nothing)</td></tr>
 <tr><td>M</td><td>Next interactable / object</td></tr>
-<tr><td>B</td><td>Next point of interest</td></tr>
 <tr><td>V</td><td>Next room exit</td></tr>
+<tr><td>L</td><td>Next unexplored space (openings where the map can still be revealed)</td></tr>
 </tbody>
 </table>
 </div>
+<p>Every cycle landing plays the same four-way sight-and-route ping as Semicolon, so you always hear
+whether the thing is directly walkable-to. Points of interest are reviewed on the map screen (below),
+not in the area.</p>
 <h2 id="exploration--buffers"><a class="header" href="#exploration--buffers">Exploration — buffers</a></h2>
 <div class="table-wrapper">
 <table>
@@ -997,6 +1077,7 @@ keyboard from the game).</p>
 <tbody>
 <tr><td>Alt + W A S D</td><td>Pan the camera</td></tr>
 <tr><td>Alt+Q / Alt+E</td><td>Rotate the camera left / right</td></tr>
+<tr><td>Alt+C</td><td>Read the compass (camera facing)</td></tr>
 <tr><td>Alt+F</td><td>Follow the selected character</td></tr>
 </tbody>
 </table>
@@ -1013,11 +1094,32 @@ keyboard from the game).</p>
 <tr><td>Ctrl+I</td><td>Inventory</td></tr>
 <tr><td>Ctrl+B</td><td>Spellbook</td></tr>
 <tr><td>Ctrl+J</td><td>Journal</td></tr>
+<tr><td>Ctrl+V</td><td>Map</td></tr>
+<tr><td>Ctrl+L</td><td>Log (past messages, grouped into channels)</td></tr>
 </tbody>
 </table>
 </div>
-<p>The encyclopedia and local map don’t have a shortcut yet — open them from the Windows panel of the
-in-game UI.</p>
+<p>The encyclopedia doesn’t have a shortcut yet — open it from the Windows panel of the in-game UI.</p>
+<h2 id="the-map-screen"><a class="header" href="#the-map-screen">The map screen</a></h2>
+<p><strong>Ctrl+V</strong> opens the accessible area map: your own faster map cursor over the whole area, plus the
+map’s curated markers. Movement and most review keys work as in the area; the differences:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Key</th><th>Action</th></tr>
+</thead>
+<tbody>
+<tr><td>W A S D (or arrows)</td><td>Move the map cursor (faster than the area cursor)</td></tr>
+<tr><td>Comma / Period</td><td>Next party member / enemy</td></tr>
+<tr><td>N</td><td>Next person — neutral NPCs and bystanders together, including people you’ve met who are currently hidden by fog (see the Enhancements setting)</td></tr>
+<tr><td>B</td><td>Next map marker (quest points, exits, loot, people — the game’s points of interest)</td></tr>
+<tr><td>M</td><td>Next exit marker</td></tr>
+<tr><td>Slash (or Home)</td><td>Move the map cursor to the review item</td></tr>
+<tr><td>K</td><td>Read the map cursor</td></tr>
+<tr><td>Escape</td><td>Close the map</td></tr>
+</tbody>
+</table>
+</div>
 <h2 id="world-map"><a class="header" href="#world-map">World map</a></h2>
 <p>The world map has its own cursor, scanner, and sonar.</p>
 <div class="table-wrapper">
@@ -1047,42 +1149,71 @@ in-game UI.</p>
 </div>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="settings"><a class="header" href="#settings">Settings</a></h1>
-<p>Press <strong>Ctrl+M</strong> anywhere to open the <strong>mod menu</strong>. It holds the mod’s own settings, lets you re-run
-the <strong>setup wizard</strong>, opens <strong>Help</strong> (which has <strong>Read documentation</strong> — opening this book in your
-browser), and links to the Discord and Patreon. Settings are organised into tabs; you navigate them
-with the usual arrows, Tab, and Enter, and every category has a <strong>Reset to defaults</strong> that affects
-only that category.</p>
+<p>Press <strong>Ctrl+M</strong> anywhere to open the <strong>mod menu</strong>. It holds <strong>Settings</strong>, lets you re-run the
+<strong>setup wizard</strong>, opens <strong>Help</strong> — with <strong>Read documentation</strong> (this book, in your browser) and the
+<strong>Audio glossary</strong>, which plays every mod sound on demand with an explanation of what it means —
+and links to the Discord and Patreon.</p>
 <h2 id="the-setup-wizard"><a class="header" href="#the-setup-wizard">The setup wizard</a></h2>
 <p>The first launch runs a setup wizard automatically, and you can re-run it from the mod menu at any
 time. It walks you through the most important choices as a series of steps with a roadmap header you
 can jump around in:</p>
 <ul>
-<li><strong>Speech</strong> — which speech engine to use (your screen reader via Prism, or Windows SAPI) and its
-rate / volume.</li>
+<li><strong>Speech</strong> — which speech output to use (your screen reader, or Windows SAPI) and its rate /
+volume.</li>
 <li><strong>Movement</strong> — continuous vs. tiled cursor movement, speed, and tile size.</li>
 <li><strong>Wall tones</strong> and <strong>sonar</strong> — whether they play, and which kinds of things the sonar pings.</li>
 <li><strong>Event feedback</strong> — whether combat and world events (damage, healing, spellcasting, …) are spoken
 aloud, and how, including distinct voices for enemies, allies, neutrals, and sourceless events.</li>
 </ul>
 <p>The wizard’s presets configure many settings at once; anything it sets can still be fine-tuned
-afterward under the matching settings tab.</p>
-<h2 id="settings-tabs"><a class="header" href="#settings-tabs">Settings tabs</a></h2>
+afterward.</p>
+<h2 id="the-simple-settings-screen"><a class="header" href="#the-simple-settings-screen">The simple settings screen</a></h2>
+<p>The mod menu’s <strong>Settings</strong> entry opens a small, curated screen with the controls most people
+actually want, grouped as:</p>
 <ul>
-<li><strong>Speech</strong> — the speech engine and per-engine tuning (rate, volume, voice). Includes the distinct
-voices used for positional event feedback.</li>
-<li><strong>Audio &amp; overlays</strong> — the spatial-audio overlays (sonar, wall tones, and others): per-system play
-mode (off / when moving / continuous) and volume, plus the shared cursor and movement behaviour.</li>
-<li><strong>Scanner</strong> — what the scanner includes and how it’s grouped, and the taxonomy used for both the
-scanner and the sonar sounds.</li>
-<li><strong>Events</strong> — one entry per event the mod can announce (damage, healing, buffs, spellcasting, turn
-changes, and so on), with per-source settings (party / enemy / neutral / sourceless) and the speech
-configuration each uses.</li>
-<li><strong>Input</strong> — every action in the mod as a rebindable binding. Capture a new combination (with a
-clash warning) or clear one. These are the mod’s own bindings, persisted separately from the game’s
-keybindings.</li>
-<li><strong>Announcements / UI</strong> — verbosity toggles the mod consults live; turning one off stops that piece
-of information being spoken.</li>
+<li><strong>Speech</strong> — the speech output (Auto = your screen reader, a specific screen reader, SAPI, or
+Clipboard) and the tuning that applies to it: rate, volume, and voice.</li>
+<li><strong>Audio cues</strong> — the master volume, then one node per sound system (sonar, slope, wall tones, fog,
+objects): when it’s active (off / when moving / continuous) and its volume. The sonar node also
+carries per-type <strong>Play sound</strong> switches — which kinds of things ping.</li>
+<li><strong>Announcements</strong> — “how much does it talk” presets: menu verbosity, scanner detail, the
+<strong>direction type</strong> (compass in 8 or 16 points, short spoken-letter forms, relative to your facing,
+or clock face), log detail, and event speech level.</li>
+<li><strong>Cursor</strong> — movement speed, room-change announcements, and the path/AoE speech toggles.</li>
+<li><strong>Input</strong> — every mod action as a rebindable binding, with a clash warning on capture.</li>
 </ul>
+<p>Everything here is a view over the same settings the full screen edits — nothing is duplicated, and
+hand-tuning in the full screen is never lost (a preset that no longer matches reads as “Custom”).</p>
+<h2 id="all-settings"><a class="header" href="#all-settings">All settings</a></h2>
+<p>The <strong>All settings</strong> button at the bottom opens the full tabbed browser:</p>
+<ul>
+<li><strong>Audio</strong> — master volume and every system volume.</li>
+<li><strong>Enhancements</strong> — deliberate, opt-outable departures from what a sighted player gets, where that
+materially helps a blind player. First entry: <strong>Neutral NPCs ignore fog of war</strong> — people you have
+met stay locatable on the map even while fog currently hides them (on by default; turn it off for
+strict sighted parity).</li>
+<li><strong>Events</strong> — one entry per event the mod can announce (damage, healing, buffs, deaths, …), with
+per-source settings (party / enemy / neutral / sourceless) and the speech configuration each uses;
+plus <strong>additional speech configurations</strong> so events can speak in different voices, positioned in
+the world where the engine supports it.</li>
+<li><strong>Exploration</strong> — the shared cursor behaviour (speed, wall slide, first-held direction priority,
+review-cycle reset) and each sensing system’s defaults (grid, spatial, slope, wall tones, object
+and fog cues, path info).</li>
+<li><strong>Input</strong> — the same rebindable bindings as the simple screen.</li>
+<li><strong>Log</strong> — which game-log message types are spoken, with presets (Default RTWP / Default Turn
+Based / Nothing).</li>
+<li><strong>Overlays</strong> — the spatial-audio overlay roster: each overlay’s composition and per-system
+overrides, plus add / rename / remove.</li>
+<li><strong>Scanner</strong> — what the scanner lists (per-type Listed switches), the sonar sound assigned to each
+entity type, <strong>scan announcements</strong> (which parts of an item’s line are spoken — name, type, health,
+location and its distance / direction / height sub-toggles) with per-type overrides, and the
+<strong>review cursor sounds</strong>: which sound each of the four sight-and-route outcomes plays (any can be
+Silent).</li>
+<li><strong>Speech</strong> — the default speech output and its tuning, plus the additional speech configurations
+used by events.</li>
+<li><strong>UI</strong> — announcement verbosity for menus and controls, with per-element-type overrides.</li>
+</ul>
+<p>Every tab has a <strong>Reset to defaults</strong> for just that tab, and a reset-everything below it.</p>
 <h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
 <ul>
 <li>Your Wrath Access settings are stored separately from the game’s, so <strong>updating the mod never
@@ -1099,17 +1230,27 @@ the exact history see the <a href="https://github.com/bradjrenshaw/wotr-access/c
 <p>The current alpha already covers a large slice of the game:</p>
 <ul>
 <li>Speech through your screen reader (Prism) with a Windows SAPI fallback, and custom keyboard
-navigation in mouse mode.</li>
+navigation in mouse mode. Speech outputs are configurable per use (rate, volume, voice — including
+OneCore), and event voices can be positioned in the world.</li>
 <li>Main menu, the New Game flow, and character creation / level-up.</li>
-<li>A mod menu (Ctrl+M) with the mod’s settings and a first-run setup wizard.</li>
-<li>Exploration: the movement cursor, the categorized scanner and review cursor, sonar and other
-spatial-audio overlays, wall tones, room/area awareness, and world-map travel.</li>
-<li>Dialogue, book events, tutorial popups, and the in-game log / barks.</li>
-<li>Turn-based combat and targeting (abilities, resting).</li>
-<li>Service windows: inventory, character sheet, spellbook, journal, encyclopedia, local map.</li>
-<li>Vendors / trade, looting, resting, party selection, and the group manager.</li>
+<li>A mod menu (Ctrl+M) with simple and full settings, a first-run setup wizard, and an audio glossary.</li>
+<li>Exploration: the movement cursor (with turnable facing on Q/E), the categorized scanner and review
+cursor with sight-and-route pings, sonar and other spatial-audio overlays, wall tones, room/area
+awareness with authored room descriptions, unexplored-space cycling, and world-map travel.</li>
+<li>The accessible map screen (Ctrl+V): a fast map cursor, the game’s markers, and met NPCs locatable
+even under fog (an opt-outable Enhancement).</li>
+<li>Dialogue, book events, tutorial popups, loading-screen tips, and the in-game log / barks (log
+review on Ctrl+L).</li>
+<li>Turn-based combat and targeting (abilities, touch spells, a settable default attack, resting on
+Ctrl+R, AoE cast previews, turn delaying).</li>
+<li>Service windows: inventory (with keyboard drag, off-hand equipping, and stack splitting),
+character sheet, spellbook, journal, encyclopedia.</li>
+<li>Vendors / trade (including partial-stack amounts), looting, resting, party selection, and the
+group manager.</li>
 <li>Review buffers for reading a unit’s details line by line.</li>
 <li>Party commands: select all / by member, hold position, stop, stealth, and AI toggles.</li>
+<li>Spoken directions in your choice of style: compass (8/16, full or short), relative to facing, or
+clock face.</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="known-issues"><a class="header" href="#known-issues">Known Issues</a></h1>
@@ -1121,7 +1262,6 @@ feature can’t hand out achievements you shouldn’t have.</li>
 <li><strong>Console / controller mode is not supported</strong> — PC keyboard only.</li>
 <li>After an area transition the cursor can occasionally land in an odd spot; press <strong>C</strong> to snap it
 back to the party leader. This is being worked on.</li>
-<li>A few screens aren’t accessible yet.</li>
 </ul>
 <p><strong>Please report bugs</strong> on the <a href="https://github.com/bradjrenshaw/wotr-access/issues">issue tracker</a>.
 The more detail the better — where you were, what you pressed, and what you heard versus what you

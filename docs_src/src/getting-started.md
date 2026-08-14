@@ -47,8 +47,23 @@ When the cursor is over an object, release the direction and you'll hear its nam
 the cursor. **C** snaps the cursor to the party leader. The cursor follows slopes and stairs
 automatically, so you never adjust its height by hand.
 
+Two optional movement aids live under **Settings → Exploration → Cursor**: **Slide along walls**
+makes a blocked glide slip along the wall's surface (funnelling through doorways), and **First-held
+direction has priority** makes a held diagonal turn into a gap the moment it opens — hold the
+direction you actually want first, add the second to follow the wall.
+
 This game has fog of war: if none of your characters can see a spot, you won't know what's there. A
 sound marks the cursor entering or leaving fog of war.
+
+### Facing
+
+You have a facing, and movement is relative to it: **W** is always "forward". Hold **Q** or **E** to
+turn continuously, or **Shift+Q / Shift+E** to snap to the next 45° step. Everything audible turns
+with you — cursor movement, sonar and wall-tone panning, even the game's own voices and effects —
+while **spoken directions stay compass words** (north is north no matter which way you face), so you
+can always re-orient. As you turn, a chime marks world north each time your facing sweeps past a
+compass point, and **Alt+C** reads the camera's compass heading. If you prefer readouts relative to
+your facing instead of the compass, switch the **direction type** (see below).
 
 ### The review cursor
 
@@ -61,8 +76,19 @@ Press **I** to interact with the review item (a left-click) — handy for target
 spells without moving the movement cursor. **Slash** jumps the movement cursor to the review cursor.
 
 You can also cycle the review cursor by kind, nearest first: **Period** for enemies, **Comma** for
-allies, **M** for interactables, **N** for neutral units, **B** for points of interest, **V** for
-room exits, **L** for unexplored space. Hold **Shift** to go backwards.
+allies, **M** for interactables, **N** for neutral NPCs, **B** for bystanders, **V** for room exits,
+**L** for unexplored space. Hold **Shift** to go backwards. The N/B split separates the people worth
+talking to from the background crowd: **neutrals** (N) are NPCs a click gets a real conversation or
+scripted interaction from — quest-givers, vendors — while **bystanders** (B) only bark a one-liner,
+or nothing at all. An NPC whose conversation unlocks later moves from B to N when it does.
+
+Every cycle landing plays one of **four sight-and-route sounds**, telling you how the thing relates
+to your cursor: a **straight line** is walkable directly to it; a **path around** exists but bends;
+**unreachable** means you can see it but no walkable path leads there; **blocked sight** means a
+wall is between you and it. **Semicolon** replays the ping for the current review item on demand,
+and the audio glossary (Ctrl+M → Help → Audio glossary) plays all four with explanations. If you'd
+like the cycles to snap back to the nearest thing whenever you move, enable **Cursor movement resets
+review cycles** under Settings → Exploration → Cursor.
 
 Unexplored space (**L**) deserves a note: it cycles the openings where walkable ground you haven't
 revealed yet borders ground you have — the places where the map can still grow. If you're ever
@@ -97,6 +123,22 @@ the mod's own hand-written visual description of the scanner object you're focus
 **Shift+X** for the description of the room your cursor is standing in, where one has been authored.
 **K** reads the movement cursor's exact position, and **Shift+K** reads your party.
 
+Spoken directions default to the 8-point compass, but the **Direction type** dropdown (in the simple
+settings under Announcements) offers more: a 16-point compass for finer bearings, short spoken-letter
+forms ("ne", "n ne"), directions **relative to your facing** (ahead / behind / left / right, in 4 or
+8 ways), or **clock face** (12 o'clock is dead ahead). The relative and clock styles follow your Q/E
+turning; the compass styles stay world-locked.
+
+## The map
+
+**Ctrl+V** opens the accessible area map: a faster cursor you can sweep across the whole area, the
+map's curated markers (quest points, exits, loot, people) on **B**, and the same review keys as the
+area. The map reviews what you've **discovered** rather than what's currently in sight — and by
+default, people you have met stay locatable on it even while fog currently hides them (the "Neutral
+NPCs ignore fog of war" entry under **Settings → Enhancements**; turn it off for strict sighted
+parity). That's the tool for re-finding a vendor in a big settlement: open the map, press **N**,
+jump the cursor there with **Slash**, close the map and send the party.
+
 ## Party control and movement
 
 Press **Ctrl+A** to select the whole party, or **Ctrl+1**–**Ctrl+6** to select a single member
@@ -125,13 +167,27 @@ mode. Aim with either cursor: move the movement cursor onto a target and press *
 review cursor on a target and press **I**. **Escape** cancels targeting (when you're not targeting,
 Escape opens the game menu instead).
 
+You can also set a **default attack**: press **Backspace** on an eligible action-bar ability (an
+at-will ability or cantrip, like Acid Splash) and attacking an enemy with Enter or I casts it
+instead of swinging your weapon — the same auto-use feature the sighted game offers on right-click.
+The slot announces "default attack" while one is set; Backspace again clears it.
+
 ## Your character windows
 
 Open the main character screens directly, both in an area and on the world map: **Ctrl+C** for the
-character sheet, **Ctrl+I** for inventory, **Ctrl+B** for the spellbook, and **Ctrl+J** for the
-journal. Each toggles, so pressing the key again closes it, and you move around inside with the usual
-arrows, Tab, and Enter. The encyclopedia and local map don't have a shortcut yet; open them from the
-Windows panel of the in-game UI.
+character sheet, **Ctrl+I** for inventory, **Ctrl+B** for the spellbook, **Ctrl+J** for the journal,
+**Ctrl+V** for the map, and **Ctrl+L** for the log. Each toggles, so pressing the key again closes
+it, and you move around inside with the usual arrows, Tab, and Enter. The encyclopedia doesn't have
+a shortcut yet; open it from the Windows panel of the in-game UI.
+
+### Managing items
+
+In the inventory, **Enter** on an item equips or uses it the default way, and **Backspace** opens
+its menu — equip to a specific slot (including **Equip in off hand**), drop, split, and so on.
+**Backslash** is a keyboard drag: press it on an item to pick it up, then press it again on a slot
+to place it there — the way to move gear directly between equipment slots. Splitting a stack (or
+dropping part of one) opens an **amount window**: focus lands on the slider, arrows adjust the
+count, and Enter on the action button confirms.
 
 ## Dialogue
 
@@ -144,7 +200,8 @@ your answer choices, including skill-check options. Choose an answer to continue
 A vendor window is a series of labelled panels you Tab between: your inventory, the store, your
 buying cart, your selling cart, the bulk-sell options, the running deal total, and close. **Enter**
 on an item moves it the sensible way for its panel (buying from the store, selling from your
-inventory, returning from a cart), and the deal button confirms the trade.
+inventory, returning from a cart), **Backspace** offers moving the whole stack, and the deal button
+confirms the trade. Moving part of a stack opens the same amount window as splitting does.
 
 ## Looting
 
@@ -153,8 +210,9 @@ you leave an area, the game may ask whether to collect any loot you left behind.
 
 ## Resting
 
-Rest from the in-game menu bar — it behaves like a targeted action and asks you to place your camp —
-or open the rest screen to manage the camp itself: who cooks, who keeps watch, and so on.
+Press **Ctrl+R** (or choose Rest from the in-game menu bar) — it behaves like a targeted action and
+asks you to place your camp — or open the rest screen to manage the camp itself: who cooks, who
+keeps watch, and so on.
 
 ## The world map
 

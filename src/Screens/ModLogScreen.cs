@@ -24,6 +24,7 @@ namespace WrathAccess.Screens
         private static bool s_open;
         public static void Open() => s_open = true;
         public static void Close() => s_open = false;
+        public static void Toggle() => s_open = !s_open; // the Ctrl+L window key (press again to close)
 
         public override string Key => "overlay.modlog";
         public override string ScreenName => L("log.title", "Log");

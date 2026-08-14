@@ -67,6 +67,7 @@ namespace WrathAccess
                 BuildSettings();
                 WrathAccess.Settings.ModSettings.Initialize(
                     System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "WrathAccess"));
+                MigrateMapBinding(); // one-time: the map's default moved Ctrl+L → Ctrl+V (Ctrl+L = log now)
                 // Speech comes up AFTER settings load so the persisted handler/backend choices apply.
                 WrathAccess.Speech.SpeechManager.Initialize();
                 // Overlays are built AFTER load: the saved overlay-id list (incl. user-added ones) is only
@@ -427,6 +428,28 @@ namespace WrathAccess
             WrathAccess.Speech.SpeechConfigRegistry.Register();
         }
 
+        // The map window's default binding moved Ctrl+L → Ctrl+V (Ctrl+L now opens the log). Saved
+        // configs override code defaults, so an existing install would keep map on Ctrl+L and COLLIDE
+        // with the new log default. Run after settings load: a saved map binding that is still exactly
+        // the old default gets re-pointed at the new one; any custom combo the user chose is kept.
+        private static void MigrateMapBinding()
+        {
+            foreach (var action in InputManager.Actions)
+            {
+                if (action.Key != "window.map") continue;
+                var oldDefault = new WrathAccess.Input.KeyboardBinding(KeyCode.L, ctrl: true);
+                if (action.Bindings.Count == 1
+                    && action.Bindings[0] is WrathAccess.Input.KeyboardBinding kb
+                    && kb.Serialize() == oldDefault.Serialize())
+                {
+                    action.ClearBindings();
+                    action.AddBinding(KeyCode.V, ctrl: true);
+                    Log?.Log("[input] migrated window.map binding Ctrl+L -> Ctrl+V (Ctrl+L is the log now).");
+                }
+                return;
+            }
+        }
+
         private static void RegisterInput()
         {
             // ---- Global: always live, even when focus mode is off (handlers self-gate as needed) ----
@@ -748,9 +771,19 @@ namespace WrathAccess
                 () => OpenWindow(ServiceWindowsType.Spellbook)).AddBinding(KeyCode.B, ctrl: true);
             InputManager.Register("window.journal", "Open journal", InputCategory.Windows,
                 () => OpenWindow(ServiceWindowsType.Journal)).AddBinding(KeyCode.J, ctrl: true);
-            // Ctrl+L (Local map) — Ctrl+M is the mod settings menu.
+            // Ctrl+V (map View) — Ctrl+M is the mod settings menu, Ctrl+L is the log below.
             InputManager.Register("window.map", "Open map", InputCategory.Windows,
-                () => OpenWindow(ServiceWindowsType.LocalMap)).AddBinding(KeyCode.L, ctrl: true);
+                () => OpenWindow(ServiceWindowsType.LocalMap)).AddBinding(KeyCode.V, ctrl: true);
+            // Ctrl+L (Log) — the mod's log review screen (channel tabs + history), same as the HUD's
+            // Log button; toggles like the other window keys.
+            InputManager.Register("window.log", "Open log", InputCategory.Windows,
+                WrathAccess.Screens.ModLogScreen.Toggle).AddBinding(KeyCode.L, ctrl: true);
+            // Ctrl+R (Rest) — the same one-action flow as the HUD menu's Rest button: arms the game's
+            // rest-marker targeting (its gates apply), then the cursor aims and Enter places the camp.
+            InputManager.Register("explore.rest", "Rest", InputCategory.Exploration, () =>
+                WrathAccess.Exploration.Targeting.BeginRest(TextUtil.StripRichText(
+                    Kingmaker.Blueprints.Root.Strings.UIStrings.Instance.InGameMenuTexts.RestText)))
+                .AddBinding(KeyCode.R, ctrl: true).Grouped("party");
 
             // ---- World map: like the local map, the world-map screen REUSES the shared Exploration
             // actions (movement, PageUp/Down browse, review cycles, I travel, Enter/K/C//) — Route()d

@@ -67,6 +67,12 @@ whole party), then give the order:
 - **Use an ability or spell** — Tab to the action bar, choose it, and the game enters targeting; aim
   with the movement cursor (Enter) or the review cursor (I).
 
+Two refinements worth knowing. A **default attack**: press Backspace on an eligible action-bar
+ability (an at-will ability or a cantrip) and your attack orders cast it instead of swinging — handy
+for casters who'd rather throw Acid Splash than poke with a dagger; Backspace again clears it. And
+**touch spells**: after casting a touch spell you hold the charge, and the interact keys (Enter on
+the cursor, I on the review target) deliver it to a valid target.
+
 How those orders play out depends on the mode.
 
 ### Commanding in real time with pause
@@ -90,8 +96,9 @@ cursor + I) or to cast from the action bar — or, if you don't move, a full att
 swings. Press **R** at any point in the turn to hear the active character's **action economy** — the
 standard, move, and swift actions still available and how much movement is left — so you know what you
 can still do before committing. When you're finished, **end your turn** (Space skips/ends the turn in
-turn-based) and play passes to the next creature. Tab to the extra **turn panel** for the initiative order and turn-based
-actions such as ending your turn or taking a five-foot step.
+turn-based) and play passes to the next creature. Tab to the extra **turn panel** for the initiative
+order and turn-based actions such as ending your turn or taking a five-foot step — and pressing
+Enter on a unit in the initiative list **delays your turn** until after that unit acts.
 
 ## Attacking
 

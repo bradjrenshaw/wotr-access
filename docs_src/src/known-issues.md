@@ -7,7 +7,6 @@
 - **Console / controller mode is not supported** — PC keyboard only.
 - After an area transition the cursor can occasionally land in an odd spot; press **C** to snap it
   back to the party leader. This is being worked on.
-- A few screens aren't accessible yet.
 
 **Please report bugs** on the [issue tracker](https://github.com/bradjrenshaw/wotr-access/issues).
 The more detail the better — where you were, what you pressed, and what you heard versus what you

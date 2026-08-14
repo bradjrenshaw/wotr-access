@@ -27,7 +27,8 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 | Arrow keys | Navigate the focused panel / adjust the focused control |
 | Tab / Shift+Tab | Next / previous region or panel |
 | Enter (or Keypad Enter) | Activate the focused control |
-| Backspace | Secondary action (e.g. clear a key binding) |
+| Backspace | Secondary action (right-click: clear a key binding, open an item's menu, set an action-bar ability as your default attack) |
+| Backslash | Pick up / place the focused item (keyboard drag — e.g. move gear between equipment slots) |
 | Escape | Back / close |
 | Space (or F1) | Read tooltip / inline links |
 | Home / End | Jump to first / last item |
@@ -37,8 +38,10 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 
 | Key | Action |
 | --- | --- |
-| W A S D (or arrows) | Move the movement cursor |
+| W A S D (or arrows) | Move the movement cursor (relative to your facing) |
 | Shift + W A S D (or Shift+arrows) | Move the secondary cursor |
+| Q / E | Turn your facing left / right (continuous while held) |
+| Shift+Q / Shift+E | Turn your facing to the next 45° step |
 | Enter | Interact at the cursor (left-click) |
 | Backspace | Move the selected party to the cursor |
 | C | Recenter the cursor on the party leader |
@@ -58,6 +61,7 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 | G | Stop |
 | Ctrl+S | Toggle stealth |
 | Ctrl+D | Toggle AI control |
+| Ctrl+R | Rest — arms camp placement; aim with the cursor and press Enter |
 
 ## Exploration — combat
 
@@ -75,6 +79,7 @@ Used while navigating UI panels (menus, the character sheet, dialogue, vendors, 
 | Shift+Page Down / Shift+Page Up | Next / previous subcategory |
 | I | Interact with the review item |
 | Slash (or Home) | Move the movement cursor to the review item |
+| Semicolon | Ping the review item: one of four sounds for sight and route from the cursor (straight line / path around / unreachable / blocked sight — hear them in the audio glossary) |
 | K | Announce cursor position |
 | Shift+K | Announce party |
 | Y | Inspect the review-cursor unit |
@@ -86,11 +91,15 @@ Quick review-cursor cycles (hold **Shift** to go backwards):
 | --- | --- |
 | Comma | Next party member |
 | Period | Next enemy |
-| N | Next neutral unit |
+| N | Next neutral NPC (people a click gets a real conversation or interaction from) |
+| B | Next bystander (background NPCs with only a one-liner bark, or nothing) |
 | M | Next interactable / object |
-| B | Next point of interest |
 | V | Next room exit |
 | L | Next unexplored space (openings where the map can still be revealed) |
+
+Every cycle landing plays the same four-way sight-and-route ping as Semicolon, so you always hear
+whether the thing is directly walkable-to. Points of interest are reviewed on the map screen (below),
+not in the area.
 
 ## Exploration — buffers
 
@@ -118,6 +127,7 @@ Quick review-cursor cycles (hold **Shift** to go backwards):
 | --- | --- |
 | Alt + W A S D | Pan the camera |
 | Alt+Q / Alt+E | Rotate the camera left / right |
+| Alt+C | Read the compass (camera facing) |
 | Alt+F | Follow the selected character |
 
 ## Character windows
@@ -130,9 +140,26 @@ Toggle these directly, in an area or on the world map (press again to close).
 | Ctrl+I | Inventory |
 | Ctrl+B | Spellbook |
 | Ctrl+J | Journal |
+| Ctrl+V | Map |
+| Ctrl+L | Log (past messages, grouped into channels) |
 
-The encyclopedia and local map don't have a shortcut yet — open them from the Windows panel of the
-in-game UI.
+The encyclopedia doesn't have a shortcut yet — open it from the Windows panel of the in-game UI.
+
+## The map screen
+
+**Ctrl+V** opens the accessible area map: your own faster map cursor over the whole area, plus the
+map's curated markers. Movement and most review keys work as in the area; the differences:
+
+| Key | Action |
+| --- | --- |
+| W A S D (or arrows) | Move the map cursor (faster than the area cursor) |
+| Comma / Period | Next party member / enemy |
+| N | Next person — neutral NPCs and bystanders together, including people you've met who are currently hidden by fog (see the Enhancements setting) |
+| B | Next map marker (quest points, exits, loot, people — the game's points of interest) |
+| M | Next exit marker |
+| Slash (or Home) | Move the map cursor to the review item |
+| K | Read the map cursor |
+| Escape | Close the map |
 
 ## World map
 

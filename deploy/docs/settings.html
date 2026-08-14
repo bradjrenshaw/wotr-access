@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b3ee46d5.js";
+            window.path_to_searchindex_js = "searchindex-c0ad5050.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-6d5d962f.js"></script>
@@ -178,42 +178,71 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="settings"><a class="header" href="#settings">Settings</a></h1>
-<p>Press <strong>Ctrl+M</strong> anywhere to open the <strong>mod menu</strong>. It holds the mod’s own settings, lets you re-run
-the <strong>setup wizard</strong>, opens <strong>Help</strong> (which has <strong>Read documentation</strong> — opening this book in your
-browser), and links to the Discord and Patreon. Settings are organised into tabs; you navigate them
-with the usual arrows, Tab, and Enter, and every category has a <strong>Reset to defaults</strong> that affects
-only that category.</p>
+<p>Press <strong>Ctrl+M</strong> anywhere to open the <strong>mod menu</strong>. It holds <strong>Settings</strong>, lets you re-run the
+<strong>setup wizard</strong>, opens <strong>Help</strong> — with <strong>Read documentation</strong> (this book, in your browser) and the
+<strong>Audio glossary</strong>, which plays every mod sound on demand with an explanation of what it means —
+and links to the Discord and Patreon.</p>
 <h2 id="the-setup-wizard"><a class="header" href="#the-setup-wizard">The setup wizard</a></h2>
 <p>The first launch runs a setup wizard automatically, and you can re-run it from the mod menu at any
 time. It walks you through the most important choices as a series of steps with a roadmap header you
 can jump around in:</p>
 <ul>
-<li><strong>Speech</strong> — which speech engine to use (your screen reader via Prism, or Windows SAPI) and its
-rate / volume.</li>
+<li><strong>Speech</strong> — which speech output to use (your screen reader, or Windows SAPI) and its rate /
+volume.</li>
 <li><strong>Movement</strong> — continuous vs. tiled cursor movement, speed, and tile size.</li>
 <li><strong>Wall tones</strong> and <strong>sonar</strong> — whether they play, and which kinds of things the sonar pings.</li>
 <li><strong>Event feedback</strong> — whether combat and world events (damage, healing, spellcasting, …) are spoken
 aloud, and how, including distinct voices for enemies, allies, neutrals, and sourceless events.</li>
 </ul>
 <p>The wizard’s presets configure many settings at once; anything it sets can still be fine-tuned
-afterward under the matching settings tab.</p>
-<h2 id="settings-tabs"><a class="header" href="#settings-tabs">Settings tabs</a></h2>
+afterward.</p>
+<h2 id="the-simple-settings-screen"><a class="header" href="#the-simple-settings-screen">The simple settings screen</a></h2>
+<p>The mod menu’s <strong>Settings</strong> entry opens a small, curated screen with the controls most people
+actually want, grouped as:</p>
 <ul>
-<li><strong>Speech</strong> — the speech engine and per-engine tuning (rate, volume, voice). Includes the distinct
-voices used for positional event feedback.</li>
-<li><strong>Audio &amp; overlays</strong> — the spatial-audio overlays (sonar, wall tones, and others): per-system play
-mode (off / when moving / continuous) and volume, plus the shared cursor and movement behaviour.</li>
-<li><strong>Scanner</strong> — what the scanner includes and how it’s grouped, and the taxonomy used for both the
-scanner and the sonar sounds.</li>
-<li><strong>Events</strong> — one entry per event the mod can announce (damage, healing, buffs, spellcasting, turn
-changes, and so on), with per-source settings (party / enemy / neutral / sourceless) and the speech
-configuration each uses.</li>
-<li><strong>Input</strong> — every action in the mod as a rebindable binding. Capture a new combination (with a
-clash warning) or clear one. These are the mod’s own bindings, persisted separately from the game’s
-keybindings.</li>
-<li><strong>Announcements / UI</strong> — verbosity toggles the mod consults live; turning one off stops that piece
-of information being spoken.</li>
+<li><strong>Speech</strong> — the speech output (Auto = your screen reader, a specific screen reader, SAPI, or
+Clipboard) and the tuning that applies to it: rate, volume, and voice.</li>
+<li><strong>Audio cues</strong> — the master volume, then one node per sound system (sonar, slope, wall tones, fog,
+objects): when it’s active (off / when moving / continuous) and its volume. The sonar node also
+carries per-type <strong>Play sound</strong> switches — which kinds of things ping.</li>
+<li><strong>Announcements</strong> — “how much does it talk” presets: menu verbosity, scanner detail, the
+<strong>direction type</strong> (compass in 8 or 16 points, short spoken-letter forms, relative to your facing,
+or clock face), log detail, and event speech level.</li>
+<li><strong>Cursor</strong> — movement speed, room-change announcements, and the path/AoE speech toggles.</li>
+<li><strong>Input</strong> — every mod action as a rebindable binding, with a clash warning on capture.</li>
 </ul>
+<p>Everything here is a view over the same settings the full screen edits — nothing is duplicated, and
+hand-tuning in the full screen is never lost (a preset that no longer matches reads as “Custom”).</p>
+<h2 id="all-settings"><a class="header" href="#all-settings">All settings</a></h2>
+<p>The <strong>All settings</strong> button at the bottom opens the full tabbed browser:</p>
+<ul>
+<li><strong>Audio</strong> — master volume and every system volume.</li>
+<li><strong>Enhancements</strong> — deliberate, opt-outable departures from what a sighted player gets, where that
+materially helps a blind player. First entry: <strong>Neutral NPCs ignore fog of war</strong> — people you have
+met stay locatable on the map even while fog currently hides them (on by default; turn it off for
+strict sighted parity).</li>
+<li><strong>Events</strong> — one entry per event the mod can announce (damage, healing, buffs, deaths, …), with
+per-source settings (party / enemy / neutral / sourceless) and the speech configuration each uses;
+plus <strong>additional speech configurations</strong> so events can speak in different voices, positioned in
+the world where the engine supports it.</li>
+<li><strong>Exploration</strong> — the shared cursor behaviour (speed, wall slide, first-held direction priority,
+review-cycle reset) and each sensing system’s defaults (grid, spatial, slope, wall tones, object
+and fog cues, path info).</li>
+<li><strong>Input</strong> — the same rebindable bindings as the simple screen.</li>
+<li><strong>Log</strong> — which game-log message types are spoken, with presets (Default RTWP / Default Turn
+Based / Nothing).</li>
+<li><strong>Overlays</strong> — the spatial-audio overlay roster: each overlay’s composition and per-system
+overrides, plus add / rename / remove.</li>
+<li><strong>Scanner</strong> — what the scanner lists (per-type Listed switches), the sonar sound assigned to each
+entity type, <strong>scan announcements</strong> (which parts of an item’s line are spoken — name, type, health,
+location and its distance / direction / height sub-toggles) with per-type overrides, and the
+<strong>review cursor sounds</strong>: which sound each of the four sight-and-route outcomes plays (any can be
+Silent).</li>
+<li><strong>Speech</strong> — the default speech output and its tuning, plus the additional speech configurations
+used by events.</li>
+<li><strong>UI</strong> — announcement verbosity for menus and controls, with per-element-type overrides.</li>
+</ul>
+<p>Every tab has a <strong>Reset to defaults</strong> for just that tab, and a reset-everything below it.</p>
 <h2 id="notes"><a class="header" href="#notes">Notes</a></h2>
 <ul>
 <li>Your Wrath Access settings are stored separately from the game’s, so <strong>updating the mod never

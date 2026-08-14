@@ -48,14 +48,12 @@ namespace WrathAccess.Screens
         public override IEnumerable<ElementAction> GetActions()
         {
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"),
-                _ => ServiceWindows()?.HandleCloseAll());
+                _ => ServiceWindows.Current?.HandleCloseAll());
         }
 
         private static CharacterInfoVM Vm()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM?.CharacterInfoVM?.Value;
+            => ServiceWindows.Current?.CharacterInfoVM?.Value;
 
-        private static ServiceWindowsVM ServiceWindows()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
 
         public override void Build(GraphBuilder b)

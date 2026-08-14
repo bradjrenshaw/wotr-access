@@ -42,7 +42,7 @@ namespace WrathAccess.Screens
                     vm.MetamagicBuilderMode.Value = false;
                     Navigation.FocusStop("known"); // back to the spell list you built from
                 }
-                else ServiceWindows()?.HandleCloseAll();
+                else ServiceWindows.Current?.HandleCloseAll();
             });
         }
 
@@ -50,10 +50,8 @@ namespace WrathAccess.Screens
             => vm.MetamagicBuilderMode.Value && vm.SpellbookMetamagicMixerVM != null;
 
         private static SpellbookVM Vm()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM?.SpellbookVM?.Value;
+            => ServiceWindows.Current?.SpellbookVM?.Value;
 
-        private static ServiceWindowsVM ServiceWindows()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
 
         public override void Build(GraphBuilder b)

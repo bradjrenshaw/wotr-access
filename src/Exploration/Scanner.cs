@@ -694,6 +694,7 @@ namespace WrathAccess.Exploration
                 if (!reachable) { Speak(Loc.T("scan.cant_reach", new { name })); return; }
             }
             EnsureSelection();
+            int warnings = WarningReader.Count;
             switch (target.Interact())
             {
                 case InteractOutcome.Started:
@@ -702,7 +703,13 @@ namespace WrathAccess.Exploration
                 case InteractOutcome.RefusedSpoken:
                     break; // the item already spoke its refusal — don't talk over it
                 default:
-                    Speak(Loc.T("scan.cant_interact", new { name }));
+                    // The game often SPEAKS the refusal reason itself (a warning toast — e.g. the
+                    // encumbrance gate on a global-map exit: "You cannot travel. Your inventory's
+                    // weight is too great."). WarningReader queues those non-interrupting, so our
+                    // generic line's interrupt would CANCEL the explanation before it played (the
+                    // random-encounter can't-leave repro). Fall back only when the game stayed silent.
+                    if (WarningReader.Count == warnings)
+                        Speak(Loc.T("scan.cant_interact", new { name }));
                     break;
             }
         }

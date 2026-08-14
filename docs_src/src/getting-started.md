@@ -55,16 +55,6 @@ direction you actually want first, add the second to follow the wall.
 This game has fog of war: if none of your characters can see a spot, you won't know what's there. A
 sound marks the cursor entering or leaving fog of war.
 
-### Facing
-
-You have a facing, and movement is relative to it: **W** is always "forward". Hold **Q** or **E** to
-turn continuously, or **Shift+Q / Shift+E** to snap to the next 45° step. Everything audible turns
-with you — cursor movement, sonar and wall-tone panning, even the game's own voices and effects —
-while **spoken directions stay compass words** (north is north no matter which way you face), so you
-can always re-orient. As you turn, a chime marks world north each time your facing sweeps past a
-compass point, and **Alt+C** reads the camera's compass heading. If you prefer readouts relative to
-your facing instead of the compass, switch the **direction type** (see below).
-
 ### The review cursor
 
 The scanner cycles through everything visible to you. Use **Page Up / Page Down** to move through

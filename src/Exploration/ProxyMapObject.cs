@@ -282,8 +282,7 @@ namespace WrathAccess.Exploration
             // Area transitions (area exits) aren't InteractionParts, so ClickMapObjectHandler can't act on
             // them — that's why they read "can't interact". Trigger them the way the overtip's click does.
             var transition = _obj.Get<AreaTransitionPart>();
-            if (transition != null)
-                return TriggerTransition(view, transition) ? InteractOutcome.Started : InteractOutcome.NotSupported;
+            if (transition != null) return TriggerTransition(view, transition);
 
             var units = Game.Instance?.SelectionCharacter?.SelectedUnits;
             if (units == null || units.Count == 0) return InteractOutcome.NotSupported;
@@ -304,15 +303,28 @@ namespace WrathAccess.Exploration
 
         // Mirrors AreaTransitionController.StartAreaTransition: move the party to the exit in formation,
         // then run each unit's UnitAreaTransition (the group command loads the next area once they arrive).
-        private static bool TriggerTransition(EntityViewBase view, AreaTransitionPart transition)
+        // Refusals carry their REASON: the sighted click just goes dead at these gates (the overtip is
+        // greyed), but "nothing happened" is unexplained by ear.
+        private static InteractOutcome TriggerTransition(EntityViewBase view, AreaTransitionPart transition)
         {
             var game = Game.Instance;
-            if (game == null || game.Player.IsInCombat || game.CurrentMode == GameModeType.Dialog) return false;
-            if (AreaTransitionController.CanNotMove(transition)) return false; // shows its own warning bark
+            if (game == null || game.CurrentMode == GameModeType.Dialog) return InteractOutcome.NotSupported;
+            if (game.Player.IsInCombat)
+            {
+                Tts.Speak(Loc.T("exit.in_combat"), interrupt: true);
+                return InteractOutcome.RefusedSpoken;
+            }
+            // CanNotMove refusals usually raise the game's own warning toast (the global-map exits'
+            // encumbrance gate: "You cannot travel. Your inventory's weight is too great."), which
+            // WarningReader speaks — report RefusedSpoken so no generic line cancels it. The rare
+            // silent refusal (a party member captured) falls back to the generic message.
+            int warnings = WarningReader.Count;
+            if (AreaTransitionController.CanNotMove(transition))
+                return WarningReader.Count != warnings ? InteractOutcome.RefusedSpoken : InteractOutcome.NotSupported;
 
             var position = view.transform.position;
             var party = game.Player.GetPartyCharactersForGroupCommand(position);
-            if (party.Count == 0) return false;
+            if (party.Count == 0) return InteractOutcome.NotSupported;
 
             var groupCommand = new AreaTransitionGroupCommand(party, transition);
             (game.UI.SelectionManager as SelectionManagerPC)?.MultiSelect(party.Select(u => u.View), canAddToSelection: false);
@@ -322,7 +334,7 @@ namespace WrathAccess.Exploration
                 preview: false, showTargetMarker: true,
                 BlueprintRoot.Instance.Formations.MinSpaceFactor, ignoreHold: true,
                 (unit, s) => AreaTransitionController.RunUnitTransitionCommand(groupCommand, unit, s.Destination, s.SpeedLimit));
-            return true;
+            return InteractOutcome.Started;
         }
     }
 }

@@ -46,14 +46,12 @@ namespace WrathAccess.Screens
         public override IEnumerable<ElementAction> GetActions()
         {
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"),
-                _ => ServiceWindows()?.HandleCloseAll());
+                _ => ServiceWindows.Current?.HandleCloseAll());
         }
 
         private static InventoryVM Vm()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM?.InventoryVM?.Value;
+            => ServiceWindows.Current?.InventoryVM?.Value;
 
-        private static ServiceWindowsVM ServiceWindows()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
 
         public override void Build(GraphBuilder b)
@@ -160,8 +158,14 @@ namespace WrathAccess.Screens
             var enc = stash.EncumbranceVM;
             if (enc != null)
                 b.AddItem(ControlId.Structural(k + "encumbrance"), GraphNodes.Text(
+                    // Everything the sighted bar shows: current weight + status PLUS the light/
+                    // medium/heavy LIMITS (the bar labels its thresholds — without them
+                    // "Overloaded" gives no target to shed to; the stuck-at-a-random-encounter-
+                    // exit repro, where the party had no way to hear how much was too much).
                     () => Loc.T("inv.encumbrance", new { value = enc.LoadWeight.Value
-                        + (string.IsNullOrEmpty(enc.LoadStatus.Value) ? "" : ", " + enc.LoadStatus.Value) }),
+                        + (string.IsNullOrEmpty(enc.LoadStatus.Value) ? "" : ", " + enc.LoadStatus.Value)
+                        + ", " + Loc.T("inv.enc_limits", new
+                        { light = enc.Light.Value, medium = enc.Medium.Value, heavy = enc.Heavy.Value }) }),
                     () => stash.EncumbranceTooltip));
             b.AddItem(ControlId.Structural(k + "gold"),
                 GraphNodes.Text(() => Loc.T("inv.gold", new { value = stash.Money.Value })));

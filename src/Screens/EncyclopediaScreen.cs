@@ -59,15 +59,13 @@ namespace WrathAccess.Screens
             yield return new ElementAction(ActionIds.Back, Message.Localized("ui", "action.close"), _ =>
             {
                 if (!Equals(Navigation.FocusedStopKey, "tree") && _history.Count > 0) Back();
-                else ServiceWindows()?.HandleCloseAll();
+                else ServiceWindows.Current?.HandleCloseAll();
             });
         }
 
         private static EncyclopediaVM Vm()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM?.EncyclopediaVM?.Value;
+            => ServiceWindows.Current?.EncyclopediaVM?.Value;
 
-        private static ServiceWindowsVM ServiceWindows()
-            => Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.ServiceWindowsVM;
 
         // An entry whose title resolves EMPTY at runtime renders as a blank, affordance-free row in
         // the game's own view — effectively invisible to sighted players (the shipped case: the

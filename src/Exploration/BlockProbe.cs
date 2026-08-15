@@ -34,7 +34,19 @@ namespace WrathAccess.Exploration
         private const float CutAhead = 1.8f;      // cut CENTRE at most this far past the edge (half a table)
         private const float CutLateral = 0.9f;
 
+        private const float DeepReach = 3.5f;     // last-resort ray: cave wall collider faces sit
+                                                  // metres past the eroded navmesh edge (live: 1.3-3m
+                                                  // in Prologue_Caves_1) — far beyond the sphere
+
         private static readonly Collider[] Buf = new Collider[24];
+        private static readonly RaycastHit[] RayBuf = new RaycastHit[16];
+
+        /// <summary>Asset name says wall: "wall"/"fence" anywhere in the name counts as a WALL
+        /// regardless of collider height (a 1.2m fence is a wall for navigation, not furniture).</summary>
+        public static bool WallName(string n) =>
+            n != null
+            && (n.IndexOf("wall", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || n.IndexOf("fence", System.StringComparison.OrdinalIgnoreCase) >= 0);
 
         /// <summary>What stopped a push from <paramref name="origin"/> that hit the navmesh edge at
         /// <paramref name="edge"/> going <paramref name="dir"/> (XZ-normalized). For a dead-stopped
@@ -97,13 +109,38 @@ namespace WrathAccess.Exploration
                 return new Result { Kind = Kind.Obstacle, Object = cutGo, Distance = Mathf.Max(0.1f, cutAlong) };
             if (bestFar != null && FrontIsNarrow(origin, edge, dir))
                 return Classified(bestFar, edge, farDist);
+
+            // Last resort — a straight deep ray past the edge: cave/terrain walls have colliders,
+            // but their faces sit metres beyond the eroded navmesh edge, out of the sphere's reach.
+            // Inherently directional (along the push line), so no lateral/narrow-front guards.
+            Collider deep = null;
+            float deepDist = float.MaxValue;
+            foreach (float h in DeepHeights)
+            {
+                int m = Physics.RaycastNonAlloc(edge + Vector3.up * h, dir, RayBuf, DeepReach, -1,
+                    QueryTriggerInteraction.Ignore);
+                for (int i = 0; i < m; i++)
+                {
+                    var col = RayBuf[i].collider;
+                    if (col == null || RayBuf[i].distance >= deepDist) continue;
+                    if (col.bounds.size.y < 0.3f) continue;
+                    if (col.attachedRigidbody != null) continue;
+                    if (col.GetComponentInParent<Kingmaker.View.UnitEntityView>() != null) continue;
+                    deep = col;
+                    deepDist = RayBuf[i].distance;
+                }
+            }
+            if (deep != null) return Classified(deep, edge, deepDist);
             return default;
         }
+
+        private static readonly float[] DeepHeights = { 0.5f, 1.6f };
 
         private static Result Classified(Collider col, Vector3 edge, float dist)
         {
             var b = col.bounds;
-            var kind = (b.size.y >= WallHeight && b.min.y <= edge.y + 0.6f) ? Kind.Wall : Kind.Obstacle;
+            var kind = (WallName(col.gameObject.name) || (b.size.y >= WallHeight && b.min.y <= edge.y + 0.6f))
+                ? Kind.Wall : Kind.Obstacle;
             return new Result { Kind = kind, Object = col.gameObject, Distance = dist };
         }
 

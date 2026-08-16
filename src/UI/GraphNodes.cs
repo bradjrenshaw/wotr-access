@@ -505,6 +505,7 @@ namespace WrathAccess.UI
             IEnumerable<NodeAnnouncement> extraParts = null)
         {
             string verb = side == VendorSide.Stock ? "buy" : side == VendorSide.Inventory ? "sell" : "return";
+            var boundItem = slot.Item.Value; // the entity this ROW represents (see StateText note)
             Func<string> label = () =>
             {
                 var name = slot.DisplayName.Value;
@@ -522,14 +523,18 @@ namespace WrathAccess.UI
                 Announcements = anns,
                 SearchText = label,
                 // Synchronous feedback after Enter: the row with its REMAINING quantity ("Longsword, 4").
-                // The count reads the LIVE ItemEntity — the VM's Count reactive updates a beat after
-                // the deal, so it spoke the pre-sale number (tester repro). Null once the slot
-                // empties — the row vanishes and the differ announces the landing item instead.
+                // Bound to the ITEM ENTITY captured at emission, NOT the slot: this runs right after
+                // the trade mutated the collections, and with a sorter active (shared with the
+                // inventory) the game re-deals items into the positional slot VMs immediately — the
+                // slot then holds a DIFFERENT item and the feedback named it (tester repro: sold a
+                // chainshirt, heard "Leather Armor, 14"). The entity keeps its own live count; when
+                // the trade destroyed it (stack merged/emptied), stay silent — the row vanishes and
+                // the differ announces the landing item instead.
                 StateText = () =>
                 {
-                    var item = slot.Item.Value;
-                    if (item == null) return null;
-                    return label() + ", " + (item.Count > 1 ? item.Count.ToString() : "1");
+                    var item = boundItem;
+                    if (item == null || item.Collection == null || item.Count <= 0) return null;
+                    return item.Name + ", " + (item.Count > 1 ? item.Count.ToString() : "1");
                 },
                 // Enter = move ONE (the slot routes by its collection); it plays the game's own sound.
                 OnActivate = () => slot.VendorTryMove(state: false, all: false),

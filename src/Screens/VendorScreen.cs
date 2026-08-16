@@ -123,6 +123,14 @@ namespace WrathAccess.Screens
                     // (the post-sale readout spoke the pre-sale number).
                     Func<string> qty = () => (s.Item.Value?.Count ?? 0) > 1 ? s.Item.Value.Count.ToString() : "1";
                     Func<string> price = () => Price(s, buy);
+                    // Identity = the ITEM ENTITY, not the slot VM. Slot VMs are POSITIONAL containers
+                    // the game re-deals items into on every refresh — and with a sorter active
+                    // (Player.UISettings.InventorySorter is SHARED with the inventory, by design),
+                    // any transaction re-sorts both lists (weights change), so a slot-keyed focus
+                    // silently ended up on a DIFFERENT item and a repeat Enter traded the wrong thing
+                    // (tester repro). Entity-keyed focus follows the item you acted on: partial sales
+                    // keep you on the stack, a full-stack move follows it into the deal table and the
+                    // differ announces the landing.
                     sheet.Row(
                         GraphNodes.VendorItem(s, side, new[]
                         {
@@ -130,7 +138,7 @@ namespace WrathAccess.Screens
                             new NodeAnnouncement(qty),
                             new NodeAnnouncement(price),
                         }),
-                        s, // identity keys: selling out a stack lands on a NEW identity → announced
+                        (object)s.Item.Value ?? s,
                         type, qty, price);
                 }
             if (!any) sheet.Line(GraphNodes.Text(() => Loc.T("vendor.empty")));

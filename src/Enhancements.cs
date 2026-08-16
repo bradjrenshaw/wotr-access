@@ -8,9 +8,10 @@ namespace WrathAccess
     /// </summary>
     internal static class Enhancements
     {
-        /// <summary>Revealed neutral/bystander NPCs stay locatable on the MAP while fogged (the
-        /// sighted map hides fogged units entirely — but re-finding a met vendor by sweeping an
-        /// area is sighted-cheap and blind-expensive, e.g. Neathholm's traders).</summary>
+        /// <summary>Revealed neutral/bystander NPCs stay locatable while out of sight — on the MAP
+        /// (the sighted map hides fogged units entirely) AND in the in-area scanner lists/cycles
+        /// (Scanner.RevealedNeutral): re-finding a met vendor by sweeping an area is sighted-cheap
+        /// and blind-expensive, e.g. Neathholm's traders, the Defender's Heart respec NPC.</summary>
         public static bool NeutralsIgnoreFog =>
             Settings.ModSettings.GetSetting<Settings.BoolSetting>("enhancements.neutrals_ignore_fog")?.Get() ?? true;
 

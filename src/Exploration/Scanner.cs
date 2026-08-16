@@ -278,10 +278,23 @@ namespace WrathAccess.Exploration
                 list.Sort((a, b) => a.DistanceTo(refPos).CompareTo(b.DistanceTo(refPos)));
         }
 
+        // The "Neutral NPCs ignore fog of war" ENHANCEMENT, scanner half: a previously met
+        // neutral/bystander stays listable in-area (the category lists + the N/B cycles) at their
+        // live position even while out of sight — same rationale as the map half (re-finding a met
+        // vendor is sighted-cheap, blind-expensive). Deliberately NOT wired through IsVisible: the
+        // sonar/object-cue soundscape keys off that, and fogged people must not hum.
+        private static bool RevealedNeutral(ScanItem it)
+        {
+            if (!Enhancements.NeutralsIgnoreFog) return false;
+            if (it.Primary != ScanTaxonomy.UnitsNeutrals && it.Primary != ScanTaxonomy.UnitsBystanders) return false;
+            var u = it.TargetUnit;
+            return u != null && u.IsInGame && u.IsRevealed;
+        }
+
         private static void Add(ScanItem item)
         {
             if (item == null) return;
-            if (!_debugAll && !item.IsVisible) return; // debug (F11) lists hidden things too
+            if (!_debugAll && !item.IsVisible && !RevealedNeutral(item)) return; // debug (F11) lists hidden things too
             bool inEverything = false;
             foreach (var key in item.Nodes)
             {
@@ -589,7 +602,7 @@ namespace WrathAccess.Exploration
             // V, are a separate cycle and stay always-reachable — that geometry is known.)
             var candidates = new List<ScanItem>();
             foreach (var it in WorldModel.Items)
-                if ((_debugAll || it.DetectableFrom(refPos)) && InGroup(it, group)) candidates.Add(it);
+                if ((_debugAll || it.DetectableFrom(refPos) || RevealedNeutral(it)) && InGroup(it, group)) candidates.Add(it);
             if (candidates.Count == 0)
             {
                 Speak(Loc.T("scan.category_empty", new { label = ReviewGroupLabel(group) }));

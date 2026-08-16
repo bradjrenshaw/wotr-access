@@ -131,8 +131,69 @@ namespace WrathAccess.Exploration
                 }
             }
             if (deep != null) return Classified(deep, edge, deepDist);
+
+            // Visual-only walls: some kits ship wall pieces with NO collider at all (the cave kit's
+            // cave_wall_*_high variants — no collider, no fog polyline, flat terrain beneath; live
+            // case Prologue_Caves_1) — the drawn mesh is the only evidence left. Test the torso band
+            // just past the edge against cached wall-named renderer bounds. Coarse (AABBs), so it
+            // fires only when nothing physical was found at all.
+            EnsureWallRenderCache();
+            for (float t = 0.5f; t <= 2f; t += 0.75f)
+            {
+                var p = edge + dir * t;
+                p.y = edge.y + 1.25f;
+                for (int i = 0; i < WallRenderBounds.Count; i++)
+                {
+                    if (!WallRenderBounds[i].Contains(p)) continue;
+                    var go = WallRenderObjs[i];
+                    if (go == null) continue; // its area part unloaded
+                    return new Result { Kind = Kind.Wall, Object = go, Distance = t };
+                }
+            }
             return default;
         }
+
+        // ---- wall-named renderer bounds (per-area-part cache) ----
+
+        private static readonly System.Collections.Generic.List<Bounds> WallRenderBounds
+            = new System.Collections.Generic.List<Bounds>();
+        private static readonly System.Collections.Generic.List<GameObject> WallRenderObjs
+            = new System.Collections.Generic.List<GameObject>();
+        private static string _wallRenderKey;
+
+        private static void EnsureWallRenderCache()
+        {
+            var area = Kingmaker.Game.Instance?.CurrentlyLoadedArea;
+            if (area == null) return;
+            var part = Kingmaker.Blueprints.Area.AreaService.Instance?.CurrentAreaPart;
+            string key = area.name + "|" + (part != null ? part.name : "");
+            if (key == _wallRenderKey) return;
+            // Renderers activate progressively during the load — scanning early caches a partial set.
+            var lp = Kingmaker.EntitySystem.Persistence.LoadingProcess.Instance;
+            if (lp != null && lp.IsLoadingInProcess) return;
+            _wallRenderKey = key;
+            WallRenderBounds.Clear();
+            WallRenderObjs.Clear();
+            foreach (var r in UnityEngine.Object.FindObjectsOfType<MeshRenderer>())
+            {
+                if (r == null || !r.enabled) continue;
+                string nm = r.gameObject.name;
+                // Wall/fence names always qualify; natural-terrain names (a 3m "cave_stones" pile
+                // IS a wall to a walker) qualify when the piece is tall enough to not see over.
+                // Anonymous tall meshes (the cave's outer shell — bounds contain the whole
+                // corridor) stay excluded: no name, no entry.
+                if (!WallName(nm) && !(NatureName(nm) && r.bounds.size.y >= 2f)) continue;
+                WallRenderBounds.Add(r.bounds);
+                WallRenderObjs.Add(r.gameObject);
+            }
+        }
+
+        private static bool NatureName(string n) =>
+            n != null
+            && (n.IndexOf("stone", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || n.IndexOf("rock", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || n.IndexOf("boulder", System.StringComparison.OrdinalIgnoreCase) >= 0
+                || n.IndexOf("cliff", System.StringComparison.OrdinalIgnoreCase) >= 0);
 
         private static readonly float[] DeepHeights = { 0.5f, 1.6f };
 

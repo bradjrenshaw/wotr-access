@@ -197,6 +197,8 @@
   "grid.walkable_up": "walkable, up {height}",
   "grid.walkable_down": "walkable, down {height}",
   "overlay.off": "Overlays off",
+  "screen.retrain": "Retrain character",
+  "retrain.char": "{name}, level {level}",
   "collision.rise": "raised ground",
   "collision.drop": "drop",
   "overlay.mode_set": "{system}: {mode}",

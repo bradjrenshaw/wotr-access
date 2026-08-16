@@ -219,13 +219,17 @@ namespace WrathAccess.Screens
                     Func<string> qty = () => s.Count.Value > 1 ? s.Count.Value.ToString() : "1";
                     Func<string> weight = () => Weight(s.Weight.Value);
                     Func<string> cost = () => s.Cost.Value.ToString();
+                    // Identity = the ITEM ENTITY, not the slot VM — the game re-deals items into the
+                    // positional slots on every sorted refresh (shared InventorySorter), so slot-keyed
+                    // focus silently ended up on a different item after equip/drop/move re-sorts
+                    // (same mechanism as the vendor tester repro; see VendorScreen.EmitTable).
                     sheet.Row(
                         ItemNodes.InventoryItem(s, new[]
                         {
                             new NodeAnnouncement(type),
                             new NodeAnnouncement(qty),
                         }, offHand: () => vm.DollVM?.CurrentSet?.Value?.Secondary),
-                        s, type, qty, weight, cost);
+                        (object)s.Item.Value ?? s, type, qty, weight, cost);
                 }
             if (!any) sheet.Line(GraphNodes.Text(() => Loc.T("inv.no_items")));
             sheet.Finish();

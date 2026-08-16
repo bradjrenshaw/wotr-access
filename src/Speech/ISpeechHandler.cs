@@ -37,7 +37,7 @@ namespace WrathAccess.Speech
         /// <summary>Whether this handler can render speech to PCM (for world-positioned playback through
         /// the spatial audio pipeline). SAPI can; Prism (screen-reader passthrough) and clipboard can't —
         /// this is the capability behind a config's <c>SupportsPositional</c>.</summary>
-        bool SupportsAudioRender { get; }
+        bool SupportsAudioRender(CategorySetting config);
 
         /// <summary>Render <paramref name="text"/> to PCM applying <paramref name="config"/>'s params.
         /// Null when unsupported/failed. Independent of the live speech path (must never cut, or be cut by,

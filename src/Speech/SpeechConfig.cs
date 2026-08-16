@@ -103,7 +103,14 @@ namespace WrathAccess.Speech
         /// <summary>Can speech through this config be positioned in the world (handler renders to PCM)?
         /// SAPI yes; Prism when the bound backend implements speak-to-memory (OneCore — screen readers
         /// don't); clipboard no. The "use positional" CHOICE is a separate, event-side option.</summary>
-        public bool SupportsPositional => Handler?.SupportsAudioRender ?? false;
+        public bool SupportsPositional
+        {
+            get
+            {
+                var h = Handler;
+                return h != null && h.SupportsAudioRender(Params(h));
+            }
+        }
 
         public bool Speak(string text, bool interrupt = false)
         {

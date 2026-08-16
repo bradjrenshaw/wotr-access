@@ -32,7 +32,7 @@ namespace WrathAccess.Speech
 
         public bool Silence() => true;
 
-        public bool SupportsAudioRender => false;
+        public bool SupportsAudioRender(CategorySetting config) => false;
         public SpeechAudio RenderToAudio(string text, CategorySetting config) => null;
     }
 }

@@ -21,6 +21,42 @@ namespace WrathAccess.Speech
         private string _currentBackend = AutoBackend; // last backend applied from a config (apply-on-change)
         private static List<string> _backendNames;    // enumerated once (the registry probe is expensive)
 
+        // One LIVE backend per preference id, so configs that alternate (default = a screen reader,
+        // events = OneCore) COEXIST. The old single-handle design stopped AND FREED the other
+        // backend on every switch — the moment the screen-reader channel spoke, OneCore was
+        // destroyed mid-utterance ("SR speech interrupts my combat events" — tester repro), and
+        // capability checks answered for whichever backend happened to be current. Per-slot applied
+        // params persist across switches (a switch is now a lookup, not a teardown), and Silence
+        // stops only the CURRENT slot — an interrupt on one channel never cuts the other off.
+        private sealed class BackendSlot
+        {
+            public IntPtr Handle;
+            public PrismNative.BackendFeatures Features;
+            public int AppliedRate = -1, AppliedVolume = -1;
+            public string AppliedVoice;
+        }
+        private readonly Dictionary<string, BackendSlot> _slots = new Dictionary<string, BackendSlot>();
+        private BackendSlot _current;
+
+        // The slot for a preference id — acquired once, cached forever (including acquisition
+        // FAILURES as zero-handle slots, so a broken choice isn't re-attempted per utterance).
+        // Null (uncached) only when the handler isn't loaded yet.
+        private BackendSlot EnsureSlot(string pref)
+        {
+            if (_ctx == IntPtr.Zero) return null;
+            BackendSlot slot;
+            if (_slots.TryGetValue(pref, out slot)) return slot;
+            var handle = ResolveBackend(pref);
+            slot = new BackendSlot
+            {
+                Handle = handle,
+                Features = handle != IntPtr.Zero
+                    ? (PrismNative.BackendFeatures)PrismNative.BackendGetFeatures(handle) : 0,
+            };
+            _slots[pref] = slot;
+            return slot;
+        }
+
         public string Key => "prism";
         public string Label => "Prism";
         public string LocalizationKey => "speech.prism";
@@ -172,14 +208,17 @@ namespace WrathAccess.Speech
                     return false;
                 }
                 // Start on the best available backend; the config's chosen backend is applied on first speak.
-                var backend = ResolveBackend(AutoBackend);
-                if (backend == IntPtr.Zero)
+                var slot = EnsureSlot(AutoBackend);
+                if (slot == null || slot.Handle == IntPtr.Zero)
                 {
                     Main.Log?.Error("[speech] PrismHandler: no backend could be acquired.");
                     Unload();
                     return false;
                 }
-                SetActiveBackend(backend, AutoBackend);
+                _current = slot;
+                _backend = slot.Handle;
+                _backendFeatures = slot.Features;
+                _currentBackend = AutoBackend;
                 return true;
             }
             catch (Exception ex)
@@ -192,82 +231,79 @@ namespace WrathAccess.Speech
 
         public void Unload()
         {
-            if (_backend != IntPtr.Zero)
-            {
-                try { PrismNative.BackendStop(_backend); } catch { }
-                try { PrismNative.BackendFree(_backend); } catch { }
-                _backend = IntPtr.Zero;
-            }
+            foreach (var slot in _slots.Values)
+                if (slot != null && slot.Handle != IntPtr.Zero)
+                {
+                    try { PrismNative.BackendStop(slot.Handle); } catch { }
+                    try { PrismNative.BackendFree(slot.Handle); } catch { }
+                    slot.Handle = IntPtr.Zero;
+                }
+            _slots.Clear();
+            _current = null;
+            _backend = IntPtr.Zero;
+            _backendFeatures = 0;
+            _currentBackend = AutoBackend;
             if (_ctx != IntPtr.Zero)
             {
                 try { PrismNative.Shutdown(_ctx); } catch { }
                 _ctx = IntPtr.Zero;
             }
-            _backendFeatures = 0;
-            _currentBackend = AutoBackend;
         }
 
-        // Apply a config's backend choice, rebinding only when it differs from what's bound (rebinding is
-        // a native teardown/acquire — never per utterance). CRITICAL: acquire the replacement BEFORE tearing
-        // down the current backend, so a backend choice that can't be acquired never leaves us silent — we
-        // keep whatever's already working. Never strand a blind user with no voice.
+        // Apply a config's backend choice — a SLOT LOOKUP, never a teardown (see BackendSlot).
+        // A choice that can't be acquired keeps whatever's already working (the failure is cached in
+        // its slot, so it isn't re-attempted per utterance). Never strand a blind user with no voice.
         private void ApplyConfig(CategorySetting config)
         {
             var pref = config?.Get<ChoiceSetting>("backend")?.Current?.Id ?? AutoBackend;
             if (pref != _currentBackend || _backend == IntPtr.Zero)
             {
-                var replacement = ResolveBackend(pref); // named if acquirable, else best; zero only if nothing works
-                if (replacement == IntPtr.Zero)
+                var slot = EnsureSlot(pref);
+                if (slot == null || slot.Handle == IntPtr.Zero)
                 {
-                    Main.Log?.Error("[speech] PrismHandler: backend '" + pref + "' could not be acquired; keeping current backend.");
-                    _currentBackend = pref; // don't re-attempt the failed acquire on every utterance
+                    if (_currentBackend != pref)
+                        Main.Log?.Error("[speech] PrismHandler: backend '" + pref + "' could not be acquired; keeping current backend.");
+                    _currentBackend = pref;
                     return;
                 }
-                if (_backend != IntPtr.Zero && _backend != replacement)
-                {
-                    try { PrismNative.BackendStop(_backend); } catch { }
-                    PrismNative.BackendFree(_backend);
-                }
-                SetActiveBackend(replacement, pref);
+                _current = slot;
+                _backend = slot.Handle;
+                _backendFeatures = slot.Features;
+                _currentBackend = pref;
             }
             ApplyParams(config);
         }
-
-        // Last-applied params, value-diffed so repeated speaks with an unchanged config cost no native
-        // round-trips. Reset on backend rebind (a fresh backend starts at its own defaults).
-        private int _appliedRate = -1, _appliedVolume = -1;
-        private string _appliedVoice;
 
         // Apply the config's rate/volume/voice to the bound backend, each gated on its feature bits —
         // a screen reader that owns its own rate simply doesn't advertise the knob and the request is
         // skipped. Voice matches by NAME at apply time (Prism voice ids are session-local indices).
         private void ApplyParams(CategorySetting config)
         {
-            if (_backend == IntPtr.Zero || config == null) return;
+            if (_backend == IntPtr.Zero || config == null || _current == null) return;
             int rate = config.Get<IntSetting>("rate")?.Get() ?? 50;
             int volume = config.Get<IntSetting>("volume")?.Get() ?? 100;
             string voice = config.Get<ChoiceSetting>("voice")?.ValueId ?? "default";
 
-            if (rate != _appliedRate)
+            if (rate != _current.AppliedRate)
             {
                 if ((_backendFeatures & PrismNative.BackendFeatures.SupportsSetRate) != 0)
                     try { PrismNative.BackendSetRate(_backend, rate / 100f); } catch { }
-                _appliedRate = rate;
+                _current.AppliedRate = rate;
             }
-            if (volume != _appliedVolume)
+            if (volume != _current.AppliedVolume)
             {
                 if ((_backendFeatures & PrismNative.BackendFeatures.SupportsSetVolume) != 0)
                     try { PrismNative.BackendSetVolume(_backend, volume / 100f); } catch { }
-                _appliedVolume = volume;
+                _current.AppliedVolume = volume;
             }
-            if (voice != _appliedVoice)
+            if (voice != _current.AppliedVoice)
             {
                 // "default" = leave the backend's own voice untouched (never force a pick).
                 if (voice != "default"
                     && (_backendFeatures & PrismNative.BackendFeatures.SupportsSetVoice) != 0
                     && (_backendFeatures & PrismNative.BackendFeatures.SupportsCountVoices) != 0)
                     try { SetVoiceByName(voice); } catch { }
-                _appliedVoice = voice;
+                _current.AppliedVoice = voice;
             }
         }
 
@@ -342,12 +378,17 @@ namespace WrathAccess.Speech
         }
 
         // Render-to-PCM (positional speech) rides prism_backend_speak_to_memory — OneCore implements
-        // it (synchronous, silence-trimmed float samples); screen readers don't. The property reflects
-        // the CURRENTLY bound backend (the render call itself re-applies the config first and returns
-        // null when that backend can't render, so callers fall back safely either way).
-        public bool SupportsAudioRender =>
-            _backend != IntPtr.Zero
-            && (_backendFeatures & PrismNative.BackendFeatures.SupportsSpeakToMemory) != 0;
+        // it (synchronous, silence-trimmed float samples); screen readers don't. Answered for THE
+        // CONFIG'S OWN backend slot — the old current-backend property raced with whichever config
+        // spoke last (default SR spoke → events' OneCore reported "can't render" → live fallback →
+        // no panning; tester repro).
+        public bool SupportsAudioRender(CategorySetting config)
+        {
+            var pref = config?.Get<ChoiceSetting>("backend")?.Current?.Id ?? AutoBackend;
+            var slot = EnsureSlot(pref);
+            return slot != null && slot.Handle != IntPtr.Zero
+                && (slot.Features & PrismNative.BackendFeatures.SupportsSpeakToMemory) != 0;
+        }
 
         public SpeechAudio RenderToAudio(string text, CategorySetting config)
         {
@@ -454,14 +495,5 @@ namespace WrathAccess.Speech
 
         // Adopt a freshly-acquired backend as the active one and cache its features (the query does real work
         // per call on some backends, and features don't change after init).
-        private void SetActiveBackend(IntPtr backend, string requested)
-        {
-            _backend = backend;
-            _currentBackend = requested;
-            _appliedRate = _appliedVolume = -1; _appliedVoice = null; // fresh backend → re-apply params
-            _backendFeatures = (PrismNative.BackendFeatures)PrismNative.BackendGetFeatures(_backend);
-            Main.Log?.Log("[speech] PrismHandler backend acquired: " + (PrismNative.BackendName(_backend) ?? "<unknown>")
-                + " (requested=" + requested + ", features=0x" + ((ulong)_backendFeatures).ToString("X") + ")");
-        }
     }
 }

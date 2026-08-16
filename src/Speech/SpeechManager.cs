@@ -184,8 +184,11 @@ namespace WrathAccess.Speech
         {
             if (string.IsNullOrEmpty(text)) return null;
             foreach (var handler in Handlers)
-                if (handler.SupportsAudioRender && EnsureLoaded(handler))
-                    return handler.RenderToAudio(text, Default?.Tree?.Get<CategorySetting>(handler.Key));
+            {
+                var cfg = Default?.Tree?.Get<CategorySetting>(handler.Key);
+                if (EnsureLoaded(handler) && handler.SupportsAudioRender(cfg))
+                    return handler.RenderToAudio(text, cfg);
+            }
             return null;
         }
 

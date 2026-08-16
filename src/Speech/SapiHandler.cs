@@ -134,7 +134,7 @@ namespace WrathAccess.Speech
 
         // ---- render-to-audio (for world-positioned speech) ----
 
-        public bool SupportsAudioRender => true;
+        public bool SupportsAudioRender(CategorySetting config) => true;
 
         public SpeechAudio RenderToAudio(string text, CategorySetting config)
         {

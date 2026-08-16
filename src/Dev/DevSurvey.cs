@@ -84,6 +84,40 @@ namespace WrathAccess.Dev
             });
         }
 
+        /// <summary>Dump the room grid + rooms/exits to a text file for the offline floor-plan
+        /// renderer (tools/rooms_render.py). Line 1: "w h cell x0 z0 areaName"; line 2: label CSV;
+        /// line 3: cellY CSV; then "R id|class|area|cx|cy|cz" and "E fromId|toId|x|y|z" lines.</summary>
+        public static string DumpRooms(string path = null)
+        {
+            if (!RoomMap.Ready || !RoomMap.TryGetGrid(out var label, out var cellY, out int w, out int h))
+                return Err("no room map (area still loading?)");
+            if (string.IsNullOrEmpty(path))
+                path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "claude", "rooms_dump.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path));
+            float cell = RoomMap.CellSize;
+            var origin = RoomMap.CellCenter(1, 1); // inverse mapping: x0 = centre(1,1) - half a cell
+            float x0 = origin.x - 0.5f * cell, z0 = origin.z - 0.5f * cell;
+            using (var sw = new System.IO.StreamWriter(path))
+            {
+                sw.WriteLine(w + " " + h + " " + cell.ToString("0.###") + " " + x0.ToString("0.###") + " "
+                    + z0.ToString("0.###") + " " + (Game.Instance?.CurrentlyLoadedArea?.name ?? "?"));
+                var sb = new System.Text.StringBuilder();
+                for (int i = 0; i < label.Length; i++) { sb.Append(label[i]); sb.Append(','); }
+                sw.WriteLine(sb.ToString()); sb.Length = 0;
+                for (int i = 0; i < cellY.Length; i++) { sb.Append(cellY[i].ToString("0.0")); sb.Append(','); }
+                sw.WriteLine(sb.ToString());
+                foreach (var room in RoomMap.Rooms)
+                {
+                    sw.WriteLine("R " + room.Id + "|" + room.ClassKey + "|" + room.Area.ToString("0") + "|"
+                        + room.Centroid.x.ToString("0.0") + "|" + room.Centroid.y.ToString("0.0") + "|" + room.Centroid.z.ToString("0.0"));
+                    foreach (var e in room.Exits)
+                        sw.WriteLine("E " + room.Id + "|" + e.To.Id + "|" + e.Position.x.ToString("0.0") + "|"
+                            + e.Position.y.ToString("0.0") + "|" + e.Position.z.ToString("0.0"));
+                }
+            }
+            return JsonConvert.SerializeObject(new { ok = true, path });
+        }
+
         /// <summary>All RoomMap rooms with survey points: centroid-seeded farthest-point sampling over
         /// the room's own cells, count scaling with area (1 + area/200 m², capped), stopping early when
         /// no candidate is ≥3 m from the picked set (small rooms stay one-shot). Exits included so the

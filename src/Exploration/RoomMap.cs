@@ -121,6 +121,59 @@ namespace WrathAccess.Exploration
             return null;
         }
 
+        // ---- curation (geometry half of assets/descriptions/<Area>.json; the "rooms" title
+        // anchors in the same file belong to EnvDescriptions) ----
+
+        private sealed class CurationWall
+        {
+            public float? y { get; set; }                       // optional floor gate (±2.5m)
+            public List<List<float>> points { get; set; }       // polyline of [x,z] pairs
+        }
+
+        private sealed class CurationFile
+        {
+            public List<CurationWall> walls { get; set; }       // virtual walls → forced splits
+            public List<List<List<float>>> merges { get; set; } // groups of [x,y,z] anchors → one room
+        }
+
+        private static CurationFile LoadCuration()
+        {
+            try
+            {
+                var area = Game.Instance?.CurrentlyLoadedArea;
+                if (area == null) return null;
+                var path = System.IO.Path.Combine(Main.ModDir ?? "", "assets", "descriptions", area.name + ".json");
+                if (!System.IO.File.Exists(path)) return null;
+                return Newtonsoft.Json.JsonConvert.DeserializeObject<CurationFile>(System.IO.File.ReadAllText(path));
+            }
+            catch (Exception e)
+            {
+                Main.Log?.Warning("[rooms] curation load failed: " + e.Message);
+                return null;
+            }
+        }
+
+        // The region label at a curation anchor — RoomAt's resolution (nearest labeled cell within
+        // 2 cells, same-floor gate) against the raw label grid, mid-build.
+        private static int LabelAtAnchor(float x, float y, float z)
+        {
+            int gx = (int)((x - _x0) / _cell) + 1;
+            int gz = (int)((z - _z0) / _cell) + 1;
+            for (int ring = 0; ring <= 2; ring++)
+                for (int dz = -ring; dz <= ring; dz++)
+                    for (int dx = -ring; dx <= ring; dx++)
+                    {
+                        if (Math.Max(Math.Abs(dz), Math.Abs(dx)) != ring) continue;
+                        int nz = gz + dz, nx = gx + dx;
+                        if (nz < 0 || nx < 0 || nz >= _h || nx >= _w) continue;
+                        int idx = nz * _w + nx;
+                        if (_label[idx] < 0) continue;
+                        if (Mathf.Abs(_cellY[idx] - y) > LevelGap) continue;
+                        return _label[idx];
+                    }
+            return -1;
+        }
+
         // ---- lifecycle ----
 
         private static int _retryCooldown; // frames until the next attempt while the graph is empty
@@ -365,6 +418,36 @@ namespace WrathAccess.Exploration
             var dist = new int[n];
             const int INF = int.MaxValue / 4;
             for (int i = 0; i < n; i++) dist[i] = (walk[i] || noShadow[i]) ? INF : 0;
+
+            // 4.1) CURATED VIRTUAL WALLS (assets/descriptions/<Area>.json "walls"): authored
+            //      polylines seeded as zero-clearance lines — cells stay walkable (no holes in the
+            //      grid; the navmesh still connects, so BuildExits puts an opening across the line),
+            //      but the clearance field dips to ~0 there, guaranteeing a persistence split where
+            //      judgment says a boundary belongs. Optional per-line y gates it to one floor.
+            var curation = LoadCuration();
+            if (curation?.walls != null)
+                foreach (var wall in curation.walls)
+                {
+                    if (wall?.points == null || wall.points.Count < 2) continue;
+                    for (int s = 0; s + 1 < wall.points.Count; s++)
+                    {
+                        var p1 = wall.points[s]; var p2 = wall.points[s + 1];
+                        if (p1 == null || p2 == null || p1.Count < 2 || p2.Count < 2) continue;
+                        float sx = p1[0], sz = p1[1], ex = p2[0], ez = p2[1];
+                        int steps = Mathf.Max(1, Mathf.CeilToInt(
+                            Mathf.Sqrt((ex - sx) * (ex - sx) + (ez - sz) * (ez - sz)) / (_cell * 0.5f)));
+                        for (int st = 0; st <= steps; st++)
+                        {
+                            float t = (float)st / steps;
+                            int gx = (int)((sx + (ex - sx) * t - _x0) / _cell) + 1;
+                            int gz = (int)((sz + (ez - sz) * t - _z0) / _cell) + 1;
+                            if (gx < 0 || gz < 0 || gx >= _w || gz >= _h) continue;
+                            int ci = gz * _w + gx;
+                            if (wall.y.HasValue && walk[ci] && Mathf.Abs(_cellY[ci] - wall.y.Value) > 2.5f) continue;
+                            dist[ci] = 0;
+                        }
+                    }
+                }
             for (int gz = 0; gz < _h; gz++)
                 for (int gx = 0; gx < _w; gx++)
                 {
@@ -560,6 +643,30 @@ namespace WrathAccess.Exploration
                     changed = true;
                 }
             }
+
+            // 7.5) CURATED MERGES ("merges": groups of [x,y,z] anchors): the regions containing a
+            //      group's anchors become ONE room — the human/AI judgment pass killing phantom
+            //      splits the clearance heuristic can't. Anchors resolve like RoomAt (nearest label
+            //      within 2 cells, same-floor gate), coordinate-anchored so they survive
+            //      segmentation drift.
+            if (curation?.merges != null)
+                foreach (var group in curation.merges)
+                {
+                    if (group == null || group.Count < 2) continue;
+                    int target = -2;
+                    var members = new List<int>();
+                    foreach (var a in group)
+                    {
+                        if (a == null || a.Count < 3) continue;
+                        int l = LabelAtAnchor(a[0], a[1], a[2]);
+                        if (l < 0) continue;
+                        if (target < 0) target = l;
+                        else if (l != target && !members.Contains(l)) members.Add(l);
+                    }
+                    if (target < 0 || members.Count == 0) continue;
+                    for (int i = 0; i < n; i++)
+                        if (members.Contains(_label[i])) _label[i] = target;
+                }
 
             // 8) Stable numbering (centroid sort) + classification.
             var stats = new Dictionary<int, List<int>>();

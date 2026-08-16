@@ -11,11 +11,22 @@
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
-  <!-- The test project (tests/) compiles the BCL-only sources it covers by direct link; keep it out
-       of the mod build (it references xunit, and tests never ship). -->
+  <!-- HOST/MODULE SPLIT (hot reload — the TBW pattern): this project builds the permanent HOST
+       (entry, Ticker, dev-server core, module loader) that the Owlcat loader loads from
+       Assemblies/. Everything else compiles into the byte-loaded MODULE
+       (module/WrathAccess.Module.csproj — built by the BuildModule target below), which
+       hot-swaps at runtime via POST /reload. Host changes need a game restart; keep this set minimal. -->
+  <PropertyGroup>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
   <ItemGroup>
-    <Compile Remove="tests\**" />
-    <None Remove="tests\**" />
+    <Compile Include="src\Host\**\*.cs" />
+    <Compile Include="src\Modularity\**\*.cs" />
+    <Compile Include="src\ModLogger.cs" />
+    <Compile Include="src\Dev\DevServer.cs" />
+    <Compile Include="src\Dev\DevHttpServer.cs" />
+    <Compile Include="src\Dev\CSharpEvaluator.cs" />
+    <Compile Include="src\Dev\SpeechLog.cs" />
   </ItemGroup>
 
   <!-- Paths. Override GameDir on the command line if your install differs:
@@ -79,6 +90,13 @@
     <!-- ScreenCapture for the dev server's /screenshot (game assembly; reference only, never copied). -->
     <Reference Include="UnityEngine.ScreenCaptureModule"><HintPath>$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
+
+  <!-- Build the reloadable module after the host (it references our output dll). The module project
+       deploys its own dll (Module/WrathAccess.Module.dll — never file-locked, byte-loaded). -->
+  <Target Name="BuildModule" AfterTargets="Build">
+    <MSBuild Projects="$(MSBuildProjectDirectory)\module\WrathAccess.Module.csproj"
+             Properties="Configuration=$(Configuration);GameDir=$(GameDir)" />
+  </Target>
 
   <!-- Deploy to the game's native Modifications folder after a Debug build, then restart the game. -->
   <Target Name="DeployMod" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">

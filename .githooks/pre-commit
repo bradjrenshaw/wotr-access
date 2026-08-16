@@ -13,6 +13,6 @@ staged=$(git diff --cached --name-only --diff-filter=ACM)
 if printf '%s\n' "$staged" | grep -qE '\.cs$|^src/|WrathAccess\.csproj$'; then
     echo "[pre-commit] Source staged - restaging the tester payload (scripts/stage.ps1)..."
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/stage.ps1
-    git add deploy/Assemblies/WrathAccess.dll deploy/Assemblies/NAudio.dll
-    echo "[pre-commit] deploy/Assemblies refreshed and added to this commit."
+    git add deploy/Assemblies/WrathAccess.dll deploy/Assemblies/NAudio.dll deploy/Module/WrathAccess.Module.dll
+    echo "[pre-commit] deploy/Assemblies + deploy/Module refreshed and added to this commit."
 fi

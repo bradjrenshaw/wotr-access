@@ -30,6 +30,16 @@ $naudio = Get-ChildItem "$env:USERPROFILE\.nuget\packages\naudio\*\lib\net35\NAu
 if (-not $naudio) { throw "NAudio.dll not found in the NuGet cache. Run a normal build first to restore it." }
 Copy-Item $naudio.FullName $asm -Force
 
+# The reloadable module (its OUTPUT name is timestamped per build - see the module csproj; the
+# deployed FILE name is stable). Take the newest build from the module's Release output.
+$modOut = Get-ChildItem (Join-Path $root 'module\bin\Release\WrathAccess.Module_*.dll') -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime | Select-Object -Last 1
+if (-not $modOut) { throw "Module dll not found under module\bin\Release. The Release build should have produced it." }
+$modDir = Join-Path $root 'deploy\Module'
+New-Item -ItemType Directory -Force -Path $modDir | Out-Null
+Remove-Item "$modDir\*.dll" -Force -ErrorAction SilentlyContinue
+Copy-Item $modOut.FullName (Join-Path $modDir 'WrathAccess.Module.dll') -Force
+
 Write-Host ""
-Write-Host "Staged deploy\Assemblies (WrathAccess.dll + NAudio.dll)." -ForegroundColor Green
-Write-Host "Commit deploy/Assemblies and push so testers can pull and run deploy.ps1."
+Write-Host "Staged deploy\Assemblies (WrathAccess.dll + NAudio.dll) + deploy\Module (WrathAccess.Module.dll)." -ForegroundColor Green
+Write-Host "Commit deploy/Assemblies + deploy/Module and push so testers can pull and run deploy.ps1."

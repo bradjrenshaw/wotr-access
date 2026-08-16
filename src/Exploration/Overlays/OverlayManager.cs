@@ -70,6 +70,17 @@ namespace WrathAccess.Exploration.Overlays
         /// one and a fallback of their own when not.</summary>
         internal static Overlay ActiveOverlay => Active ? Current : null;
 
+        /// <summary>Module hot-reload teardown: run every overlay's exit path so its audio systems
+        /// release their NAudio voices, then drop the roster. Exit ALL of them, not just the
+        /// selected one — a previously-selected overlay's systems may still hold voices.</summary>
+        public static void DisengageForReload()
+        {
+            foreach (var o in _overlays)
+                try { o.OnExit(); } catch { }
+            _overlays = new List<Overlay>();
+            _active = -1;
+        }
+
         public static void Cycle()
         {
             if (!InExploration) return;

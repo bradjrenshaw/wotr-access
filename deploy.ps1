@@ -85,6 +85,10 @@ $dll = Join-Path $root 'deploy\Assemblies\WrathAccess.dll'
 if (-not (Test-Path $dll)) {
     throw "deploy\Assemblies\WrathAccess.dll is missing. Pull the latest commit (or, if you build, run scripts\stage.ps1)."
 }
+$moduleDll = Join-Path $root 'deploy\Module\WrathAccess.Module.dll'
+if (-not (Test-Path $moduleDll)) {
+    throw "deploy\Module\WrathAccess.Module.dll is missing. Pull the latest commit (or, if you build, run scripts\stage.ps1)."
+}
 
 $game = Find-GameDir $GameDir
 Write-Host "Game:    $game"
@@ -100,6 +104,10 @@ Write-Host "Copying mod files..."
 Copy-Item (Join-Path $root 'OwlcatModificationManifest.json') $modDir
 Copy-Item (Join-Path $root 'OwlcatModificationSettings.json') $modDir
 Copy-Item (Join-Path $root 'deploy\Assemblies\*.dll') "$modDir\Assemblies"
+# The reloadable module goes in Module\ (NOT Assemblies\ - the game loader would lock it there;
+# the host byte-loads it from here instead).
+New-Item -ItemType Directory -Force -Path "$modDir\Module" | Out-Null
+Copy-Item $moduleDll "$modDir\Module"
 Copy-Item (Join-Path $root 'assets') $modDir -Recurse
 
 # Bundled documentation (Help > Read documentation opens <ModDir>\docs\index.html). Present once

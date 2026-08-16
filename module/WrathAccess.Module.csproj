@@ -1,0 +1,80 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The reloadable MODULE — every feature of the mod (see the host project's split note). Built
+       automatically by the host's BuildModule target; the host byte-loads the deployed dll from
+       Module/WrathAccess.Module.dll and hot-swaps it via POST /reload without a game restart.
+
+       ASSEMBLY IDENTITY IS TIMESTAMPED (do not "fix" this): Mono binds non-strong-named assemblies
+       by SIMPLE NAME, so byte-loading a rebuilt dll under an unchanged name silently returns the
+       OLD image and the reload no-ops (learned in tbw-access, solved there with Cecil rewriting —
+       here a per-build AssemblyName does the same with no extra dependency). The deployed FILE name
+       stays stable; GET /module shows the loaded assembly name to verify a swap. -->
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>WrathAccess.Module_$([System.DateTime]::UtcNow.ToString(yyyyMMddHHmmss))</AssemblyName>
+    <RootNamespace>WrathAccess</RootNamespace>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ModName>WrathAccess</ModName>
+    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Pathfinder Second Adventure</GameDir>
+    <ManagedDir>$(GameDir)\Wrath_Data\Managed</ManagedDir>
+    <LocalLowDir>$(UserProfile)\AppData\LocalLow\Owlcat Games\Pathfinder Wrath Of The Righteous</LocalLowDir>
+    <ModDeployDir>$(LocalLowDir)\Modifications\$(ModName)</ModDeployDir>
+    <RepoRoot>$(MSBuildProjectDirectory)\..</RepoRoot>
+    <VendorDir>$(RepoRoot)\vendor</VendorDir>
+  </PropertyGroup>
+
+  <!-- Everything under src/ EXCEPT the host's files (which compile into WrathAccess.dll). -->
+  <ItemGroup>
+    <Compile Include="$(RepoRoot)\src\**\*.cs"
+             Exclude="$(RepoRoot)\src\Host\**\*.cs;$(RepoRoot)\src\Modularity\**\*.cs;$(RepoRoot)\src\ModLogger.cs;$(RepoRoot)\src\Dev\DevServer.cs;$(RepoRoot)\src\Dev\DevHttpServer.cs;$(RepoRoot)\src\Dev\CSharpEvaluator.cs;$(RepoRoot)\src\Dev\SpeechLog.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The HOST assembly: Main.Log/ModDir/Enabled, the loader, dev-server registration surface. -->
+    <Reference Include="WrathAccess"><HintPath>$(RepoRoot)\bin\$(Configuration)\WrathAccess.dll</HintPath><Private>false</Private></Reference>
+    <!-- Game + framework assemblies (reference only, never copied) — same set as the host. -->
+    <Reference Include="0Harmony"><HintPath>$(ManagedDir)\0Harmony.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Assembly-CSharp"><HintPath>$(ManagedDir)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Newtonsoft.Json"><HintPath>$(ManagedDir)\Newtonsoft.Json.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="AstarPathfindingProject"><HintPath>$(ManagedDir)\AstarPathfindingProject.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Owlcat.Runtime.UI"><HintPath>$(ManagedDir)\Owlcat.Runtime.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Owlcat.Runtime.Core"><HintPath>$(ManagedDir)\Owlcat.Runtime.Core.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Owlcat.Runtime.Visual"><HintPath>$(ManagedDir)\Owlcat.Runtime.Visual.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Owlcat.Runtime.UniRx"><HintPath>$(ManagedDir)\Owlcat.Runtime.UniRx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Owlcat.Runtime.Validation"><HintPath>$(ManagedDir)\Owlcat.Runtime.Validation.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UniRx"><HintPath>$(ManagedDir)\UniRx.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine"><HintPath>$(ManagedDir)\UnityEngine.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.IMGUIModule"><HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.PhysicsModule"><HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(ManagedDir)\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UIModule"><HintPath>$(ManagedDir)\UnityEngine.UIModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(ManagedDir)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="1.10.0" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <Reference Include="UnityEngine.ScreenCaptureModule"><HintPath>$(ManagedDir)\UnityEngine.ScreenCaptureModule.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- Deploy the module dll under the STABLE file name. Module/ (not Assemblies/!) — the Owlcat
+       loader Assembly.LoadFrom's and LOCKS everything in Assemblies/; the host byte-loads this file
+       instead, so rebuilding + copying it with the game RUNNING is safe (then POST /reload). -->
+  <Target Name="DeployModule" AfterTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+    <MakeDir Directories="$(ModDeployDir)\Module" />
+    <Copy SourceFiles="$(OutputPath)$(AssemblyName).dll" DestinationFiles="$(ModDeployDir)\Module\WrathAccess.Module.dll" />
+    <Message Text="Deployed module ($(AssemblyName)) to $(ModDeployDir)\Module" Importance="high" />
+  </Target>
+
+</Project>

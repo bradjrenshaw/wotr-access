@@ -16,10 +16,14 @@ namespace WrathAccess.Dev
     /// MUST be used from the Unity main thread: evaluated code routinely touches Unity/game objects. The
     /// dev server enqueues code and pumps it from the per-frame tick.
     /// </summary>
-    internal sealed class CSharpEvaluator
+    public sealed class CSharpEvaluator
     {
         private Evaluator _evaluator;
         private StringWriter _report; // compiler diagnostics land here
+
+        /// <summary>Drop the REPL session so the next Eval builds a fresh one — called after a module
+        /// reload, so evaluated code binds against the NEW generation (and only it).</summary>
+        public void Reset() => _evaluator = null;
 
         private void Initialize()
         {
@@ -41,6 +45,12 @@ namespace WrathAccess.Dev
             {
                 string name = asm.GetName().Name;
                 if (string.IsNullOrEmpty(name) || asm.IsDynamic || !referenced.Add(name)) continue;
+                // Old module GENERATIONS leak in the AppDomain (byte-loads are uncollectible) and
+                // carry the same types under different assembly names — referencing more than the
+                // CURRENT one would make every module type ambiguous (CS0433). Reset() after each
+                // reload rebuilds the session against the fresh generation.
+                if (name.StartsWith("WrathAccess.Module", StringComparison.OrdinalIgnoreCase)
+                    && !ReferenceEquals(asm, WrathAccess.Modularity.ModuleLoader.CurrentAssembly)) continue;
                 try { _evaluator.ReferenceAssembly(asm); }
                 catch { /* not referenceable (reflection-only / load quirk); ignore */ }
             }

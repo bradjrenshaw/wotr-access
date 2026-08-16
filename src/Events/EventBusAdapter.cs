@@ -39,6 +39,15 @@ namespace WrathAccess.Events
             EventBus.Subscribe(_instance);
         }
 
+        /// <summary>Unhook from the game (module hot-reload teardown). EventBus.Unsubscribe also
+        /// removes the global-rulebook registration Subscribe made.</summary>
+        public static void Shutdown()
+        {
+            if (_instance == null) return;
+            EventBus.Unsubscribe(_instance);
+            _instance = null;
+        }
+
         /// <summary>Reconcile the frame's buff churn into genuine gain/loss events. Ticked once per frame
         /// (before <see cref="EventDispatcher.Tick"/>, so the reconciled events flush this frame).</summary>
         public static void Tick() => _instance?.Reconcile();

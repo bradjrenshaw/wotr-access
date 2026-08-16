@@ -1,12 +1,10 @@
 #if DEBUG
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using System.Threading;
-using WrathAccess.Input;
-using WrathAccess.Speech;
-using WrathAccess.UI;
 
 namespace WrathAccess.Dev
 {
@@ -26,9 +24,29 @@ namespace WrathAccess.Dev
     /// This whole subsystem is compiled only in DEBUG (#if DEBUG) — a Release build has none of it, so it
     /// cannot be toggled on by anything. Even in Debug it stays inert unless WRATHACCESS_DEV=1.
     /// </summary>
-    internal sealed class DevServer
+    public sealed class DevServer
     {
         public static readonly DevServer Instance = new DevServer();
+
+        // Routes the MODULE registers on Load (and unregisters on Dispose) — /gui, /input,
+        // /loadsave live module-side because they call module types. handler(method, body, query).
+        private readonly Dictionary<string, Func<string, string, string, string>> _moduleRoutes
+            = new Dictionary<string, Func<string, string, string, string>>(StringComparer.OrdinalIgnoreCase);
+        private readonly object _routeLock = new object();
+
+        public void RegisterRoute(string route, Func<string, string, string, string> handler)
+        { lock (_routeLock) _moduleRoutes[route] = handler; }
+
+        public void UnregisterRoute(string route)
+        { lock (_routeLock) _moduleRoutes.Remove(route); }
+
+        /// <summary>Run work on the Unity main thread (next Pump) and block for its result — for
+        /// module-registered route handlers that touch game state.</summary>
+        public string OnMain(Func<string> work, int timeoutSeconds = 30) => OnMainThread(work, timeoutSeconds);
+
+        /// <summary>Feed one spoken line into the /speech ring buffer (the module wires its
+        /// SpeechManager observer here — we can't hear the TTS; this is how the driver observes it).</summary>
+        public void TapSpeech(string line) => _speech.Add(line);
 
         public const string EnableEnv = "WRATHACCESS_DEV";
         public const string PortEnv = "WRATHACCESS_DEV_PORT";
@@ -83,9 +101,7 @@ namespace WrathAccess.Dev
             string p = Environment.GetEnvironmentVariable(PortEnv);
             if (!string.IsNullOrEmpty(p)) int.TryParse(p, out port);
 
-            // Tap every string the mod speaks through the SpeechManager chokepoint into the ring buffer.
-            SpeechManager.Observer = _speech.Add;
-
+            // (The module wires its SpeechManager observer to TapSpeech on Load.)
             try
             {
                 _http = new DevHttpServer(port, HandleRequest);
@@ -137,20 +153,25 @@ namespace WrathAccess.Dev
                 return OnMainThread(() => _evaluator.Eval(body));
             }
 
-            if (route == "/gui" && method == "GET")
-                return OnMainThread(() => GuiInspector.Dump());
-
-            if (route == "/input" && method == "POST")
-            {
-                string verb = (body ?? "").Trim();
-                return OnMainThread(() => Inject(verb));
-            }
-
             if (route == "/screenshot" && method == "GET")
                 return Screenshot();
 
-            if (route == "/loadsave" && method == "POST")
-                return LoadSave(body);
+            if (route == "/reload" && method == "POST")
+                return OnMainThread(() =>
+                {
+                    string result = WrathAccess.Modularity.ModuleLoader.Reload();
+                    _evaluator.Reset(); // next eval binds against the fresh generation
+                    return result;
+                }, 60);
+
+            if (route == "/module" && method == "GET")
+                return WrathAccess.Modularity.ModuleLoader.Describe();
+
+            // Module-registered routes (/gui, /input, /loadsave, ...) — absent until the module loads.
+            Func<string, string, string, string> moduleHandler;
+            lock (_routeLock) _moduleRoutes.TryGetValue(route, out moduleHandler);
+            if (moduleHandler != null)
+                return moduleHandler(method, body, query);
 
             if (route == "/speech" && method == "GET")
             {
@@ -166,102 +187,6 @@ namespace WrathAccess.Dev
             if (route == "/health" || route == "/") return "ok\n";
 
             return "[404] " + method + " " + route + "\n";
-        }
-
-        // Fire one of our InputActions by key, exactly as InputManager.Tick routes a real press: a UI action
-        // goes to the navigator; anything else fires its handler. Lets the dev driver drive nav (ui.down,
-        // ui.activate, ui.next…) and global hotkeys. Unknown key → list what's available. Main-thread only.
-        private static string Inject(string key)
-        {
-            foreach (var a in InputManager.Actions)
-            {
-                if (a.Key != key) continue;
-                bool consumed = a.Category == InputCategory.UI && Navigation.DispatchJustPressed(a);
-                if (!consumed) a.InvokePerformed();
-                return "fired " + key + (consumed ? " (navigator)" : " (handler)") + "\n";
-            }
-            var sb = new StringBuilder("[unknown action] " + key + "\navailable:\n");
-            foreach (var a in InputManager.Actions) sb.Append("  ").Append(a.Key).Append('\n');
-            return sb.ToString();
-        }
-
-        // Load a save from the main menu and BLOCK until the gameplay scene is interactive, so the driver
-        // can script "drop me in-game" in one call. body = "latest" (default) | "quick" | an index into the
-        // save list. Drives Game.LoadGameFromMainMenu (the CONTINUE-button path), then polls for loading to
-        // finish + a play context to be active. We drive nav via /input + /eval (our InputManager), so we
-        // don't need the game's keyboard focus — no focus fix required (the dev server already keeps the loop
-        // running unfocused). Save metadata loads async at the title screen, so a too-early call returns a
-        // retryable "[not ready]"/"[no save]".
-        private string LoadSave(string body)
-        {
-            string sel = (body ?? "").Trim();
-            if (sel.Length == 0) sel = "latest";
-
-            string kick = OnMainThread(() =>
-            {
-                var game = Kingmaker.Game.Instance;
-                if (game == null || game.SaveManager == null) return "[not ready] no SaveManager yet; retry\n";
-                // Must be idle at the title screen. The server answers /health at the GameStarter entry point
-                // (before the menu exists), and loading mid-boot half-initializes the game.
-                var lp = Kingmaker.EntitySystem.Persistence.LoadingProcess.Instance;
-                if (lp == null || lp.IsLoadingScreenActive) return "[not ready] still on a loading screen; retry\n";
-                var mm = game.UI?.MainMenu;
-                if (mm == null) return "[not ready] not at the main menu (load only from the title screen); retry\n";
-                var save = ResolveSave(game.SaveManager, sel);
-                if (save == null) return "[no save] '" + sel + "' not found (saves still loading? retry)\n";
-                // Drive the real Continue-button path: MainMenu.LoadGame wraps the load in EnterGame, which
-                // shows the loading screen, tears down the menu (stopping its music) + EscManager, loads the
-                // obligatory scenes, THEN runs LoadGameFromMainMenu. Calling LoadGameFromMainMenu directly
-                // skips that transition and leaves a broken half-load (menu music + no party).
-                mm.LoadGame(save);
-                return "ok\n";
-            });
-            if (kick != "ok\n") return kick;
-
-            var timer = System.Diagnostics.Stopwatch.StartNew();
-            while (timer.Elapsed.TotalSeconds < 90)
-            {
-                string status = OnMainThread(() =>
-                {
-                    var lp = Kingmaker.EntitySystem.Persistence.LoadingProcess.Instance;
-                    if (lp != null && lp.IsLoadingScreenActive) return "";
-                    // A play context becoming active is our "interactive" signal; at the menu it's
-                    // ctx.mainmenu (not in-play), so we can't falsely return before the load even starts.
-                    string key = WrathAccess.Screens.ScreenManager.Current?.Key;
-                    bool inPlay = key == "ctx.ingame" || key == "ctx.tacticalcombat" || key == "ctx.globalmap";
-                    return inPlay ? "loaded '" + sel + "': screen=" + key + "\n" : "";
-                });
-                if (status.Length > 0) return status;
-                Thread.Sleep(150);
-            }
-            return "[timeout] load '" + sel + "' did not become interactive within 90s\n";
-        }
-
-        private static Kingmaker.EntitySystem.Persistence.SaveInfo ResolveSave(
-            Kingmaker.EntitySystem.Persistence.SaveManager mgr, string sel)
-        {
-            if (sel == "latest") return mgr.GetLatestSave();
-            if (sel == "quick") return mgr.GetNewestQuickslot();
-            // "area:<BlueprintName>" = the newest save made IN that area — the survey workflow's way
-            // to load an area in its story-correct etude state (teleporting a later save in shows the
-            // area as the LATER story left it, e.g. the festival square already torn by the attack).
-            if (sel.StartsWith("area:", StringComparison.OrdinalIgnoreCase))
-            {
-                string area = sel.Substring("area:".Length).Trim();
-                Kingmaker.EntitySystem.Persistence.SaveInfo best = null;
-                foreach (var s in mgr)
-                    if (s != null && s.Area != null && s.Area.name == area
-                        && (best == null || s.SystemSaveTime > best.SystemSaveTime))
-                        best = s;
-                return best;
-            }
-            if (int.TryParse(sel, out int idx))
-            {
-                int i = 0;
-                foreach (var s in mgr) if (i++ == idx) return s;
-                return null;
-            }
-            return mgr.GetLatestSave();
         }
 
         // Capture the game framebuffer to a PNG (works unfocused) and return its path for the driver to Read.

@@ -149,6 +149,16 @@ namespace WrathAccess.Speech
 
         public static bool Ready => _initialized && Default != null;
 
+        /// <summary>Release every handler's native/COM resources (module hot-reload teardown) — a
+        /// leaked Prism context or SAPI voice from an old generation would keep speaking over the
+        /// new one's. The next generation re-initializes from the persisted settings.</summary>
+        public static void Shutdown()
+        {
+            _initialized = false;
+            foreach (var h in Handlers)
+                try { h.Unload(); } catch { }
+        }
+
         // ---- the default-config speak/render API (UI / announcements / dialogue) ----
 
         public static void Speak(string text, bool interrupt = false) { Tap(text); if (Ready) Default.Speak(text, interrupt); }

@@ -26,6 +26,14 @@ namespace WrathAccess
             EventBus.Subscribe(_instance);
         }
 
+        /// <summary>Unhook from the game (module hot-reload teardown).</summary>
+        public static void Shutdown()
+        {
+            if (_instance == null) return;
+            EventBus.Unsubscribe(_instance);
+            _instance = null;
+        }
+
         // Enum form: resolve to the game's localized text (same source the on-screen warnings use).
         public void HandleWarning(WarningNotificationType warningType, bool addToLog = true)
         {

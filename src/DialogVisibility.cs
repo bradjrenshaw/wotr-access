@@ -29,6 +29,14 @@ namespace WrathAccess
             EventBus.Subscribe(_instance);
         }
 
+        /// <summary>Unhook from the game (module hot-reload teardown).</summary>
+        public static void Shutdown()
+        {
+            if (_instance == null) return;
+            EventBus.Unsubscribe(_instance);
+            _instance = null;
+        }
+
         // The window is shown exactly while Dialog mode is active; any other mode hides it.
         public void OnGameModeStart(GameModeType gameMode) => Shown = gameMode == GameModeType.Dialog;
         public void OnGameModeStop(GameModeType gameMode) { }

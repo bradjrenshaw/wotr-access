@@ -55,11 +55,14 @@ capturing the rest. ~100 restarts is normal.
 ```
 dotnet build
 ```
-Debug build compiles `WrathAccess.dll` and deploys the full native-mod layout to
-`%LocalLow%\...\Modifications\WrathAccess\` (manifest + settings json + dlls
-under `Assemblies\` + `assets\`), and the native speech dll (`prism.dll`) next to
-`Wrath.exe` (**game must be closed** or that copy fails; `dotnet build -c Release`
-compiles without deploying). Then restart the game. The mod must be enabled once
+Debug build compiles the HOST (`WrathAccess.dll`) + MODULE (`WrathAccess.Module.dll`)
+and deploys the full native-mod layout to `%LocalLow%\...\Modifications\WrathAccess\`
+(manifest + settings json + host dlls under `Assemblies\` + the module under `Module\`
++ `assets\`), and the native speech dll (`prism.dll`) next to `Wrath.exe` (**the FULL
+build needs the game closed** — prism.dll and the host dll are locked; `dotnet build
+-c Release` compiles without deploying). **Module-only changes need NO restart and NO
+game close**: `dotnet build module/WrathAccess.Module.csproj` + `POST /reload` — see
+the architecture section. The mod must be enabled once
 in `OwlcatModificationManagerSettings.json` (already done on this machine).
 
 **Alpha distribution = git pull + `deploy.ps1`** (pure copy, no SDK for testers; see
@@ -85,10 +88,29 @@ jumps) and reshapes the whole UI. Instead we build our own nav over the live
 `RootUIContext`. We suppress the game's own keybindings with
 `Game.Instance.Keyboard.Disabled` while our focus mode owns the keyboard.
 
-## Architecture (current — input substrate)
-- `src/Main.cs` — native-mod entry (`[OwlcatModificationEnterPoint] Load`). Boots
-  speech, Harmony, registers input; the `Ticker` MonoBehaviour drives the per-frame
-  loops; `Enabled` master switch (wired to the game's mod enable/disable).
+## Architecture — HOST/MODULE split (hot reload; the tbw-access pattern)
+Two assemblies:
+- **HOST** (`WrathAccess.csproj` → `WrathAccess.dll` in `Assemblies/`, loaded by the
+  Owlcat loader; **changing it needs a game restart — keep it minimal**): `src/Host/Main.cs`
+  (entry + `Ticker` + `Enabled`/`ModDir`/`Log` statics), `src/Modularity/` (IModModule +
+  ModuleLoader), `src/ModLogger.cs`, and the dev-server core (`src/Dev/DevServer.cs`,
+  `DevHttpServer.cs`, `CSharpEvaluator.cs`, `SpeechLog.cs`).
+- **MODULE** (`module/WrathAccess.Module.csproj` → `Module/WrathAccess.Module.dll`,
+  **byte-loaded — never file-locked**): everything else; `src/ModuleMain.cs` is its
+  IModModule (Load = the old boot sequence, Tick = the frame loop, Dispose = teardown).
+  **Day-to-day feature work goes here and hot-reloads with no restart**:
+  `dotnet build module/WrathAccess.Module.csproj` (works with the game RUNNING) →
+  `curl -X POST 127.0.0.1:8771/reload` (`GET /module` verifies the swap). The module's
+  `AssemblyName` is TIMESTAMPED per build (Mono binds by simple name — an unchanged name
+  would silently reload the OLD image; do not "fix" this). Module references the host
+  dll directly (`Main.Log` etc.); the host knows the module only through IModModule.
+  Dispose must undo every persistent hook (Harmony per-generation ids, EventBus subs,
+  GameObjects, keyboard scope, NAudio outputs, speech engines, dev routes) — a missed
+  one shows up as doubled speech/audio after a reload.
+
+## Architecture (module contents)
+- `src/ModuleMain.cs` — the module entry (was `Main`). Boots speech, Harmony, registers
+  input; `Tick` drives the per-frame loops; observes the host's `Enabled` master switch.
 - `src/Tts.cs` — speech facade over `src/Speech/` (Prism primary, manual-COM SAPI,
   clipboard fallback). Never interrupts by default (SayTheSpire preference).
 - `src/Input/` — ported SayTheSpire2 input framework, Unity-backed:

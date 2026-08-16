@@ -14,5 +14,13 @@ namespace WrathAccess.Audio
         {
             get { if (_naudio == null) _naudio = new NAudioEngine(); return _naudio; }
         }
+
+        /// <summary>Close the output device and drop the engine (module hot-reload teardown) — a
+        /// leaked WaveOutEvent would keep mixing the OLD generation's voices over the new one's.</summary>
+        public static void ShutdownAll()
+        {
+            _naudio?.Dispose();
+            _naudio = null;
+        }
     }
 }

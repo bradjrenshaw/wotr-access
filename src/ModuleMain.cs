@@ -17,44 +17,31 @@ using WrathAccess.UI; // NavDirection
 namespace WrathAccess
 {
     /// <summary>
-    /// Entry point for the game's NATIVE mod system (Kingmaker.Modding — no Unity Mod Manager). The game
-    /// loads every assembly under <c>Modifications/WrathAccess/Assemblies/</c> and invokes the
-    /// <c>[OwlcatModificationEnterPoint]</c> method during boot (GameStarter, before the main menu),
-    /// passing our <c>OwlcatModification</c>. Install = copy the mod folder + list "WrathAccess" in
-    /// <c>OwlcatModificationManagerSettings.json</c> (+ prism.dll next to Wrath.exe) — pure file
-    /// operations, no third-party installer. The native system has no per-frame hook, so we spawn our own
-    /// persistent <see cref="Ticker"/> MonoBehaviour to drive the input/screen/overlay loops.
+    /// The reloadable feature MODULE — everything the mod does, minus what can never reload (the
+    /// host: entry point, Ticker, dev-server socket, module loader — see <c>src/Host/Main.cs</c>).
+    /// The host byte-loads this assembly (Module/WrathAccess.Module.dll) and drives it through
+    /// <see cref="Modularity.IModModule"/>: <see cref="Load"/> once (the boot sequence that used to
+    /// be the entry point), <see cref="Tick"/> per frame, and <see cref="Dispose"/> to undo every
+    /// persistent game-side hook so a fresh generation can hot-swap in without a restart.
+    /// Host services are plain statics on <c>Main</c> (Log/ModDir/Enabled) — the module references
+    /// the host assembly directly.
     /// </summary>
-    public static class Main
+    public sealed class ModuleMain : WrathAccess.Modularity.IModModule
     {
-        public static ModLogger Log;
-
-        /// <summary>Master switch, flipped from the game's Modifications window (OnSetEnabled).</summary>
-        public static bool Enabled = true;
-
-        /// <summary>The mod's install folder (assets live at its root, the DLL under Assemblies/).</summary>
-        public static string ModDir { get; private set; }
+        private static ModLogger Log => Main.Log;
+        private static bool Enabled => Main.Enabled;
 
         private static Harmony _harmony;
+        private static GameObject _go; // module-owned components (ListenerAnchor); destroyed on Dispose
 
-        [OwlcatModificationEnterPoint]
-        public static void Load(OwlcatModification modification)
+        public void Load()
         {
-            Log = new ModLogger();
-            ModDir = modification.Path;
-            // Wire the game's enable/disable plumbing to our master switch.
-            modification.IsEnabled = () => Enabled;
-            modification.OnSetEnabled = enabled =>
-            {
-                Enabled = enabled;
-                if (!enabled) FocusMode.Set(false);
-                Log.Log("WrathAccess " + (enabled ? "enabled" : "disabled"));
-            };
-
             try
             {
                 WrathAccess.Localization.LocalizationManager.Initialize(); // wire Message's resolver early
-                _harmony = new Harmony("WrathAccess");
+                // Per-GENERATION Harmony id: Dispose unpatches by id, and a fixed id would strip a
+                // newer generation's patches if an old Dispose ever ran late.
+                _harmony = new Harmony("WrathAccess.gen" + WrathAccess.Modularity.ModuleLoader.Generation);
                 _harmony.PatchAll(Assembly.GetExecutingAssembly());
                 // Verify the pointer-cursor patch actually attached (this class of bug has bitten us before).
                 var tick = HarmonyLib.AccessTools.Method(typeof(Kingmaker.Controllers.Clicks.PointerController), "Tick");
@@ -84,28 +71,47 @@ namespace WrathAccess
                 WrathAccess.Events.EventBusAdapter.Initialize(); // turn game damage/buff events into mod events
                 DialogVisibility.Initialize(); // track when the dialogue window is actually shown/clickable
 
-                // The native mod system has no per-frame callback — drive our loops from our own
-                // persistent MonoBehaviour (survives scene loads via DontDestroyOnLoad).
-                var ticker = new GameObject("WrathAccess.Ticker");
-                UnityEngine.Object.DontDestroyOnLoad(ticker);
-                ticker.AddComponent<Ticker>();
+                // Module-owned components on a module-owned GameObject (destroyed on Dispose).
                 // The virtual audio head (+10000: its LateUpdate must land AFTER the game's camera
-                // snap so the listener override wins while active).
-                ticker.AddComponent<WrathAccess.Exploration.ListenerAnchor>();
+                // snap so the listener override wins while active). The per-frame Ticker lives in
+                // the HOST — it drives this module's Tick through the loader.
+                _go = new GameObject("WrathAccess.Module");
+                UnityEngine.Object.DontDestroyOnLoad(_go);
+                _go.AddComponent<WrathAccess.Exploration.ListenerAnchor>();
 
 #if DEBUG
-                // Dev-only in-process HTTP driver (eval/speech/health), gated again behind WRATHACCESS_DEV=1.
-                // Compiled out entirely in Release — see src/Dev/.
-                WrathAccess.Dev.DevServer.Instance.Start();
+                // Module-owned dev routes on the host's dev server (inert unless the server started).
+                WrathAccess.Dev.DevModuleRoutes.Register();
 #endif
 
-                Log.Log("WrathAccess initialized. " + BuildStamp());
+                Log.Log("WrathAccess module initialized. " + BuildStamp());
                 Tts.Speak(Loc.T("app.loaded"));
             }
             catch (Exception e)
             {
-                Log.Error("Initialization failed: " + e);
+                Log.Error("Module initialization failed: " + e);
             }
+        }
+
+        /// <summary>Undo every persistent game-side hook Load created (see IModModule docs). Runs
+        /// BEFORE the next generation loads — our systems are process-global, and two live
+        /// generations would double-subscribe and double-speak.</summary>
+        public void Dispose()
+        {
+            try { FocusMode.Set(false); } catch (Exception e) { Log?.Error("[dispose] focus: " + e); } // releases the KeyboardAccess scope
+            try { OverlayManager.DisengageForReload(); } catch (Exception e) { Log?.Error("[dispose] overlays: " + e); } // overlay systems release their NAudio voices
+            try { WrathAccess.Audio.AudioEngines.ShutdownAll(); } catch (Exception e) { Log?.Error("[dispose] audio: " + e); }
+            try { WrathAccess.Speech.SpeechManager.Shutdown(); } catch (Exception e) { Log?.Error("[dispose] speech: " + e); }
+            try { WarningReader.Shutdown(); } catch (Exception e) { Log?.Error("[dispose] warnings: " + e); }
+            try { WrathAccess.Events.EventBusAdapter.Shutdown(); } catch (Exception e) { Log?.Error("[dispose] events: " + e); }
+            try { DialogVisibility.Shutdown(); } catch (Exception e) { Log?.Error("[dispose] dialog: " + e); }
+            try { _harmony?.UnpatchAll(_harmony.Id); } catch (Exception e) { Log?.Error("[dispose] harmony: " + e); }
+            _harmony = null;
+#if DEBUG
+            try { WrathAccess.Dev.DevModuleRoutes.Unregister(); } catch (Exception e) { Log?.Error("[dispose] dev routes: " + e); }
+#endif
+            try { if (_go != null) UnityEngine.Object.Destroy(_go); } catch (Exception e) { Log?.Error("[dispose] gameobject: " + e); }
+            _go = null;
         }
 
         // The loaded DLL's build time + path, logged at startup so we can confirm from Player.log which
@@ -120,16 +126,6 @@ namespace WrathAccess
             catch { return "Build ?"; }
         }
 
-        /// <summary>Our per-frame driver (the native mod system has no update hook of its own). The
-        /// negative execution order runs us BEFORE the game's scripts each frame — UMM's dispatcher got
-        /// that position implicitly by being created at injection time, before any game object existed;
-        /// created mid-boot we'd otherwise run after them, adding a frame of input latency.</summary>
-        [DefaultExecutionOrder(-10000)]
-        private sealed class Ticker : MonoBehaviour
-        {
-            private void Update() { try { OnFrame(); } catch (Exception e) { Log?.Error("[tick] " + e); } }
-        }
-
         // Focus mode starts ON (no hotkey ritual every launch) — but the game's Keyboard doesn't exist
         // yet at our entry point (GameStarter), so engage on the first frame it does. One-shot: a later
         // manual toggle-off stays off.
@@ -142,14 +138,18 @@ namespace WrathAccess
         private static bool WizardAlreadyShown()
             => WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>("wizard.completed")?.Get() ?? false;
 
-        private static void OnFrame()
+        // React to the game's Modifications-window disable (host flips Main.Enabled): drop focus mode
+        // once so the game's own keyboard comes back, then idle.
+        private static bool _wasEnabled = true;
+
+        public void Tick()
         {
-#if DEBUG
-            // Run queued dev-eval jobs on the main thread even when the mod is toggled off, so the dev
-            // driver stays usable. Inert unless WRATHACCESS_DEV=1.
-            WrathAccess.Dev.DevServer.Instance.Pump();
-#endif
-            if (!Enabled) return;
+            if (!Enabled)
+            {
+                if (_wasEnabled) { _wasEnabled = false; try { FocusMode.Set(false); } catch { } }
+                return;
+            }
+            _wasEnabled = true;
             if (_bootFocusPending && Game.Instance?.Keyboard != null)
             {
                 _bootFocusPending = false;

@@ -453,6 +453,32 @@ namespace WrathAccess.UI
             };
         }
 
+        /// <summary>A display-only item slot — the message modal's item list (world-map "Reagents in this
+        /// location"): name (+ count for stacks), the item's tooltip on Space, no activation — the icons
+        /// aren't clickable for sighted players either; the modal's buttons act on the whole set.</summary>
+        public static NodeVtable DisplayItem(Kingmaker.UI.MVVM._VM.Slots.ItemSlotVM slot)
+        {
+            Func<string> label = () =>
+            {
+                var name = slot.DisplayName.Value;
+                if (string.IsNullOrEmpty(name)) name = slot.Item.Value?.Name ?? "item";
+                int count = slot.Count.Value;
+                return count > 1 ? name + ", " + count : name;
+            };
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Item,
+                Announcements = new[] { LabelPart(label) },
+                SearchText = label,
+                OnTooltip = () =>
+                {
+                    var t = slot.Tooltip.Value;
+                    var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
+                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
+                },
+            };
+        }
+
         /// <summary>The game's generic selection contract (<see cref="Owlcat.Runtime.UI.SelectionGroup.SelectionGroupEntityVM"/>:
         /// IsSelected / IsAvailable / SetSelectedFromView) as a radio button — race, pregen, save slot,
         /// scenario… <paramref name="extraParts"/> append after the selected part (a table row's

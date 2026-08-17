@@ -177,9 +177,21 @@ namespace WrathAccess.Exploration
         // ---- lifecycle ----
 
         private static int _retryCooldown; // frames until the next attempt while the graph is empty
+        private static float _invalidateAt; // pending rebuild time (door state changed), 0 = none
+
+        /// <summary>Schedule a rebuild shortly: a door opened/closed (its moving NavmeshCut changes
+        /// walkability AND room connectivity — the DH basement's secret room stayed unwalkable and
+        /// exit-less on the stale map). Delayed so the door's animation (and the navmesh cut it
+        /// drags along) settles first; repeated door events push the window out (coalesced).</summary>
+        public static void InvalidateSoon() => _invalidateAt = UnityEngine.Time.unscaledTime + 2f;
 
         public static void Tick()
         {
+            if (_invalidateAt > 0f && UnityEngine.Time.unscaledTime >= _invalidateAt)
+            {
+                _invalidateAt = 0f;
+                _builtFor = null; // full rebuild (rooms + exits) against the settled navmesh
+            }
             var game = Game.Instance;
             var area = game?.CurrentlyLoadedArea;
             if (area == null) { _builtFor = null; _label = null; _rooms.Clear(); return; }

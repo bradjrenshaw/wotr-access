@@ -48,6 +48,15 @@ namespace WrathAccess.Screens
             if (!string.IsNullOrEmpty(vm.MessageText))
                 b.BeginStop("msg").AddItem(ControlId.Structural(k + "msg"), GraphNodes.Text(() => vm.MessageText));
 
+            // Item-list variant (world-map "Reagents in this location"): sighted players get a row of item
+            // icons with tooltips between the message and the buttons — mirror it as display-only rows.
+            if (vm.Items != null && vm.Items.Count > 0)
+            {
+                var stop = b.BeginStop("items");
+                for (int i = 0; i < vm.Items.Count; i++)
+                    stop.AddItem(ControlId.Structural(k + "item" + i), GraphNodes.DisplayItem(vm.Items[i]));
+            }
+
             // Text-field modal (e.g. save overwrite-rename): an editable field. Enter opens our text-entry
             // overlay prefilled with the current value; Accept below submits it (OnAcceptPressed reads InputText).
             if (vm.ModalType == Kingmaker.UI.MessageModalBase.ModalType.TextField)

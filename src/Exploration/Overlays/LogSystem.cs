@@ -138,10 +138,13 @@ namespace WrathAccess.Exploration.Overlays
             // reads the same content itself (dialogue cues, loot). But BARKS are a character SPEAKING,
             // and no screen re-delivers those — camp banter during rest arrives here as BarkLogThread
             // lines while the rest screen is on top, and was being dropped. Speech always gets through.
+            // LOCATION lines get the same pass: "New location discovered" fires mid-travel exactly when
+            // the world map's location panel pops as the covering screen (travel auto-pauses and re-shows
+            // the panel), so the one line explaining the pause was being dropped with it.
             bool covered = !OverlayManager.Active;
             while (LogFeed.TryDequeue(out string thread, out string text))
             {
-                if (covered && thread != "BarkLogThread") continue;
+                if (covered && thread != "BarkLogThread" && thread != "LocationLogThread") continue;
                 if (ShouldSpeak(thread))
                     Tts.Speak(text, interrupt: false); // passive content — queue behind, never cut off nav
             }

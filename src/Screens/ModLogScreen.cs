@@ -50,7 +50,10 @@ namespace WrathAccess.Screens
 
         private static List<CombatLogChannel> Channels()
         {
-            var clog = Game.Instance?.RootUiContext?.InGameVM?.StaticPartVM?.CombatLogVM;
+            // Two hosts (in-area static HUD, or the world map's own context) — same dual-context
+            // shape as ServiceWindows.Current, so Ctrl+L works on the global map too.
+            var rc = Game.Instance?.RootUiContext;
+            var clog = rc?.InGameVM?.StaticPartVM?.CombatLogVM ?? rc?.GlobalMapVM?.CombatLogVM;
             return clog != null ? ChannelsField?.GetValue(clog) as List<CombatLogChannel> : null;
         }
 

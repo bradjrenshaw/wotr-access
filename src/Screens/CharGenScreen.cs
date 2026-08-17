@@ -29,6 +29,12 @@ namespace WrathAccess.Screens
             var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
             if (rc == null) return null;
             // Same VM whether reached from the main menu (new game) or in-game (level-up/respec).
+            // Three hosts, each alive only in its context (same shape as ServiceWindows.Current):
+            // the main menu (new game), the in-game static HUD, and the WORLD MAP's own context —
+            // levelling up on the global map spawns the wizard there (tester repro: the map kept
+            // focus because this resolver never saw the global map's CharGenVM).
+            var map = rc.GlobalMapVM?.CharGenContextVM?.CharGenVM?.Value;
+            if (map != null) return map;
             var menu = rc.MainMenuVM?.CharGenContextVM?.CharGenVM?.Value;
             if (menu != null) return menu;
             return rc.InGameVM?.StaticPartVM?.CharGenContextVM?.CharGenVM?.Value;

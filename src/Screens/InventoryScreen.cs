@@ -85,6 +85,76 @@ namespace WrathAccess.Screens
             BuildEquipment(b, vm.DollVM, uk);
             BuildLoad(b, vm.StashVM, k);
             BuildStash(b, vm, k);
+            BuildFinnean(b, vm, k);
+        }
+
+        // Finnean, the talking weapon — the game's smart-item panel, as a Tab-stop after the stash.
+        // Closed: the same toggle button the sighted window shows (game-localized "Finnean"); Enter
+        // opens the panel via the VM contract (ToggleSmartItem creates the InventorySmartItemVM and,
+        // for sighted players, swaps the stash panel out — parity). Open: Talk (hidden on the global
+        // map, like the game), the weapon-form radios (Enter STAGES a form — the game's dropdown),
+        // the live "who can wield" preview, then Equip (the slot's double-click) and Close. Staging
+        // before equipping is deliberate parity: the preview reads the can-do warning BEFORE the
+        // form is committed to the character.
+        private static void BuildFinnean(GraphBuilder b, InventoryVM vm, string k)
+        {
+            if (vm.HasSmartItem?.Value != true) return;
+            var strings = Kingmaker.Blueprints.Root.Strings.UIStrings.Instance.CharacterSheet;
+            b.BeginStop("finnean");
+
+            var sm = vm.SmartItemVM?.Value;
+            if (sm == null)
+            {
+                b.AddItem(ControlId.Structural(k + "finnean:open"),
+                    GraphNodes.Button(() => (string)strings.SmartItemLabel, () => vm.ToggleSmartItem()));
+                return;
+            }
+
+            // Open: each piece is its own Tab-stop — weapons list, then the staged form + wielder
+            // preview, then Equip, then Close (user spec 2026-08-17).
+            string fk = k + "finnean:" + sm.GetHashCode() + ":";
+
+            if (sm.CanStartDialog.Value)
+                b.AddItem(ControlId.Structural(fk + "talk"),
+                    GraphNodes.Button(() => (string)strings.SmartItemStartDialog, () => sm.StartDialog()));
+
+            if (sm.CanPolymorph.Value && sm.PolymorphItems != null)
+            {
+                b.BeginStop("finnean_forms").PushContext((string)strings.SmartItemLabel, "list");
+                for (int i = 0; i < sm.PolymorphItems.Count; i++)
+                {
+                    var item = sm.PolymorphItems[i];
+                    int idx = i;
+                    var vt = GraphNodes.ChoiceOption(
+                        () => item.Blueprint.NonIdentifiedName,
+                        // Staged = what sits in the slot right now (the dropdown's selection).
+                        () => sm.SmartItemSlotVM?.Item?.Value?.Blueprint == item.Blueprint,
+                        () => sm.SelectItem(idx));
+                    // The form's item tooltip (resolved fresh per press — never cache a template).
+                    vt.OnTooltip = () => TooltipScreen.Open(
+                        new Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateItem(item));
+                    b.AddItem(ControlId.Structural(fk + "form:" + i), vt);
+                }
+                b.PopContext();
+
+                // The staged form + wielder preview: whether the current character can use it —
+                // read it before committing with Equip.
+                b.BeginStop("finnean_form");
+                b.AddItem(ControlId.Structural(fk + "cando"), GraphNodes.Text(() =>
+                {
+                    var staged = sm.SmartItemSlotVM?.Item?.Value ?? sm.CurrentPolymorph;
+                    if (staged == null) return Loc.T("finnean.no_form");
+                    string name = staged.Blueprint?.NonIdentifiedName ?? staged.Name;
+                    var warn = Kingmaker.UI.Common.UIUtilityTexts.GetCanDoText(staged, defaultColor: true);
+                    return name + ", " + (string.IsNullOrEmpty(warn) ? Loc.T("finnean.can_wield") : warn);
+                }));
+
+                b.BeginStop("finnean_equip").AddItem(ControlId.Structural(fk + "equip"),
+                    GraphNodes.Button(() => Loc.T("finnean.equip"), () => sm.SmartItemSlotVM?.Equip()));
+            }
+
+            b.BeginStop("finnean_close").AddItem(ControlId.Structural(fk + "close"),
+                GraphNodes.Button(() => Loc.T("finnean.close"), () => vm.ToggleSmartItem()));
         }
 
         // The equipment doll: the grip button (only when the active set can re-grip), the weapon-set

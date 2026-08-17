@@ -39,9 +39,14 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class CharacterInfoScreen : Screen
     {
+        public CharacterInfoScreen() { Wrap = true; } // Tab cycles the window's stops end-around
+
         public override string Key => "service.Character";
         public override string ScreenName => Loc.T("screen.character");
         public override int Layer => 10;
+        // Window-tab parity: the window.* hotkeys stay live inside this window (see UiAndWindows).
+        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories => UiAndWindows;
+
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.CharacterInfo;
 
@@ -61,6 +66,10 @@ namespace WrathAccess.Screens
             var vm = Vm();
             if (vm == null) return;
             string k = "chinfo:" + vm.GetHashCode() + ":";
+
+            // Character switcher — the shared Tab-stop (ServiceWindows.EmitCharacterSwitcher):
+            // drives the game's real selection; the current character carries a live "selected" part.
+            ServiceWindows.EmitCharacterSwitcher(b, k);
 
             // Page tabs — the game's page radio group; activating selects the page (the content below
             // re-keys). Keyed by entity, so tab focus survives page switches.

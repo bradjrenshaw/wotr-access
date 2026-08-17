@@ -36,8 +36,9 @@ namespace WrathAccess.Screens
 
         // The movement/review/action keys are the SHARED Exploration actions (Route()d to the map
         // systems by screen); LocalMap holds only the Escape→close key.
-        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.Exploration, InputCategory.LocalMap };
-        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.Exploration, InputCategory.LocalMap, InputCategory.UI };
+        // Windows included so the window.* hotkeys act as the sighted tab bar from the map too.
+        private static readonly IReadOnlyList<InputCategory> Focused = new[] { InputCategory.UI, InputCategory.Exploration, InputCategory.LocalMap, InputCategory.Windows };
+        private static readonly IReadOnlyList<InputCategory> Unfocused = new[] { InputCategory.Exploration, InputCategory.LocalMap, InputCategory.UI, InputCategory.Windows };
         public override IReadOnlyList<InputCategory> InputCategories
             => Navigation.HasFocus ? Focused : Unfocused;
 

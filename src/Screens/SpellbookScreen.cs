@@ -25,9 +25,14 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class SpellbookScreen : Screen
     {
+        public SpellbookScreen() { Wrap = true; } // Tab cycles the window's stops end-around
+
         public override string Key => "service.Spellbook";
         public override string ScreenName => Loc.T("screen.spellbook");
         public override int Layer => 10;
+        // Window-tab parity: the window.* hotkeys stay live inside this window (see UiAndWindows).
+        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories => UiAndWindows;
+
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Spellbook;
 
@@ -62,22 +67,9 @@ namespace WrathAccess.Screens
             string k = "spellbook:" + vm.GetHashCode() + ":";
             string uk = k + (unit != null ? unit.CharacterName : "?") + ":";
 
-            // Character switcher — switching the selected unit re-keys everything below it.
-            var party = Game.Instance?.Player?.Party;
-            if (party != null && party.Count > 0)
-            {
-                b.BeginStop("chars").PushContext(Loc.T("label.characters"), "list");
-                int ci = 0;
-                foreach (var u in party)
-                {
-                    var un = u;
-                    b.AddItem(ControlId.Referenced(un, k + "char:" + ci),
-                        GraphNodes.Button(() => un.CharacterName,
-                            () => Game.Instance.SelectionCharacter.SetSelected(un)));
-                    ci++;
-                }
-                b.PopContext();
-            }
+            // Character switcher — the shared Tab-stop (ServiceWindows.EmitCharacterSwitcher):
+            // drives the game's real selection; the current character carries a live "selected" part.
+            ServiceWindows.EmitCharacterSwitcher(b, k);
 
             if (!vm.HasSpellbooks.Value)
             {

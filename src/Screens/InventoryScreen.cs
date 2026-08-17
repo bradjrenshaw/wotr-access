@@ -26,9 +26,14 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class InventoryScreen : Screen
     {
+        public InventoryScreen() { Wrap = true; } // Tab cycles the window's stops end-around
+
         public override string Key => "service.Inventory";
         public override string ScreenName => Loc.T("screen.inventory");
         public override int Layer => 10;
+        // Window-tab parity: the window.* hotkeys stay live inside this window (see UiAndWindows).
+        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories => UiAndWindows;
+
         public override bool IsActive()
         {
             var rc = Game.Instance?.RootUiContext;
@@ -64,22 +69,9 @@ namespace WrathAccess.Screens
             // the new character's content only if focus was inside it — switcher focus is untouched).
             string uk = k + (unit != null ? unit.CharacterName : "?") + ":";
 
-            // Character switcher — drives the game's real selection; the stash below is party-shared.
-            var party = Game.Instance?.Player?.Party;
-            if (party != null && party.Count > 0)
-            {
-                b.BeginStop("chars").PushContext(Loc.T("label.characters"), "list");
-                int ci = 0;
-                foreach (var u in party)
-                {
-                    var un = u;
-                    b.AddItem(ControlId.Referenced(un, k + "char:" + ci),
-                        GraphNodes.Button(() => un.CharacterName,
-                            () => Game.Instance.SelectionCharacter.SetSelected(un)));
-                    ci++;
-                }
-                b.PopContext();
-            }
+            // Character switcher — the shared Tab-stop (ServiceWindows.EmitCharacterSwitcher):
+            // drives the game's real selection; the current character carries a live "selected" part.
+            ServiceWindows.EmitCharacterSwitcher(b, k);
 
             // Character summary — the same blocks as the char-sheet Summary page (shared renderer).
             b.BeginStop("stats");

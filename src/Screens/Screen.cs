@@ -80,6 +80,13 @@ namespace WrathAccess.Screens
 
         private static readonly WrathAccess.Input.InputCategory[] UiOnly = { WrathAccess.Input.InputCategory.UI };
 
+        /// <summary>For SERVICE-WINDOW screens: UI plus the Windows hotkeys, so the window.* keys
+        /// act as the sighted tab bar — Ctrl+I from inside the character sheet swaps to the
+        /// inventory via the game's own HandleOpenWindowOfType toggle. NOT for vendor/loot (the
+        /// game closes service windows in those contexts).</summary>
+        protected static readonly WrathAccess.Input.InputCategory[] UiAndWindows =
+            { WrathAccess.Input.InputCategory.UI, WrathAccess.Input.InputCategory.Windows };
+
         /// <summary>The input categories this screen uses while it's the TOP screen, in priority order
         /// (an identical chord in two categories resolves to the earlier one). Default: plain UI
         /// navigation. The in-game screen adds Exploration and flips the order with HUD focus.</summary>

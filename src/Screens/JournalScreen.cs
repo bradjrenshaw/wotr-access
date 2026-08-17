@@ -17,9 +17,14 @@ namespace WrathAccess.Screens
     /// </summary>
     public sealed class JournalScreen : Screen
     {
+        public JournalScreen() { Wrap = true; } // Tab cycles the window's stops end-around
+
         public override string Key => "service.Journal";
         public override string ScreenName => Loc.T("screen.journal");
         public override int Layer => 10;
+        // Window-tab parity: the window.* hotkeys stay live inside this window (see UiAndWindows).
+        public override System.Collections.Generic.IReadOnlyList<WrathAccess.Input.InputCategory> InputCategories => UiAndWindows;
+
         public override bool IsActive()
             => Game.Instance?.RootUiContext?.CurrentServiceWindow == ServiceWindowsType.Journal;
 

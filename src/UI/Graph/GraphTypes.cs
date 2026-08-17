@@ -99,6 +99,13 @@ namespace WrathAccess.UI.Graph
         /// per-type announcement settings identity. Null = an untyped one-off.</summary>
         public ControlType ControlType;
 
+        /// <summary>Optional. The node's LANDING group — the general row-vanish rule: when the
+        /// focused node disappears on a rebuild, the reconcile fallback lands on the nearest
+        /// surviving node of the SAME group (next first, then previous), never on a header, lead
+        /// line or another panel. Sheets stamp their data rows with their key automatically; nodes
+        /// without a group use the plain nearest-survivor walk.</summary>
+        public string LandGroup;
+
         /// <summary>Optional. Primary activation — the left-click equivalent (Enter).</summary>
         public Action OnActivate;
 
@@ -258,6 +265,10 @@ namespace WrathAccess.UI.Graph
         /// <summary>The logical column focus last sat on in a tabular row (see NodeVtable.Column), or
         /// -1. The reconcile fallback slides to this column when the focused row vanished.</summary>
         public int LastColumn = -1;
+
+        /// <summary>The focused node's <see cref="NodeVtable.LandGroup"/> (null when it had none) —
+        /// the row-vanish fallback prefers survivors of this group.</summary>
+        public string LastLandGroup;
 
         /// <summary>Remembered position per Tab-stop: where Tab lands when cycling back into a stop.</summary>
         public readonly Dictionary<object, ControlId> StopMemory = new Dictionary<object, ControlId>();

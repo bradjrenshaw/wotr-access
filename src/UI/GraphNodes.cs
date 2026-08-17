@@ -505,7 +505,8 @@ namespace WrathAccess.UI
             IEnumerable<NodeAnnouncement> extraParts = null)
         {
             string verb = side == VendorSide.Stock ? "buy" : side == VendorSide.Inventory ? "sell" : "return";
-            var boundItem = slot.Item.Value; // the entity this ROW represents (see StateText note)
+            var boundItem = slot.Item.Value;               // the entity this ROW represents (see StateText note)
+            var boundCollection = boundItem?.Collection;   // ...and the collection it lived in at emission
             Func<string> label = () =>
             {
                 var name = slot.DisplayName.Value;
@@ -532,8 +533,12 @@ namespace WrathAccess.UI
                 // the differ announces the landing item instead.
                 StateText = () =>
                 {
+                    // The general FEEDBACK rule: speak about the thing AS IT LIVES IN THIS ROW's
+                    // collection. A whole-stack trade MIGRATES the entity to the opposite table —
+                    // its row here is gone, so stay silent and let the landing announcement speak
+                    // (re-reading the just-sold item from its new table confused the tester).
                     var item = boundItem;
-                    if (item == null || item.Collection == null || item.Count <= 0) return null;
+                    if (item == null || item.Collection != boundCollection || item.Count <= 0) return null;
                     return item.Name + ", " + (item.Count > 1 ? item.Count.ToString() : "1");
                 },
                 // Enter = move ONE (the slot routes by its collection); it plays the game's own sound.

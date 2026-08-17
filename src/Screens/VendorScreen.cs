@@ -106,7 +106,11 @@ namespace WrathAccess.Screens
             string label, GraphNodes.VendorSide side, bool buy, NodeVtable lead, NodeVtable trailer)
         {
             b.BeginStop(key);
-            var sheet = new GraphSheet(b, key + ":");
+            // FollowRowRefs off: a whole-stack trade migrates the ITEM ENTITY to the opposite
+            // table, and reference-following dragged focus there with it — stay in this table on
+            // the neighbouring row instead (the hash-based structural keys still hold focus
+            // through re-sorts within the table).
+            var sheet = new GraphSheet(b, key + ":") { FollowRowRefs = false };
             var cols = new[] { Loc.T("col.type"), Loc.T("col.qty"), Loc.T(buy ? "vendor.col_buy" : "vendor.col_sell") };
             sheet.Region(label, cols);
             if (lead != null) sheet.Line(lead);

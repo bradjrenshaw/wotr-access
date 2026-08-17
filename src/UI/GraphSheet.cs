@@ -41,6 +41,10 @@ namespace WrathAccess.UI
         private Action _rowActivate;   // the primary's Enter/Backspace, inherited by the row's cells
         private Action _rowSecondary;
 
+        /// <summary>Whether row primaries carry their domain object as a tier-1 focus reference (the
+        /// default). Turn OFF for sheets whose objects can MIGRATE to another sheet (see EmitCell).</summary>
+        public bool FollowRowRefs = true;
+
         public GraphSheet(GraphBuilder b, string keyPrefix)
         {
             _b = b;
@@ -154,13 +158,23 @@ namespace WrathAccess.UI
                 if (vt.OnSecondary == null) vt.OnSecondary = _rowSecondary;
             }
             vt.Column = col; // tabular position — the engine preserves it across row-vanish/type-ahead jumps
+            // DATA rows join this sheet's landing group (the general row-vanish rule: land on a
+            // neighbouring row of the same list, never a lead line/header/another panel). Static
+            // lines (a gold lead row, "return all" trailers, empty messages) stay out.
+            if (_rowRef != null) vt.LandGroup = _key;
 
             // Identity keys when the row has a domain object: stable across reorders/removals (the
             // primary also carries the reference for tier-1 follow); positional only for static lines.
+            // FollowRowRefs=false keeps the hash-based STRUCTURAL key (focus still survives
+            // re-sorts within this sheet via tier-2 matching) but drops the tier-1 reference — so
+            // when the object MOVES TO ANOTHER SHEET (a sold-out stack's entity landing in the
+            // vendor's cart), focus stays here on the nearest neighbour instead of chasing it
+            // across tables (tester repro: selling a single item jumped focus to the selling panel).
             string skey = _rowRef != null
                 ? _key + "row" + _rowRef.GetHashCode() + "c" + col
                 : _key + "r" + _row + "c" + col;
-            var id = _rowRef != null && col == 0 ? ControlId.Referenced(_rowRef, skey) : ControlId.Structural(skey);
+            var id = _rowRef != null && col == 0 && FollowRowRefs
+                ? ControlId.Referenced(_rowRef, skey) : ControlId.Structural(skey);
             _b.AddNode(id, vt);
 
             // Left/right to the nearest EMITTED cell (sparse rows skip empty columns), labeled with the

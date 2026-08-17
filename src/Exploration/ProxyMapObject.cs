@@ -59,7 +59,15 @@ namespace WrathAccess.Exploration
                     any = true;
                 }
                 if (!any) b = view.GetMaxBounds(); // fallback (e.g. an object with only hide-renderers)
-                return Mathf.Max(b.extents.x, b.extents.z);
+                float r = Mathf.Max(b.extents.x, b.extents.z);
+                // FLOOR for zero-extent objects: area transitions (and some markers) carry NO
+                // colliders at all, so their footprint collapsed to a POINT — the gliding cursor
+                // could never land "on" an exit (tester repro: near impossible to reach one).
+                // Exits get a walk-into-doorway pad; other interactables a modest disc.
+                if (r < 0.05f)
+                    r = _obj.Get<AreaTransitionPart>() != null ? 1.5f
+                        : _obj.Get<InteractionPart>() != null ? 0.5f : r;
+                return r;
             }
         }
 

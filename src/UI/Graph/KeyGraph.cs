@@ -96,6 +96,24 @@ namespace WrathAccess.UI.Graph
                     if (render.Nodes.TryGetValue(old, out structural)) resolved = structural.Id;
                 }
 
+                // Tier 3 — the GENERAL row-vanish rule: land on the nearest survivor OF THE SAME
+                // LANDING GROUP (this list's rows), next-first then previous — never a header, a
+                // lead line (the vendor's gold row) or another panel. Only nodes stamped with a
+                // LandGroup participate; the vanished node's group was remembered at focus time.
+                if (resolved == null && state.KeyOrder != null && state.LastLandGroup != null)
+                {
+                    int oldIndex = IndexOf(state.KeyOrder, old);
+                    if (oldIndex >= 0)
+                    {
+                        for (int off = 1; off < state.KeyOrder.Count && resolved == null; off++)
+                        {
+                            resolved = GroupSurvivorAt(render, state, oldIndex + off);       // next row first
+                            if (resolved == null) resolved = GroupSurvivorAt(render, state, oldIndex - off);
+                        }
+                        if (resolved != null) resolved = SlideToColumn(render, resolved, state.LastColumn);
+                    }
+                }
+
                 // Fallback: nearest survivor walking the previous order backward. The order interleaves
                 // row cells, so when a whole row vanished (an equipped item's row) the walk lands on
                 // the previous row's LAST cell — a different column. Slide along that row to the column
@@ -128,7 +146,24 @@ namespace WrathAccess.UI.Graph
             state.CurKey = resolved;
             RememberStop(render, state, resolved);
             RememberColumn(render, state, resolved);
+            RememberLandGroup(render, state, resolved);
             state.KeyOrder = ComputeOrder(render);
+        }
+
+        // A survivor at a previous-order index belonging to the remembered landing group, else null.
+        private static ControlId GroupSurvivorAt(GraphRender render, GraphState state, int index)
+        {
+            if (index < 0 || index >= state.KeyOrder.Count) return null;
+            GraphNode n;
+            if (!render.Nodes.TryGetValue(state.KeyOrder[index], out n)) return null;
+            return n.Vtable != null && n.Vtable.LandGroup == state.LastLandGroup ? n.Id : null;
+        }
+
+        // Track the focused node's landing group (null when it has none) for the row-vanish rule.
+        private static void RememberLandGroup(GraphRender render, GraphState state, ControlId key)
+        {
+            var node = render.NodeAt(key);
+            if (node != null) state.LastLandGroup = node.Vtable?.LandGroup;
         }
 
         // Track the tabular column focus sits on (nodes outside tables leave it untouched, so a detour
@@ -222,6 +257,7 @@ namespace WrathAccess.UI.Graph
             _state.CurKey = node.Id;
             if (node.StopKey != null) _state.StopMemory[node.StopKey] = node.Id;
             if (node.Vtable != null && node.Vtable.Column >= 0) _state.LastColumn = node.Vtable.Column;
+            _state.LastLandGroup = node.Vtable?.LandGroup; // row-vanish rule (see Reconcile tier 3)
         }
 
         /// <summary>Focus <paramref name="id"/> slid to <paramref name="prefCol"/> within its row (the

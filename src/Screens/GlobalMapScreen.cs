@@ -54,37 +54,25 @@ namespace WrathAccess.Screens
 
         public override bool AllowsTypeahead => false; // letters are world-map hotkeys (b/m/n, i), not type-ahead
 
-        /// <summary>True while the location panel tab stop is shown (grace-stable). The world-map cursor +
-        /// sonar system check this and freeze, so they don't run while the player reads/acts on the panel.</summary>
-        public static bool PanelActive { get; private set; }
+        /// <summary>True while the location panel is up (now its own modal screen —
+        /// <see cref="GlobalMapEnterScreen"/>). The world-map cursor + sonar check this and freeze.</summary>
+        public static bool PanelActive => GlobalMapEnterScreen.PanelActive;
 
         // The location list's ORDER, frozen at map entry (nearest-first from where you arrived) — live
         // distance sorting would shuffle the list under the cursor as the traveler moves. The SET still
         // reads live each render; only the ordering is a per-entry presentation choice (as before).
         private List<GlobalMapPointView> _order;
 
-        // The location panel's grace-stabilized state: which location it's for (null = none), the capture
-        // of its location-stable texts/labels, and the drop deadline absorbing the game's transient nulls.
-        private BlueprintGlobalMapPoint _panelLoc;
-        private float _panelClearAt;
         private bool _wasPaused; // last frame's travel-pause state (announce on the transition)
-        private string _lore, _desc, _acceptLabel, _manageLabel, _closeLabel;
-        private bool _acceptEnabled, _hasSettlement;
 
         public override void OnPush()
         {
-            _order = null; ClearPanelState();
+            _order = null; _wasPaused = false;
             GlobalMapScanner.Reset(); GlobalMapCursor.Reset(); // the sonar is an overlay system now (resets on overlay exit)
         }
-        public override void OnPop() { _order = null; ClearPanelState(); }
+        public override void OnPop() { _order = null; _wasPaused = false; }
 
-        private void ClearPanelState() { _panelLoc = null; _panelClearAt = 0f; PanelActive = false; _wasPaused = false; }
-
-        public override void OnUpdate()
-        {
-            SyncPanel();
-            SyncTravelPause();
-        }
+        public override void OnUpdate() => SyncTravelPause();
 
         // The game pauses travel mid-journey on a discovery/event (its move-helper shows Continue). Announce
         // the pause once on the transition so the player knows to resume (Enter on the cursor → resume); the
@@ -101,8 +89,7 @@ namespace WrathAccess.Screens
         public override void Build(GraphBuilder b)
         {
             if (!GlobalMapModel.Active) return;
-            BuildPanel(b);    // when open: the FIRST stop, so Tab from the map lands on it directly
-            BuildLocations(b);
+            BuildLocations(b); // the location panel is its own modal screen now (GlobalMapEnterScreen)
         }
 
         private void BuildLocations(GraphBuilder b)
@@ -125,94 +112,6 @@ namespace WrathAccess.Screens
                 i++;
             }
             b.PopContext();
-        }
-
-        // ---- the location panel, as a tab stop synced to the game's live GlobalMapEnterMessageVM ----
-
-        private static GlobalMapEnterMessageVM PanelVm()
-        {
-            var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
-            return rc?.GlobalMapVM?.GlobalMapEnterMessageVM?.Value;
-        }
-
-        // Track the panel VM as it comes and goes — keyed on the LOCATION so the game's open-time
-        // dispose+recreate churn (same location) doesn't re-key it, with a short grace before dropping to
-        // absorb the transient nulls. Captures the location-stable texts/labels at open (the VM instance
-        // is churned under us; the ACTIONS resolve the live VM each press).
-        private void SyncPanel()
-        {
-            var vm = PanelVm();
-            var loc = vm != null && vm.Location != null ? vm.Location.Blueprint : null;
-            if (loc != null)
-            {
-                _panelClearAt = 0f;
-                if (loc != _panelLoc) OpenPanel(loc, vm);
-                return;
-            }
-            if (_panelLoc == null) return;
-            if (_panelClearAt == 0f) _panelClearAt = Time.unscaledTime + 0.25f;
-            else if (Time.unscaledTime >= _panelClearAt) { ClearPanelState(); }
-        }
-
-        private void OpenPanel(BlueprintGlobalMapPoint loc, GlobalMapEnterMessageVM vm)
-        {
-            _panelLoc = loc;
-            _panelClearAt = 0f;
-            PanelActive = true;
-
-            // Location lore first (what the place is), then the game-panel body (travel time / enter
-            // confirmation / closed or restricted reason). Both are location-stable, captured here.
-            _lore = GlobalMapEnterPanel.LocationDescription(vm);
-            GlobalMapEnterPanel.Compute(vm, out _desc, out _acceptEnabled);
-            _acceptLabel = TextUtil.StripRichText(GlobalMapEnterPanel.AcceptLabel(vm));
-            _hasSettlement = GlobalMapEnterPanel.HasSettlement(vm);
-            _manageLabel = TextUtil.StripRichText(GlobalMapEnterPanel.ManageLabel());
-            _closeLabel = TextUtil.StripRichText(GlobalMapEnterPanel.CloseLabel());
-
-            Tts.Speak(Loc.T("worldmap.selected", new { name = GlobalMapEnterPanel.Title(vm) })); // signal it's there
-        }
-
-        private void BuildPanel(GraphBuilder b)
-        {
-            if (_panelLoc == null) return;
-            string k = "panel:" + _panelLoc.GetHashCode() + ":"; // re-keys per location
-            b.BeginStop("panel").PushContext(Loc.T("worldmap.panel"), "list"); // "Location options" on Tab-in
-
-            if (!string.IsNullOrWhiteSpace(_lore))
-                b.AddItem(ControlId.Structural(k + "lore"), GraphNodes.Text(() => _lore));
-            if (!string.IsNullOrWhiteSpace(_desc))
-                b.AddItem(ControlId.Structural(k + "desc"), GraphNodes.Text(() => TextUtil.StripRichText(_desc)));
-
-            // Each action fires the game's button-click sound + the VM method the real OwlcatButton is
-            // wired to (Accept/AlternativeAction/Close) — same behavior as pressing the button (see
-            // GlobalMapEnterMessagePCView), resolving the LIVE VM each press, never a stale capture.
-            b.AddItem(ControlId.Structural(k + "accept"), GraphNodes.Button(
-                () => _acceptLabel, AcceptLive, () => _acceptEnabled, sound: null));
-            if (_hasSettlement)
-                b.AddItem(ControlId.Structural(k + "manage"), GraphNodes.Button(
-                    () => _manageLabel, () => { PlayClick(); PanelVm()?.AlternativeAction(); }, sound: null));
-            b.AddItem(ControlId.Structural(k + "close"), GraphNodes.Button(
-                () => _closeLabel, () => { PlayClick(); PanelVm()?.Close(); }, sound: null));
-            b.PopContext();
-        }
-
-        // The default button-click sound the OwlcatButton plays on a left-click (UISoundController, exactly as
-        // the game does it), so our VM-driven actions sound identical to a real button press.
-        private static void PlayClick() => Kingmaker.UI.UISoundController.Instance?.PlayButtonClickSound();
-
-        // Travel / Enter on the LIVE VM (what the Accept OwlcatButton is wired to), with its click sound.
-        // Confirm the outcome for the player case; a selected crusade army gets the game's own "set
-        // destination" warning, so stay quiet there to avoid doubling it.
-        private static void AcceptLive()
-        {
-            var vm = PanelVm();
-            if (vm == null) return;
-            PlayClick();
-            var army = Game.Instance.GlobalMapController != null ? Game.Instance.GlobalMapController.SelectedArmy : null;
-            bool entering = vm.IsCurrentLocation;
-            var name = GlobalMapEnterPanel.Title(vm);
-            vm.Accept();
-            if (army == null) Tts.Speak(Loc.T(entering ? "worldmap.entering" : "worldmap.traveling", new { name }));
         }
 
         // Escape opens the game menu (the game's own EscManager is muted while focus mode owns the keyboard).

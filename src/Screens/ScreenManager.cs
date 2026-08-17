@@ -128,6 +128,7 @@ namespace WrathAccess.Screens
             Register(new ModLogScreen()); // mod log review (channel tabs + history), opened from the HUD, layer 22
             Register(new GlobalMapScreen()); // world map: browse + cursor/scanner + the location panel as a tab stop
             Register(new GlobalMapEncounterScreen()); // world-map travel popup (encounter/discovery), FlowSheet like dialogue; layer 15
+            Register(new GlobalMapEnterScreen()); // world-map location panel (description + travel/close), modal; layer 15
             Register(new PredicateScreen("ctx.tacticalcombat", Loc.T("screen.tactical_combat"), 0, () => RC()?.IsTacticalCombat ?? false));
             Register(new DialogueScreen()); // in-game conversation (common DialogVM); layer 15, above contexts + service windows
             Register(new LootScreen()); // loot window (container/corpse); layer 15, above contexts + service windows

@@ -59,17 +59,26 @@ namespace WrathAccess.Screens
             if (vm == null) return;
             string k = "gmenc:" + vm.GetHashCode() + ":";
 
-            // The event line as the cue (the start node — the landing announcement reads it). When Avoid
-            // is disabled, Continue is the only way forward, so Enter on the cue advances it.
+            // Which button block the SIGHTED view shows (GlobalMapRandomEncounterPCView): avoidance
+            // is PRE-ROLLED before the popup — a lone "Continue" when avoid is disabled OR the check
+            // FAILED (the description text carries the outcome; no DCs/tooltips exist anywhere in
+            // this UI), the Fight!/Evade pair only when the check SUCCEEDED. We used to offer Evade
+            // after a failed check — a free escape the game denies.
+            bool canAvoid = !vm.AvoidIsDisable && vm.Success;
+
+            // The event line as the cue (the start node — the landing announcement reads it). When
+            // Continue is the only way forward, Enter on the cue advances it.
             var cue = GraphNodes.Text(() => CueText(Vm()));
-            cue.OnActivate = () => { if (Vm()?.AvoidIsDisable ?? false) AcceptLive(); };
+            cue.OnActivate = () => { if (!canAvoid) AcceptLive(); };
             b.AddItem(ControlId.Structural(k + "cue"), cue);
 
-            // The real choices: Enter (Continue/Fight) + Avoid (only when offered).
-            string enterLabel = TextUtil.StripRichText(vm.EnterLabel);
+            // The real choices: Continue (single-button block, the sighted label) or Fight! + Evade.
+            string enterLabel = canAvoid
+                ? TextUtil.StripRichText(vm.EnterLabel)
+                : TextUtil.StripRichText((string)Kingmaker.Blueprints.Root.Strings.UIStrings.Instance.MainMenu.Continue);
             b.AddItem(ControlId.Structural(k + "enter"),
                 GraphNodes.Button(() => enterLabel, AcceptLive, sound: null));
-            if (!vm.AvoidIsDisable)
+            if (canAvoid)
             {
                 string avoidLabel = TextUtil.StripRichText(vm.AvoidLabel);
                 b.AddItem(ControlId.Structural(k + "avoid"),

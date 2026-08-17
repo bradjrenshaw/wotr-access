@@ -75,6 +75,12 @@ namespace WrathAccess.Exploration
         {
             get
             {
+                // The ANIMATED half of a lever/switch twin (a scripted AlwaysDisabled door part with
+                // a co-located real mechanism): not browsable at all — the mechanism is the one
+                // logical control and reads the flip state. Both halves listing separately gave
+                // "two lever 2s" (tester repro).
+                if (IsSwitchVisual()) return new string[0];
+
                 var nodes = new HashSet<string>();
                 var interactions = _obj.Interactions; // InteractionPart parts only
                 for (int i = 0; i < interactions.Count; i++)
@@ -85,6 +91,12 @@ namespace WrathAccess.Exploration
                     // A disabled CLOSED door stays out (HiddenPart gating / scripts) so secret doors don't leak.
                     if (part is InteractionDoorPart dr)
                     {
+                        // AlwaysDisabled = a SCRIPTED animation "door", never a player interaction:
+                        // Owlcat builds levers/switches as twins — an invisible mechanism plus an
+                        // animated visual whose door part's IsOpen IS the flipped state (DH basement
+                        // puzzle repro: flipped levers listed as "open doors"). Puzzle-driven gates
+                        // are authored the same way. Not a door; the mechanism twin reads the state.
+                        if (dr.Settings != null && dr.Settings.AlwaysDisabled) continue;
                         if (part.Enabled || dr.IsOpen) nodes.Add(dr.IsOpen ? "doors.open" : "doors");
                         continue;
                     }
@@ -124,6 +136,10 @@ namespace WrathAccess.Exploration
         {
             get
             {
+                // The animated half of a lever/switch twin: no primary at all (not cycled, not
+                // sounded) — the mechanism twin is the one logical control. Mirrors Nodes.
+                if (IsSwitchVisual()) return null;
+
                 InteractionLootPart loot = null;
                 bool door = false, doorOpen = false, trap = false, hidden = false, skill = false, mechanism = false;
                 var interactions = _obj.Interactions;
@@ -132,6 +148,8 @@ namespace WrathAccess.Exploration
                     var part = interactions[i];
                     if (part is InteractionDoorPart d)
                     {
+                        // Scripted animation doors (AlwaysDisabled) never count — see Nodes.
+                        if (d.Settings != null && d.Settings.AlwaysDisabled) continue;
                         // disabled-but-open = an opened one-way door, still a door landmark (see Categories)
                         if (part.Enabled || d.IsOpen) { door = true; doorOpen = d.IsOpen; }
                         continue;
@@ -214,7 +232,9 @@ namespace WrathAccess.Exploration
         // "what it is", not "what it looks like" — puzzles needing visual detail want real model
         // descriptions later (deferred, e.g. render + vision). Tuned to observed names; extend as needed.
         private static readonly string[] NoisePrefixes = { "Loot_" };
-        private static readonly string[] NoiseSuffixes = { "_Dialogue" };
+        // "_object" = the designers' interaction-twin convention (the invisible mechanism half of a
+        // lever/switch pair, e.g. "Drezen_lever (2) object") — redundant with the spoken type word.
+        private static readonly string[] NoiseSuffixes = { "_Dialogue", "_object", " object" };
 
         private static string CleanName(string raw)
         {
@@ -271,11 +291,70 @@ namespace WrathAccess.Exploration
         {
             var bits = new List<string>();
             var doorPart = _obj.Get<InteractionDoorPart>();
-            if (doorPart != null && doorPart.IsOpen) bits.Add(Loc.T("object.open"));
+            // Real doors announce "open"; a scripted animation door (AlwaysDisabled — a lever's
+            // flip, a puzzle gate) doesn't — its state reads on the mechanism twin below.
+            if (doorPart != null && doorPart.IsOpen
+                && !(doorPart.Settings != null && doorPart.Settings.AlwaysDisabled))
+                bits.Add(Loc.T("object.open"));
+            var flipped = SwitchTwinState();
+            if (flipped.HasValue) bits.Add(Loc.T(flipped.Value ? "object.flipped" : "object.unflipped"));
             if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add(Loc.T("object.restricted"));
             var trapPart = _obj.Get<DisableTrapInteractionPart>();
             if (trapPart?.Owner != null && trapPart.Owner.TrapActive) bits.Add(Loc.T("object.trapped"));
             return bits;
+        }
+
+        // Is THIS object the animated half of a mechanism twin? (a scripted AlwaysDisabled door
+        // part, with a real interactable mechanism co-located ≤1.5m — the pairs sit ~0.1m apart).
+        private bool IsSwitchVisual()
+        {
+            var dr = _obj.Get<InteractionDoorPart>();
+            if (dr == null || dr.Settings == null || !dr.Settings.AlwaysDisabled) return false;
+            var p = Position;
+            foreach (var mo in Game.Instance.State.MapObjects)
+            {
+                if (mo == null || ReferenceEquals(mo, _obj)) continue;
+                float dx = mo.Position.x - p.x, dz = mo.Position.z - p.z;
+                if (dx * dx + dz * dz > 1.5f * 1.5f) continue;
+                var ints = mo.Interactions;
+                for (int i = 0; i < ints.Count; i++)
+                    if (ints[i].Enabled && !(ints[i] is InteractionDoorPart)
+                        && !(ints[i] is InteractionLootPart)) return true;
+            }
+            return false;
+        }
+
+        // A lever/switch MECHANISM's flipped state, read LIVE off its co-located animated twin —
+        // the nearest map object (≤1.5m; the pairs sit ~0.1m apart) carrying a scripted
+        // (AlwaysDisabled) door part, whose IsOpen is the flip. Null when this object isn't an
+        // interactable mechanism or no twin exists — then no state part is spoken.
+        private bool? SwitchTwinState()
+        {
+            bool interactable = false;
+            var ints = _obj.Interactions;
+            for (int i = 0; i < ints.Count; i++)
+                if (ints[i].Enabled && !(ints[i] is InteractionDoorPart)
+                    && !(ints[i] is InteractionLootPart)) { interactable = true; break; }
+            if (!interactable) return null;
+
+            var p = Position;
+            bool? state = null;
+            float bestSq = 1.5f * 1.5f;
+            foreach (var mo in Game.Instance.State.MapObjects)
+            {
+                if (mo == null || ReferenceEquals(mo, _obj)) continue;
+                float dx = mo.Position.x - p.x, dz = mo.Position.z - p.z;
+                float dsq = dx * dx + dz * dz;
+                if (dsq > bestSq) continue;
+                var twins = mo.Interactions;
+                for (int i = 0; i < twins.Count; i++)
+                {
+                    var dr = twins[i] as InteractionDoorPart;
+                    if (dr != null && dr.Settings != null && dr.Settings.AlwaysDisabled)
+                    { state = dr.IsOpen; bestSq = dsq; break; }
+                }
+            }
+            return state;
         }
 
         // Same as clicking the object: paths to it and runs its interaction. We pass the current

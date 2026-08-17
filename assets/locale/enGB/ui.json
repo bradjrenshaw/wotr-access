@@ -199,6 +199,8 @@
   "overlay.off": "Overlays off",
   "screen.retrain": "Retrain character",
   "retrain.char": "{name}, level {level}",
+  "object.flipped": "flipped",
+  "object.unflipped": "unflipped",
   "collision.rise": "raised ground",
   "collision.drop": "drop",
   "overlay.mode_set": "{system}: {mode}",

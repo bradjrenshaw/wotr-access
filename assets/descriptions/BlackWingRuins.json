@@ -1,0 +1,8 @@
+{
+  "rooms": [
+    { "x": 30.0, "y": 40.1, "z": 61.2, "key": "bw_reading_hall" },
+    { "x": 44.2, "y": 40.0, "z": 66.9, "key": "bw_grand_aisle" },
+    { "x": 57.5, "y": 40.0, "z": 69.3, "key": "bw_griffon_corner" },
+    { "x": 21.1, "y": 40.0, "z": 71.2, "key": "bw_hidden_armoury" }
+  ]
+}

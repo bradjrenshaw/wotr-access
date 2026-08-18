@@ -34,7 +34,7 @@ namespace WrathAccess.Events
         {
             try
             {
-                if (!Main.Enabled || !e.Visible || !EventRegistry.Enabled(e)) return;
+                if (!Main.Enabled || !e.Visible || !EventRegistry.Enabled(e) || !InRange(e)) return;
                 var msg = e.GetMessage();
                 if (msg == null || msg.IsEmpty) return;
                 var text = msg.Resolve();
@@ -56,6 +56,24 @@ namespace WrathAccess.Events
                 config.Output(text, interrupt: false);
             }
             catch (Exception ex) { Main.Log?.Error("[events] dispatch failed: " + ex.Message); }
+        }
+
+        // The spoken-event radius (per-event/per-source "Maximum distance", feet, 0 = unlimited),
+        // measured from the same "ears" positional playback uses (cursor if placed, else player) — a
+        // distant crowd of neutrals firing buff/heal events at once was pure noise. Sourceless and
+        // position-less events always pass (they're party-scoped by nature).
+        private static bool InRange(ModEvent e)
+        {
+            if (e.Source == EventSources.None) return true;
+            int maxFt = EventRegistry.MaxDistanceFeet(e);
+            if (maxFt <= 0) return true;
+            var p = e.Position;
+            if (p == UnityEngine.Vector3.zero) return true;
+            var from = WrathAccess.Exploration.Cursor.Has
+                ? WrathAccess.Exploration.Cursor.Position.Value
+                : WrathAccess.Exploration.Overlays.Cursor.PlayerPosition;
+            float dx = p.x - from.x, dz = p.z - from.z;
+            return WrathAccess.Exploration.Geo.Feet(UnityEngine.Mathf.Sqrt(dx * dx + dz * dz)) <= maxFt;
         }
     }
 }

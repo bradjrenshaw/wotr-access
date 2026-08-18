@@ -62,12 +62,12 @@ namespace WrathAccess.Events
             {
                 var sc = ModSettingsRegistry.EnsureCategory("events.settings." + bucket,
                     "Events/Event settings/" + bucket, "source." + bucket);
-                BuildGlobalOutput(sc);
+                BuildGlobalOutput(sc, bucket);
             }
         }
 
         // One source's global default: plain settings (the base the per-event overrides inherit).
-        private static void BuildGlobalOutput(CategorySetting into)
+        private static void BuildGlobalOutput(CategorySetting into, string bucket)
         {
             if (into.GetByKey("enabled") == null)
                 into.Add(new BoolSetting("enabled", "Announce", true, "event.enabled"));
@@ -75,6 +75,13 @@ namespace WrathAccess.Events
                 into.Add(new ChoiceSetting("speech_config", "Speech configuration", () => ConfigChoices(), "default", "event.speech_config"));
             if (into.GetByKey("positional") == null)
                 into.Add(new BoolSetting("positional", "Positional audio", true, "event.positional"));
+            // Spoken-event radius (feet, 0 = unlimited). Party events are always relevant; enemies get
+            // combat range; NEUTRALS default tight — a whole distant crowd's buffs/heals firing at once
+            // was pure noise (Market Square repro, 2026-08-17).
+            if (into.GetByKey("max_distance") == null)
+                into.Add(new IntSetting("max_distance", "Maximum distance",
+                    bucket == "enemy" ? 120 : bucket == "neutral" ? 60 : 0,
+                    0, 300, 10, "event.max_distance"));
         }
 
         private static CategorySetting GlobalBucket(string bucket)
@@ -124,6 +131,9 @@ namespace WrathAccess.Events
             }
             if (into.GetByKey("positional") == null)
                 into.Add(new NullableBoolSetting("positional", "Positional audio", global?.Get<BoolSetting>("positional"), "event.positional"));
+            if (into.GetByKey("max_distance") == null)
+                into.Add(new NullableIntSetting("max_distance", "Maximum distance",
+                    global?.Get<IntSetting>("max_distance"), 0, 300, 10, "event.max_distance"));
         }
 
         // Default + the user's additional speech configs. Read LIVE (the dropdowns hold a provider, not
@@ -155,6 +165,15 @@ namespace WrathAccess.Events
         {
             var id = ModSettings.GetSetting<NullableChoiceSetting>(CustomPath(e) + ".speech_config")?.EffectiveId;
             return string.IsNullOrEmpty(id) ? GlobalConfigId(e.Source) : id;
+        }
+
+        /// <summary>The event's spoken radius in feet (0 = unlimited): per-event override, else the
+        /// source bucket's default.</summary>
+        public static int MaxDistanceFeet(ModEvent e)
+        {
+            var ni = ModSettings.GetSetting<NullableIntSetting>(CustomPath(e) + ".max_distance");
+            if (ni != null) return ni.Resolved;
+            return ModSettings.GetSetting<IntSetting>("events.settings." + Bucket(e.Source) + ".max_distance")?.Get() ?? 0;
         }
 
         private static bool GlobalEnabled(EventSources s)

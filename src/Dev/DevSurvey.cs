@@ -265,7 +265,7 @@ namespace WrathAccess.Dev
             = new List<KeyValuePair<FogOfWarArea, bool>>();
 
         /// <summary>Aim the camera for a capture: fog cheat-revealed, immediate scroll to the point,
-        /// held yaw (135 = canonical: north upper-right), normalized zoom (0 = in, 1 = out; the zoom
+        /// held yaw (135 = canonical: north upper-right), normalized zoom (1 = in/FovMin, 0 = out/FovMax; the zoom
         /// smooths over a few frames — the driver waits before /screenshot). Saves the previous camera +
         /// fog state on FIRST use so <see cref="Restore"/> can undo the whole session.</summary>
         public static string Frame(float x, float y, float z, float yaw = 135f, float zoom = 0.5f)
@@ -301,7 +301,16 @@ namespace WrathAccess.Dev
             // scroll below (bit a live survey 2026-08-14) — release it before taking the camera.
             Game.Instance.CameraController?.Follower?.Release();
             rig.SetRotation(yaw);
-            if (rig.CameraZoom != null) rig.CameraZoom.CurrentNormalizePosition = zoom;
+            // NOT the CurrentNormalizePosition setter: TickZoom overwrites m_ScrollPosition from the
+            // player's wheel state every frame, silently reverting it (every "wide" capture came back
+            // at the old zoom, 2026-08-17). ZoomToImmediate writes all three positions — but takes RAW
+            // scroll units (0..m_ZoomLenght), so convert from the normalized 0..1 argument.
+            if (rig.CameraZoom != null)
+            {
+                var zl = HarmonyLib.AccessTools.Field(typeof(Kingmaker.View.CameraZoom), "m_ZoomLenght");
+                float len = zl != null ? (float)zl.GetValue(rig.CameraZoom) : 1f;
+                rig.CameraZoom.ZoomToImmediate(zoom * len);
+            }
             rig.ScrollToImmediately(new Vector3(x, y, z));
             return JsonConvert.SerializeObject(new { ok = true });
         }
@@ -364,7 +373,12 @@ namespace WrathAccess.Dev
             if (rig != null)
             {
                 rig.SetRotation(_savedYaw);
-                if (rig.CameraZoom != null) rig.CameraZoom.CurrentNormalizePosition = _savedZoom;
+                if (rig.CameraZoom != null) // ZoomToImmediate, raw units — see Frame
+                {
+                    var zl = HarmonyLib.AccessTools.Field(typeof(Kingmaker.View.CameraZoom), "m_ZoomLenght");
+                    float len = zl != null ? (float)zl.GetValue(rig.CameraZoom) : 1f;
+                    rig.CameraZoom.ZoomToImmediate(_savedZoom * len);
+                }
                 rig.ScrollToImmediately(_savedPos);
             }
             _saved = false;

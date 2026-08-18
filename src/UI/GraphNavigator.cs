@@ -84,6 +84,10 @@ namespace WrathAccess.UI
             _pendingAnnounce = announce;
         }
 
+        // Idle-rebuild throttle (see EnsureFocus): full immediate-mode rebuilds only every Nth frame.
+        private int _lastIdleRender = int.MinValue;
+        private const int IdleRenderEvery = 6; // ~100ms at 60fps
+
         // A pending land-on-stop request (applied by EnsureFocus once the stop has nodes, like
         // _pendingFocus): resolves to the stop's FIRST node at apply time, so it works when the
         // caller can't know the node keys (a wizard page whose content varies per step).
@@ -124,6 +128,21 @@ namespace WrathAccess.UI
         public override void EnsureFocus()
         {
             if (Screen == null || _graph == null) return;
+
+            // Throttle the IDLE rebuild: every input path rerenders on its own before acting, so this
+            // per-frame pull only needs to catch content appearing, external focus drift, and live-state
+            // flips — none of which need 60Hz. A full screen.Build each frame burned ~6ms + Boehm GC
+            // churn on big item tables (audible-fans vendor lag repro, 2026-08-18). On throttled frames
+            // still watch the focused node's live parts against the cached render (closures read live
+            // game state, so value flips are caught at full rate; only structure lags ~100ms).
+            bool mustRender = _state.CurKey == null || _pendingFocus != null || _pendingStop != null;
+            if (!mustRender && UnityEngine.Time.frameCount - _lastIdleRender < IdleRenderEvery)
+            {
+                var cached = _graph.CurrentNode;
+                if (cached != null) WatchLive(cached);
+                return;
+            }
+            _lastIdleRender = UnityEngine.Time.frameCount;
 
             if (_state.CurKey == null && _pendingFocus == null)
             {

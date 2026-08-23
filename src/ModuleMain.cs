@@ -78,6 +78,7 @@ namespace WrathAccess
                 _go = new GameObject("WrathAccess.Module");
                 UnityEngine.Object.DontDestroyOnLoad(_go);
                 _go.AddComponent<WrathAccess.Exploration.ListenerAnchor>();
+                _go.AddComponent<WrathAccess.Exploration.CameraFollowCursor>();
 
 #if DEBUG
                 // Module-owned dev routes on the host's dev server (inert unless the server started).
@@ -391,6 +392,9 @@ namespace WrathAccess
             // Enhancements = deliberate deviations from sighted parity that materially help blind
             // players — opt-outable, gathered under one category (see Enhancements).
             WrathAccess.Enhancements.RegisterSettings();
+
+            // Vision = low-vision aids (the follow-cursor camera lives here).
+            WrathAccess.Exploration.CameraFollowCursor.RegisterSettings();
 
             // Audio = settings-wide master volume (every overlay sound system scales by it).
             var audio = new WrathAccess.Settings.CategorySetting("audio", "Audio", localizationKey: "category.audio");
@@ -746,6 +750,14 @@ namespace WrathAccess
             // the future rotatable cursor/listener.
             InputManager.Register("camera.compass", "Read compass (camera facing)", InputCategory.Exploration,
                 WrathAccess.Exploration.CameraControls.AnnounceCompass).AddBinding(KeyCode.C, alt: true).Grouped("camera");
+            // Zoom through the game's own zoom (its speed and clamps) — works in both camera modes.
+            InputManager.Register("camera.zoomIn", "Zoom in", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.ZoomIn).AddBinding(KeyCode.PageUp, alt: true).Repeating().Grouped("camera");
+            InputManager.Register("camera.zoomOut", "Zoom out", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraControls.ZoomOut).AddBinding(KeyCode.PageDown, alt: true).Repeating().Grouped("camera");
+            // Alt+R (follow-cursor mode): reset the arrangement — offsets and relative angle to zero.
+            InputManager.Register("camera.reset", "Reset camera offset and angle", InputCategory.Exploration,
+                WrathAccess.Exploration.CameraFollowCursor.Reset).AddBinding(KeyCode.R, alt: true).Grouped("camera");
             // Q/E: turn the LISTENER's facing CONTINUOUSLY while held (person-frame: "turn right" =
             // facing yaw increases; independent of the camera). No handler — ListenerFrame.Tick polls
             // the held state each frame. Shift+Q/E snap to the next 45° step. Movement, spatial pans,

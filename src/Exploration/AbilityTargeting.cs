@@ -135,27 +135,37 @@ namespace WrathAccess.Exploration
             if (ability == null) return;
             var go = unit != null && unit.View != null ? unit.View.gameObject : null;
 
-            // Turn-based TOUCH cast on an out-of-reach target: vanilla casts IN PLACE onto a held
-            // charge (see TouchApproachPatch) — silent and baffling by ear. Our behavior instead:
-            // approach-then-cast when the MOVE action's range covers the walk (mirrors the attack rule
-            // in ProxyUnit — the standard action must survive for the cast itself), and REFUSE ALOUD
-            // when it can't. Never the silent held-charge trap.
+            // Turn-based cast on an out-of-reach target - ANY ability, not just touch. Vanilla
+            // issues the command regardless: touch spells silently cast onto a held charge (see
+            // TouchApproachPatch), and ranged/point casts walk the move action toward the target,
+            // force-finish out of range, and BURN THE TURN with nothing cast (Create Pit repro -
+            // both actions consumed). Sighted players are warned off by the red path preview; we
+            // gate the order up front instead: approach-then-cast when the MOVE action's range
+            // covers the walk (the standard action must survive for the cast itself), and REFUSE
+            // ALOUD with the exact reason when it can't.
             bool wantApproach = false;
             var caster = ability.Caster != null ? ability.Caster.Unit : null;
-            if (CombatMode.InTurnBased && unit != null && caster != null && unit != caster
+            if (CombatMode.InTurnBased && caster != null && (unit == null || unit != caster)
                 && caster == CombatMode.CurrentUnit && caster.IsDirectlyControllable
-                && ability.Blueprint.StickyTouch != null)
+                && ability.TargetAnchor != AbilityTargetAnchor.Owner)
             {
+                var targetPos = unit != null ? unit.Position : point;
                 float reach = ability.GetApproachDistance(unit);
                 // The command system's own "am I in range" test (same statics UnitCommand.Start uses),
                 // including its LOS rule (UnitUseAbility: LOS unless the ability opts out) so the
                 // populated path ends somewhere the cast can actually happen.
                 bool los = ability.Blueprint
                     .GetComponent<Kingmaker.UnitLogic.Abilities.Components.TargetCheckers.ILineOfSightIgnore>() == null;
-                bool inReach = UnitCommand.IsUnitCloseEnough(unit.Position, caster.Position,
+                bool inReach = UnitCommand.IsUnitCloseEnough(targetPos, caster.Position,
                     caster.EyePosition, reach, needLOS: los, ignoreBlockerRadius: 0f);
                 if (!inReach)
                 {
+                    // A full-round cast can never share the turn with movement.
+                    if (ability.RequireFullRoundAction)
+                    {
+                        Tts.Speak(Loc.T("combat.full_round_too_far"), interrupt: true);
+                        return;
+                    }
                     // No time for both the walk and the cast (surprise round, staggered, standard
                     // spent): refuse with the action-economy reason, not "too far".
                     if (CombatMode.MoveThenActBlocked(caster))
@@ -164,7 +174,7 @@ namespace WrathAccess.Exploration
                         return; // no path computed, nothing to cancel
                     }
                     // TryApproach also POPULATES the path, so the issued command has a route to walk.
-                    if (CombatMode.TryApproach(unit.Position, reach, out float walk, out float moveRange, needLOS: los)
+                    if (CombatMode.TryApproach(targetPos, reach, out float walk, out float moveRange, needLOS: los)
                         && walk <= moveRange)
                         wantApproach = true;
                     else
@@ -185,7 +195,9 @@ namespace WrathAccess.Exploration
             // it actually issued the cast.
             if (Handler.OnClick(go, point, 0))
             {
-                if (wantApproach)
+                // Sticky-touch only: the held-charge patch turns vanilla's cast-in-place into the
+                // approach-then-cast we verified above. Ranged/point casts approach natively.
+                if (wantApproach && ability.Blueprint.StickyTouch != null)
                 {
                     var cmd = caster.Commands.GetCommand<UnitUseAbility>();
                     if (cmd != null && cmd.Ability != null && cmd.Ability.Blueprint == ability.Blueprint)

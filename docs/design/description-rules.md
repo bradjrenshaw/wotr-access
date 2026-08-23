@@ -19,6 +19,11 @@ error. Design background: `environmental-descriptions.md` (same folder).
   contested claims against `State.MapObjects` and the capture.
 - Directions come from **coordinates, not eyeballing**: at the canonical capture yaw 135, north is
   upper-right, east lower-right. If prose states a direction, derive it from world coords.
+- **Geometry seen past a wall cutaway is NOT in the room.** The isometric camera slices walls open,
+  so neighbouring rooms — and unwalkable shell scenery — show inside a room's frame. Anything that
+  implies traversal (stairs, doors, passages) must be checked against the room graph before prose
+  claims it: a stair with no navmesh under it reads as a way down and sends the player hunting
+  (the Gwerm drawing-room stair). If it's visually striking, keep it but SAY it's out of reach.
 
 ## What goes in
 

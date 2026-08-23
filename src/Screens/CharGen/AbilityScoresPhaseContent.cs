@@ -122,17 +122,20 @@ namespace WrathAccess.Screens
 
         // The point cost shown on the stepper — or, when you can't raise, why ("maximum" at 18, or
         // "N points, need M more"); lowering shows the refund ("minimum" at 7, or "N points back").
+        // The 7..18 bounds are the POINT-BUY rules only: the level-up attribute point has NO value cap
+        // (SpendAttributePoint.Check tests just points-remaining — raising a 20 Dex is legal vanilla),
+        // so outside point-buy the bound labels must never fire ("Dexterity: maximum" at 20 repro).
         private string CostLabel(CharGenAbilityScoreAllocatorVM a, bool raise)
         {
             if (raise)
             {
-                if (Score(a) >= 18) return L("value.maximum");
+                if (PointBuy && Score(a) >= 18) return L("value.maximum");
                 int cost = PointBuy ? Dist.GetAddCost(a.StatType) : 1;
                 if (CanAct(a, raise: true)) return L("value.points", new { count = cost });
                 int need = cost - Points();                 // tell them how short they are
                 return L("value.points_need_more", new { count = cost, need = need > 0 ? need : 1 });
             }
-            if (Score(a) <= 7) return L("value.minimum");
+            if (PointBuy && Score(a) <= 7) return L("value.minimum");
             int refund = PointBuy ? -Dist.GetRemoveCost(a.StatType) : 1; // GetRemoveCost is negative (points returned)
             return L("value.points_back", new { count = refund });
         }

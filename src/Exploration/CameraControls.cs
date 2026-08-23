@@ -31,18 +31,53 @@ namespace WrathAccess.Exploration
         private static MethodInfo Method(string name)
             => typeof(CameraRig).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Instance);
 
-        public static void PanUp() => Invoke(PanUpM);
-        public static void PanDown() => Invoke(PanDownM);
-        public static void PanLeft() => Invoke(PanLeftM);
-        public static void PanRight() => Invoke(PanRightM);
+        // While the follow-cursor camera owns the rig (Vision/Camera), these handlers go quiet: the
+        // same keys are polled as HELD by CameraFollowCursor each frame for CONTINUOUS adjustment of
+        // the persisted arrangement (Alt+WASD glide the view-frame offsets at the game's own keyboard
+        // scroll speed, Alt+Q/E turn the relative angle at the listener's turn speed).
+        public static void PanUp() { if (!CameraFollowCursor.Active) Invoke(PanUpM); }
+        public static void PanDown() { if (!CameraFollowCursor.Active) Invoke(PanDownM); }
+        public static void PanLeft() { if (!CameraFollowCursor.Active) Invoke(PanLeftM); }
+        public static void PanRight() { if (!CameraFollowCursor.Active) Invoke(PanRightM); }
 
         // DELIBERATELY CROSSED (user decision, sighted-verified): the game labels rotation by what the
         // SCENE does on screen — its RotateRight SUBTRACTS camera yaw (world spins right, the camera
         // itself turns left). By ear there is no scene, only a viewpoint, so our keys speak PERSON
         // terms: "turn right" = facing yaw increases (north → east) = the game's RotateLeft, and vice
         // versa. The future rotatable cursor/listener must use this same person-frame convention.
-        public static void RotateLeft() => Invoke(RotRightM);
-        public static void RotateRight() => Invoke(RotLeftM);
+        public static void RotateLeft() { if (!CameraFollowCursor.Active) Invoke(RotRightM); }
+        public static void RotateRight() { if (!CameraFollowCursor.Active) Invoke(RotLeftM); }
+
+        // Zoom nudges: with the follow-cursor camera on they adjust the PERSISTED preferred zoom
+        // (the glue enforces + eases it); otherwise the game's own transient zoom (its speed, its
+        // clamps). Announce the resulting percentage either way so the change is audible.
+        public static void ZoomIn() { if (CameraFollowCursor.Active) CameraFollowCursor.NudgeZoom(1); else Zoom(zoomIn: true); }
+        public static void ZoomOut() { if (CameraFollowCursor.Active) CameraFollowCursor.NudgeZoom(-1); else Zoom(zoomIn: false); }
+
+        private static void Zoom(bool zoomIn)
+        {
+            var zoom = Rig?.CameraZoom;
+            if (zoom == null) return;
+            if (zoomIn) zoom.ZoomIn(); else zoom.ZoomOut();
+            // CurrentNormalizePosition lags a frame (smoothed) — read the player target via the same
+            // normalization the game uses so the spoken percent reflects the press just made.
+            Tts.Speak(Loc.T("camera.zoom", new
+            {
+                percent = UnityEngine.Mathf.RoundToInt(UnityEngine.Mathf.Clamp01(TargetNormalizedZoom(zoom)) * 100f),
+            }), interrupt: true);
+        }
+
+        private static readonly FieldInfo ZoomPlayerPosF =
+            typeof(Kingmaker.View.CameraZoom).GetField("m_PlayerScrollPosition", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo ZoomLenF =
+            typeof(Kingmaker.View.CameraZoom).GetField("m_ZoomLenght", BindingFlags.NonPublic | BindingFlags.Instance);
+
+        private static float TargetNormalizedZoom(Kingmaker.View.CameraZoom zoom)
+        {
+            if (ZoomPlayerPosF == null || ZoomLenF == null) return zoom.CurrentNormalizePosition;
+            float len = (float)ZoomLenF.GetValue(zoom);
+            return len <= 0f ? 0f : (float)ZoomPlayerPosF.GetValue(zoom) / len;
+        }
 
         private static void Invoke(MethodInfo m)
         {

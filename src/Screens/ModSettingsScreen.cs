@@ -45,6 +45,7 @@ namespace WrathAccess.Screens
             ("scanner", "Scanner", "category.scanner"),
             ("speech", "Speech", "category.speech"),
             ("ui", "UI", "category.ui"),
+            ("vision", "Vision", "category.vision"),
         };
 
         // Focus mode is owned by the ModMenuScreen launcher (always open beneath us), so we don't touch it.
@@ -271,6 +272,14 @@ namespace WrathAccess.Screens
                 var enh = ModSettings.Root.Get<CategorySetting>("enhancements");
                 if (enh != null)
                     foreach (var s in enh.Children) ModSettingNodes.Emit(b, s, k);
+            }
+            else if (key == "vision")
+            {
+                // Low-vision aids (the follow-cursor camera) — rendered generically; the camera
+                // subcategory comes out as a collapsible tree group.
+                var vis = ModSettings.Root.Get<CategorySetting>("vision");
+                if (vis != null)
+                    foreach (var s in vis.Children) ModSettingNodes.Emit(b, s, k);
             }
             else if (key == "exploration")
             {

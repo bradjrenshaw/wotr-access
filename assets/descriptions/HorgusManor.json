@@ -1,0 +1,31 @@
+{
+  "merges": [
+    [[10.8, 2.0, -31.5], [5.7, 2.0, -26.0]],
+    [[39.2, 2.0, 88.9], [32.3, 2.0, 95.8]]
+  ],
+  "rooms": [
+    { "x": 10.8, "y": 2.0, "z": -31.5, "key": "gwerm_kitchen" },
+    { "x": 23.5, "y": 2.0, "z": -30.3, "key": "gwerm_dining_room" },
+    { "x": 64.6, "y": 2.0, "z": -29.9, "key": "gwerm_rotunda" },
+    { "x": 39.3, "y": 2.0, "z": -29.8, "key": "gwerm_library" },
+    { "x": 49.9, "y": 2.0, "z": -26.8, "key": "gwerm_reading_room" },
+    { "x": 55.4, "y": 2.0, "z": -19.8, "key": "gwerm_banner_corridor" },
+    { "x": 24.5, "y": 2.0, "z": -19.0, "key": "gwerm_feast_hall" },
+    { "x": 5.5, "y": 2.0, "z": -16.5, "key": "gwerm_anteroom" },
+    { "x": 12.5, "y": 2.0, "z": -12.8, "key": "gwerm_servants_room" },
+    { "x": 37.7, "y": 2.0, "z": -10.5, "key": "gwerm_entrance_hall" },
+    { "x": 66.1, "y": 2.0, "z": -8.0, "key": "gwerm_drawing_room" },
+    { "x": 51.2, "y": 2.0, "z": -7.4, "key": "gwerm_screened_study" },
+    { "x": 4.4, "y": 2.0, "z": -6.6, "key": "gwerm_storeroom" },
+    { "x": 23.9, "y": 2.0, "z": -6.6, "key": "gwerm_dormitory" },
+    { "x": 13.3, "y": 2.0, "z": -4.0, "key": "gwerm_little_bedroom" },
+    { "x": 58.0, "y": 2.0, "z": 68.0, "key": "gwerm2_green_salon" },
+    { "x": 19.3, "y": 2.0, "z": 71.8, "key": "gwerm2_upper_study" },
+    { "x": 40.9, "y": 2.1, "z": 72.5, "key": "gwerm2_upper_rotunda" },
+    { "x": 58.5, "y": 2.0, "z": 80.8, "key": "gwerm2_stair_landing" },
+    { "x": 19.8, "y": 2.0, "z": 85.0, "key": "gwerm2_upper_corridor" },
+    { "x": 39.2, "y": 2.0, "z": 88.9, "key": "gwerm2_master_bedroom" },
+    { "x": 13.3, "y": 2.0, "z": 94.1, "key": "gwerm2_family_gallery" },
+    { "x": 23.3, "y": 2.0, "z": 95.5, "key": "gwerm2_collection_room" }
+  ]
+}

@@ -37,6 +37,11 @@ def stage_payload():
     shutil.copy2(os.path.join(REPO, "OwlcatModificationManifest.json"), mod)
     shutil.copy2(os.path.join(REPO, "OwlcatModificationSettings.json"), mod)
     shutil.copy2(os.path.join(REPO, "bin", "Release", "WrathAccess.dll"), asm)
+    # The hot-reloadable module (host/module split): byte-loaded by the host from Module\, not
+    # Assemblies\. A payload without it boots the host with nothing to load — mod silent.
+    module_dir = os.path.join(mod, "Module")
+    os.makedirs(module_dir)
+    shutil.copy2(os.path.join(REPO, "deploy", "Module", "WrathAccess.Module.dll"), module_dir)
     naudio = glob.glob(os.path.join(os.path.expanduser("~"), ".nuget", "packages",
                                     "naudio", "*", "lib", "net35", "NAudio.dll"))
     if not naudio:

@@ -199,6 +199,11 @@ pub fn install_repo_zip(data: &[u8], game_path: &Path) -> Result<(), String> {
             mod_dir.join(repo_rel)
         } else if let Ok(stripped) = repo_rel.strip_prefix("deploy/Assemblies") {
             mod_dir.join("Assemblies").join(stripped)
+        } else if let Ok(stripped) = repo_rel.strip_prefix("deploy/Module") {
+            // The hot-reloadable module (host/module split, 2026-08): byte-loaded by the host from
+            // Module\, NOT Assemblies\ (the game loader would lock it there). Without this mapping
+            // the host boots with nothing to load — game runs, mod silent (new-device repro).
+            mod_dir.join("Module").join(stripped)
         } else if let Ok(stripped) = repo_rel.strip_prefix("deploy/docs") {
             mod_dir.join("docs").join(stripped)
         } else if let Ok(stripped) = repo_rel.strip_prefix("assets") {
@@ -243,6 +248,9 @@ pub fn install_repo_zip(data: &[u8], game_path: &Path) -> Result<(), String> {
     }
     if !mod_dir.join("Assemblies").join("WrathAccess.dll").exists() {
         return Err("The download didn't contain WrathAccess.dll (deploy/Assemblies) — the repo may be mid-build.".into());
+    }
+    if !mod_dir.join("Module").join("WrathAccess.Module.dll").exists() {
+        return Err("The download didn't contain WrathAccess.Module.dll (deploy/Module) — without it the mod loads silent. The repo may be mid-build.".into());
     }
 
     for dll in LEGACY_GAME_ROOT_DLLS {

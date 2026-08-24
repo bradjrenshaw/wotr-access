@@ -119,11 +119,45 @@ if (Test-Path $docs) {
     Copy-Item "$docs\*" "$modDir\docs" -Recurse -Force
 }
 
-Write-Host "Copying prism.dll next to Wrath.exe..."
-Copy-Item (Join-Path $root 'vendor\prism.dll') $game
-
+# Enable BEFORE the Program Files copy: if prism.dll can't be written (strict ACLs), the mod
+# must still load — it falls back to SAPI speech. The old order left a deployed-but-DISABLED
+# mod on a partial failure: game boots fine, zero speech, nothing to hear (tester repro).
 Write-Host "Enabling the mod..."
 Enable-Mod $localLow
 
+Write-Host "Copying prism.dll next to Wrath.exe..."
+$prismOk = $true
+try { Copy-Item (Join-Path $root 'vendor\prism.dll') $game -Force }
+catch {
+    $prismOk = $false
+    Write-Host "WARNING: could not copy prism.dll into '$game'." -ForegroundColor Yellow
+    Write-Host "  ($($_.Exception.Message))"
+    Write-Host "  The mod will still run and speak through SAPI. For screen-reader speech, re-run"
+    Write-Host "  this script from an elevated PowerShell (right-click, Run as administrator)."
+}
+
+# Verify out loud - every line here is a fact a tester can read back over Discord.
 Write-Host ""
-Write-Host "Wrath Access deployed. Start the game to load this build." -ForegroundColor Green
+Write-Host "---- Verification ----"
+$checks = @(
+    @{ Name = 'Mod folder';           Ok = (Test-Path (Join-Path $modDir 'Assemblies\WrathAccess.dll')) },
+    @{ Name = 'Reloadable module';    Ok = (Test-Path (Join-Path $modDir 'Module\WrathAccess.Module.dll')) },
+    @{ Name = 'Manifest + settings';  Ok = ((Test-Path (Join-Path $modDir 'OwlcatModificationManifest.json')) -and (Test-Path (Join-Path $modDir 'OwlcatModificationSettings.json'))) },
+    @{ Name = 'Assets';               Ok = (Test-Path (Join-Path $modDir 'assets\locale\enGB\ui.json')) },
+    @{ Name = 'prism.dll by Wrath.exe'; Ok = ($prismOk -and (Test-Path (Join-Path $game 'prism.dll'))) },
+    @{ Name = 'Enabled in mod manager'; Ok = ((Get-Content (Join-Path $localLow 'OwlcatModificationManagerSettings.json') -Raw) -match '"?WrathAccess"?') }
+)
+$allOk = $true
+foreach ($c in $checks) {
+    $mark = if ($c.Ok) { 'OK  ' } else { $allOk = $false; 'FAIL' }
+    Write-Host ("  {0} {1}" -f $mark, $c.Name)
+}
+
+Write-Host ""
+if ($allOk) {
+    Write-Host "Wrath Access deployed and verified. Start the game to load this build." -ForegroundColor Green
+} elseif ($prismOk) {
+    Write-Host "Deployed with FAILURES above - the mod may not load. Please report the FAIL lines." -ForegroundColor Yellow
+} else {
+    Write-Host "Deployed; speech will use SAPI until prism.dll is in place (see warning above)." -ForegroundColor Yellow
+}

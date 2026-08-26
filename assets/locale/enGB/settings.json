@@ -431,6 +431,7 @@
   "bind.camera.zoomIn": "Zoom in",
   "bind.camera.zoomOut": "Zoom out",
   "bind.camera.reset": "Reset camera offset and angle",
+  "audio.latency": "Audio latency in milliseconds",
   "category.vision": "Vision",
   "vision.camera": "Camera",
   "vision.camera.follow_cursor": "Camera follows the cursor",

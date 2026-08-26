@@ -172,6 +172,16 @@ namespace WrathAccess.Exploration.Overlays
             // 3D audio is heard from. Default = the same reference the sonification pans from, so
             // game audio and our sounds share one spatial frame; "camera" is the vanilla behaviour.
             var audio = ModSettingsRegistry.EnsureCategory("audio", "Audio", "category.audio");
+            // Output buffer size for the mod's mixer (wall tones, sonar, positional speech — one
+            // shared output). Smaller = snappier response, bigger = rides through CPU/GC pauses
+            // without dropouts. Applies LIVE (the engine swaps the output device, voices carry over).
+            if (audio.GetByKey("latency") == null)
+            {
+                var lat = new WrathAccess.Settings.IntSetting("latency", "Audio latency (milliseconds)",
+                    50, 50, 150, 5, "audio.latency");
+                lat.Changed += ms => WrathAccess.Audio.AudioEngines.NAudio.SetLatency(ms);
+                audio.Add(lat);
+            }
             // (The audio.engine classic/wwise choice is GONE — the Wwise path was retired; NAudio is
             // the one engine. An orphaned persisted value is ignored harmlessly.)
             // Spatial cues (see Spatializer), each toggleable so they can be A/B'd by ear.

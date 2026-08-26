@@ -23,13 +23,33 @@ namespace WrathAccess.Audio
 
         public bool Available => true; // the default output device is always there
 
+        // Output buffer size = the audio.latency setting (default 50 ms; was a hardcoded 100 for
+        // GC-pause underruns, a02f165 — the user traced those pauses to machine conditions, and the
+        // per-frame alloc fixes since have cut GC pressure). Users who DO hear dropouts raise the
+        // slider instead of us re-hardcoding: bigger buffer = underrun-immune, smaller = snappier.
+        private int _latencyMs;
+
+        private static int SettingLatencyMs =>
+            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.IntSetting>("audio.latency")?.Get() ?? 50;
+
         private void EnsureStarted()
         {
             if (_out != null) return;
             _mixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(Rate, 2)) { ReadFully = true };
-            // 100 ms buffer to ride through managed-thread (GC/CPU) pauses without underrunning — see the
-            // wall-tone/GC findings; below a full-GC pause and brief silences drop into continuous tones.
-            _out = new WaveOutEvent { DesiredLatency = 100, NumberOfBuffers = 4 };
+            _latencyMs = SettingLatencyMs;
+            _out = new WaveOutEvent { DesiredLatency = _latencyMs, NumberOfBuffers = 4 };
+            _out.Init(_mixer);
+            _out.Play();
+        }
+
+        /// <summary>Live latency change (the settings slider): swap the output device only — the
+        /// mixer and every voice attached to it carry over, so playing tones continue seamlessly.</summary>
+        public void SetLatency(int ms)
+        {
+            if (_out == null || _mixer == null || ms == _latencyMs) return; // not started yet → EnsureStarted reads the setting
+            _latencyMs = ms;
+            try { _out.Stop(); _out.Dispose(); } catch { }
+            _out = new WaveOutEvent { DesiredLatency = ms, NumberOfBuffers = 4 };
             _out.Init(_mixer);
             _out.Play();
         }

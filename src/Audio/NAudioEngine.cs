@@ -342,7 +342,17 @@ namespace WrathAccess.Audio
                 public volatile float Volume;
                 public float LeftGain = 0.70710677f;
                 public float RightGain = 0.70710677f;
+                public float Trim = 1f; // perceived-loudness match, folded into Volume in Update
             }
+
+            // Perceived-loudness trims in dB, per channel (north, south, east, west) per tone set —
+            // measured A-weighted by the gdaccess port (2026-08-22, shared files): the files are
+            // RMS-matched at equal dBFS, but the tones are pitched very differently (set 1: north
+            // 942 Hz, east/west ~487, SOUTH ONLY 248 — and hearing is far less sensitive that low),
+            // so at equal meters south SOUNDED ~7.7 dB softer than north and was hard to pick out.
+            // These bring every file to set-1-north's level by ear; loudest post-trim peak −3.6 dBFS.
+            private static readonly float[] TrimDbSet1 = { 0f, 7.7f, 2.7f, 2.7f };
+            private static readonly float[] TrimDbSet2 = { -3.8f, 1.0f, -2.7f, -2.7f }; // set 2 also ran hot overall
 
             private readonly Channel[] _channels = { new Channel(), new Channel(), new Channel(), new Channel() };
             private readonly NAudioEngine _engine;
@@ -356,6 +366,9 @@ namespace WrathAccess.Audio
                 Set(1, Path.Combine(setDir, "south.wav"), 0f);
                 Set(2, Path.Combine(setDir, "east.wav"), 1f);  // hard right
                 Set(3, Path.Combine(setDir, "west.wav"), -1f); // hard left
+                var trims = Path.GetFileName(setDir) == "2" ? TrimDbSet2 : TrimDbSet1;
+                for (int i = 0; i < _channels.Length; i++)
+                    _channels[i].Trim = (float)Math.Pow(10.0, trims[i] / 20.0);
                 engine.Add(this);
             }
 
@@ -370,12 +383,14 @@ namespace WrathAccess.Audio
             }
 
             // hits unused on this engine (pan is fixed per direction); volumes drive the four channels.
+            // The loudness trim multiplies AFTER the 0..1 clamp — clamping the product would undo
+            // the boost exactly where it matters (close walls at full volume).
             public void Update(Vector3[] hits, float[] volumes)
             {
                 for (int i = 0; i < _channels.Length && i < volumes.Length; i++)
                 {
                     float v = volumes[i];
-                    _channels[i].Volume = v < 0f ? 0f : (v > 1f ? 1f : v);
+                    _channels[i].Volume = (v < 0f ? 0f : (v > 1f ? 1f : v)) * _channels[i].Trim;
                 }
             }
 

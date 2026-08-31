@@ -43,6 +43,18 @@ namespace WrathAccess.Exploration.Overlays
             review.Add(new WrathAccess.Settings.ChoiceSetting("los", "Blocked sight",
                 ReviewSoundChoices(), StemDefault("review_los"), "overlay.sonar.review.los"));
             cat.Add(review);
+            // Sonar mode (user + gdaccess collaboration): "sweep" = the serialized left-to-right
+            // pass below; "pulse" = every candidate repeats its own tone, period shrinking with
+            // distance and left/right offsetting the phase (see SonarField). Both share the same
+            // candidate filter, sounds, volumes and pan.
+            cat.Add(new WrathAccess.Settings.ChoiceSetting("sonar_mode", "Sonar mode",
+                new System.Collections.Generic.List<WrathAccess.Settings.Choice>
+                {
+                    new WrathAccess.Settings.Choice("sweep", "Sweep", "choice.sweep"),
+                    new WrathAccess.Settings.Choice("pulse", "Pulse", "choice.pulse"),
+                }, "sweep", "overlay.sonar.mode"));
+            cat.Add(new WrathAccess.Settings.IntSetting("period_near", "Pulse period up close (ms)", 300, 60, 500, 10, "overlay.sonar.period_near"));
+            cat.Add(new WrathAccess.Settings.IntSetting("period_far", "Pulse period at max distance (ms)", 600, 300, 2000, 50, "overlay.sonar.period_far"));
             cat.Add(new WrathAccess.Settings.IntSetting("ref_distance", "Reference distance (feet)", 10, 1, 60, 1, "overlay.sonar.ref_distance"));
             cat.Add(new WrathAccess.Settings.IntSetting("max_distance", "Maximum distance (feet)", 40, 10, 120, 5, "overlay.sonar.max_distance"));
             cat.Add(new WrathAccess.Settings.IntSetting("gap_min", "Minimum ping gap (ms)", 100, 30, 400, 10, "overlay.sonar.gap_min"));
@@ -116,13 +128,16 @@ namespace WrathAccess.Exploration.Overlays
 
         private static float PanWidthM => PanWidthFeet * Geo.MetresPerFoot;
 
-        public override void OnExit(Overlay overlay) => ResetSweep();
+        public override void OnExit(Overlay overlay) { ResetSweep(); _field?.Reset(); }
 
         public override void Tick(float dt, Overlay overlay)
         {
             // Silent without control (cutscene): the overlay stays engaged, but the sonar shouldn't sweep
             // over a scripted scene. ResetSweep so it starts fresh when control returns.
-            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { ResetSweep(); return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { ResetSweep(); _field?.Reset(); return; }
+
+            if (ChoiceId("sonar_mode", "sweep") == "pulse") { ResetSweep(); PulseTick(dt, overlay); return; }
+            _field?.Reset(); // back on sweep: forget the pulse grid so a mode flip restarts clean
 
             _timer -= dt;
             if (_timer > 0f) return;
@@ -137,6 +152,47 @@ namespace WrathAccess.Exploration.Overlays
 
             FirePing(_sweep[_index++], overlay); // positioned live, in case the cursor moved during the sweep
             _timer = _index >= _sweep.Count ? RestSec : GapSec(_sweep.Count);
+        }
+
+        // ---- pulse mode (SonarField): per-entity metronomes, no sweep ----
+        private SonarField _field;
+        private double _clock;
+        private readonly System.Collections.Generic.List<SonarField.Candidate> _candidates
+            = new System.Collections.Generic.List<SonarField.Candidate>();
+
+        private void PulseTick(float dt, Overlay overlay)
+        {
+            _clock += dt;
+            if (_field == null) _field = new SonarField();
+            _field.PeriodNearSec = Int("period_near", 300) / 1000.0;
+            _field.PeriodFarSec = Int("period_far", 600) / 1000.0;
+            // Distance endpoints ride the existing feet-based knobs: the volume reference distance
+            // is "close" (fastest pulse at/under it), the sweep radius cap is "far" (slowest at it).
+            _field.DistNear = Int("ref_distance", 10) * Geo.MetresPerFoot;
+            _field.DistFar = Int("max_distance", 40) * Geo.MetresPerFoot;
+
+            // The frame's candidates: the SAME filter as the sweep snapshot (sound configured,
+            // radius cap, detectable), plus distance and the left/right phase.
+            var c = overlay.Cursor.Position;
+            float maxDist = _field.DistFar;
+            _candidates.Clear();
+            foreach (var it in WorldModel.Items)
+            {
+                if (ScanSounds.Resolve(it.Primary) == null) continue;
+                var np = it.NearestPoint(c);
+                float dx = np.x - c.x, dz = np.z - c.z;
+                float d2 = dx * dx + dz * dz;
+                if (d2 > maxDist * maxDist) continue;
+                if (!it.DetectableFrom(c)) continue;
+                float dist = Mathf.Sqrt(d2);
+                ListenerFrame.ToEar(ref dx, ref dz); // phase in the facing's frame, like the pan
+                float pan = Mathf.Clamp(dx / Mathf.Max(dist, PanWidthM), -1f, 1f);
+                _candidates.Add(new SonarField.Candidate { Item = it, Dist = dist, Phase = (pan + 1f) * 0.5f });
+            }
+
+            var fired = _field.Update(_candidates, _clock);
+            for (int i = 0; i < fired.Count; i++)
+                FirePing(fired[i], overlay); // live-positioned SpatialSources, same as the sweep
         }
 
         private void ResetSweep() { _sweep.Clear(); _index = 0; _timer = 0f; }

@@ -391,18 +391,22 @@ namespace WrathAccess.Exploration
             if (turn == null || cu == null) return null;
 
             string State(bool available) => Message.Localized("ui", available ? "combat.available" : "combat.used").Resolve();
-            // Two layers must agree for the standard action to actually be usable: the time/cooldown
-            // layer (HasStandardAction) AND the activity state machine the action bar gates on
-            // (TurnState.Standard.CanUseAbility — e.g. Lost after converting the standard into a second
-            // move). Reading only the cooldown said "standard available" while every spell was greyed.
+            // Two layers must agree for an action to actually be usable: the time/cooldown layer
+            // (HasStandardAction & co.) AND the per-turn activity state machine the action bar gates on
+            // (TurnState.<slot>.CanUse / CanUseAbility — e.g. Standard Lost after converting it into a
+            // second move; Move Used after a full attack, which the cooldown layer never charges when
+            // the attack list has one entry). Reading only the cooldown said "standard available"
+            // while every spell was greyed, and "move available" after a full attack had locked it.
             var states = GetActionsStatesMethod?.Invoke(turn, new object[] { cu }) as ActionsState;
             bool standardOk = cu.HasStandardAction() && (states == null || states.Standard.CanUseAbility);
+            bool moveOk = cu.HasMoveAction() && (states == null || states.Move.CanUse);
+            bool swiftOk = cu.HasSwiftAction() && (states == null || states.Swift.CanUse);
             var sb = new System.Text.StringBuilder(Message.Localized("ui", "combat.status_actions", new
             {
                 name = cu.CharacterName,
                 standard = State(standardOk),
-                move = State(cu.HasMoveAction()),
-                swift = State(cu.HasSwiftAction()),
+                move = State(moveOk),
+                swift = State(swiftOk),
             }).Resolve());
             // Two numbers, like the game's path break markers: the move action alone, and (when different)
             // the maximum with the standard action converted to a second move.

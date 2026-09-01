@@ -23,16 +23,26 @@ namespace WrathAccess.Patches
     /// (enum 0). <c>GetEnabledFullAttack</c> reads that mode for the un-moved current unit, so every
     /// keyboard-flow attack silently became a single attack: Rapid Shot, Haste and iterative attacks
     /// never fired. The mode is purely the mouse UI's downgrade dial; the RULES restrictions live
-    /// elsewhere and still apply (<c>UsedOneMoveAction</c> → single, staggered → single, …). While
-    /// the mod is enabled, answer "full attack allowed" and let the rules engine decide.
+    /// elsewhere and still apply (<c>UsedOneMoveAction</c> → single, staggered → single, …).
+    ///
+    /// Answer with VANILLA'S OWN RULE for when the smart cursor offers a full attack
+    /// (<c>TurnController.UpdateSmartCursorVariants</c>): the unit must have MORE THAN ONE attack
+    /// (<c>UnitAttack.EstimateFullAttacks</c>) and still hold a full-round action (or a prepared
+    /// spell combat). A blanket "true" made single-attack characters full-attack too, and a
+    /// one-attack "full attack" is a split-brain command: the prediction layer (ours and the game's
+    /// both key on <c>IsFullAttack()</c>) marks the MOVE slot used, so every move-action ability
+    /// greys out for the rest of the turn, while <c>SpendAction</c> (which keys on
+    /// <c>IsFullRoundAction()</c>, false for a single attack) never charges the move cooldown — the
+    /// tester's "attacked, then couldn't use a move action, yet R said move available".
     /// </summary>
     [HarmonyPatch(typeof(TurnController), "GetEnabledFullAttack")]
     internal static class FullAttackModePatch
     {
-        private static bool Prefix(ref bool __result)
+        private static bool Prefix(Kingmaker.EntitySystem.Entities.UnitEntityData unit, ref bool __result)
         {
-            if (!Main.Enabled) return true;
-            __result = true;
+            if (!Main.Enabled || unit == null) return true;
+            __result = Kingmaker.UnitLogic.Commands.UnitAttack.EstimateFullAttacks(unit) > 1
+                && (unit.HasFullRoundAction() || unit.PreparedSpellCombat());
             return false;
         }
     }

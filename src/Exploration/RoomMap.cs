@@ -262,7 +262,13 @@ namespace WrathAccess.Exploration
 
         public static string Describe(Room room)
         {
-            string s = Loc.T("where.room", new { id = room.Id }) + ", " + Loc.T("room.class." + room.ClassKey);
+            // Authored title first when the room has one ("The Sunken Graveyard") — it says more than
+            // the class word, which is dropped as noise; untitled rooms keep "Room N, class". Fixes
+            // room-change / where-am-I / map announcements all at once (they all come through here).
+            var title = EnvDescriptions.RoomTitle(room);
+            string s = !string.IsNullOrEmpty(title)
+                ? title
+                : Loc.T("where.room", new { id = room.Id }) + ", " + Loc.T("room.class." + room.ClassKey);
             int pct = UnexploredPercent(room);
             if (pct >= 100) return s + ", " + Loc.T("room.unexplored");
             if (pct > 0) return s + ", " + Loc.T("room.unexplored_pct", new { pct });

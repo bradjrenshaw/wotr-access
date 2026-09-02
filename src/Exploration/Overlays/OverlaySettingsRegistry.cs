@@ -144,6 +144,8 @@ namespace WrathAccess.Exploration.Overlays
             if (cursorCat.GetByKey("collision_names") == null)
                 cursorCat.Add(new BoolSetting("collision_names", "Name blocking objects on collision", false,
                     "overlay.cursor.collision_names"));
+            // OPT-IN terrain footsteps under the moving cursor (the game's own foley, see TerrainSounds).
+            TerrainSounds.RegisterSettings(cursorCat);
             // Continuous is the primary development target and the intended mode for most players
             // (2026-07-22) — tiled remains a settings choice, no longer the default.
             BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "continuous", 15, "continuous", 18);
@@ -167,6 +169,10 @@ namespace WrathAccess.Exploration.Overlays
                     volumes.Add(new IntSetting(proto.Key, proto.Name + " volume",
                         proto.Key == "walltones" ? 60 : 40, 0, 100, 5,
                         "audio.volumes." + proto.Key));
+            // The cursor's terrain footsteps (TerrainSounds) aren't a system but do have a volume.
+            if (volumes.GetByKey(TerrainSounds.VolumeKey) == null)
+                volumes.Add(new IntSetting(TerrainSounds.VolumeKey, "Footsteps volume", 100, 0, 100, 5,
+                    "audio.volumes." + TerrainSounds.VolumeKey));
 
             // The audio listener anchor (the "virtual head" — see ListenerAnchor): where the game's
             // 3D audio is heard from. Default = the same reference the sonification pans from, so

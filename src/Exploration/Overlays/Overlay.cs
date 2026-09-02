@@ -64,6 +64,7 @@ namespace WrathAccess.Exploration.Overlays
         public void OnExit()
         {
             foreach (var s in _systems) if (Applies(s.Scope)) s.OnExit(this);
+            TerrainSounds.Teardown();
             if (InAreaNow) Cursor.OnExit(this);
         }
 
@@ -84,6 +85,7 @@ namespace WrathAccess.Exploration.Overlays
             // held state; a real position change covers walking while the cursor is untethered.
             if (InAreaNow) _cursorMotion.Update(Cursor.Position, dt, Cursor.MovementKeysHeld()); else _cursorMotion.Reset();
             foreach (var s in _systems) if (Applies(s.Scope)) s.Tick(dt, this);
+            if (InAreaNow) TerrainSounds.Tick(dt, this); else TerrainSounds.Teardown();
         }
 
         // ---- input ----

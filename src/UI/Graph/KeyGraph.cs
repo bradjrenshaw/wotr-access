@@ -643,6 +643,16 @@ namespace WrathAccess.UI.Graph
             return true;
         }
 
+        /// <summary>Run the focused control's delete behavior. False = it has none.</summary>
+        public bool Delete()
+        {
+            if (!Rerender()) return false;
+            var node = CurrentNode;
+            if (node?.Vtable.OnDelete == null) return false;
+            node.Vtable.OnDelete();
+            return true;
+        }
+
         /// <summary>Run the focused control's drag behavior. False = it has none.</summary>
         public bool Drag()
         {

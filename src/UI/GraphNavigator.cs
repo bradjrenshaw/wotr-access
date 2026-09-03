@@ -300,6 +300,14 @@ namespace WrathAccess.UI
                     Speak(Loc.T("drag.no_target"));
                     return true;
                 }
+                case "ui.delete":
+                {
+                    var node = _graph?.CurrentNode;
+                    if (node == null) return false;
+                    if (node.Vtable.OnDelete != null) { _graph.Delete(); return true; }
+                    Speak(Loc.T("delete.no_target"));
+                    return true;
+                }
                 default:
                     return false;
             }

@@ -121,6 +121,10 @@ namespace WrathAccess.UI.Graph
         /// only dispatches.</summary>
         public Action OnDrag;
 
+        /// <summary>Optional. Remove / clear the focused thing (Delete) — the sighted "drag it off
+        /// the bar". The action owns the behavior; the core only dispatches.</summary>
+        public Action OnDelete;
+
         /// <summary>Optional. Horizontal value adjust (a slider): sign is -1 (decrease) / +1 (increase),
         /// large requests a coarse step. When set, left/right do NOT navigate.</summary>
         public Action<int, bool> OnAdjust;

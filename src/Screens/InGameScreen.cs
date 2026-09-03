@@ -93,8 +93,15 @@ namespace WrathAccess.Screens
                     b.AddItem(ControlId.Referenced(slot, "bar:main:" + i), ActionBarNodes.Slot(slot));
                     i++; usable++;
                 }
-            if (usable == 0)
+            if (usable == 0 && !ActionBarDrag.Holding)
                 b.AddItem(ControlId.Structural("bar:none"), GraphNodes.Text(() => Loc.T("hud.no_actions")));
+            // Drag in progress: one empty slot (the first free hotkey position) as a drop target, so a
+            // group entry can land on the bar without swapping something out.
+            if (ActionBarDrag.Holding)
+            {
+                int empty = ActionBarDrag.FirstEmptyIndex(vm);
+                if (empty >= 0) b.AddItem(ControlId.Structural("bar:empty"), ActionBarNodes.EmptySlot(empty));
+            }
 
             AddGroup(b, vm?.GroupAbilities, "hud.abilities");
             AddGroup(b, vm?.GroupSpells, "hud.spells");

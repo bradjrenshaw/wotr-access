@@ -47,6 +47,8 @@ namespace WrathAccess.UI
                 SearchText = () => slot()?.GetTitle() ?? "",
                 OnActivate = () => Activate(vm),
                 OnSecondary = () => ToggleAutoUse(vm),
+                OnDrag = () => ActionBarDrag.OnSlot(vm), // Backslash: pick up / place (the mouse drag)
+                OnDelete = () => ActionBarDrag.ClearSlot(vm), // Delete: the mouse "drop it off the bar"
                 OnTooltip = () =>
                 {
                     var tpl = slot()?.GetTooltipTemplate();
@@ -55,11 +57,28 @@ namespace WrathAccess.UI
             };
         }
 
+        /// <summary>The drop target the HUD lists while a drag is held: the first empty bar slot, so
+        /// a picked-up spell/ability/item has somewhere to land besides an occupied slot (swap).</summary>
+        public static NodeVtable EmptySlot(int index)
+        {
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Button,
+                Announcements = new List<NodeAnnouncement>
+                {
+                    GraphNodes.LabelPart(() => Loc.T("actionbar.empty_slot", new { slot = ActionBarDrag.SlotName(index) })),
+                },
+                SearchText = () => Loc.T("actionbar.empty_slot", new { slot = ActionBarDrag.SlotName(index) }),
+                OnActivate = () => Tts.Speak(Loc.T("actionbar.slot_empty"), interrupt: true),
+                OnDrag = () => ActionBarDrag.OnEmpty(index),
+            };
+        }
+
         // The live "ui" value key for a toggle ability's state, or null if this slot isn't a toggle:
         //   on + waiting for a target -> "value.targeting"  (e.g. Saddle Up: on, but needs a mount target)
         //   on, no targeting          -> "value.on"          (a plain toggle, e.g. Fight Defensively)
         //   off                       -> "value.off"
-        private static string ToggleStateKey(MechanicActionBarSlot s)
+        internal static string ToggleStateKey(MechanicActionBarSlot s)
         {
             if (!(s is MechanicActionBarSlotActivableAbility act) || act.ActivatableAbility == null) return null;
             var a = act.ActivatableAbility;
@@ -122,7 +141,7 @@ namespace WrathAccess.UI
                 new { name = s.GetTitle() }), interrupt: true);
         }
 
-        private static void Activate(ActionBarSlotVM vm)
+        internal static void Activate(ActionBarSlotVM vm)
         {
             var s = vm?.MechanicActionBarSlot;
             // A click does nothing useful when the slot can neither be activated nor (for a toggle)

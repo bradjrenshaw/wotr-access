@@ -503,6 +503,10 @@ namespace WrathAccess
             // declare OnDrag; elsewhere the key reports there's nothing to drag.
             InputManager.Register("ui.drag", "Pick up / place item (drag)", InputCategory.UI)
                 .AddBinding(KeyCode.Backslash);
+            // Delete: remove the focused thing where a control supports it (an action-bar slot —
+            // the sighted "drag it off the bar"); elsewhere the key reports nothing to remove.
+            InputManager.Register("ui.delete", "Remove (clear slot)", InputCategory.UI)
+                .AddBinding(KeyCode.Delete);
             // Home/End jump to the first/last item: a list's ends, a tree's current depth's ends, a
             // FlowSheet's very first/last cell regardless of region (and a live search's first/last hit).
             InputManager.Register("ui.home", "Jump to first item", InputCategory.UI).AddBinding(KeyCode.Home);
@@ -758,6 +762,21 @@ namespace WrathAccess
             // Alt+R (follow-cursor mode): reset the arrangement — offsets and relative angle to zero.
             InputManager.Register("camera.reset", "Reset camera offset and angle", InputCategory.Exploration,
                 WrathAccess.Exploration.CameraFollowCursor.Reset).AddBinding(KeyCode.R, alt: true).Grouped("camera");
+
+            // Action-bar hotkeys: one rebindable action per slot of the game's three 14-slot rows
+            // (row 1 = the main bar, rows 2/3 = the "additional" rows). Defaults mirror the game's
+            // own action-bar-button-N bindings (VERIFY LIVE: ActionBarHotkeyDefaults); unbound slots
+            // stay rebindable from the Input tab.
+            for (int row = 0; row < WrathAccess.Exploration.ActionBarHotkeys.Rows; row++)
+                for (int slot = 0; slot < WrathAccess.Exploration.ActionBarHotkeys.PerRow; slot++)
+                {
+                    int r = row, sl = slot;
+                    var act = InputManager.Register(WrathAccess.Exploration.ActionBarHotkeys.Key(row, slot),
+                        row == 0 ? "Action bar slot " + (slot + 1) : "Action bar row " + (row + 1) + " slot " + (slot + 1),
+                        InputCategory.Exploration, () => WrathAccess.Exploration.ActionBarHotkeys.Use(r, sl)).Grouped("actionbar");
+                    var def = ActionBarHotkeyDefault(row, slot);
+                    if (def.HasValue) act.AddBinding(def.Value.key, ctrl: def.Value.ctrl, shift: def.Value.shift, alt: def.Value.alt);
+                }
             // Q/E: turn the LISTENER's facing CONTINUOUSLY while held (person-frame: "turn right" =
             // facing yaw increases; independent of the camera). No handler — ListenerFrame.Tick polls
             // the held state each frame. Shift+Q/E snap to the next 45° step. Movement, spatial pans,
@@ -918,5 +937,20 @@ namespace WrathAccess
                 Route(inArea: WrathAccess.Exploration.Scanner.PingReview))
                 .AddBinding(KeyCode.Semicolon).Grouped("review");
         }
+        /// <summary>The game's default action-bar hotkeys per row/slot (null = unbound), read live
+        /// from <c>SettingsRoot.Controls.Keybindings.ActionBar</c> (2026-09-02): 1..9, 0, minus,
+        /// equals for the first twelve slots of each row — bare for the main row, Ctrl for the
+        /// first additional row, Shift for the second; slots 13/14 unbound. Our row 2 stays UNBOUND
+        /// by default: Ctrl+1..6 is the party-selection chord (same Exploration category), and the
+        /// game's Ctrl row would shadow it. Rebindable from the Input tab.</summary>
+        private static (KeyCode key, bool ctrl, bool shift, bool alt)? ActionBarHotkeyDefault(int row, int slot)
+        {
+            if (row == 1) return null;
+            KeyCode[] keys = { KeyCode.Alpha1, KeyCode.Alpha2, KeyCode.Alpha3, KeyCode.Alpha4, KeyCode.Alpha5, KeyCode.Alpha6,
+                KeyCode.Alpha7, KeyCode.Alpha8, KeyCode.Alpha9, KeyCode.Alpha0, KeyCode.Minus, KeyCode.Equals };
+            if (slot >= keys.Length) return null;
+            return (keys[slot], false, row == 2, false);
+        }
+
     }
 }

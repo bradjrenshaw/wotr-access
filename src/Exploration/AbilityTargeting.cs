@@ -86,6 +86,39 @@ namespace WrathAccess.Exploration
             return null;
         }
 
+        /// <summary>True when activating this slot FIRES on the spot with no further prompt: an
+        /// owner-anchored ability that is castable now (the game casts it straight from the click),
+        /// or a non-ability slot (items, activatable toggles — routed to OnMainClick). Targeted
+        /// abilities enter aim, convert flyouts open a menu, uncastable ones only play the refusal —
+        /// none of those need a confirmation step.</summary>
+        internal static bool IsImmediate(MechanicActionBarSlot slot)
+        {
+            if (slot == null) return false;
+            var ability = AbilityOf(slot);
+            if (ability == null) return true;
+            if (WantsConvertMenu(slot, ability)) return false;
+            if (!slot.IsPossibleActive()) return false;
+            return ability.TargetAnchor == AbilityTargetAnchor.Owner;
+        }
+
+        /// <summary>The units an owner-anchored ability would affect if cast right now — the game's
+        /// own per-unit oracle (<c>AbilityData.WouldCurrentlyTarget</c>, what lights the AoE decals
+        /// on hover), over the visible living units of the area. Empty for a plain self-buff (no
+        /// AoE radius provider → the oracle says no to everyone).</summary>
+        internal static List<UnitEntityData> AffectedNow(AbilityData ability)
+        {
+            var hits = new List<UnitEntityData>();
+            var caster = ability?.Caster?.Unit;
+            var units = Game.Instance?.State?.Units;
+            if (caster == null || units == null) return hits;
+            foreach (var u in units)
+            {
+                if (u == null || !u.IsInGame || u.Descriptor.State.IsDead || !u.IsVisibleForPlayer) continue;
+                if (ability.WouldCurrentlyTarget(caster.Position, u)) hits.Add(u);
+            }
+            return hits;
+        }
+
         // The exact conditions ActionBarSlotVM.OnMainClick uses to open the flyout instead of casting.
         private static bool WantsConvertMenu(MechanicActionBarSlot slot, AbilityData ability)
         {

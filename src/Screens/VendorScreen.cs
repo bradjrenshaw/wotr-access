@@ -49,13 +49,18 @@ namespace WrathAccess.Screens
             if (vm == null) return;
             string k = "vendor:" + vm.GetHashCode() + ":";
 
-            // Your inventory — your gold reads first (a lead line), then the sellable items.
+            // Your inventory — the stash's own search / sort / type-filter block first (the same
+            // widget the inventory screen shows; the vendor window embeds the stash view), then
+            // your gold (a lead line), then the sellable items.
             EmitTable(b, k + "inv", vm.StashVM?.ItemSlotsGroup, Loc.T("vendor.your_inventory"),
                 GraphNodes.VendorSide.Inventory, buy: false,
                 lead: GraphNodes.Text(() => Loc.T("vendor.gold", new { value = vm.StashVM?.Money?.Value ?? 0 })),
-                trailer: null);
+                trailer: null,
+                head: bb => InventoryScreen.EmitItemFilters(bb, vm.StashVM?.ItemsFilter, vm.StashVM?.ItemSlotsGroup, k + "inv:"));
+            // The vendor's goods carry their own filter block (VendorVM.VendorItemsFilter).
             EmitTable(b, k + "store", vm.VendorSlotsGroup, Loc.T("vendor.store"),
-                GraphNodes.VendorSide.Stock, buy: true, lead: null, trailer: null);
+                GraphNodes.VendorSide.Stock, buy: true, lead: null, trailer: null,
+                head: bb => InventoryScreen.EmitItemFilters(bb, vm.VendorItemsFilter, vm.VendorSlotsGroup, k + "store:"));
             EmitTable(b, k + "buycart", vm.VendorExchangePart, Loc.T("vendor.buy_cart"),
                 GraphNodes.VendorSide.BuyCart, buy: true, lead: null,
                 trailer: GraphNodes.Button(() => Strip(UIStrings.Instance.Vendor.ReturnBuy),
@@ -103,16 +108,22 @@ namespace WrathAccess.Screens
         // Type/Qty/Price table (Price = buy or sell per side), and an optional trailing "return all".
         // Rows carry their metadata as parts on the item cell; empty regions read one "empty" line.
         private static void EmitTable(GraphBuilder b, string key, SlotsGroupVM<ItemSlotVM> group,
-            string label, GraphNodes.VendorSide side, bool buy, NodeVtable lead, NodeVtable trailer)
+            string label, GraphNodes.VendorSide side, bool buy, NodeVtable lead, NodeVtable trailer,
+            Action<GraphBuilder> head = null)
         {
             b.BeginStop(key);
+            // The whole stop is ONE named container ("Inventory" / "Store"): the filter block reads
+            // as "Inventory, Filters, ..." and the table as "Inventory, Items, ..." (user design —
+            // a bare "Filters" on Tab-landing said nothing about which side you were on).
+            b.PushContext(label);
+            head?.Invoke(b); // filter block (search / sort / type filters) ahead of the table
             // FollowRowRefs off: a whole-stack trade migrates the ITEM ENTITY to the opposite
             // table, and reference-following dragged focus there with it — stay in this table on
             // the neighbouring row instead (the hash-based structural keys still hold focus
             // through re-sorts within the table).
             var sheet = new GraphSheet(b, key + ":") { FollowRowRefs = false };
             var cols = new[] { Loc.T("col.type"), Loc.T("col.qty"), Loc.T(buy ? "vendor.col_buy" : "vendor.col_sell") };
-            sheet.Region(label, cols);
+            sheet.Region(Loc.T("vendor.items"), cols);
             if (lead != null) sheet.Line(lead);
 
             bool any = false;
@@ -148,6 +159,7 @@ namespace WrathAccess.Screens
             if (!any) sheet.Line(GraphNodes.Text(() => Loc.T("vendor.empty")));
             if (trailer != null) sheet.Line(trailer);
             sheet.Finish();
+            b.PopContext();
         }
 
         private static string Price(ItemSlotVM s, bool buy)

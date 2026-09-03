@@ -243,27 +243,7 @@ namespace WrathAccess.Screens
             var filter = stash?.ItemsFilter;
             b.BeginStop("stash");
 
-            if (filter?.ItemsFilterSearchVM != null)
-                b.AddItem(ControlId.Structural(k + "search"),
-                    ItemNodes.ItemSearch(filter.ItemsFilterSearchVM, () => group?.SearchString?.Value));
-
-            if (filter != null)
-                b.AddItem(ControlId.Structural(k + "sort"), ItemNodes.ItemSorter(filter));
-
-            if (filter?.SelectionFilterGroup?.EntitiesCollection != null)
-            {
-                b.PushContext(Loc.T("inv.filters"), "list");
-                b.StartRow();
-                foreach (var type in FilterOrder)
-                {
-                    var e = FindFilter(filter, type);
-                    if (e != null)
-                        b.AddItem(ControlId.Referenced(e, k + "filter:" + type),
-                            GraphNodes.SelectionItem(e, () => LocalizedTexts.Instance.ItemsFilter.GetText(e.CurrentFilter)));
-                }
-                b.EndRow();
-                b.PopContext();
-            }
+            EmitItemFilters(b, filter, group, k);
 
             // The item table: rows key by SLOT identity (equip/use/drop lands on a different identity →
             // announced); each row carries Type/Qty/Weight/Value as parts and as header-labelled cells.
@@ -298,6 +278,35 @@ namespace WrathAccess.Screens
         }
 
         // The game's stash filter bar: 8 category toggles ("Other" maps to NonUsable), in display order.
+        /// <summary>The game's items-filter block as nodes — search field, sort combo, then the type
+        /// filter radio row — over an <see cref="ItemsFilterVM"/>. Shared by the inventory stash and
+        /// both sides of the vendor window (the same widget in the sighted UI). Null-safe: emits
+        /// whatever parts the VM provides.</summary>
+        internal static void EmitItemFilters(GraphBuilder b, ItemsFilterVM filter, SlotsGroupVM<ItemSlotVM> group, string k)
+        {
+            if (filter?.ItemsFilterSearchVM != null)
+                b.AddItem(ControlId.Structural(k + "search"),
+                    ItemNodes.ItemSearch(filter.ItemsFilterSearchVM, () => group?.SearchString?.Value));
+
+            if (filter != null)
+                b.AddItem(ControlId.Structural(k + "sort"), ItemNodes.ItemSorter(filter));
+
+            if (filter?.SelectionFilterGroup?.EntitiesCollection != null)
+            {
+                b.PushContext(Loc.T("inv.filters"), "list");
+                b.StartRow();
+                foreach (var type in FilterOrder)
+                {
+                    var e = FindFilter(filter, type);
+                    if (e != null)
+                        b.AddItem(ControlId.Referenced(e, k + "filter:" + type),
+                            GraphNodes.SelectionItem(e, () => LocalizedTexts.Instance.ItemsFilter.GetText(e.CurrentFilter)));
+                }
+                b.EndRow();
+                b.PopContext();
+            }
+        }
+
         private static readonly ItemsFilter.FilterType[] FilterOrder =
         {
             ItemsFilter.FilterType.NoFilter, ItemsFilter.FilterType.Weapon, ItemsFilter.FilterType.Armor,

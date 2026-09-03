@@ -27,7 +27,7 @@ namespace WrathAccess.Exploration
         // listener hanging well above the field (the camera boom), so ear-height made medium-range
         // things sound too close. Straight up keeps the compass symmetric (no north/south bias).
         private static float HeightMetres =>
-            (ModSettings.GetSetting<IntSetting>("audio.listener_height")?.Get() ?? 35) * Geo.MetresPerFoot;
+            (ModSettings.GetSetting<IntSetting>("audio.listener_height")?.Get() ?? 10) * Geo.MetresPerFoot;
 
         /// <summary>The override pose, when our ears-at-cursor mode should own the listener this
         /// frame; false = vanilla camera audio (setting, cutscene/dialog/rest, no area). Shared with

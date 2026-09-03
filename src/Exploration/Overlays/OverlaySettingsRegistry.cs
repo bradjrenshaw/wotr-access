@@ -206,7 +206,7 @@ namespace WrathAccess.Exploration.Overlays
                         new Choice("camera", "Camera (game default)", "audio.listener.camera"),
                     }, "cursor", "audio.listener"));
             if (audio.GetByKey("listener_height") == null)
-                audio.Add(new IntSetting("listener_height", "Listener height (feet)", 35, 0, 80, 5,
+                audio.Add(new IntSetting("listener_height", "Listener height (feet)", 10, 0, 80, 5,
                     "audio.listener_height"));
             // Wwise's global stereo panning rule (game audio; the game itself never sets it, so
             // vanilla = Speakers). Headphones = constant-power panning, audibly wider positioning.

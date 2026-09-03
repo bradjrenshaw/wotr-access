@@ -61,12 +61,17 @@ namespace WrathAccess.Exploration
         private static IntSetting Zoom => ModSettings.GetSetting<IntSetting>("vision.camera.zoom");
         private static IntSetting Smoothing => ModSettings.GetSetting<IntSetting>("vision.camera.smoothing");
 
+        /// <summary>Set while something else legitimately holds the camera (the dev survey's Frame()
+        /// captures — it scrolls to a room and this component was dragging the rig straight back to
+        /// the cursor, so every capture showed the party; 2026-09-01).</summary>
+        public static bool Suspended;
+
         /// <summary>The mode is switched on AND the game state lets us own the camera this frame.</summary>
         public static bool Active
         {
             get
             {
-                if (!Main.Enabled) return false;
+                if (!Main.Enabled || Suspended) return false;
                 if (!(ModSettings.GetSetting<BoolSetting>("vision.camera.follow_cursor")?.Get() ?? false)) return false;
                 var game = Game.Instance;
                 if (game == null || game.CurrentlyLoadedArea == null) return false;

@@ -1,0 +1,64 @@
+{
+  "rooms": [
+    {
+      "x": 15.3,
+      "y": 1.2,
+      "z": -0.2,
+      "key": "estrod_ritual_hall"
+    },
+    {
+      "x": 45.5,
+      "y": 1.0,
+      "z": -0.2,
+      "key": "estrod_east_hall"
+    },
+    {
+      "x": 9.0,
+      "y": 5.6,
+      "z": -15.9,
+      "key": "estrod_south_gallery"
+    },
+    {
+      "x": -2.7,
+      "y": 5.6,
+      "z": 1.3,
+      "key": "estrod_west_gallery"
+    },
+    {
+      "x": 1.5,
+      "y": 4.3,
+      "z": -0.5,
+      "key": "estrod_west_landing"
+    },
+    {
+      "x": 5.5,
+      "y": 2.5,
+      "z": -6.0,
+      "key": "estrod_west_stair"
+    },
+    {
+      "x": 22.5,
+      "y": 4.0,
+      "z": -11.7,
+      "key": "estrod_southeast_stair"
+    },
+    {
+      "x": 26.8,
+      "y": 5.6,
+      "z": -6.5,
+      "key": "estrod_east_gallery"
+    },
+    {
+      "x": 33.3,
+      "y": 4.1,
+      "z": -7.2,
+      "key": "estrod_east_stair"
+    },
+    {
+      "x": 23.5,
+      "y": 5.0,
+      "z": 10.8,
+      "key": "estrod_north_stair"
+    }
+  ]
+}

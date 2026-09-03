@@ -300,6 +300,8 @@ namespace WrathAccess.Dev
             // The camera follower re-scrolls to the followed unit every frame, silently undoing the
             // scroll below (bit a live survey 2026-08-14) — release it before taking the camera.
             Game.Instance.CameraController?.Follower?.Release();
+            // Same for the mod's own low-vision follow-cursor camera (LateUpdate, order +10000).
+            Exploration.CameraFollowCursor.Suspended = true;
             rig.SetRotation(yaw);
             // NOT the CurrentNormalizePosition setter: TickZoom overwrites m_ScrollPosition from the
             // player's wheel state every frame, silently reverting it (every "wide" capture came back
@@ -360,6 +362,7 @@ namespace WrathAccess.Dev
         /// position/yaw/zoom captured at the first <see cref="Frame"/>.</summary>
         public static string Restore()
         {
+            Exploration.CameraFollowCursor.Suspended = false;
             // UI-unhide runs UNCONDITIONALLY: a Frame in a restarted/foreign session can leave the UI
             // hidden with _saved false, and a player staring at a working game with an invisible HUD
             // (and an un-OCR-able pause menu) has no way to know why. Never gate this on _saved.

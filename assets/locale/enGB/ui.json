@@ -135,6 +135,7 @@
   "combat.status_actions": "{name}, standard action {standard}, move action {move}, swift action {swift}",
   "combat.available": "available",
   "combat.used": "used",
+  "combat.available_used": "available, {used} of {max} feet used",
   "combat.movement_remaining": "{feet} feet movement remaining",
   "combat.with_standard": "{feet} with standard action",
   "combat.five_foot_step": "five foot step available",

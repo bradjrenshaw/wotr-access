@@ -401,17 +401,25 @@ namespace WrathAccess.Exploration
             bool standardOk = cu.HasStandardAction() && (states == null || states.Standard.CanUseAbility);
             bool moveOk = cu.HasMoveAction() && (states == null || states.Move.CanUse);
             bool swiftOk = cu.HasSwiftAction() && (states == null || states.Swift.CanUse);
-            var sb = new System.Text.StringBuilder(Message.Localized("ui", "combat.status_actions", new
-            {
-                name = cu.CharacterName,
-                standard = State(standardOk),
-                move = State(moveOk),
-                swift = State(swiftOk),
-            }).Resolve());
             // Two numbers, like the game's path break markers: the move action alone, and (when different)
             // the maximum with the standard action converted to a second move.
             int moveFt = Mathf.RoundToInt(
                 cu.CombatState.TBM.GetRemainingMovementRange(total: false, singleActionMove: false) / Geo.MetresPerFoot);
+            // A PARTIAL move keeps the move action "available" for walking but has already spent
+            // part of it — and, invisibly, lost the slot's ability use (no Charge / full-round after
+            // any step). Say how much of the action is gone: "available, 10 of 30 feet used".
+            int maxFt = Mathf.RoundToInt(turn.GetMaxMovementRangeFeet(cu).Value);
+            int usedFt = Mathf.Clamp(maxFt - moveFt, 0, maxFt);
+            string moveState = moveOk && usedFt > 0
+                ? Message.Localized("ui", "combat.available_used", new { used = usedFt, max = maxFt }).Resolve()
+                : State(moveOk);
+            var sb = new System.Text.StringBuilder(Message.Localized("ui", "combat.status_actions", new
+            {
+                name = cu.CharacterName,
+                standard = State(standardOk),
+                move = moveState,
+                swift = State(swiftOk),
+            }).Resolve());
             int totalFt = Mathf.RoundToInt(
                 cu.CombatState.TBM.GetRemainingMovementRange(total: true, singleActionMove: false) / Geo.MetresPerFoot);
             sb.Append(", ").Append(Message.Localized("ui", "combat.movement_remaining", new { feet = moveFt }).Resolve());

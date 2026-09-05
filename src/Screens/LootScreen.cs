@@ -14,7 +14,8 @@ namespace WrathAccess.Screens
     /// own Tab-stop list of items; arrows move within a source, Tab moves between sources. Enter takes an
     /// item — immediate mode drops the emptied slot from the next render, so focus slides to the nearest
     /// remaining item and announces it. "Take all" / Skin / the zone-exit controls are their own stops;
-    /// Escape closes. The party-stash side (moving items the other way, chest deposits) is deferred.
+    /// Escape closes. Chest-type windows (LootVM.ShowStash) add the party-stash side as its own stop:
+    /// your inventory (filters + items), Enter deposits an item into the container.
     /// </summary>
     public sealed class LootScreen : Screen
     {
@@ -92,6 +93,40 @@ namespace WrathAccess.Screens
                         },
                         () => collector.HasItemsToSkinning,
                         sound: null)); // the VM plays LootSkinning itself
+            }
+
+            // The party-stash side (chests, the personal chest, zone exits — LootVM.ShowStash): your
+            // inventory with its search / sort / type filters, then the items; Enter on an item puts
+            // it INTO the container (the sighted double-click / drag onto the chest).
+            var stash = vm.ShowStash ? vm.InventoryStash : null;
+            if (stash?.ItemSlotsGroup != null)
+            {
+                b.BeginStop(k + "stash");
+                b.PushContext(Loc.T("loot.your_inventory"));
+                InventoryScreen.EmitItemFilters(b, stash.ItemsFilter, stash.ItemSlotsGroup, k + "stash:");
+                b.PushContext(Loc.T("loot.items"), "list");
+                int si = 0; bool anyStash = false;
+                foreach (var slot in stash.ItemSlotsGroup.VisibleCollection)
+                {
+                    if (slot != null && slot.HasItem)
+                    {
+                        anyStash = true;
+                        // Identity = the ITEM ENTITY, not the slot VM: the stash group re-deals its
+                        // items into positional slots after every transfer, so a slot-keyed node just
+                        // silently changes content under focus; an entity key loses the deposited
+                        // item's node instead, and focus slides to the neighbour and announces it.
+                        // ControlId equality is the STRUCTURAL key alone, so the key must carry the
+                        // entity too: a positional "item:N" key makes the re-dealt neighbour look like
+                        // the same node (silent). Reference hash, like the vendor sheet's row keys.
+                        object ent = (object)slot.Item.Value ?? slot;
+                        b.AddItem(ControlId.Referenced(ent, k + "stash:item:" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(ent)),
+                            GraphNodes.StashItem(vm, slot));
+                    }
+                    si++;
+                }
+                if (!anyStash) b.AddItem(ControlId.Structural(k + "stash:none"), GraphNodes.Text(() => Loc.T("loot.stash_empty")));
+                b.PopContext();
+                b.PopContext();
             }
 
             // Zone-exit variant (leaving the area with uncollected loot): mirror the game's extra

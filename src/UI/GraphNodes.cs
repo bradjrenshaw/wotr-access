@@ -453,6 +453,34 @@ namespace WrathAccess.UI
             };
         }
 
+        /// <summary>An item on the loot window's INVENTORY side (chests / zone exits): Enter moves it
+        /// INTO the container — the sighted double-click / drag, <c>LootVM.HandleTryTransferInventorySlot</c>
+        /// (the VM plays the collect sound). Name + count; the item tooltip on Space.</summary>
+        public static NodeVtable StashItem(Kingmaker.UI.MVVM._VM.Loot.LootVM loot,
+            Kingmaker.UI.MVVM._VM.Slots.ItemSlotVM slot)
+        {
+            Func<string> label = () =>
+            {
+                var name = slot.DisplayName.Value;
+                if (string.IsNullOrEmpty(name)) name = slot.Item.Value?.Name ?? "item";
+                int count = slot.Count.Value;
+                return count > 1 ? name + ", " + count : name;
+            };
+            return new NodeVtable
+            {
+                ControlType = ControlTypes.Item,
+                Announcements = new[] { LabelPart(label) },
+                SearchText = label,
+                OnActivate = () => loot.HandleTryTransferInventorySlot(slot),
+                OnTooltip = () =>
+                {
+                    var t = slot.Tooltip.Value;
+                    var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
+                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
+                },
+            };
+        }
+
         /// <summary>A display-only item slot — the message modal's item list (world-map "Reagents in this
         /// location"): name (+ count for stacks), the item's tooltip on Space, no activation — the icons
         /// aren't clickable for sighted players either; the modal's buttons act on the whole set.</summary>

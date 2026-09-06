@@ -189,7 +189,7 @@ namespace WrathAccess.Exploration
         private static void PlayCue(bool enter)
         {
             float vol = (ModSettings.GetSetting<IntSetting>("audio.volumes.object")?.Get() ?? 100) / 100f * OverlayAudio.Master;
-            AudioEngines.NAudio.Play2D(Path.Combine(OverlayAudio.Dir, enter ? "object_enter.wav" : "object_exit.wav"), vol);
+            AudioEngines.Current.Play2D(Path.Combine(OverlayAudio.Dir, enter ? "object_enter.wav" : "object_exit.wav"), vol);
         }
 
         // The nearest cached marker whose footprint (plus a comfortable landing pad) contains the cursor.

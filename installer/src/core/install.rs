@@ -210,6 +210,8 @@ pub fn install_repo_zip(data: &[u8], game_path: &Path) -> Result<(), String> {
             mod_dir.join("assets").join(stripped)
         } else if repo_rel == Path::new("vendor/prism.dll") {
             game_path.join("prism.dll")
+        } else if repo_rel == Path::new("vendor/loadstar.dll") {
+            game_path.join("loadstar.dll")
         } else {
             continue;
         };

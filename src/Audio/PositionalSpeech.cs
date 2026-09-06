@@ -22,7 +22,7 @@ namespace WrathAccess.Audio
         public static void Play(SpeechAudio audio, Vector3? worldPos)
         {
             if (audio == null) return;
-            if (worldPos == null) { AudioEngines.NAudio.PlayPcm(audio, 1f, 0f); return; } // centred, still overlapping
+            if (worldPos == null) { AudioEngines.Current.PlayPcm(audio, 1f, 0f); return; } // centred, still overlapping
 
             var from = Listener();
             var p = worldPos.Value;
@@ -33,7 +33,7 @@ namespace WrathAccess.Audio
             float panWidth = PanWidthFeet * Geo.MetresPerFoot;
             float vol = Mathf.Clamp(refDist / (refDist + dist), MinVol, 1f);
             float pan = Mathf.Clamp(dx / Mathf.Max(dist, panWidth), -1f, 1f);
-            AudioEngines.NAudio.PlayPcm(audio, vol, pan);
+            AudioEngines.Current.PlayPcm(audio, vol, pan);
         }
 
         // The listener "ears" — the same reference the scanner/cursor work from (cursor if placed, else player).

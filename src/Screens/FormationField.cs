@@ -80,7 +80,7 @@ namespace WrathAccess.Screens
         private static void PlayCue(bool enter)
         {
             float vol = (ModSettings.GetSetting<IntSetting>("audio.volumes.object")?.Get() ?? 100) / 100f * OverlayAudio.Master;
-            AudioEngines.NAudio.Play2D(Path.Combine(OverlayAudio.Dir, enter ? "object_enter.wav" : "object_exit.wav"), vol);
+            AudioEngines.Current.Play2D(Path.Combine(OverlayAudio.Dir, enter ? "object_enter.wav" : "object_exit.wav"), vol);
         }
 
         /// <summary>Enter: pick up the member at the cursor / drop the held one here (Custom only).</summary>
@@ -144,7 +144,7 @@ namespace WrathAccess.Screens
             float vol = Mathf.Clamp(refDist / (refDist + dist), 0.1f, 1f)
                 * ((ModSettings.GetSetting<IntSetting>("audio.volumes.object")?.Get() ?? 100) / 100f) * OverlayAudio.Master;
             // off.x = east, off.y = north — the spatializer pans/ITDs by east and front/back-filters by north.
-            AudioEngines.NAudio.PlaySpatial(Path.Combine(OverlayAudio.Dir, file), vol, off.x, off.y, panWidth);
+            AudioEngines.Current.PlaySpatial(Path.Combine(OverlayAudio.Dir, file), vol, off.x, off.y, panWidth);
         }
 
         /// <summary>Ctrl+1..6: grab the Nth party member straight away (start dragging) — so Ctrl+1, then move

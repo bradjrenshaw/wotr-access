@@ -56,6 +56,7 @@ def stage_payload():
     else:
         print("WARNING: deploy/docs not found — run build_docs.ps1 to bundle the docs.")
     shutil.copy2(os.path.join(REPO, "vendor", "prism.dll"), game)
+    shutil.copy2(os.path.join(REPO, "vendor", "loadstar.dll"), game)  # the low-latency audio backend
 
 
 def make_zip():

@@ -66,7 +66,7 @@ namespace WrathAccess.Exploration
         {
             float dx = 0f, dz = NorthCueDistance; // due north of the head, in world terms
             ToEar(ref dx, ref dz);
-            WrathAccess.Audio.AudioEngines.NAudio.PlaySpatial(
+            WrathAccess.Audio.AudioEngines.Current.PlaySpatial(
                 System.IO.Path.Combine(Overlays.OverlayAudio.Dir, "compass_north.wav"),
                 Overlays.OverlayAudio.Master * 0.8f, dx, dz, NorthCuePanWidth);
         }

@@ -75,7 +75,7 @@ namespace WrathAccess.Screens
         {
             b.AddItem(ControlId.Structural("gloss:cue:" + stem),
                 GraphNodes.Button(() => Loc.T("glossary." + stem),
-                    () => WrathAccess.Audio.AudioEngines.NAudio.Play2D(
+                    () => WrathAccess.Audio.AudioEngines.Current.Play2D(
                         Path.Combine(OverlayAudio.Dir, stem + ".wav"), volume()),
                     sound: null));
         }
@@ -95,7 +95,7 @@ namespace WrathAccess.Screens
                             kind: AnnouncementKinds.Value),
                     },
                     SearchText = () => Loc.T("glossary." + stem),
-                    OnActivate = () => WrathAccess.Audio.AudioEngines.NAudio.Play2D(
+                    OnActivate = () => WrathAccess.Audio.AudioEngines.Current.Play2D(
                         Path.Combine(OverlayAudio.Dir, stem + ".wav"), SystemVolume("sonar")),
                 });
         }
@@ -163,7 +163,7 @@ namespace WrathAccess.Screens
         {
             float volume = (ModSettings.GetSetting<IntSetting>("audio.volumes.sonar")?.Get() ?? 40) / 100f
                 * OverlayAudio.Master;
-            WrathAccess.Audio.AudioEngines.NAudio.Play2D(
+            WrathAccess.Audio.AudioEngines.Current.Play2D(
                 Path.Combine(OverlayAudio.Dir, "interactables", stem + ".wav"), volume);
         }
     }

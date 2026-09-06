@@ -242,7 +242,7 @@ namespace WrathAccess
             if (!_hadControl.HasValue) { _hadControl = ControlState.HasControl; return; }
             bool settled = ControlState.Settled;
             if (settled == _hadControl.Value) return;
-            WrathAccess.Audio.AudioEngines.NAudio.Play2D(System.IO.Path.Combine(OverlayAudio.Dir,
+            WrathAccess.Audio.AudioEngines.Current.Play2D(System.IO.Path.Combine(OverlayAudio.Dir,
                 settled ? "control_gained.wav" : "control_lost.wav"), OverlayAudio.Master);
             _hadControl = settled;
         }

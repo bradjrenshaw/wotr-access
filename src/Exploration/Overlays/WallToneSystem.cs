@@ -36,6 +36,7 @@ namespace WrathAccess.Exploration.Overlays
 
         private static readonly Vector3[] DirVecs = { Vector3.forward, Vector3.back, Vector3.right, Vector3.left }; // ahead, behind, right, left
 
+        private int _gen = -1;          // AudioEngines.Generation the voices were created on
         private IWallTones _walls;      // tone set 1 — real walls (sight-blocked)
         private IWallTones _obstacles;  // tone set 2 — navmesh-only blockage (furniture/clutter)
         private readonly Vector3[] _hits = new Vector3[4];
@@ -65,8 +66,15 @@ namespace WrathAccess.Exploration.Overlays
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { Mute(); return; }
 
             bool split = Split;
-            if (_walls == null) _walls = AudioEngines.NAudio.CreateWallTones("1");
-            if (split && _obstacles == null) _obstacles = AudioEngines.NAudio.CreateWallTones("2");
+            // A backend switch disposed the engine our voices lived on: drop and recreate them.
+            if (_gen != AudioEngines.Generation)
+            {
+                _gen = AudioEngines.Generation;
+                _walls?.Dispose(); _obstacles?.Dispose();
+                _walls = null; _obstacles = null;
+            }
+            if (_walls == null) _walls = AudioEngines.Current.CreateWallTones("1");
+            if (split && _obstacles == null) _obstacles = AudioEngines.Current.CreateWallTones("2");
 
             var c = overlay.Cursor.Position;
             float v = EffectiveVolume;

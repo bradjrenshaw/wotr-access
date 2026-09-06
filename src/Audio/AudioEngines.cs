@@ -1,30 +1,70 @@
+using WrathAccess.Settings;
+
 namespace WrathAccess.Audio
 {
     /// <summary>
-    /// Entry point to the audio backend — our NAudio mixer, the ONE engine (the Wwise path was retired:
-    /// buggy in several ways, and the NAudio spatializer sounds better; the game's own Wwise engine is
-    /// still configured via WwiseRuntimeConfig, but the mod plays nothing through it).
+    /// Entry point to the audio backend. Two engines behind one <see cref="IAudioEngine"/> surface,
+    /// picked by the <c>audio.backend</c> setting: <c>naudio</c> (the managed mixer on a WaveOut
+    /// buffer — works everywhere, 50 ms cushion against Mono GC pauses) and <c>loadstar</c> (the
+    /// user's native Rust mixer, WASAPI IAudioClient3 at the driver's minimum period on its own
+    /// MMCSS thread). Loadstar falls back to NAudio when its dll or a device is missing. Switching
+    /// live disposes the old engine and bumps <see cref="Generation"/>, which owners of long-lived
+    /// voices (the wall-tone system) watch to recreate theirs on the new engine.
     /// (Named <c>AudioEngines</c> rather than <c>Audio</c> to avoid colliding with the namespace.)
     /// </summary>
     internal static class AudioEngines
     {
-        private static NAudioEngine _naudio;
+        private static IAudioEngine _current;
 
-        public static NAudioEngine NAudio
+        /// <summary>Bumped on every backend switch / shutdown: voices created on an older generation
+        /// belong to a disposed engine and must be recreated.</summary>
+        public static int Generation { get; private set; }
+
+        public static string BackendId =>
+            ModSettings.GetSetting<ChoiceSetting>("audio.backend")?.Current?.Id ?? "naudio";
+
+        public static IAudioEngine Current
         {
-            get { if (_naudio == null) _naudio = new NAudioEngine(); return _naudio; }
+            get { if (_current == null) _current = Create(); return _current; }
         }
 
-        /// <summary>Per-frame: keeps the output bound to a live device (headset unplug / re-plug).
-        /// Only ticks an engine that already exists — never starts one.</summary>
-        public static void Tick() => _naudio?.Tick();
+        /// <summary>The NAudio engine when it is the active backend, else null (its WaveOut-specific
+        /// knobs — the latency slider — only apply there).</summary>
+        public static NAudioEngine NAudio => _current as NAudioEngine;
+
+        private static IAudioEngine Create()
+        {
+            if (BackendId == "loadstar")
+            {
+                var e = LoadstarEngine.TryOpen();
+                if (e != null) return e;
+                Main.Log?.Warning("[audio] Loadstar backend unavailable — using NAudio");
+            }
+            return new NAudioEngine();
+        }
+
+        /// <summary>The backend setting changed: drop the current engine; the next use opens the new
+        /// one. Existing wall-tone voices die with the old engine (their owner recreates them).</summary>
+        public static void Reselect()
+        {
+            var old = _current;
+            _current = null;
+            Generation++;
+            try { old?.Dispose(); } catch { }
+        }
+
+        /// <summary>Per-frame: device watchdogs / finished polls. Only ticks an engine that already
+        /// exists — never starts one.</summary>
+        public static void Tick() => _current?.Tick();
 
         /// <summary>Close the output device and drop the engine (module hot-reload teardown) — a
-        /// leaked WaveOutEvent would keep mixing the OLD generation's voices over the new one's.</summary>
+        /// leaked output would keep mixing the OLD generation's voices over the new one's.</summary>
         public static void ShutdownAll()
         {
-            _naudio?.Dispose();
-            _naudio = null;
+            var old = _current;
+            _current = null;
+            Generation++;
+            try { old?.Dispose(); } catch { }
         }
     }
 }

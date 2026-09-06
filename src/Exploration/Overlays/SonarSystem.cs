@@ -115,7 +115,7 @@ namespace WrathAccess.Exploration.Overlays
             float dx = np.x - from.x, dz = np.z - from.z;
             float dist = Mathf.Sqrt(dx * dx + dz * dz);
             ListenerFrame.ToEar(ref dx, ref dz); // pan in the facing's frame
-            AudioEngines.NAudio.PlaySpatial(Path.Combine(OverlayAudio.Dir, stem + ".wav"),
+            AudioEngines.Current.PlaySpatial(Path.Combine(OverlayAudio.Dir, stem + ".wav"),
                 VolumeFor(dist), dx, dz, PanWidthM);
         }
 

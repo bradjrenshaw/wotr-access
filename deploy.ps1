@@ -127,7 +127,7 @@ Enable-Mod $localLow
 
 Write-Host "Copying prism.dll next to Wrath.exe..."
 $prismOk = $true
-try { Copy-Item (Join-Path $root 'vendor\prism.dll') $game -Force }
+try { Copy-Item (Join-Path $root 'vendor\prism.dll') $game -Force; Copy-Item (Join-Path $root 'vendor\loadstar.dll') $game -Force }
 catch {
     $prismOk = $false
     Write-Host "WARNING: could not copy prism.dll into '$game'." -ForegroundColor Yellow

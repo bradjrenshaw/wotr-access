@@ -14,7 +14,7 @@ namespace WrathAccess.Audio
     /// migrate) is an input on that single mixer, replacing the scattered per-consumer SfxPlayer /
     /// WallToneEngine instances that each opened their own device + feeder thread + buffer.
     /// </summary>
-    internal sealed class NAudioEngine : IDisposable
+    internal sealed class NAudioEngine : IDisposable, IAudioEngine
     {
         public const int Rate = 44100; // mixer format; the wall-tone WAVs are authored at this rate
 
@@ -367,6 +367,8 @@ namespace WrathAccess.Audio
 
             public WaveFormat WaveFormat { get; }
             public bool Finished => _finished;
+
+            public void SetOffset(float dxEast, float dzNorth, float panWidth, float volume) { } // cue-driven here
 
             public void SetPlacement(SpatialCue cue, float volume)
             {

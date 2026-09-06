@@ -43,7 +43,7 @@ namespace WrathAccess.Audio
                 float dx = s.x - c.x, dz = s.z - c.z;
                 float dist = Mathf.Sqrt(dx * dx + dz * dz);
                 WrathAccess.Exploration.ListenerFrame.ToEar(ref dx, ref dz); // pans sit around the HEAD, not the map
-                var voice = AudioEngines.NAudio.PlaySpatial(file, gain(dist), dx, dz, panWidth);
+                var voice = AudioEngines.Current.PlaySpatial(file, gain(dist), dx, dz, panWidth);
                 if (voice == null) return;
                 _live.Add(new Src { Voice = voice, Listener = listener, SourceAt = sourceAt, Gain = gain, PanWidth = panWidth });
             }
@@ -64,7 +64,9 @@ namespace WrathAccess.Audio
                     float dx = s.x - c.x, dz = s.z - c.z;
                     float dist = Mathf.Sqrt(dx * dx + dz * dz);
                     WrathAccess.Exploration.ListenerFrame.ToEar(ref dx, ref dz); // live-track the facing too
-                    src.Voice.SetPlacement(Spatializer.Cue(dx, dz, src.PanWidth), src.Gain(dist));
+                    float g = src.Gain(dist);
+                    src.Voice.SetOffset(dx, dz, src.PanWidth, g);            // backends with their own head model
+                    src.Voice.SetPlacement(Spatializer.Cue(dx, dz, src.PanWidth), g); // the NAudio cue path
                 }
                 catch { _live.RemoveAt(i); } // a stale/destroyed source — let the voice drain on its own
             }

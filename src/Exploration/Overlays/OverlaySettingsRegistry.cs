@@ -182,10 +182,24 @@ namespace WrathAccess.Exploration.Overlays
             // shared output). Smaller = snappier response, bigger = rides through CPU/GC pauses
             // without dropouts. Applies LIVE (the engine swaps the output device, voices carry over).
             if (audio.GetByKey("latency") == null)
+            // Output backend: the managed NAudio mixer (compatible) or the user's native Loadstar
+            // mixer (WASAPI low latency, GC-immune). Live switch: the old engine is dropped, the
+            // next sound opens the new one; wall tones recreate on the new generation.
+            if (audio.GetByKey("backend") == null)
+            {
+                var backend = new ChoiceSetting("backend", "Audio backend",
+                    new System.Collections.Generic.List<Choice>
+                    {
+                        new Choice("naudio", "NAudio WaveOut (compatible)", "audio.backend.naudio"),
+                        new Choice("loadstar", "Loadstar WASAPI (low latency)", "audio.backend.loadstar"),
+                    }, "naudio", "audio.backend");
+                backend.Changed += _ => WrathAccess.Audio.AudioEngines.Reselect();
+                audio.Add(backend);
+            }
             {
                 var lat = new WrathAccess.Settings.IntSetting("latency", "Audio latency (milliseconds)",
                     50, 50, 150, 5, "audio.latency");
-                lat.Changed += ms => WrathAccess.Audio.AudioEngines.NAudio.SetLatency(ms);
+                lat.Changed += ms => WrathAccess.Audio.AudioEngines.NAudio?.SetLatency(ms); // WaveOut-only knob
                 audio.Add(lat);
             }
             // (The audio.engine classic/wwise choice is GONE — the Wwise path was retired; NAudio is

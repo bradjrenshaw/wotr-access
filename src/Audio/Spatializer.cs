@@ -19,6 +19,10 @@ namespace WrathAccess.Audio
     {
         bool Finished { get; }                       // drained — safe to drop from tracking
         void SetPlacement(SpatialCue cue, float volume);
+        /// <summary>The raw listener-relative, facing-rotated offset (metres) — for backends whose
+        /// own head model does the spatialising (Loadstar); the NAudio voice ignores it and uses
+        /// the pre-computed <see cref="SpatialCue"/> instead.</summary>
+        void SetOffset(float dxEast, float dzNorth, float panWidth, float volume);
     }
 
     /// <summary>

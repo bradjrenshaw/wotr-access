@@ -64,7 +64,7 @@ namespace WrathAccess.Exploration.Overlays
             if (!_baselined) { _inside = inside; _spoken = inside; _baselined = true; return; }
             if (inside != _inside)
             {
-                AudioEngines.NAudio.Play2D(Path.Combine(OverlayAudio.Dir, inside != null ? "object_enter.wav" : "object_exit.wav"), EffectiveVolume);
+                AudioEngines.Current.Play2D(Path.Combine(OverlayAudio.Dir, inside != null ? "object_enter.wav" : "object_exit.wav"), EffectiveVolume);
                 _inside = inside;
             }
 

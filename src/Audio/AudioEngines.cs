@@ -4,10 +4,10 @@ namespace WrathAccess.Audio
 {
     /// <summary>
     /// Entry point to the audio backend. Two engines behind one <see cref="IAudioEngine"/> surface,
-    /// picked by the <c>audio.backend</c> setting: <c>naudio</c> (the managed mixer on a WaveOut
-    /// buffer — works everywhere, 50 ms cushion against Mono GC pauses) and <c>loadstar</c> (the
-    /// user's native Rust mixer, WASAPI IAudioClient3 at the driver's minimum period on its own
-    /// MMCSS thread). Loadstar falls back to NAudio when its dll or a device is missing. Switching
+    /// picked by the <c>audio.mixer</c> setting: <c>loadstar</c> (the DEFAULT: the user's native
+    /// Rust mixer — miniaudio device layer, ~2.7 ms periods on its own MMCSS thread, GC-immune)
+    /// and <c>naudio</c> (the managed mixer on a WaveOut buffer — works everywhere, 50 ms cushion
+    /// against Mono GC pauses). Loadstar falls back to NAudio when its dll or a device is missing. Switching
     /// live disposes the old engine and bumps <see cref="Generation"/>, which owners of long-lived
     /// voices (the wall-tone system) watch to recreate theirs on the new engine.
     /// (Named <c>AudioEngines</c> rather than <c>Audio</c> to avoid colliding with the namespace.)
@@ -21,7 +21,7 @@ namespace WrathAccess.Audio
         public static int Generation { get; private set; }
 
         public static string BackendId =>
-            ModSettings.GetSetting<ChoiceSetting>("audio.backend")?.Current?.Id ?? "naudio";
+            ModSettings.GetSetting<ChoiceSetting>("audio.mixer")?.Current?.Id ?? "loadstar";
 
         public static IAudioEngine Current
         {

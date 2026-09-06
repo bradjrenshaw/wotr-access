@@ -182,17 +182,20 @@ namespace WrathAccess.Exploration.Overlays
             // shared output). Smaller = snappier response, bigger = rides through CPU/GC pauses
             // without dropouts. Applies LIVE (the engine swaps the output device, voices carry over).
             if (audio.GetByKey("latency") == null)
-            // Output backend: the managed NAudio mixer (compatible) or the user's native Loadstar
-            // mixer (WASAPI low latency, GC-immune). Live switch: the old engine is dropped, the
-            // next sound opens the new one; wall tones recreate on the new generation.
-            if (audio.GetByKey("backend") == null)
+            // Output backend: the user's native Loadstar mixer (low latency, GC-immune — the DEFAULT
+            // since 2026-09-06, by ear) or the managed NAudio mixer kept as the compatible fallback.
+            // Live switch: the old engine is dropped, the next sound opens the new one; wall tones
+            // recreate on the new generation. Key "mixer" (not the day-old "backend"): every
+            // persisted file stores all values, so a renamed key is how existing installs pick up
+            // the new default instead of a stored "naudio"; the orphan is ignored.
+            if (audio.GetByKey("mixer") == null)
             {
-                var backend = new ChoiceSetting("backend", "Audio backend",
+                var backend = new ChoiceSetting("mixer", "Audio backend",
                     new System.Collections.Generic.List<Choice>
                     {
-                        new Choice("naudio", "NAudio WaveOut (compatible)", "audio.backend.naudio"),
-                        new Choice("loadstar", "Loadstar WASAPI (low latency)", "audio.backend.loadstar"),
-                    }, "naudio", "audio.backend");
+                        new Choice("loadstar", "Loadstar (low latency)", "audio.mixer.loadstar"),
+                        new Choice("naudio", "NAudio WaveOut (compatible)", "audio.mixer.naudio"),
+                    }, "loadstar", "audio.mixer");
                 backend.Changed += _ => WrathAccess.Audio.AudioEngines.Reselect();
                 audio.Add(backend);
             }

@@ -15,7 +15,7 @@ namespace WrathAccess.Audio
     /// <summary>The mod's audio output backend — the consumer surface every cue/speech/wall-tone
     /// caller uses. Two implementations: <see cref="NAudioEngine"/> (managed mixer on a WaveOut
     /// buffer; compatible everywhere) and <see cref="LoadstarEngine"/> (the native low-latency
-    /// mixer). Picked by the <c>audio.backend</c> setting via <see cref="AudioEngines.Current"/>.</summary>
+    /// mixer). Picked by the <c>audio.mixer</c> setting via <see cref="AudioEngines.Current"/>.</summary>
     internal interface IAudioEngine : IDisposable
     {
         IWallTones CreateWallTones(string toneSet);

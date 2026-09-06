@@ -145,6 +145,7 @@ $checks = @(
     @{ Name = 'Manifest + settings';  Ok = ((Test-Path (Join-Path $modDir 'OwlcatModificationManifest.json')) -and (Test-Path (Join-Path $modDir 'OwlcatModificationSettings.json'))) },
     @{ Name = 'Assets';               Ok = (Test-Path (Join-Path $modDir 'assets\locale\enGB\ui.json')) },
     @{ Name = 'prism.dll by Wrath.exe'; Ok = ($prismOk -and (Test-Path (Join-Path $game 'prism.dll'))) },
+    @{ Name = 'loadstar.dll by Wrath.exe'; Ok = ($prismOk -and (Test-Path (Join-Path $game 'loadstar.dll'))) },
     @{ Name = 'Enabled in mod manager'; Ok = ((Get-Content (Join-Path $localLow 'OwlcatModificationManagerSettings.json') -Raw) -match '"?WrathAccess"?') }
 )
 $allOk = $true

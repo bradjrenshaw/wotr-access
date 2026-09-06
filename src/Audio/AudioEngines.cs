@@ -15,6 +15,10 @@ namespace WrathAccess.Audio
             get { if (_naudio == null) _naudio = new NAudioEngine(); return _naudio; }
         }
 
+        /// <summary>Per-frame: keeps the output bound to a live device (headset unplug / re-plug).
+        /// Only ticks an engine that already exists — never starts one.</summary>
+        public static void Tick() => _naudio?.Tick();
+
         /// <summary>Close the output device and drop the engine (module hot-reload teardown) — a
         /// leaked WaveOutEvent would keep mixing the OLD generation's voices over the new one's.</summary>
         public static void ShutdownAll()

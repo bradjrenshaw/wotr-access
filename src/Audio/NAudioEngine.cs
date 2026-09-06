@@ -37,9 +37,7 @@ namespace WrathAccess.Audio
             if (_out != null) return;
             _mixer = new MixingSampleProvider(WaveFormat.CreateIeeeFloatWaveFormat(Rate, 2)) { ReadFully = true };
             _latencyMs = SettingLatencyMs;
-            _out = new WaveOutEvent { DesiredLatency = _latencyMs, NumberOfBuffers = 4 };
-            _out.Init(_mixer);
-            _out.Play();
+            Open();
         }
 
         /// <summary>Live latency change (the settings slider): swap the output device only — the
@@ -48,10 +46,101 @@ namespace WrathAccess.Audio
         {
             if (_out == null || _mixer == null || ms == _latencyMs) return; // not started yet → EnsureStarted reads the setting
             _latencyMs = ms;
-            try { _out.Stop(); _out.Dispose(); } catch { }
-            _out = new WaveOutEvent { DesiredLatency = ms, NumberOfBuffers = 4 };
-            _out.Init(_mixer);
-            _out.Play();
+            Reopen("latency " + ms + " ms");
+        }
+
+        // ---- output device lifetime: survive the headset being unplugged / re-plugged ----
+        //
+        // A waveOut handle (WAVE_MAPPER included) is bound to the endpoint that was the default when
+        // it was opened. Pull that endpoint and the handle dies: NAudio's playback thread hits the
+        // error, raises PlaybackStopped with the exception, and nothing ever restarts it — the mod's
+        // sonar/wall tones/speech go silent for good while the game's Wwise audio (which handles
+        // device changes itself) carries on (tester repro: headset out and back in). Two watchers:
+        // the PlaybackStopped event (device died mid-play) and a 2 s poll of the waveOut device
+        // table (a re-plugged headset comes back as a NEW default endpoint even when the old handle
+        // limps on through the speakers). Either → reopen the output on the CURRENT default device,
+        // keeping the mixer and every attached voice. Opens that fail (no device at all) retry on
+        // the next poll. A dead handle reopens on the next FRAME (the flag short-circuits the
+        // cadence); the table poll is a few waveOut queries hashed without allocating, so it can
+        // run every half second.
+        private volatile bool _needReopen;
+        private float _nextPoll;
+        private int _deviceSig;
+        private const float PollSec = 0.5f;
+
+        private void Open()
+        {
+            var o = new WaveOutEvent { DesiredLatency = _latencyMs, NumberOfBuffers = 4, DeviceNumber = -1 };
+            o.PlaybackStopped += OnPlaybackStopped;
+            o.Init(_mixer);
+            o.Play();
+            _out = o;
+            _deviceSig = DeviceSignature();
+        }
+
+        private void OnPlaybackStopped(object sender, StoppedEventArgs e)
+        {
+            // Unexpected stop (we never Stop() a live output except to swap it): mark for reopen.
+            // May arrive on the playback thread — flag only, the swap runs on the game thread.
+            if (!ReferenceEquals(sender, _out)) return; // an output we already replaced
+            _needReopen = true;
+            if (e?.Exception != null) Main.Log?.Log("[audio] output stopped: " + e.Exception.Message);
+        }
+
+        private void Reopen(string why)
+        {
+            var old = _out;
+            _out = null;
+            if (old != null)
+            {
+                old.PlaybackStopped -= OnPlaybackStopped;
+                try { old.Stop(); } catch { }
+                try { old.Dispose(); } catch { }
+            }
+            try
+            {
+                Open();
+                Main.Log?.Log("[audio] output reopened (" + why + ")");
+            }
+            catch (System.Exception ex)
+            {
+                // No usable device right now (everything unplugged): stay closed, the poll retries.
+                _out = null;
+                _needReopen = true;
+                Main.Log?.Log("[audio] output reopen failed (" + why + "): " + ex.Message);
+            }
+        }
+
+        /// <summary>Per-frame from the module tick (cheap: the device poll runs every 2 s).</summary>
+        public void Tick()
+        {
+            if (_mixer == null) return; // never started — nothing to keep alive
+            float now = UnityEngine.Time.unscaledTime;
+            if (now < _nextPoll && !_needReopen) return;
+            _nextPoll = now + PollSec;
+            if (_needReopen) { _needReopen = false; Reopen("device lost"); return; }
+            var sig = DeviceSignature();
+            if (sig != _deviceSig) Reopen("audio devices changed");
+        }
+
+        /// <summary>The waveOut device table as one hash — count + each device's name, so an
+        /// unplug, a re-plug or a reorder all read as a change.</summary>
+        private static int DeviceSignature()
+        {
+            try
+            {
+                int n = WaveOut.DeviceCount;
+                int h = n;
+                for (int i = 0; i < n; i++)
+                {
+                    int nh;
+                    try { nh = (WaveOut.GetCapabilities(i).ProductName ?? "").GetHashCode(); }
+                    catch { nh = -1; }
+                    h = unchecked(h * 31 + nh);
+                }
+                return h;
+            }
+            catch { return 0; }
         }
 
         internal void Add(ISampleProvider p) { EnsureStarted(); _mixer.AddMixerInput(p); }
@@ -66,8 +155,11 @@ namespace WrathAccess.Audio
 
         public void Dispose()
         {
-            try { _out?.Stop(); _out?.Dispose(); } catch { }
-            _out = null; _mixer = null;
+            var o = _out;
+            _out = null; // detach first so the Stop()'s PlaybackStopped doesn't flag a reopen
+            if (o != null) o.PlaybackStopped -= OnPlaybackStopped;
+            try { o?.Stop(); o?.Dispose(); } catch { }
+            _mixer = null;
         }
 
         // One-shots: decode the file once (cached), then add a self-removing OneShot voice to the shared mixer.

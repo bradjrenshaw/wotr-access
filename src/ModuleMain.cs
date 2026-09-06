@@ -157,6 +157,7 @@ namespace WrathAccess
                 FocusMode.Set(true); // silent: the first screen announcement signals we're live
             }
             WrathAccess.Localization.LocalizationManager.Tick(); // pick up a live game-language swap
+            WrathAccess.Audio.AudioEngines.Tick(); // keep the mod's output on a live device (headset re-plug)
             FocusMode.Tick(); // re-acquire the hotkey-suppression scope if the game rebuilt its keyboard
             WrathAccess.Audio.WwiseRuntimeConfig.Tick(); // apply panning rule + background-audio options (game audio)
             InputManager.Tick();

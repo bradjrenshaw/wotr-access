@@ -162,6 +162,7 @@ namespace WrathAccess.Screens
             Register(new MessageModalScreen()); // generic confirm/message modal, layer 30
             Register(new CounterWindowScreen()); // stack-amount picker (Split/Drop/Move + vendor quantities), layer 31
             Register(new RetrainScreen()); // respec NPC's character picker (RetrainContextVM), layer 17
+            Register(new RespecWindowScreen()); // the retraining progress window (RespecWindowVM), layer 18
             Register(new InfoWindowScreen()); // game Info window (item Details / glossary info), layer 30
             Register(new InspectScreen()); // game unit Inspect window (bestiary readout), layer 30
             Register(new LockpickScreen()); // lock/disable-device tool-choice window (skill/+5/+10/destroy), layer 30

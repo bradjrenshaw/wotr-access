@@ -908,6 +908,15 @@ namespace WrathAccess
             InputManager.Register("review.prevUnexplored", "Review previous unexplored space", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Unexplored, -1))
                 .AddBinding(KeyCode.L, shift: true).Repeating().Grouped("review");
+            // Alt+1..6: review party member N — the review cursor jumps to them as if cycled to;
+            // repeats walk their pets/mounts (the Ctrl+N ring, minus the commandable gate).
+            for (int i = 0; i < 6; i++)
+            {
+                int idx = i;
+                InputManager.Register("review.target" + (i + 1), "Review party member " + (i + 1), InputCategory.Exploration,
+                    () => WrathAccess.Exploration.Scanner.ReviewPartyMember(idx))
+                    .AddBinding(KeyCode.Alpha1 + i, alt: true).Grouped("review");
+            }
             // J / Shift+J: STRATEGIC hints — enemy spawn points and enemy objectives (StrategicModel; an
             // Enhancements toggle). In-area only: the maps have no strategic layer.
             InputManager.Register("review.nextStrategic", "Review next strategic point", InputCategory.Exploration,

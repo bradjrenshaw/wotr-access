@@ -189,8 +189,10 @@ namespace WrathAccess.Exploration
 
         // A member's selection ring: the member, then each owned, in-game, controllable unit they own
         // (pets/mounts via member.Pets — a pet is its own unit linked back by Master). Empty if there's
-        // no such party slot.
-        private static List<UnitEntityData> BuildRing(int index)
+        // no such party slot. <paramref name="controllableOnly"/> = the SELECTION ring (Ctrl+N: only
+        // units the player can command); false = the REVIEW ring (Alt+N: whatever of theirs is in the
+        // area — a roaming capital-mode companion is still worth looking at).
+        internal static List<UnitEntityData> BuildRing(int index, bool controllableOnly = true)
         {
             var ring = new List<UnitEntityData>();
             var party = Game.Instance?.Player?.PartyCharacters;
@@ -205,7 +207,7 @@ namespace WrathAccess.Exploration
                 foreach (var pet in pets)
                 {
                     var e = pet.Entity;
-                    if (e != null && e != member && e.IsInGame && e.IsDirectlyControllable
+                    if (e != null && e != member && e.IsInGame && (!controllableOnly || e.IsDirectlyControllable)
                         && e.View != null && !ring.Contains(e))
                         ring.Add(e);
                 }

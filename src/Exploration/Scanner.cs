@@ -148,6 +148,43 @@ namespace WrathAccess.Exploration
             DoCycleReview(group, dir);
         }
 
+        /// <summary>Alt+1..6: jump the review cursor straight to party member N, as if the cycle had
+        /// landed there (selection sync, landing ping, the same spoken line). Repeating the same key
+        /// walks the member's ring — the member, then their pets / mounts in the area, wrapping —
+        /// mirroring Ctrl+N's selection ring.</summary>
+        public static void ReviewPartyMember(int index)
+        {
+            if (!Active) return;
+            var ring = PartySelection.BuildRing(index, controllableOnly: false);
+            if (ring.Count == 0)
+            {
+                Speak(Loc.T("party.no_member", new { index = index + 1 }));
+                return;
+            }
+            // Position from the CURRENT review target: one of this ring → advance (wrapping); anything
+            // else → start at the member.
+            var currentUnit = Selected?.TargetUnit;
+            int pos = currentUnit != null ? ring.IndexOf(currentUnit) : -1;
+            var unit = ring[pos >= 0 ? (pos + 1) % ring.Count : 0];
+
+            _selectionOverride = null;
+            Rebuild();
+            ScanItem target = null;
+            foreach (var it in WorldModel.Items)
+                if (it.TargetUnit == unit) { target = it; break; }
+            if (target == null)
+            {
+                Speak(Loc.T("party.no_member", new { index = index + 1 }));
+                return;
+            }
+            var refPos = ScanFrom;
+            SyncSelectionTo(target);
+            PlayReviewPing(target);
+            string line = target.Describe(refPos);
+            if (ring.Count > 1) line += ", " + Loc.T("nav.position", new { index = ring.IndexOf(unit) + 1, count = ring.Count });
+            Speak(line);
+        }
+
         /// <summary>Ping the review target (Semicolon): probe sight + route from the movement cursor
         /// to the reviewed thing and play the matching cue — blocked sight, sighted-but-unreachable,
         /// route-around, or straight line (PathProbe). Sound-only; the cycles' spoken line already

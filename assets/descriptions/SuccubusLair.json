@@ -1,0 +1,52 @@
+{
+  "rooms": [
+    {
+      "x": 55.68,
+      "y": 40.12,
+      "z": 25.87,
+      "key": "tirabade_entry_lane"
+    },
+    {
+      "x": 21.68,
+      "y": 40.0,
+      "z": 41.12,
+      "key": "tirabade_sunken_square"
+    },
+    {
+      "x": 45.93,
+      "y": 40.0,
+      "z": 49.62,
+      "key": "tirabade_crossroads"
+    },
+    {
+      "x": 61.18,
+      "y": 40.0,
+      "z": 58.12,
+      "key": "tirabade_east_lane"
+    },
+    {
+      "x": 29.93,
+      "y": 40.0,
+      "z": 59.12,
+      "key": "tirabade_residence_yard"
+    },
+    {
+      "x": 151.93,
+      "y": 46.03,
+      "z": -8.35,
+      "key": "tirabade_front_room"
+    },
+    {
+      "x": 154.18,
+      "y": 46.14,
+      "z": 2.15,
+      "key": "tirabade_back_room"
+    },
+    {
+      "x": 149.43,
+      "y": 46.14,
+      "z": 2.4,
+      "key": "tirabade_kitchen"
+    }
+  ]
+}

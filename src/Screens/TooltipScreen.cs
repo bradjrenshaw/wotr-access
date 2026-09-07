@@ -20,18 +20,23 @@ namespace WrathAccess.Screens
     public sealed class TooltipScreen : Screen
     {
         private readonly TooltipBaseTemplate _doc;                  // doc page (null ⇒ menu page)
+        private readonly TooltipTemplateType _docType = TooltipTemplateType.Info; // how the doc is prepared
         private readonly string _title;                             // menu page
         private readonly List<string> _labels;
         private readonly List<Func<TooltipBaseTemplate>> _opens;
 
-        private TooltipScreen(TooltipBaseTemplate doc) { _doc = doc; }
+        private TooltipScreen(TooltipBaseTemplate doc, TooltipTemplateType type = TooltipTemplateType.Info)
+        { _doc = doc; _docType = type; }
         private TooltipScreen(string title, List<string> labels, List<Func<TooltipBaseTemplate>> opens)
         { _title = title; _labels = labels; _opens = opens; }
 
-        /// <summary>Open a tooltip document page (pushed as a child of the current screen / page).</summary>
-        public static void Open(TooltipBaseTemplate template)
+        /// <summary>Open a tooltip document page (pushed as a child of the current screen / page).
+        /// <paramref name="type"/> = how the template is prepared: Info (the default, the full document)
+        /// or Tooltip for a plain hover-style read — an item template prepared as Info runs the item's
+        /// open-description hooks, which a comparison read must not.</summary>
+        public static void Open(TooltipBaseTemplate template, TooltipTemplateType type = TooltipTemplateType.Info)
         {
-            if (template != null) ScreenManager.Current?.PushChild(new TooltipScreen(template));
+            if (template != null) ScreenManager.Current?.PushChild(new TooltipScreen(template, type));
         }
 
         /// <summary>Open a chooser page: the element's own tooltip plus its inline links (parallel
@@ -80,7 +85,7 @@ namespace WrathAccess.Screens
             string k = "tt:" + GetHashCode() + ":"; // per page instance (each drill level is its own screen)
             if (_doc != null)
             {
-                TooltipFlowBuilder.Emit(b, k, _doc);
+                TooltipFlowBuilder.Emit(b, k, _doc, _docType);
                 return;
             }
 

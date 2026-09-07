@@ -492,6 +492,7 @@
   "vendor.move_all.sell": "Sell all",
   "vendor.move_all.return": "Return all",
   "item.magic": "magic",
+  "item.compared_equipped": "Equipped: {name}",
   "item.notable": "notable",
   "menu.information": "Information",
   "screen.group_manager": "Group manager",

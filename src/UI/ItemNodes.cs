@@ -32,6 +32,12 @@ namespace WrathAccess.UI
         {
             var t = slot.Tooltip.Value;
             if (t == null || t.Count == 0) return;
+            // The list's leading entries are the COMPARISON templates — the selected character's
+            // equipped item(s) in the slot(s) this item fits (ItemSlotVM.GetTooltips: comparative
+            // TooltipTemplateItems, the ones the sighted hover shows alongside). The Info window
+            // screen offers them as "Compare with equipped" drill-ins.
+            var comparisons = t.Count > 1 ? t.GetRange(0, t.Count - 1) : null;
+            Screens.InfoWindowScreen.OfferComparisons(comparisons);
             slot.ShowInfo();
         }
 

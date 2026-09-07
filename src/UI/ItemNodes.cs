@@ -21,13 +21,18 @@ namespace WrathAccess.UI
     {
         private static UIContextMenu Menu => UIStrings.Instance.ContextMenu;
 
-        // The slot's item template: comparisons (the EQUIPPED items) come first, the item's own is LAST —
-        // the same end the game's ShowInfo reads. Resolved live per press.
-        private static void OpenItemTooltip(ItemSlotVM slot)
+        /// <summary>Space on an item = the game's own Information action (<c>ItemSlotVM.ShowInfo</c> →
+        /// the Info window, read by <see cref="Screens.InfoWindowScreen"/>), NOT a bare tooltip over
+        /// the same template: opening an item's info is a game event — <c>AddItemShowInfoCallback</c>
+        /// items run actions the first time their description is opened (the Estrod museum scroll
+        /// damages the party), and the sighted path is the only one that fires them. Same content
+        /// either way (the item's own template is the LAST in the slot's list; the game reads that
+        /// end too). Resolved live per press; an item with no template does nothing.</summary>
+        internal static void OpenItemInfo(ItemSlotVM slot)
         {
             var t = slot.Tooltip.Value;
-            var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
-            if (tpl != null) Screens.TooltipScreen.Open(tpl);
+            if (t == null || t.Count == 0) return;
+            slot.ShowInfo();
         }
 
         /// <summary>One stash item: name with its visible badges folded in (magic / notable / unusable /
@@ -66,7 +71,7 @@ namespace WrathAccess.UI
                     else OpenStashMenu(slot, label(), offHand);
                 },
                 OnSecondary = () => OpenStashMenu(slot, label(), offHand),
-                OnTooltip = () => OpenItemTooltip(slot),
+                OnTooltip = () => OpenItemInfo(slot),
                 OnDrag = () => ItemDrag.OnStashItem(slot),
             };
         }
@@ -141,7 +146,7 @@ namespace WrathAccess.UI
                 SearchText = label,
                 OnActivate = () => { if (hasItem() && slot.TryUnequip()) Refresh(); },
                 OnSecondary = () => { if (hasItem()) OpenEquipMenu(slot, label()); },
-                OnTooltip = () => { if (hasItem()) OpenItemTooltip(slot); },
+                OnTooltip = () => { if (hasItem()) OpenItemInfo(slot); },
                 OnDrag = () => ItemDrag.OnEquipSlot(slot, slotName),
             };
         }

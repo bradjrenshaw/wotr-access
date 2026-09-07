@@ -444,12 +444,7 @@ namespace WrathAccess.UI
                     if (needsSkinning()) { Tts.Speak(Loc.T("loot.needs_skinning"), interrupt: true); return; }
                     loot.HandleTryCollectLootSlot(slot); // plays its own LootCollectOne/LootCollectGold
                 },
-                OnTooltip = () =>
-                {
-                    var t = slot.Tooltip.Value;
-                    var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
-                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
-                },
+                OnTooltip = () => ItemNodes.OpenItemInfo(slot), // the game's Information action (fires show-info callbacks)
             };
         }
 
@@ -472,12 +467,7 @@ namespace WrathAccess.UI
                 Announcements = new[] { LabelPart(label) },
                 SearchText = label,
                 OnActivate = () => loot.HandleTryTransferInventorySlot(slot),
-                OnTooltip = () =>
-                {
-                    var t = slot.Tooltip.Value;
-                    var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
-                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
-                },
+                OnTooltip = () => ItemNodes.OpenItemInfo(slot), // the game's Information action (fires show-info callbacks)
             };
         }
 
@@ -607,12 +597,7 @@ namespace WrathAccess.UI
                         else if (idx == 1) slot.ShowInfo();
                     });
                 },
-                OnTooltip = () =>
-                {
-                    var t = slot.Tooltip.Value; // live per press; own template LAST (comparisons first)
-                    var tpl = t != null && t.Count > 0 ? t[t.Count - 1] : null;
-                    if (tpl != null) Screens.TooltipScreen.Open(tpl);
-                },
+                OnTooltip = () => ItemNodes.OpenItemInfo(slot), // the game's Information action (fires show-info callbacks)
             };
         }
 

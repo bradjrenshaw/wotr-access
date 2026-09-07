@@ -15,7 +15,7 @@ namespace WrathAccess.Exploration
     /// unexplored frontier.</summary>
     // POI review moved to the MAP screen (LocalMapReview): markers are annotations, not world objects —
     // reviewing them in-area invited interaction attempts that could never work.
-    internal enum ReviewGroup { Party, Enemies, Neutrals, Bystanders, Others, Unexplored }
+    internal enum ReviewGroup { Party, Enemies, Neutrals, Bystanders, Others, Unexplored, Strategic }
 
     /// <summary>
     /// The scanner: a categorized, distance-sorted list of things in the current area, browsed with
@@ -311,7 +311,8 @@ namespace WrathAccess.Exploration
                     && _byNode.TryGetValue(cat.Key, out var cl) && !cl.Contains(item)) cl.Add(item);
                 // "Everything" aggregates the real things — not scenery-only props, not the curated POI
                 // markers (which duplicate entities). Added once however many nodes the item has.
-                if (cat != null && cat.Key != "scenery" && cat.Key != "poi") inEverything = true;
+                // Strategic hints stay out too — they're inferences about the scene, not things in it.
+                if (cat != null && cat.Key != "scenery" && cat.Key != "poi" && cat.Key != ScanTaxonomy.Strategic) inEverything = true;
             }
             if (inEverything && !_everything.Contains(item)) _everything.Add(item);
         }
@@ -415,15 +416,19 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Neutrals: return p == ScanTaxonomy.UnitsNeutrals;
                 case ReviewGroup.Bystanders: return p == ScanTaxonomy.UnitsBystanders;
                 case ReviewGroup.Unexplored: return p == ScanTaxonomy.Unexplored;
+                case ReviewGroup.Strategic: return IsStrategic(p);
                 default: return p != ScanTaxonomy.UnitsParty && p != ScanTaxonomy.UnitsEnemies
                     && p != ScanTaxonomy.UnitsNeutrals && p != ScanTaxonomy.UnitsBystanders
-                    && p != ScanTaxonomy.Scenery && !IsPoi(p) && p != ScanTaxonomy.Unexplored;
+                    && p != ScanTaxonomy.Scenery && !IsPoi(p) && p != ScanTaxonomy.Unexplored && !IsStrategic(p);
             }
         }
 
         // POI markers carry SUBCATEGORY primaries since the taxonomy split (poi.quest / poi.units / …)
         // — a bare == Poi check let every marker leak into the Others cycle (M read "Terendelev" off
         // her People marker) and left the B cycle matching only the curated AreaDetails points.
+        private static bool IsStrategic(string primary)
+            => primary == ScanTaxonomy.Strategic || primary.StartsWith(ScanTaxonomy.Strategic + ".", System.StringComparison.Ordinal);
+
         private static bool IsPoi(string primary)
             => primary == ScanTaxonomy.Poi || primary.StartsWith(ScanTaxonomy.Poi + ".", System.StringComparison.Ordinal);
 
@@ -436,6 +441,7 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Neutrals: return Loc.T("taxonomy.units.neutrals");
                 case ReviewGroup.Bystanders: return Loc.T("taxonomy.units.bystanders");
                 case ReviewGroup.Unexplored: return Loc.T("taxonomy.unexplored");
+                case ReviewGroup.Strategic: return Loc.T("taxonomy.strategic");
                 default: return Loc.T("review.others");
             }
         }

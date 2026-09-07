@@ -908,6 +908,14 @@ namespace WrathAccess
             InputManager.Register("review.prevUnexplored", "Review previous unexplored space", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Unexplored, -1))
                 .AddBinding(KeyCode.L, shift: true).Repeating().Grouped("review");
+            // J / Shift+J: STRATEGIC hints — enemy spawn points and enemy objectives (StrategicModel; an
+            // Enhancements toggle). In-area only: the maps have no strategic layer.
+            InputManager.Register("review.nextStrategic", "Review next strategic point", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Strategic, 1))
+                .AddBinding(KeyCode.J).Repeating().Grouped("review");
+            InputManager.Register("review.prevStrategic", "Review previous strategic point", InputCategory.Exploration,
+                () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Strategic, -1))
+                .AddBinding(KeyCode.J, shift: true).Repeating().Grouped("review");
             InputManager.Register("review.prevOther", "Review previous object", InputCategory.Exploration,
                 Route(inArea: () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Others, -1),
                       localMap: () => WrathAccess.Exploration.LocalMapReview.Cycle(WrathAccess.Exploration.LocalMapReview.Group.Exits, -1),

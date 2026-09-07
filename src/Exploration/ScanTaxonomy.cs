@@ -53,10 +53,14 @@ namespace WrathAccess.Exploration
         public const string BuffZones = "buffzones";
         public const string Scenery = "scenery";
         public const string Poi = "poi";
+        public const string Strategic = "strategic";
+        public const string StrategicSpawns = "strategic.spawns";
+        public const string StrategicObjectives = "strategic.objectives";
 
         /// <summary>True for nodes that mark a real interactive thing (cursor targeting cares about these
         /// regardless of what sound — if any — the user assigned). POI/Scenery are not interactive.</summary>
-        public static bool IsInteractive(string key) => key != null && key != Poi && key != Scenery;
+        public static bool IsInteractive(string key)
+            => key != null && key != Poi && key != Scenery && !key.StartsWith(Strategic, System.StringComparison.Ordinal);
 
         internal sealed class Node
         {
@@ -149,6 +153,13 @@ namespace WrathAccess.Exploration
             Cat("buffzones", "Buff zones", ScanClass.Object, "buff-zone");
             // Frontier blobs — where walkable unexplored ground borders explored ground (FrontierModel).
             Cat("unexplored", "Unexplored space", ScanClass.Object, Silent);
+
+            // Strategic hints (StrategicModel, an Enhancements toggle): where enemies will appear and
+            // what their AI is after. Silent on the sonar by default — they're for the J review cycle
+            // and the category browse, not the soundscape.
+            Cat("strategic", "Strategic", ScanClass.Marker, Silent,
+                Sub("spawns", "Spawn points", Silent),
+                Sub("objectives", "Enemy objectives", Silent));
 
             Cat("scenery", "Scenery", ScanClass.Object, Silent);
             // NOTE: the poi category is GONE from the in-area taxonomy — the game's local-map markers

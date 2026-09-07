@@ -85,6 +85,7 @@ namespace WrathAccess.Exploration
                 _present.Add(entry);
             }
             FoldFrontier();
+            FoldStrategic();
 
             // Drop anything no longer in the pools (despawned, or left when the area changed).
             _gone.Clear();
@@ -138,6 +139,28 @@ namespace WrathAccess.Exploration
                 var blob = f; // capture for the factory closure
                 if (!_items.ContainsKey(blob)) Ensure(blob, () => new ProxyFrontier(blob));
                 _present.Add(blob);
+            }
+        }
+
+        // Strategic hints (spawn points / enemy objectives) — StrategicModel owns the item objects
+        // (stable identity across its rescans); they're registered under themselves as keys and
+        // simply drop out of _present when the model no longer lists them.
+        private static void FoldStrategic()
+        {
+            StrategicModel.Tick();
+            var clusters = StrategicModel.Clusters;
+            for (int i = 0; i < clusters.Count; i++)
+            {
+                var c = clusters[i];
+                if (!_items.ContainsKey(c)) Ensure(c, () => c);
+                _present.Add(c);
+            }
+            var objectives = StrategicModel.Objectives;
+            for (int i = 0; i < objectives.Count; i++)
+            {
+                var o = objectives[i];
+                if (!_items.ContainsKey(o)) Ensure(o, () => o);
+                _present.Add(o);
             }
         }
 

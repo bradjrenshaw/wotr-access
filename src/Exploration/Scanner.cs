@@ -98,6 +98,9 @@ namespace WrathAccess.Exploration
         // overlay last moved it. Falls back to the player when no cursor is set.
         private static Vector3 ScanFrom => Cursor.Has ? Cursor.Position.Value : Reference;
 
+        /// <summary>The scanner's reference point — the movement cursor when placed, else the leader.</summary>
+        public static Vector3 ReferencePoint => ScanFrom;
+
         // ---- input entry points (gated) ----
         public static void NextItem() { if (Active) StepItem(1); }
         public static void PrevItem() { if (Active) StepItem(-1); }
@@ -177,12 +180,21 @@ namespace WrathAccess.Exploration
                 Speak(Loc.T("party.no_member", new { index = index + 1 }));
                 return;
             }
+            string suffix = ring.Count > 1 ? ", " + Loc.T("nav.position", new { index = ring.IndexOf(unit) + 1, count = ring.Count }) : "";
+            ReviewItem(target, suffix);
+        }
+
+        /// <summary>Land the review cursor on a specific item as if cycled to: selection sync, landing
+        /// ping, the spoken line (+ an optional suffix). Used by Alt+N and the bookmarks screen.</summary>
+        public static void ReviewItem(ScanItem target, string suffix = "")
+        {
+            if (!Active || target == null) return;
+            _selectionOverride = null;
+            Rebuild();
             var refPos = ScanFrom;
             SyncSelectionTo(target);
             PlayReviewPing(target);
-            string line = target.Describe(refPos);
-            if (ring.Count > 1) line += ", " + Loc.T("nav.position", new { index = ring.IndexOf(unit) + 1, count = ring.Count });
-            Speak(line);
+            Speak(target.Describe(refPos) + suffix);
         }
 
         /// <summary>Ping the review target (Semicolon): probe sight + route from the movement cursor
@@ -349,7 +361,8 @@ namespace WrathAccess.Exploration
                 // "Everything" aggregates the real things — not scenery-only props, not the curated POI
                 // markers (which duplicate entities). Added once however many nodes the item has.
                 // Strategic hints stay out too — they're inferences about the scene, not things in it.
-                if (cat != null && cat.Key != "scenery" && cat.Key != "poi" && cat.Key != ScanTaxonomy.Strategic) inEverything = true;
+                if (cat != null && cat.Key != "scenery" && cat.Key != "poi" && cat.Key != ScanTaxonomy.Strategic
+                    && cat.Key != ScanTaxonomy.Bookmarks) inEverything = true;
             }
             if (inEverything && !_everything.Contains(item)) _everything.Add(item);
         }
@@ -456,7 +469,8 @@ namespace WrathAccess.Exploration
                 case ReviewGroup.Strategic: return IsStrategic(p);
                 default: return p != ScanTaxonomy.UnitsParty && p != ScanTaxonomy.UnitsEnemies
                     && p != ScanTaxonomy.UnitsNeutrals && p != ScanTaxonomy.UnitsBystanders
-                    && p != ScanTaxonomy.Scenery && !IsPoi(p) && p != ScanTaxonomy.Unexplored && !IsStrategic(p);
+                    && p != ScanTaxonomy.Scenery && !IsPoi(p) && p != ScanTaxonomy.Unexplored && !IsStrategic(p)
+                    && !p.StartsWith(ScanTaxonomy.Bookmarks, System.StringComparison.Ordinal);
             }
         }
 

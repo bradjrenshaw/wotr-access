@@ -908,6 +908,10 @@ namespace WrathAccess
             InputManager.Register("review.prevUnexplored", "Review previous unexplored space", InputCategory.Exploration,
                 () => WrathAccess.Exploration.Scanner.CycleReview(WrathAccess.Exploration.ReviewGroup.Unexplored, -1))
                 .AddBinding(KeyCode.L, shift: true).Repeating().Grouped("review");
+            // Alt+B: the bookmarks screen (pin the position / the reviewed object; list + delete).
+            InputManager.Register("bookmark.open", "Open bookmarks", InputCategory.Exploration,
+                () => WrathAccess.Screens.BookmarkScreen.Toggle())
+                .AddBinding(KeyCode.B, alt: true).Grouped("review");
             // Alt+1..6: review party member N — the review cursor jumps to them as if cycled to;
             // repeats walk their pets/mounts (the Ctrl+N ring, minus the commandable gate).
             for (int i = 0; i < 6; i++)

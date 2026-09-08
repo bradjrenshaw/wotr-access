@@ -56,6 +56,9 @@ namespace WrathAccess.Exploration
         public const string Strategic = "strategic";
         public const string StrategicSpawns = "strategic.spawns";
         public const string StrategicObjectives = "strategic.objectives";
+        public const string Bookmarks = "bookmarks";
+        public const string BookmarksPoint = "bookmarks.point";
+        public const string BookmarksAttached = "bookmarks.attached";
 
         /// <summary>True for nodes that mark a real interactive thing (cursor targeting cares about these
         /// regardless of what sound — if any — the user assigned). POI/Scenery are not interactive.</summary>
@@ -160,6 +163,11 @@ namespace WrathAccess.Exploration
             Cat("strategic", "Strategic", ScanClass.Marker, Silent,
                 Sub("spawns", "Spawn points", Silent),
                 Sub("objectives", "Enemy objectives", Silent));
+
+            // The player's own bookmarks (BookmarkModel, Alt+B): points and entity-attached pins.
+            Cat("bookmarks", "Bookmarks", ScanClass.Marker, Silent,
+                Sub("point", "Point bookmarks", Silent),
+                Sub("attached", "Attached bookmarks", Silent));
 
             Cat("scenery", "Scenery", ScanClass.Object, Silent);
             // NOTE: the poi category is GONE from the in-area taxonomy — the game's local-map markers

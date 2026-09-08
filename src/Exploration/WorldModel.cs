@@ -86,6 +86,7 @@ namespace WrathAccess.Exploration
             }
             FoldFrontier();
             FoldStrategic();
+            FoldBookmarks();
 
             // Drop anything no longer in the pools (despawned, or left when the area changed).
             _gone.Clear();
@@ -161,6 +162,19 @@ namespace WrathAccess.Exploration
                 var o = objectives[i];
                 if (!_items.ContainsKey(o)) Ensure(o, () => o);
                 _present.Add(o);
+            }
+        }
+
+        // The player's bookmarks for this area part (BookmarkModel owns the item objects).
+        private static void FoldBookmarks()
+        {
+            BookmarkModel.Tick();
+            var items = BookmarkModel.Current;
+            for (int i = 0; i < items.Count; i++)
+            {
+                var it = items[i];
+                if (!_items.ContainsKey(it)) Ensure(it, () => it);
+                _present.Add(it);
             }
         }
 

@@ -17,6 +17,9 @@ namespace WrathAccess.Exploration
 
         protected ProxyEntity(EntityDataBase entity) { Entity = entity; }
 
+        /// <summary>The backing entity (identity: its UniqueId survives saves — bookmarks pin to it).</summary>
+        internal EntityDataBase EntityRef => Entity;
+
         public override Vector3 Position => Geo.Live(Entity); // live view transform, not the lagging data position
 
         public override bool IsVisible => Entity.IsInGame && Entity.IsVisibleForPlayer;

@@ -30,6 +30,7 @@ namespace WrathAccess.Exploration
 
         private static byte[] _g;              // latest snapshot's G channel (N*N, row-major, +z north)
         private static string _key;            // current fog area key (scene name)
+        private static FogArea _area;          // the ACTIVE area object the snapshot is mapped to
         private static Bounds _bounds;         // current fog area world bounds
         private static bool _ready;            // at least one snapshot for the current area
         private static float _timer;
@@ -47,10 +48,16 @@ namespace WrathAccess.Exploration
 
             string key = fog.gameObject.scene.name;
             if (string.IsNullOrEmpty(key)) key = fog.name;
-            if (key != _key)
+            // Re-map on a NEW ACTIVE AREA OBJECT or changed bounds, not just a new scene: a scene can
+            // hold several fog areas (the Pitaxian wine cellar's "FogOfWarArea (1)" beside the
+            // scene's first one), and keying on the scene alone left the snapshot mapped to the
+            // wrong bounds — a room the player stood in read "60% unexplored" for good.
+            var bounds = fog.GetWorldBounds();
+            if (key != _key || !ReferenceEquals(fog, _area) || bounds != _bounds)
             {
                 _key = key;
-                _bounds = fog.GetWorldBounds();
+                _area = fog;
+                _bounds = bounds;
                 _ready = false;
                 _timer = 0f; // snapshot promptly on entering the area
             }

@@ -33,6 +33,10 @@ namespace WrathAccess.Buffers
             Add(unit.CharacterName);
             Add(Loc.T("unit.hp", new { hp = unit.HPLeft, max = unit.MaxHP }));
             Add(AcLine(unit));
+            // Acting conditions (prone, stunned, ...) — Prone is a state part, not a buff, so the buff
+            // list below never shows it; the game's own condition names (UnitConditions).
+            var conds = WrathAccess.Exploration.UnitConditions.Phrase(unit);
+            if (conds != null) Add(Loc.T("combat.conditions", new { list = conds }));
             // Visible buffs in game order — same filter as the game's own buff lists (blueprint flag only;
             // suppressed buffs still show, undistinguished, exactly as the game presents them).
             var buffs = unit.Buffs?.Enumerable;

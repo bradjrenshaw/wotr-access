@@ -21,6 +21,14 @@ namespace WrathAccess.Exploration
         private static readonly Dictionary<object, ScanItem> _items = new Dictionary<object, ScanItem>();
         private static readonly HashSet<object> _present = new HashSet<object>();
         private static readonly List<object> _gone = new List<object>();
+        // Area transitions the game placed TWICE at one spot (the Market Square west exit: two
+        // AreaTransition_ToGlobalMap objects, same enter point, overlapping icons - sighted players
+        // see one exit). The later duplicate is suppressed: same enter point within DupRadius of a
+        // tracked transition. Cleared with the pools.
+        private static readonly HashSet<object> _suppressed = new HashSet<object>();
+        private static readonly List<Kingmaker.EntitySystem.Entities.MapObjectEntityData> _transitions =
+            new List<Kingmaker.EntitySystem.Entities.MapObjectEntityData>();
+        private const float DupRadius = 1.5f;
         private static int _foldedVersion = -1;
 
         /// <summary>Every in-area item (all kinds, unfiltered by fog). Consumers apply <c>IsVisible</c>.</summary>
@@ -51,7 +59,17 @@ namespace WrathAccess.Exploration
             foreach (var u in state.Units) { if (!_items.ContainsKey(u)) Ensure(u, () => new ProxyUnit(u)); _present.Add(u); }
             foreach (var o in state.MapObjects)
             {
-                if (!_items.ContainsKey(o)) Ensure(o, () => new ProxyMapObject(o));
+                if (_suppressed.Contains(o)) continue; // a doubled transition - collapsed into its twin
+                if (!_items.ContainsKey(o))
+                {
+                    var tp = o.Get<Kingmaker.View.MapObjects.AreaTransitionPart>();
+                    if (tp != null)
+                    {
+                        if (IsDuplicateTransition(o, tp)) { _suppressed.Add(o); continue; }
+                        _transitions.Add(o);
+                    }
+                    Ensure(o, () => new ProxyMapObject(o));
+                }
                 _present.Add(o);
                 // A trap additionally surfaces its TRIGGER AREA as its own item ("Trap zones") — keyed
                 // by the trap view (a distinct object, so it can't collide with the entity keys).
@@ -96,6 +114,7 @@ namespace WrathAccess.Exploration
                 var key = _gone[i];
                 var item = _items[key];
                 _items.Remove(key);
+                if (key is Kingmaker.EntitySystem.Entities.MapObjectEntityData mo) _transitions.Remove(mo);
                 Removed?.Invoke(item);
             }
         }
@@ -186,8 +205,28 @@ namespace WrathAccess.Exploration
             Added?.Invoke(item);
         }
 
+        // Same enter point as an already-tracked transition standing within DupRadius.
+        private static bool IsDuplicateTransition(Kingmaker.EntitySystem.Entities.MapObjectEntityData o,
+            Kingmaker.View.MapObjects.AreaTransitionPart tp)
+        {
+            var ep = tp.AreaEnterPoint;
+            if (ep == null) return false;
+            var pos = o.Position;
+            for (int i = 0; i < _transitions.Count; i++)
+            {
+                var t = _transitions[i];
+                if (ReferenceEquals(t, o) || !_items.ContainsKey(t)) continue;
+                var otp = t.Get<Kingmaker.View.MapObjects.AreaTransitionPart>();
+                if (otp == null || otp.AreaEnterPoint != ep) continue;
+                if ((t.Position - pos).sqrMagnitude <= DupRadius * DupRadius) return true;
+            }
+            return false;
+        }
+
         private static void ClearAll()
         {
+            _suppressed.Clear();
+            _transitions.Clear();
             if (_items.Count == 0) return;
             var snapshot = new List<ScanItem>(_items.Values);
             _items.Clear();

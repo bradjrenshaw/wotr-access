@@ -308,6 +308,12 @@ namespace WrathAccess.Exploration
                     : !cur.IsDirectlyControllable ? "combat.turn_ai"
                     : "combat.turn";
                 Tts.Speak(Message.Localized("ui", key, new { name = cur.CharacterName }).Resolve());
+                // Conditions that shape the turn (prone, stunned, ...): the sighted player sees the
+                // model lying down and the status icons; by ear they'd otherwise only meet the game's
+                // generic "no actions left" refusal.
+                var turnConds = UnitConditions.Phrase(cur);
+                if (turnConds != null)
+                    Tts.Speak(Message.Localized("ui", "combat.conditions", new { list = turnConds }).Resolve());
                 if (!cur.IsPlayersEnemy && cur.IsDirectlyControllable && !cur.Commands.Empty)
                 {
                     var action = DescribeAction(cur);
@@ -413,6 +419,13 @@ namespace WrathAccess.Exploration
             string moveState = moveOk && usedFt > 0
                 ? Message.Localized("ui", "combat.available_used", new { used = usedFt, max = maxFt }).Resolve()
                 : State(moveOk);
+            // A prone unit's move action is pre-committed to STANDING UP (the game's prediction icon):
+            // any order stands the unit first and spends the move on it, so no full-round action.
+            // (The prediction only stamps Standup while an order is being aimed; at rest the turn's
+            // get-up flag says the same thing.)
+            bool standUp = (states != null && states.Move.Type == CombatAction.UsageType.Standup)
+                || (turn.UnitCanGetUpOnCommand.Value && cu.Descriptor.State.Prone.Active);
+            if (standUp && moveOk) moveState = Message.Localized("ui", "combat.move_standup").Resolve();
             var sb = new System.Text.StringBuilder(Message.Localized("ui", "combat.status_actions", new
             {
                 name = cu.CharacterName,
@@ -425,6 +438,8 @@ namespace WrathAccess.Exploration
             sb.Append(", ").Append(Message.Localized("ui", "combat.movement_remaining", new { feet = moveFt }).Resolve());
             if (totalFt > moveFt) sb.Append(", ").Append(Message.Localized("ui", "combat.with_standard", new { feet = totalFt }).Resolve());
             if (turn.HasFiveFootStep(cu)) sb.Append(", ").Append(Message.Localized("ui", "combat.five_foot_step").Resolve());
+            var conds = UnitConditions.Phrase(cu);
+            if (conds != null) sb.Append(", ").Append(Message.Localized("ui", "combat.conditions", new { list = conds }).Resolve());
             return sb.ToString();
         }
 

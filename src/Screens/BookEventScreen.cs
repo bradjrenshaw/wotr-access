@@ -33,8 +33,12 @@ namespace WrathAccess.Screens
         // Same hide-not-close pop semantics as dialogue.
         public override bool KeepStateOnPop => true;
 
-        private BlueprintBookPage _focusedPage; // page whose first line focus was pointed at
-        private BlueprintBookPage _spokenPage;  // page we've read aloud
+        // What we've read so far: the page AND its passage lines. A hub page (the Elysium
+        // "Where am I? / Who are you?" questions) re-shows the SAME BlueprintBookPage per answer,
+        // appending the reply cue (or replacing the text outright) — keyed on the page alone, those
+        // updates went unread while the vanished answer's focus recovery re-read the old paragraph.
+        private BlueprintBookPage _spokenPage;
+        private readonly List<string> _spokenLines = new List<string>();
 
         private static BookEventVM Vm()
         {
@@ -49,8 +53,8 @@ namespace WrathAccess.Screens
         public override void OnPush() { Reset(); }
         // Keep _spokenPage across a hide/re-push (don't re-read the passage); clear only the focus
         // marker so the re-push lands back on the passage top (the pop dropped the graph state).
-        public override void OnPop() { _focusedPage = null; if (Vm() == null) Reset(); }
-        private void Reset() { _focusedPage = null; _spokenPage = null; }
+        public override void OnPop() { if (Vm() == null) Reset(); }
+        private void Reset() { _spokenPage = null; _spokenLines.Clear(); }
 
         public override void OnUpdate()
         {
@@ -59,23 +63,39 @@ namespace WrathAccess.Screens
             var page = vm.BlueprintBookPage.Value;
             if (page == null) return; // VM exists a frame before the first page is pushed
 
-            // A new page: land focus on the top of the passage SILENTLY (the queued passage read below
-            // is the speech); Down reaches the choices, Up re-reads earlier paragraphs.
-            if (page != _focusedPage)
+            var lines = PassageLines(vm);
+            // A new page: read the whole passage. The SAME page with changed lines: read only what is
+            // new — the lines past the longest unchanged prefix (an appended reply; a replaced passage
+            // reads whole again). Focus lands SILENTLY on the first new line either way (the queued
+            // read is the speech); Down reaches the choices, Up re-reads earlier paragraphs.
+            int from = page != _spokenPage ? 0 : CommonPrefix(_spokenLines, lines);
+            if (page != _spokenPage || from < lines.Count || lines.Count != _spokenLines.Count)
             {
-                _focusedPage = page;
-                Navigation.FocusNode(ControlId.Structural(PageKey(vm) + "row:0"), announce: false);
+                _spokenPage = page;
+                _spokenLines.Clear();
+                _spokenLines.AddRange(lines);
+                if (from < lines.Count)
+                {
+                    Navigation.FocusNode(ControlId.Structural(PageKey(vm) + "row:" + from), announce: false);
+                    Speak(lines, from);
+                }
             }
-            if (page != _spokenPage) { _spokenPage = page; Speak(vm); }
         }
 
-        // Speak the whole passage once per page, QUEUED (never interrupting — the dialogue rule). Re-reading
-        // individual paragraphs is done by arrowing the rows.
-        private static void Speak(BookEventVM vm)
+        private static int CommonPrefix(List<string> a, List<string> b)
         {
-            var lines = PassageLines(vm);
-            if (lines.Count > 0)
-                Tts.Speak(TextUtil.StripRichText(string.Join("\n", lines.ToArray())), interrupt: false);
+            int n = 0;
+            while (n < a.Count && n < b.Count && a[n] == b[n]) n++;
+            return n;
+        }
+
+        // Speak the passage from a line onward, QUEUED (never interrupting — the dialogue rule).
+        // Re-reading individual paragraphs is done by arrowing the rows.
+        private static void Speak(List<string> lines, int from)
+        {
+            if (from >= lines.Count) return;
+            var part = lines.GetRange(from, lines.Count - from);
+            Tts.Speak(TextUtil.StripRichText(string.Join("\n", part.ToArray())), interrupt: false);
         }
 
         private static string PageKey(BookEventVM vm)

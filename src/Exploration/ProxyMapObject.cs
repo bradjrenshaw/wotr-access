@@ -198,9 +198,39 @@ namespace WrathAccess.Exploration
         private string RealName()
         {
             var desc = _obj.Get<LocalMapMarkerPart>()?.GetDescription();
-            if (!string.IsNullOrEmpty(desc)) return desc; // curated/localized marker label wins
+            if (!string.IsNullOrEmpty(desc)) return WithDestination(desc); // curated/localized marker label wins
             var prefab = CleanName(_obj.View?.name);
-            return string.IsNullOrEmpty(prefab) ? null : prefab; // the designer's prefab name ("Bag", "Jug")
+            return string.IsNullOrEmpty(prefab) ? null : WithDestination(prefab); // the designer's prefab name ("Bag", "Jug")
+        }
+
+        // An area transition says WHERE IT LEADS: the game's own exit tooltip is often just "Area
+        // Exit" (every world-map exit in the Market Square), so append the destination the enter
+        // point names - the world map, another area's name, or a named part of this area - unless
+        // the tooltip already says it ("To the temple of Desna"). Same-area parts without a local
+        // name (the houses) add nothing; their tooltip ("Into the house") already carries it.
+        private string WithDestination(string name)
+        {
+            var ep = _obj.Get<AreaTransitionPart>()?.AreaEnterPoint;
+            if (ep == null) return name;
+            string dest = null;
+            try
+            {
+                var area = ep.Area;
+                var current = Game.Instance?.CurrentlyLoadedArea;
+                if (area != null && area.IsGlobalMap) dest = Loc.T("exit.world_map");
+                else if (area != null && area != current) dest = area.AreaName;
+                else
+                {
+                    var part = ep.AreaPart;
+                    var local = part != null && part != area ? part.AreaLocalName?.ToString() : null;
+                    if (!string.IsNullOrWhiteSpace(local)) dest = local;
+                }
+            }
+            catch { }
+            if (string.IsNullOrWhiteSpace(dest)) return name;
+            dest = TextUtil.StripRichText(dest);
+            if (name.IndexOf(dest, System.StringComparison.OrdinalIgnoreCase) >= 0) return name;
+            return Loc.T("exit.name_to", new { name, dest });
         }
 
         // The object's type word: the singular of its first node's category ("Door", "Container", …).

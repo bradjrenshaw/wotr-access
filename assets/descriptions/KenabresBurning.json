@@ -792,6 +792,24 @@
       "y": 46.04,
       "z": 5.13,
       "key": "mkt_shadowcellar_storeroom"
+    },
+    {
+      "x": 209.72,
+      "y": 39.88,
+      "z": -67.66,
+      "key": "mkt_brimorak_entry"
+    },
+    {
+      "x": 203.72,
+      "y": 40.41,
+      "z": -66.16,
+      "key": "mkt_brimorak_nook"
+    },
+    {
+      "x": 206.97,
+      "y": 40.4,
+      "z": -56.16,
+      "key": "mkt_brimorak_parlour"
     }
   ]
 }

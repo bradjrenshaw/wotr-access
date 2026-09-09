@@ -27,6 +27,9 @@ namespace WrathAccess
             if (_instance != null) return;
             _instance = new DialogVisibility();
             EventBus.Subscribe(_instance);
+            // Seed from the live mode: a module hot-reload mid-dialogue otherwise reads "hidden" until
+            // the next mode/visibility event, which left every answer disabled after a reload.
+            try { Shown = Kingmaker.Game.Instance != null && Kingmaker.Game.Instance.CurrentMode == GameModeType.Dialog; } catch { }
         }
 
         /// <summary>Unhook from the game (module hot-reload teardown).</summary>

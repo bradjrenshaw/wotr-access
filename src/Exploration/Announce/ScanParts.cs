@@ -57,9 +57,14 @@ namespace WrathAccess.Exploration.Announce
     internal sealed class ConditionPart : ScanAnnouncement
     {
         private readonly string _uiKey; // "unit.dead" / "unit.unconscious" / "unit.in_combat"
+        private readonly string _text;  // pre-localized (the game's own condition names)
         public ConditionPart(string uiKey) { _uiKey = uiKey; }
+        private ConditionPart(string text, bool raw) { _text = text; }
+        /// <summary>A condition already in the game's words (UnitConditions).</summary>
+        public static ConditionPart Text(string localized) => new ConditionPart(localized, true);
         public override string Key => "condition";
-        public override Message Render(ScanAnnounceContext ctx) => Message.Localized("ui", _uiKey);
+        public override Message Render(ScanAnnounceContext ctx)
+            => _text != null ? Message.Raw(_text) : Message.Localized("ui", _uiKey);
     }
 
     /// <summary>An object's skill-check tag — the same text the sighted overtip shows (skill name, plus

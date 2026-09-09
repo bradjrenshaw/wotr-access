@@ -156,6 +156,10 @@ namespace WrathAccess.Exploration
             {
                 yield return new Announce.HpPart(_unit.HPLeft, _unit.MaxHP);
                 if (_unit.IsInCombat) yield return new Announce.ConditionPart("unit.in_combat");
+                // The acting conditions a sighted player reads off the model / status icons (prone,
+                // stunned, paralysed, ...) in the game's own words — see UnitConditions.
+                var conds = UnitConditions.Active(_unit);
+                for (int i = 0; i < conds.Count; i++) yield return Announce.ConditionPart.Text(conds[i]);
             }
         }
 

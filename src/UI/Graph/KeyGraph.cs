@@ -448,6 +448,16 @@ namespace WrathAccess.UI.Graph
         /// announcement part (SelectionItem / ChoiceOption / Tab / radio all declare one), or null.</summary>
         public static GraphNode SelectedNodeInStop(GraphRender render, object stopKey)
         {
+            // Explicit landing hints first (an opted-in multi-select's first toggled-on item).
+            foreach (var n in render.Order)
+            {
+                if (!Equals(n.StopKey, stopKey)) continue;
+                var hint = n.Vtable?.LandHere;
+                if (hint == null) continue;
+                bool land = false;
+                try { land = hint(); } catch { }
+                if (land) return n;
+            }
             foreach (var n in render.Order)
             {
                 if (!Equals(n.StopKey, stopKey)) continue;

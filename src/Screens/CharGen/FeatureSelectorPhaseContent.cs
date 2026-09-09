@@ -175,6 +175,9 @@ namespace WrathAccess.Screens
                 {
                     GraphNodes.LabelPart(() => vm.FeatureName ?? ""),
                     GraphNodes.SelectedPart(isSelected),
+                    // The game's recommendation marker (thumbs up/down beside the row), in the game's
+                    // own glossary words; Neutral has no marker and says nothing.
+                    new NodeAnnouncement(() => RecommendationText.Label(Recommend(vm)), live: true, kind: AnnouncementKinds.Value),
                     // The unavailable reason, when it can't be picked (live).
                     new NodeAnnouncement(() => !canSelect() && !isSelected()
                         ? vm.NotAvailableLabel?.Value : null, live: true, kind: AnnouncementKinds.Value),

@@ -51,10 +51,18 @@ namespace WrathAccess.Screens
                 return;
             }
 
+            // The sighted counter is a bare number under the game's "Choose spells" heading (slots
+            // still open); we add the picked-of-total the roadmap widget shows as filled/empty slots.
             b.AddItem(ControlId.Structural(k + "count"), GraphNodes.Text(() =>
-                Phase.AvailableSpellCount.Value <= 0
-                    ? "All spells selected"
-                    : "Spells to select: " + Phase.AvailableSpellCount.Value));
+            {
+                int total = Phase.MechanicSelectedSpells?.Length ?? 0;
+                int chosen = Phase.SelectedSpellVMs?.Count ?? 0;
+                var args = new { label = UIStrings.Instance.CharGen.ChooseSpells.ToString(),
+                    available = Phase.AvailableSpellCount.Value, chosen, total };
+                return Phase.AvailableSpellCount.Value <= 0
+                    ? Loc.T("chargen.spells_all_chosen", args)
+                    : Loc.T("chargen.spells_count", args);
+            }));
 
             BuildSelector(b, k);
             BuildKnown(b, k);
@@ -94,14 +102,28 @@ namespace WrathAccess.Screens
                         new NodeAnnouncement(level),
                         new NodeAnnouncement(school),
                         new NodeAnnouncement(rec),
+                        // Greyed for the sighted player once every slot is filled (or the spell is
+                        // already known): IsAvailable false — the row can't be picked.
+                        GraphNodes.DisabledPart(() => item.IsAvailable.Value || item.IsSelected.Value),
                     },
                     SearchText = () => item.DisplayName,
                     StateText = () => Loc.T(item.IsSelected.Value ? "value.on" : "value.off"),
-                    // A toggle in a multi-select group (slot budget) — the same OnClick the view uses.
+                    // Tab into the picker lands on the first spell already toggled ON (a multi-select
+                    // gets no "selected radio" landing; a filled slot is the natural place to start).
+                    LandHere = () => item.IsSelected.Value,
+                    // A toggle in a multi-select group (slot budget) — the same OnClick guard the view
+                    // uses (CharGenSpellSelectorItemPCView.OnClick): nothing happens on an UNAVAILABLE
+                    // row (all slots filled / already known — the game greys it), and a pick goes
+                    // through the "level-up plans will drop" confirmation the game asks first.
                     OnActivate = () =>
                     {
+                        if (!item.IsAvailable.Value || (item.IsSelected.Value && !item.AllowSwitchOff))
+                        {
+                            Tts.Speak(Loc.T("chargen.spell_unavailable"), interrupt: true);
+                            return;
+                        }
                         UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
-                        item.SetSelectedFromView(!item.IsSelected.Value);
+                        item.WarnLevelupPlansWillDropBeforeAction(() => item.SetSelectedFromView(!item.IsSelected.Value));
                     },
                     OnTooltip = () =>
                     {
@@ -183,14 +205,8 @@ namespace WrathAccess.Screens
         private static string School(CharGenSpellSelectorItemVM v)
             => v.HasInSpellbook ? v.SchoolName + " / " + UIStrings.Instance.Tooltips.KnownSpell : v.SchoolName;
 
+        // The game's marker words from its glossary (RecommendationText); Neutral shows no marker.
         private static string RecLabel(CharGenSpellSelectorItemVM v)
-        {
-            switch (v.Recommendation.Recommendation.Value)
-            {
-                case RecommendationType.Recommended: return "recommended";
-                case RecommendationType.NotRecommended: return "not recommended";
-                default: return ""; // Neutral shows no marker
-            }
-        }
+            => RecommendationText.Label(v.Recommendation.Recommendation.Value) ?? "";
     }
 }

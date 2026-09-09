@@ -125,6 +125,13 @@ namespace WrathAccess.UI.Graph
         /// the bar". The action owns the behavior; the core only dispatches.</summary>
         public Action OnDelete;
 
+        /// <summary>Optional. A stop-entry LANDING hint for multi-select lists: when Tab enters this
+        /// node's stop with no remembered position, the first node whose hint is true is where focus
+        /// lands (before the generic "selected radio/tab" rule, which such lists don't satisfy —
+        /// their items say on/off, not selected). Opt-in per list: a settings page must NOT jump to
+        /// its first enabled toggle; a spell picker with a slot already filled should.</summary>
+        public Func<bool> LandHere;
+
         /// <summary>Optional. Horizontal value adjust (a slider): sign is -1 (decrease) / +1 (increase),
         /// large requests a coarse step. When set, left/right do NOT navigate.</summary>
         public Action<int, bool> OnAdjust;

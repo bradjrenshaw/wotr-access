@@ -75,8 +75,12 @@ namespace WrathAccess.Screens
                 case CharGenSpellsPhaseVM sp:
                 {
                     int chosen = sp.SelectedSpellVMs?.Count ?? 0;
-                    string head = sp.SelectorLevel >= 0 ? "level " + sp.SelectorLevel : null;
-                    if (chosen > 0) head = string.IsNullOrEmpty(head) ? chosen + " chosen" : head + ", " + chosen + " chosen";
+                    string head = sp.SelectorLevel >= 0 ? Loc.T("chargen.spell_level", new { level = sp.SelectorLevel }) : null;
+                    if (chosen > 0)
+                    {
+                        var c = Loc.T("chargen.spells_chosen", new { count = chosen });
+                        head = string.IsNullOrEmpty(head) ? c : head + ", " + c;
+                    }
                     return head;
                 }
 

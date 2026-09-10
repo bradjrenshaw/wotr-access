@@ -1,0 +1,442 @@
+{
+  "rooms": [
+    {
+      "x": -77.08,
+      "y": 0.04,
+      "z": -145.53,
+      "key": "gg_b1_south_store"
+    },
+    {
+      "x": -46.08,
+      "y": 0.01,
+      "z": -142.78,
+      "key": "gg_b1_bottle_store"
+    },
+    {
+      "x": -61.58,
+      "y": -1.96,
+      "z": -141.78,
+      "key": "gg_b1_cask_hall"
+    },
+    {
+      "x": -77.58,
+      "y": 0.04,
+      "z": -136.53,
+      "key": "gg_b1_west_store"
+    },
+    {
+      "x": -68.33,
+      "y": -1.08,
+      "z": -134.78,
+      "key": "gg_b1_hall_stair"
+    },
+    {
+      "x": -51.58,
+      "y": 0.01,
+      "z": -131.28,
+      "key": "gg_b1_east_store"
+    },
+    {
+      "x": -62.83,
+      "y": 0.12,
+      "z": -130.53,
+      "key": "gg_b1_drain_room"
+    },
+    {
+      "x": -73.58,
+      "y": 0.05,
+      "z": -129.78,
+      "key": "gg_b1_north_passage"
+    },
+    {
+      "x": -46.08,
+      "y": 0.6,
+      "z": -128.78,
+      "key": "gg_b1_upper_stair"
+    },
+    {
+      "x": 27.17,
+      "y": 0.1,
+      "z": -25.43,
+      "key": "gg_f1_chapel"
+    },
+    {
+      "x": -21.83,
+      "y": 0.07,
+      "z": -23.68,
+      "key": "gg_f1_south_room"
+    },
+    {
+      "x": -39.08,
+      "y": 0.1,
+      "z": -20.43,
+      "key": "gg_f1_southwest_hall"
+    },
+    {
+      "x": -47.83,
+      "y": 0.86,
+      "z": -16.18,
+      "key": "gg_f1_west_stair"
+    },
+    {
+      "x": 41.67,
+      "y": 0.06,
+      "z": -14.68,
+      "key": "gg_f1_museum"
+    },
+    {
+      "x": 16.42,
+      "y": 0.07,
+      "z": -13.68,
+      "key": "gg_f1_chapel_corridor"
+    },
+    {
+      "x": -34.83,
+      "y": 0.09,
+      "z": -13.43,
+      "key": "gg_f1_kitchen"
+    },
+    {
+      "x": -45.33,
+      "y": 0.05,
+      "z": -12.18,
+      "key": "gg_f1_west_guardroom"
+    },
+    {
+      "x": 28.17,
+      "y": 0.1,
+      "z": -8.43,
+      "key": "gg_f1_broken_room"
+    },
+    {
+      "x": -4.33,
+      "y": 0.05,
+      "z": -7.68,
+      "key": "gg_f1_curio_closet"
+    },
+    {
+      "x": 5.42,
+      "y": 0.14,
+      "z": -5.18,
+      "key": "gg_f1_central_hall"
+    },
+    {
+      "x": -42.33,
+      "y": 0.07,
+      "z": -3.93,
+      "key": "gg_f1_guard_cell"
+    },
+    {
+      "x": -16.83,
+      "y": 0.08,
+      "z": -3.68,
+      "key": "gg_f1_south_store"
+    },
+    {
+      "x": 24.92,
+      "y": -1.74,
+      "z": -3.18,
+      "key": "gg_f1_east_cellar_stair"
+    },
+    {
+      "x": -2.33,
+      "y": 1.61,
+      "z": -3.18,
+      "key": "gg_f1_central_stair"
+    },
+    {
+      "x": -25.58,
+      "y": 0.08,
+      "z": 3.57,
+      "key": "gg_f1_west_hall"
+    },
+    {
+      "x": -34.33,
+      "y": 0.05,
+      "z": 5.32,
+      "key": "gg_f1_reading_room"
+    },
+    {
+      "x": 27.67,
+      "y": 0.08,
+      "z": 6.32,
+      "key": "gg_f1_east_passage"
+    },
+    {
+      "x": -4.58,
+      "y": 0.11,
+      "z": 6.32,
+      "key": "gg_f1_hall_of_statues"
+    },
+    {
+      "x": 42.42,
+      "y": 0.05,
+      "z": 12.82,
+      "key": "gg_f1_east_cell"
+    },
+    {
+      "x": -36.08,
+      "y": 0.06,
+      "z": 13.57,
+      "key": "gg_f1_barrel_store"
+    },
+    {
+      "x": -47.83,
+      "y": 1.07,
+      "z": 14.82,
+      "key": "gg_f1_northwest_stair"
+    },
+    {
+      "x": -22.33,
+      "y": 0.05,
+      "z": 18.07,
+      "key": "gg_f1_library"
+    },
+    {
+      "x": 6.17,
+      "y": 0.06,
+      "z": 18.82,
+      "key": "gg_f1_bedroom"
+    },
+    {
+      "x": -3.08,
+      "y": 0.05,
+      "z": 19.07,
+      "key": "gg_f1_study"
+    },
+    {
+      "x": -41.83,
+      "y": 0.09,
+      "z": 19.07,
+      "key": "gg_f1_west_wing"
+    },
+    {
+      "x": 27.92,
+      "y": 0.06,
+      "z": 20.07,
+      "key": "gg_f1_laboratory"
+    },
+    {
+      "x": -13.83,
+      "y": 0.07,
+      "z": 24.32,
+      "key": "gg_f1_north_hall"
+    },
+    {
+      "x": 39.92,
+      "y": 0.06,
+      "z": 25.07,
+      "key": "gg_f1_northeast_landing"
+    },
+    {
+      "x": 10.42,
+      "y": 0.07,
+      "z": 25.07,
+      "key": "gg_f1_north_passage"
+    },
+    {
+      "x": 44.92,
+      "y": 1.08,
+      "z": 27.32,
+      "key": "gg_f1_northeast_stair"
+    },
+    {
+      "x": 2.42,
+      "y": -7.99,
+      "z": 63.33,
+      "key": "gg_f2_sunken_hall"
+    },
+    {
+      "x": -10.08,
+      "y": -7.97,
+      "z": 67.82,
+      "key": "gg_f2_sunken_hall_alcove"
+    },
+    {
+      "x": 16.42,
+      "y": 0.0,
+      "z": 71.82,
+      "key": "gg_f2_east_gallery"
+    },
+    {
+      "x": -46.58,
+      "y": -1.66,
+      "z": 72.32,
+      "key": "gg_f2_southwest_stair"
+    },
+    {
+      "x": -37.58,
+      "y": 0.06,
+      "z": 75.57,
+      "key": "gg_f2_west_guardroom"
+    },
+    {
+      "x": -26.58,
+      "y": 0.07,
+      "z": 75.57,
+      "key": "gg_f2_barrel_room"
+    },
+    {
+      "x": -16.33,
+      "y": 0.01,
+      "z": 75.82,
+      "key": "gg_f2_west_gallery"
+    },
+    {
+      "x": 26.67,
+      "y": 0.05,
+      "z": 77.07,
+      "key": "gg_f2_basin_room"
+    },
+    {
+      "x": -0.33,
+      "y": -7.85,
+      "z": 78.82,
+      "key": "gg_f2_statue_dais"
+    },
+    {
+      "x": 41.92,
+      "y": 0.05,
+      "z": 79.57,
+      "key": "gg_f2_barracks"
+    },
+    {
+      "x": 5.42,
+      "y": -7.97,
+      "z": 85.82,
+      "key": "gg_f2_sunken_hall_north"
+    },
+    {
+      "x": -42.58,
+      "y": 0.05,
+      "z": 90.07,
+      "key": "gg_f2_west_store"
+    },
+    {
+      "x": -15.83,
+      "y": 0.0,
+      "z": 90.82,
+      "key": "gg_f2_broken_landing"
+    },
+    {
+      "x": 31.92,
+      "y": 0.14,
+      "z": 93.57,
+      "key": "gg_f2_east_passage"
+    },
+    {
+      "x": 0.67,
+      "y": 0.02,
+      "z": 93.57,
+      "key": "gg_f2_stair_landing"
+    },
+    {
+      "x": 15.67,
+      "y": 0.04,
+      "z": 94.07,
+      "key": "gg_f2_east_landing"
+    },
+    {
+      "x": -32.08,
+      "y": 0.06,
+      "z": 102.07,
+      "key": "gg_f2_sigil_hall"
+    },
+    {
+      "x": 42.42,
+      "y": 0.05,
+      "z": 102.32,
+      "key": "gg_f2_war_room"
+    },
+    {
+      "x": -3.83,
+      "y": 0.05,
+      "z": 105.07,
+      "key": "gg_f2_library"
+    },
+    {
+      "x": 14.92,
+      "y": 0.06,
+      "z": 106.57,
+      "key": "gg_f2_library_east"
+    },
+    {
+      "x": 6.17,
+      "y": 0.05,
+      "z": 108.32,
+      "key": "gg_f2_library_centre"
+    },
+    {
+      "x": 29.42,
+      "y": 0.05,
+      "z": 110.57,
+      "key": "gg_f2_north_passage"
+    },
+    {
+      "x": 46.92,
+      "y": -0.48,
+      "z": 115.07,
+      "key": "gg_f2_northeast_stair"
+    },
+    {
+      "x": -18.08,
+      "y": 0.01,
+      "z": 116.07,
+      "key": "gg_f2_meeting_room"
+    },
+    {
+      "x": -6.08,
+      "y": 0.06,
+      "z": 116.57,
+      "key": "gg_f2_sealed_vault"
+    },
+    {
+      "x": -36.08,
+      "y": 0.01,
+      "z": 119.82,
+      "key": "gg_f2_ritual_chamber"
+    },
+    {
+      "x": 26.67,
+      "y": 0.05,
+      "z": 121.32,
+      "key": "gg_f2_reading_room"
+    },
+    {
+      "x": 12.17,
+      "y": 0.05,
+      "z": 121.57,
+      "key": "gg_f2_study_hall"
+    },
+    {
+      "x": 2.92,
+      "y": 0.01,
+      "z": 123.82,
+      "key": "gg_f2_study_corner"
+    },
+    {
+      "x": -18.58,
+      "y": 0.01,
+      "z": 124.82,
+      "key": "gg_f2_council_hall"
+    },
+    {
+      "x": 38.67,
+      "y": -0.04,
+      "z": 125.57,
+      "key": "gg_f2_shrine"
+    },
+    {
+      "x": -6.33,
+      "y": 0.05,
+      "z": 126.07,
+      "key": "gg_f2_painters_study"
+    },
+    {
+      "x": 24.92,
+      "y": 0.05,
+      "z": 126.32,
+      "key": "gg_f2_reading_room_north"
+    }
+  ]
+}

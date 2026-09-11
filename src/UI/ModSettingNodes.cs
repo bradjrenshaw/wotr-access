@@ -52,6 +52,10 @@ namespace WrathAccess.UI
                 case NullableChoiceSetting nc:
                     b.AddItem(ControlId.Structural(prefix + nc.Key), NullableChoiceDropdown(nc));
                     break;
+                case ActionSetting act: // a button: Enter runs it
+                    b.AddItem(ControlId.Structural(prefix + act.Key),
+                        GraphNodes.Button(() => act.Label, () => act.Run?.Invoke()));
+                    break;
             }
         }
 

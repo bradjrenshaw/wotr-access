@@ -29,6 +29,10 @@ namespace WrathAccess.UI.Tooltips
         }
 
         public bool IsEmpty => string.IsNullOrWhiteSpace(Text);
+
+        /// <summary>Set by the flow builder on rows that came from the template's HEADER (the name
+        /// line): a document with header rows only is still "empty" to the reader.</summary>
+        public bool FromHeader { get; internal set; }
     }
 
     /// <summary>

@@ -1,0 +1,76 @@
+{
+  "rooms": [
+    {
+      "x": -1.8,
+      "y": -16.0,
+      "z": 168.1,
+      "key": "gg3_hall_below"
+    },
+    {
+      "x": 16.5,
+      "y": 0.0,
+      "z": 177.1,
+      "key": "gg3_east_gallery"
+    },
+    {
+      "x": -0.5,
+      "y": 0.0,
+      "z": 197.4,
+      "key": "gg3_wardstone_chamber"
+    },
+    {
+      "x": 9.0,
+      "y": 0.2,
+      "z": 199.9,
+      "key": "gg3_broken_passage"
+    },
+    {
+      "x": 16.7,
+      "y": 0.0,
+      "z": 201.9,
+      "key": "gg3_east_room"
+    },
+    {
+      "x": -12.2,
+      "y": -16.0,
+      "z": 257.4,
+      "key": "gg3b_stair_foot"
+    },
+    {
+      "x": -0.7,
+      "y": -16.0,
+      "z": 267.1,
+      "key": "gg3b_fallen_hall"
+    },
+    {
+      "x": 16.0,
+      "y": 0.0,
+      "z": 272.4,
+      "key": "gg3b_broken_gallery"
+    },
+    {
+      "x": 5.8,
+      "y": -15.8,
+      "z": 281.1,
+      "key": "gg3b_north_recess"
+    },
+    {
+      "x": 17.5,
+      "y": 0.0,
+      "z": 286.6,
+      "key": "gg3b_gallery_north_end"
+    },
+    {
+      "x": 2.0,
+      "y": 0.1,
+      "z": 298.6,
+      "key": "gg3b_shattered_wardstone_chamber"
+    },
+    {
+      "x": 16.8,
+      "y": 0.0,
+      "z": 301.9,
+      "key": "gg3b_east_chamber"
+    }
+  ]
+}

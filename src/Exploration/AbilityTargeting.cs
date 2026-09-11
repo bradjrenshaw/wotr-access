@@ -47,7 +47,15 @@ namespace WrathAccess.Exploration
             }
 
             var ability = AbilityOf(slot);
-            if (ability == null) { vm.OnMainClick(); return; } // items/unknown kinds: fall back for now
+            if (ability == null)
+            {
+                // An item whose usable ability is a VARIANT CONTAINER (the Signet of House
+                // Vespertilio: pick a skill): the item's own click casts the parent, a silent
+                // no-op, and the sighted player has to use the arrow flyout. Offer the flyout.
+                if (ItemHasVariants(slot) && OpenConvertMenu(slot)) return;
+                vm.OnMainClick(); // other items / unknown kinds: the game's click
+                return;
+            }
 
             // Variant containers (hexes like Evil Eye) and uncastable spells with conversions
             // (metamagic fallbacks): the game's own main click opens the convert FLYOUT instead of
@@ -119,6 +127,14 @@ namespace WrathAccess.Exploration
             return hits;
         }
 
+        // A usable item slot whose ability blueprint has variants (the item click can't cast it).
+        private static bool ItemHasVariants(MechanicActionBarSlot slot)
+        {
+            if (!(slot is MechanicActionBarSlotItem it)) return false;
+            try { return it.Item?.Ability?.Blueprint != null && it.Item.Ability.Blueprint.HasVariants; }
+            catch { return false; }
+        }
+
         // The exact conditions ActionBarSlotVM.OnMainClick uses to open the flyout instead of casting.
         private static bool WantsConvertMenu(MechanicActionBarSlot slot, AbilityData ability)
         {
@@ -164,10 +180,39 @@ namespace WrathAccess.Exploration
         internal static void PickConversion(MechanicActionBarSlot sub)
         {
             var subAbility = AbilityOf(sub);
-            if (subAbility == null) { sub.OnClick(); return; } // activatable variants: the slot's own click
+            if (subAbility == null)
+            {
+                // The flyout's own slot kind (MechanicActionBarSlotSpontaneusConvertedSpell — not a
+                // spell/ability slot) and activatable variants: the slot's own click. A self-cast
+                // fires right here (queued while paused), an aim enters the game's targeting; say
+                // which, since neither path speaks on its own.
+                if (!sub.IsPossibleActive()) { Tts.Speak(Loc.T("action.cant_use"), interrupt: true); return; }
+                var spell = ConvertedSpell(sub);
+                sub.OnClick();
+                if (spell != null && spell.TargetAnchor != AbilityTargetAnchor.Owner)
+                    Tts.Speak(Loc.T("target.begin", new { name = sub.GetTitle() }), interrupt: true);
+                else
+                    Tts.Speak(Loc.T("actionbar.using", new { name = sub.GetTitle() }), interrupt: true);
+                return;
+            }
             if (!sub.IsPossibleActive()) { Tts.Speak(Loc.T("action.cant_use"), interrupt: true); return; }
-            if (subAbility.TargetAnchor == AbilityTargetAnchor.Owner) { CastOnSelf(subAbility); return; }
+            if (subAbility.TargetAnchor == AbilityTargetAnchor.Owner)
+            {
+                CastOnSelf(subAbility);
+                Tts.Speak(Loc.T("actionbar.using", new { name = sub.GetTitle() }), interrupt: true);
+                return;
+            }
             Begin(subAbility, sub.GetTitle());
+        }
+
+        // The flyout entry's ability: MechanicActionBarSlotSpontaneusConvertedSpell keeps it in a
+        // public FIELD named Spell (the class isn't a spell slot subtype).
+        private static readonly System.Reflection.FieldInfo ConvertedSpellField =
+            HarmonyLib.AccessTools.Field(typeof(MechanicActionBarSlotSpontaneusConvertedSpell), "Spell");
+        private static AbilityData ConvertedSpell(MechanicActionBarSlot sub)
+        {
+            if (!(sub is MechanicActionBarSlotSpontaneusConvertedSpell) || ConvertedSpellField == null) return null;
+            try { return ConvertedSpellField.GetValue(sub) as AbilityData; } catch { return null; }
         }
 
         private static void Begin(AbilityData ability, string announceName)

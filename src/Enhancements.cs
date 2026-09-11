@@ -22,6 +22,12 @@ namespace WrathAccess
         public static bool StrategicHints =>
             Settings.ModSettings.GetSetting<Settings.BoolSetting>("enhancements.strategic_hints")?.Get() ?? true;
 
+        /// <summary>Achievements stay enabled while mods are active (Patches/AchievementsPatch): the
+        /// game refuses every unlock once any mod is loaded, and this mod is always loaded. Default
+        /// on — an accessibility mod isn't a cheat.</summary>
+        public static bool AchievementsWithMods =>
+            Settings.ModSettings.GetSetting<Settings.BoolSetting>("enhancements.achievements_with_mods")?.Get() ?? true;
+
         /// <summary>Register the category + its settings (pre-load, with the other static categories).</summary>
         public static void RegisterSettings()
         {
@@ -31,6 +37,12 @@ namespace WrathAccess
                 "enh.neutrals_ignore_fog"));
             enh.Add(new Settings.BoolSetting("strategic_hints", "Strategic hints (spawn points, enemy objectives)", true,
                 "enh.strategic_hints"));
+            enh.Add(new Settings.BoolSetting("achievements_with_mods", "Achievements stay enabled with mods active", true,
+                "enh.achievements_with_mods"));
+            // The one-shot story awards the gate refused before the toggle existed: re-issue them
+            // for every achievement whose award etude has already played (AchievementClaim).
+            enh.Add(new Settings.ActionSetting("claim_achievements", "Claim achievements already earned",
+                "enh.claim_achievements", AchievementClaim.Claim));
             Settings.ModSettings.Root.Add(enh);
         }
     }

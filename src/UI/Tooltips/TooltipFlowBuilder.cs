@@ -32,9 +32,11 @@ namespace WrathAccess.UI.Tooltips
             bool includeEmptyNotice = true)
         {
             int i = 0;
+            bool anyBody = false; // any row beyond the header's name line
             foreach (var row in Rows(template, type))
             {
                 var line = row;
+                if (!line.FromHeader) anyBody = true;
                 b.AddItem(WrathAccess.UI.Graph.ControlId.Structural(keyPrefix + "r" + i), new WrathAccess.UI.Graph.NodeVtable
                 {
                     ControlType = ControlTypes.Text,
@@ -48,7 +50,10 @@ namespace WrathAccess.UI.Tooltips
                 });
                 i++;
             }
-            if (i == 0 && includeEmptyNotice)
+            // Nothing but the header (a feature whose blueprint has NO description — the minotaur's
+            // Powerful Charge repro: the sighted tooltip is just the name too): say so, instead of a
+            // page that reads the name and ends.
+            if (!anyBody && includeEmptyNotice)
             {
                 b.AddItem(WrathAccess.UI.Graph.ControlId.Structural(keyPrefix + "empty"),
                     GraphNodes.Text(() => Loc.T("tooltip.empty")));
@@ -70,8 +75,10 @@ namespace WrathAccess.UI.Tooltips
         {
             if (template == null) yield break;
             Prepare(template, type);
-            foreach (var brick in Bricks(template, type))
+            foreach (var pair in Bricks(template, type))
             {
+                var brick = pair.Key;
+                bool header = pair.Value;
                 var vm = SafeGetVM(brick);
                 if (vm == null) continue;
 
@@ -80,7 +87,7 @@ namespace WrathAccess.UI.Tooltips
                     // Inline heading row (NOT a new section): "<title>, heading level N", N from H1–H6.
                     if (!string.IsNullOrWhiteSpace(title.Title))
                         yield return new BrickLine(title.Title,
-                            suffix: Loc.T("role.heading_level", new { level = (int)title.Type + 1 }));
+                            suffix: Loc.T("role.heading_level", new { level = (int)title.Type + 1 })) { FromHeader = header };
                     continue;
                 }
 
@@ -92,20 +99,22 @@ namespace WrathAccess.UI.Tooltips
                         foreach (var part in line.Text.Split('\n'))
                         {
                             var one = part.Trim();
-                            if (one.Length > 0) yield return new BrickLine(one);
+                            if (one.Length > 0) yield return new BrickLine(one) { FromHeader = header };
                         }
                         continue;
                     }
+                    line.FromHeader = header;
                     yield return line;
                 }
             }
         }
 
-        private static IEnumerable<ITooltipBrick> Bricks(TooltipBaseTemplate t, TooltipTemplateType type)
+        // Each brick with whether it came from the HEADER section (the name line).
+        private static IEnumerable<KeyValuePair<ITooltipBrick, bool>> Bricks(TooltipBaseTemplate t, TooltipTemplateType type)
         {
-            foreach (var b in Section(t, x => x.GetHeader(type))) yield return b;
-            foreach (var b in Section(t, x => x.GetBody(type))) yield return b;
-            foreach (var b in Section(t, x => x.GetFooter(type))) yield return b;
+            foreach (var b in Section(t, x => x.GetHeader(type))) yield return new KeyValuePair<ITooltipBrick, bool>(b, true);
+            foreach (var b in Section(t, x => x.GetBody(type))) yield return new KeyValuePair<ITooltipBrick, bool>(b, false);
+            foreach (var b in Section(t, x => x.GetFooter(type))) yield return new KeyValuePair<ITooltipBrick, bool>(b, false);
         }
 
         private static IEnumerable<ITooltipBrick> Section(TooltipBaseTemplate t,

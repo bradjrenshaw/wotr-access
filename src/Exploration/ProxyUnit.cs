@@ -34,8 +34,34 @@ namespace WrathAccess.Exploration
                 if (_unit.State.IsDead)
                     return _unit.IsDeadAndHasLoot ? ScanTaxonomy.ContainersCorpse : null;
                 return _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
-                    : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : NeutralNode();
+                    : IsHostile ? ScanTaxonomy.UnitsEnemies : NeutralNode();
             }
+        }
+
+        // ENEMY for the scanner = the game's hostile flag OR a non-hostile the click would STRIKE
+        // (the sighted sword cursor: ClickUnitHandler tests CanAttack before any interaction, and
+        // it is true only for units the game means you to hit — the Gray Garrison vermleks the
+        // Desnan acolytes put to sleep, switched to a neutral faction by the cutscene). Filed under
+        // Enemies for clarity (user design): "a demon you're supposed to attack" is an enemy by ear,
+        // whatever ring colour the sighted UI paints. Cached briefly like the neutral split.
+        private bool _strikeable;
+        private float _strikeableAt = float.NegativeInfinity;
+        private bool IsHostile => _unit.IsPlayersEnemy || IsStrikeableNeutral();
+        private bool IsStrikeableNeutral()
+        {
+            float now = UnityEngine.Time.unscaledTime;
+            if (now - _strikeableAt < 1.5f) return _strikeable;
+            _strikeableAt = now;
+            _strikeable = false;
+            try
+            {
+                if (_unit.IsPlayerFaction || _unit.State.IsDead) return false;
+                var initiator = Kingmaker.Game.Instance?.UI?.SelectionManager?.GetNearestSelectedUnit(_unit.Position)
+                    ?? Kingmaker.Game.Instance?.Player?.MainCharacter.Value;
+                _strikeable = initiator != null && initiator.CanAttack(_unit);
+            }
+            catch { _strikeable = false; }
+            return _strikeable;
         }
 
         // The neutral split: NEUTRALS have a real conversation or scripted interaction behind a
@@ -125,7 +151,7 @@ namespace WrathAccess.Exploration
             get
             {
                 yield return _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
-                    : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : NeutralNode();
+                    : IsHostile ? ScanTaxonomy.UnitsEnemies : NeutralNode();
                 // A lootable corpse is also a container (its faction stays its identity for browsing).
                 if (_unit.IsDeadAndHasLoot) yield return "containers.corpse";
             }
@@ -134,7 +160,7 @@ namespace WrathAccess.Exploration
         // Announce as the faction (stable) even when dead/looted — so a corpse reads "<name>, enemy,
         // dead", not as a container. (The sound Primary still flips to containers.corpse.)
         protected override string AnnounceNode => _unit.IsPlayerFaction ? ScanTaxonomy.UnitsParty
-            : _unit.IsPlayersEnemy ? ScanTaxonomy.UnitsEnemies : NeutralNode();
+            : IsHostile ? ScanTaxonomy.UnitsEnemies : NeutralNode();
 
         // name, interaction (talk/interactive — how the unit answers the interact keys), type (faction),
         // current action (casting/attacking/moving), then either a terminal condition (dead/unconscious)
@@ -165,7 +191,7 @@ namespace WrathAccess.Exploration
 
         private string FactionWord()
             => _unit.IsPlayerFaction ? Loc.T("scan.faction.party")
-             : _unit.IsPlayersEnemy ? Loc.T("scan.faction.enemy")
+             : IsHostile ? Loc.T("scan.faction.enemy")
              : IsSignificantNeutral() ? Loc.T("scan.faction.neutral")
              : Loc.T("scan.faction.bystander");
 
@@ -177,11 +203,14 @@ namespace WrathAccess.Exploration
         private string InteractionKey()
         {
             if (_unit.State.IsDead || _unit.IsInCombat || _unit.IsPlayerFaction) return null;
-            var part = _unit.Get<Kingmaker.UnitLogic.Parts.UnitPartInteractions>();
-            if (part == null) return null;
             var initiator = Kingmaker.Game.Instance?.UI?.SelectionManager?.GetNearestSelectedUnit(_unit.Position)
                 ?? Kingmaker.Game.Instance?.Player?.MainCharacter.Value;
             if (initiator == null || initiator.IsInCombat) return null;
+            // A strikeable neutral (the sighted sword cursor) is filed as an ENEMY — see IsHostile;
+            // "enemy" already says the interact keys attack, so no interaction word.
+            if (IsStrikeableNeutral()) return null;
+            var part = _unit.Get<Kingmaker.UnitLogic.Parts.UnitPartInteractions>();
+            if (part == null) return null;
             var inter = part.SelectClickInteraction(initiator);
             if (inter == null) return null;
             // Dialogue and barks are both "talk" to the player (every spoken response); scripted

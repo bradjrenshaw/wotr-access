@@ -97,6 +97,10 @@ namespace WrathAccess.Exploration
                         // puzzle repro: flipped levers listed as "open doors"). Puzzle-driven gates
                         // are authored the same way. Not a door; the mechanism twin reads the state.
                         if (dr.Settings != null && dr.Settings.AlwaysDisabled) continue;
+                        // A LEVER built on the door machinery (Gray Garrison statue puzzle, door
+                        // levers): the game shows it with the Action icon and its own overtip name
+                        // ("Mechanism Lever"), never as a doorway. A mechanism, not a door.
+                        if (IsLever(dr)) { if (part.Enabled) nodes.Add("mechanisms"); continue; }
                         if (part.Enabled || dr.IsOpen) nodes.Add(dr.IsOpen ? "doors.open" : "doors");
                         continue;
                     }
@@ -150,6 +154,8 @@ namespace WrathAccess.Exploration
                     {
                         // Scripted animation doors (AlwaysDisabled) never count — see Nodes.
                         if (d.Settings != null && d.Settings.AlwaysDisabled) continue;
+                        // A lever on the door machinery is a mechanism — see Nodes.
+                        if (IsLever(d)) { if (part.Enabled) mechanism = true; continue; }
                         // disabled-but-open = an opened one-way door, still a door landmark (see Categories)
                         if (part.Enabled || d.IsOpen) { door = true; doorOpen = d.IsOpen; }
                         continue;
@@ -234,8 +240,17 @@ namespace WrathAccess.Exploration
         }
 
         // The object's type word: the singular of its first node's category ("Door", "Container", …).
+        // A door-machinery lever with an authored overtip name speaks THAT (what the sighted overtip
+        // shows — "Mechanism Lever"), so six statue levers don't all read as bare "object".
         private string TypeWord()
         {
+            var lever = Lever();
+            if (lever != null && lever.Settings.HasOverrideName)
+            {
+                string over = null;
+                try { over = TextUtil.StripRichText(lever.Settings.overrideName); } catch { }
+                if (!string.IsNullOrWhiteSpace(over)) return over;
+            }
             foreach (var key in Nodes)
             {
                 var node = ScanTaxonomy.Get(key);
@@ -281,6 +296,11 @@ namespace WrathAccess.Exploration
             return s.Length > 0 ? s : null;
         }
 
+        // The role pieces a curated composite (Composites.cs) folds into one line.
+        internal string TypeWordText() => TypeWord();
+        internal string CheckTextText() => CheckText();
+        internal List<string> StateWordList() => StateWords();
+
         // Announce-node = Primary (the leaf: doors / containers.corpse / …); object part-set.
         protected override IEnumerable<Announce.ScanAnnouncement> StateParts()
         {
@@ -324,14 +344,57 @@ namespace WrathAccess.Exploration
             // Real doors announce "open"; a scripted animation door (AlwaysDisabled — a lever's
             // flip, a puzzle gate) doesn't — its state reads on the mechanism twin below.
             if (doorPart != null && doorPart.IsOpen
-                && !(doorPart.Settings != null && doorPart.Settings.AlwaysDisabled))
+                && !(doorPart.Settings != null && doorPart.Settings.AlwaysDisabled) && !IsLever(doorPart))
                 bits.Add(Loc.T("object.open"));
+            // A door-machinery lever: "lit" when a light object sits on it (the Gray Garrison
+            // statue puzzle unhides a glow per activated statue and hides them all on a wrong
+            // combination — the sighted player's progress cue), else "flipped" off its own animated
+            // state. Hidden lights leave the scene entirely, so there's no "unlit" to read; like a
+            // door's "open", the rest state says nothing.
+            if (doorPart != null && IsLever(doorPart) && doorPart.Enabled)
+            {
+                if (HasLitTwin()) bits.Add(Loc.T("object.lit"));
+                else if (doorPart.IsOpen) bits.Add(Loc.T("object.flipped"));
+            }
             var flipped = SwitchTwinState();
             if (flipped.HasValue) bits.Add(Loc.T(flipped.Value ? "object.flipped" : "object.unflipped"));
             if (_obj.Get<InteractionRestrictionPart>() != null) bits.Add(Loc.T("object.restricted"));
             var trapPart = _obj.Get<DisableTrapInteractionPart>();
             if (trapPart?.Owner != null && trapPart.Owner.TrapActive) bits.Add(Loc.T("object.trapped"));
             return bits;
+        }
+
+        // A lever built on the door machinery: an enabled-by-design door part the designers tagged
+        // with the ACTION interaction icon (real doorways are UIType None). Levers that open doors
+        // (Door1Lever) and puzzle switches (the statue "doors") are authored this way.
+        private static bool IsLever(InteractionDoorPart d)
+            => d != null && d.Settings != null && d.Settings.UIType == UIInteractionType.Action;
+
+        private InteractionDoorPart Lever()
+        {
+            var d = _obj.Get<InteractionDoorPart>();
+            return IsLever(d) ? d : null;
+        }
+
+        // Is a LIGHT SOURCE object sitting on this one (≤1.5m, in game, no interactions, carrying an
+        // enabled Unity Light)? Scene-authored glow markers ("Golfrey Light") are their own map
+        // objects, shown/hidden by script — their presence IS the visible state.
+        private bool HasLitTwin()
+        {
+            var p = Position;
+            foreach (var mo in Game.Instance.State.MapObjects)
+            {
+                if (mo == null || ReferenceEquals(mo, _obj) || !mo.IsInGame) continue;
+                float dx = mo.Position.x - p.x, dz = mo.Position.z - p.z;
+                if (dx * dx + dz * dz > 1.5f * 1.5f) continue;
+                if (mo.Interactions.Count > 0) continue;
+                var view = mo.View;
+                if (view == null) continue;
+                var lights = view.GetComponentsInChildren<Light>(false);
+                for (int i = 0; i < lights.Length; i++)
+                    if (lights[i] != null && lights[i].enabled) return true;
+            }
+            return false;
         }
 
         // Is THIS object the animated half of a mechanism twin? (a scripted AlwaysDisabled door

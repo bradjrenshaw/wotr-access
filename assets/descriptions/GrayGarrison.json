@@ -437,6 +437,68 @@
       "y": 0.05,
       "z": 126.32,
       "key": "gg_f2_reading_room_north"
+    },
+    {
+      "x": 25.33,
+      "y": 0.05,
+      "z": -110.03,
+      "key": "gg_b2_storeroom"
+    },
+    {
+      "x": 13.82,
+      "y": 0.01,
+      "z": -106.03,
+      "key": "gg_b2_lower_cellar"
+    }
+  ],
+  "composites": [
+    {
+      "key": "gg_statue_golfrey",
+      "members": [
+        "Statue01_Golfrey",
+        "Statue01Golgrey",
+        "Golfrey Light"
+      ]
+    },
+    {
+      "key": "gg_statue_herald",
+      "members": [
+        "Statue02_Herald",
+        "Statue02Herald",
+        "Herald Light"
+      ]
+    },
+    {
+      "key": "gg_statue_lariel",
+      "members": [
+        "Statue03_Lariel",
+        "Statue03Lariel",
+        "Lariel Light"
+      ]
+    },
+    {
+      "key": "gg_statue_targona",
+      "members": [
+        "Statue04_Targona",
+        "Statue04Targona",
+        "Targona Light"
+      ]
+    },
+    {
+      "key": "gg_statue_zacarius",
+      "members": [
+        "Statue05_Zacaruis",
+        "Statue05Zacharius",
+        "Zakarius Light"
+      ]
+    },
+    {
+      "key": "gg_statue_yaniel",
+      "members": [
+        "Statue06_Yaniel",
+        "Statue06Yaniel",
+        "Yaniel Light"
+      ]
     }
   ]
 }

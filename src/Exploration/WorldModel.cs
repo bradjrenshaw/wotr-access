@@ -30,6 +30,12 @@ namespace WrathAccess.Exploration
             new List<Kingmaker.EntitySystem.Entities.MapObjectEntityData>();
         private const float DupRadius = 1.5f;
         private static int _foldedVersion = -1;
+        // Curated composites (Composites.cs): a member map object never gets its own proxy — it feeds
+        // the composite item keyed by the definition. Classified ONCE per entity (the name read
+        // allocates); the negative cache keeps the common path a hash probe.
+        private static readonly Dictionary<object, CompositeItem> _compositeOf = new Dictionary<object, CompositeItem>();
+        private static readonly HashSet<object> _notComposite = new HashSet<object>();
+        private static readonly HashSet<CompositeItem> _liveComposites = new HashSet<CompositeItem>();
 
         /// <summary>Every in-area item (all kinds, unfiltered by fog). Consumers apply <c>IsVisible</c>.</summary>
         public static IReadOnlyCollection<ScanItem> Items => _items.Values;
@@ -48,6 +54,8 @@ namespace WrathAccess.Exploration
             AreaDetails.Refresh(areaName);
             // Mod-authored environmental descriptions (room ambiance + per-asset), loaded per area the same way.
             EnvDescriptions.Refresh(areaName);
+            // Curated composites are per area too; a reload invalidates the per-entity classification.
+            if (Composites.Refresh(areaName)) { _compositeOf.Clear(); _notComposite.Clear(); _liveComposites.Clear(); }
             // Frontier blobs are per-area too — entering a different area drops the stale set.
             FrontierModel.SyncArea(areaName);
 
@@ -62,6 +70,24 @@ namespace WrathAccess.Exploration
                 if (_suppressed.Contains(o)) continue; // a doubled transition - collapsed into its twin
                 if (!_items.ContainsKey(o))
                 {
+                    // A curated composite's member: fold into the composite item instead of its own proxy.
+                    if (Composites.Any && !_notComposite.Contains(o))
+                    {
+                        if (!_compositeOf.TryGetValue(o, out var comp))
+                        {
+                            comp = Composites.Classify(o);
+                            if (comp == null) _notComposite.Add(o); else _compositeOf[o] = comp;
+                        }
+                        if (comp != null)
+                        {
+                            comp.Touch(o);
+                            _present.Add(o);
+                            _present.Add(comp.Definition);
+                            _liveComposites.Add(comp);
+                            if (!_items.ContainsKey(comp.Definition)) { var c = comp; Ensure(comp.Definition, () => c); }
+                            continue;
+                        }
+                    }
                     var tp = o.Get<Kingmaker.View.MapObjects.AreaTransitionPart>();
                     if (tp != null)
                     {
@@ -102,6 +128,8 @@ namespace WrathAccess.Exploration
                 if (!_items.ContainsKey(entry)) Ensure(entry, () => new ProxyDetail(entry));
                 _present.Add(entry);
             }
+            // Composites drop members that left the scene (a hidden glow marker).
+            foreach (var c in _liveComposites) c.Prune(_present);
             FoldFrontier();
             FoldStrategic();
             FoldBookmarks();
@@ -209,7 +237,9 @@ namespace WrathAccess.Exploration
         private static bool IsDuplicateTransition(Kingmaker.EntitySystem.Entities.MapObjectEntityData o,
             Kingmaker.View.MapObjects.AreaTransitionPart tp)
         {
-            var ep = tp.AreaEnterPoint;
+            Kingmaker.Blueprints.Area.BlueprintAreaEnterPoint ep;
+            try { ep = tp.AreaEnterPoint; } // settings not bound yet (area load) → NRE
+            catch { return false; }
             if (ep == null) return false;
             var pos = o.Position;
             for (int i = 0; i < _transitions.Count; i++)
@@ -227,6 +257,9 @@ namespace WrathAccess.Exploration
         {
             _suppressed.Clear();
             _transitions.Clear();
+            _compositeOf.Clear();
+            _notComposite.Clear();
+            _liveComposites.Clear();
             if (_items.Count == 0) return;
             var snapshot = new List<ScanItem>(_items.Values);
             _items.Clear();

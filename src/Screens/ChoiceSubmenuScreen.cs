@@ -21,23 +21,28 @@ namespace WrathAccess.Screens
         private readonly List<string> _options;
         private readonly int _current;
         private readonly Action<int> _onSelect;
+        private readonly Action<int> _tooltip; // optional: Space/F1 on option i (owns the whole behavior)
 
-        public ChoiceSubmenuScreen(string title, List<string> options, int current, Action<int> onSelect)
+        public ChoiceSubmenuScreen(string title, List<string> options, int current, Action<int> onSelect,
+            Action<int> tooltip = null)
         {
             _title = title;
             _options = options;
             _current = current;
             _onSelect = onSelect;
+            _tooltip = tooltip;
             Wrap = true;
         }
 
-        /// <summary>Open the submenu as a child of the current screen.</summary>
-        public static void Open(string title, List<string> options, int current, Action<int> onSelect)
+        /// <summary>Open the submenu as a child of the current screen. <paramref name="tooltip"/>, when
+        /// given, is the option's Space/F1 (e.g. an action bar flyout entry's game tooltip).</summary>
+        public static void Open(string title, List<string> options, int current, Action<int> onSelect,
+            Action<int> tooltip = null)
         {
             // Opening IS the activation — the click every caller (dropdowns, sorters, link pickers)
             // used to get from the old proxy base's default activation sound. One chokepoint here.
             UiSound.Play(Kingmaker.UI.UISoundType.ButtonClick);
-            ScreenManager.Current?.PushChild(new ChoiceSubmenuScreen(title, options, current, onSelect));
+            ScreenManager.Current?.PushChild(new ChoiceSubmenuScreen(title, options, current, onSelect, tooltip));
         }
 
         public override string Key => "overlay.choicesubmenu";
@@ -61,10 +66,12 @@ namespace WrathAccess.Screens
                 string label = _options[i];
                 // Snapshot is safe: the submenu is ephemeral (a fresh instance per open, closed by the
                 // selection itself), so the selected state can't change while it lives.
-                b.AddItem(ControlId.Structural("choice:" + i), GraphNodes.ChoiceOption(
+                var vt = GraphNodes.ChoiceOption(
                     () => label, () => idx == _current,
                     () => { _onSelect?.Invoke(idx); Close(); },
-                    GraphNodes.Position(i + 1, _options.Count)));
+                    GraphNodes.Position(i + 1, _options.Count));
+                if (_tooltip != null) vt.OnTooltip = () => _tooltip(idx);
+                b.AddItem(ControlId.Structural("choice:" + i), vt);
             }
             if (_current >= 0 && _current < _options.Count)
                 b.SetStart(ControlId.Structural("choice:" + _current)); // land on the current option

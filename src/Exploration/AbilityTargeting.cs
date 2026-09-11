@@ -132,21 +132,42 @@ namespace WrathAccess.Exploration
         // variant/conversion. False when there's nothing to offer (callers fall through).
         private static bool OpenConvertMenu(MechanicActionBarSlot slot)
         {
-            var conv = slot.GetConvertedAbilityData();
-            if (conv == null || conv.Count == 0) return false;
-            var subs = new List<MechanicActionBarSlot>(conv.GetMechanicSlots(slot.Unit));
+            var subs = ConversionSlots(slot);
+            if (subs.Count == 0) return false;
             var labels = new List<string>();
             foreach (var s in subs) labels.Add(s.GetTitle());
-            WrathAccess.Screens.ChoiceSubmenuScreen.Open(slot.GetTitle(), labels, 0, i =>
-            {
-                var sub = subs[i];
-                var subAbility = AbilityOf(sub);
-                if (subAbility == null) { sub.OnClick(); return; } // activatable variants: the slot's own click
-                if (!sub.IsPossibleActive()) { Tts.Speak(Loc.T("action.cant_use"), interrupt: true); return; }
-                if (subAbility.TargetAnchor == AbilityTargetAnchor.Owner) { CastOnSelf(subAbility); return; }
-                Begin(subAbility, sub.GetTitle());
-            });
+            WrathAccess.Screens.ChoiceSubmenuScreen.Open(slot.GetTitle(), labels, -1, i => PickConversion(subs[i]),
+                i => OpenSlotTooltip(subs[i]));
             return true;
+        }
+
+        /// <summary>The slot's flyout entries (variants, spontaneous conversions, toggle sets, ...) as
+        /// mechanic slots — the game's own list, in its order; empty when the slot converts to nothing.</summary>
+        internal static List<MechanicActionBarSlot> ConversionSlots(MechanicActionBarSlot slot)
+        {
+            var subs = new List<MechanicActionBarSlot>();
+            var conv = slot?.GetConvertedAbilityData();
+            if (conv != null && conv.Count > 0) subs.AddRange(conv.GetMechanicSlots(slot.Unit));
+            return subs;
+        }
+
+        /// <summary>The flyout entry's game tooltip (each entry is a full slot with the same hover
+        /// tooltip as a bar slot) in the drill-in reader.</summary>
+        internal static void OpenSlotTooltip(MechanicActionBarSlot sub)
+        {
+            var tpl = sub?.GetTooltipTemplate();
+            if (tpl != null) WrathAccess.Screens.TooltipScreen.Open(tpl);
+        }
+
+        /// <summary>Use one flyout entry: aim/cast that variant (self-cast straight away), or for an
+        /// activatable variant its own click (the toggle).</summary>
+        internal static void PickConversion(MechanicActionBarSlot sub)
+        {
+            var subAbility = AbilityOf(sub);
+            if (subAbility == null) { sub.OnClick(); return; } // activatable variants: the slot's own click
+            if (!sub.IsPossibleActive()) { Tts.Speak(Loc.T("action.cant_use"), interrupt: true); return; }
+            if (subAbility.TargetAnchor == AbilityTargetAnchor.Owner) { CastOnSelf(subAbility); return; }
+            Begin(subAbility, sub.GetTitle());
         }
 
         private static void Begin(AbilityData ability, string announceName)

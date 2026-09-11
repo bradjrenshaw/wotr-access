@@ -46,7 +46,7 @@ namespace WrathAccess.UI
                 },
                 SearchText = () => slot()?.GetTitle() ?? "",
                 OnActivate = () => Activate(vm),
-                OnSecondary = () => ToggleAutoUse(vm),
+                OnSecondary = () => OpenSlotMenu(vm),
                 OnDrag = () => ActionBarDrag.OnSlot(vm), // Backslash: pick up / place (the mouse drag)
                 OnDelete = () => ActionBarDrag.ClearSlot(vm), // Delete: the mouse "drop it off the bar"
                 OnTooltip = () =>
@@ -120,11 +120,43 @@ namespace WrathAccess.UI
             return ability != null && unit != null && (unit.Brain?.IsAutoUseAbility(ability) ?? false);
         }
 
-        // Backspace = the sighted plain right-click (ActionBarSlotPCView.OnRightClick →
-        // OnSupportClick → MechanicActionBarSlot.OnAutoUseToggle): set/clear this ability as the
-        // unit's default attack. The slot subclasses gate on IsSuitableForAutoUse and silently
-        // no-op otherwise — detect via the BRAIN state and speak the result either way (a dead
-        // key would read as broken).
+        // Backspace = the slot's MENU: everything the sighted slot offers beyond its main click, in one
+        // list. First the convert flyout's entries (the little arrow on the slot — variants, a cleric's
+        // spontaneous Cure spells, toggle sets), reachable here whether or not the slot is castable
+        // (the main click only opens the flyout once the slot is spent); last, the plain right-click's
+        // set/clear default attack, when this ability can be one. Nothing to offer → say so.
+        private static void OpenSlotMenu(ActionBarSlotVM vm)
+        {
+            var s = vm?.MechanicActionBarSlot;
+            if (s == null) return;
+            var subs = Exploration.AbilityTargeting.ConversionSlots(s);
+            var labels = new List<string>();
+            foreach (var sub in subs) labels.Add(sub.GetTitle());
+            // IsAutoUse = "is, or could be, the default attack" (the sighted corner affordance).
+            bool autoUse = false;
+            try { autoUse = s.IsAutoUse; } catch { }
+            if (autoUse)
+                labels.Add(Loc.T(IsDefaultAttack(s) ? "actionbar.clear_default_attack" : "actionbar.set_default_attack"));
+            if (labels.Count == 0) { Tts.Speak(Loc.T("actionbar.no_options"), interrupt: true); return; }
+            Screens.ChoiceSubmenuScreen.Open(s.GetTitle(), labels, -1, i => // -1: actions, none "selected"
+            {
+                if (i < subs.Count) Exploration.AbilityTargeting.PickConversion(subs[i]);
+                else ToggleAutoUse(vm);
+            },
+            // Space on a flyout entry = its game tooltip (the sighted flyout hovers them); the
+            // default-attack entry explains itself.
+            i =>
+            {
+                if (i < subs.Count) Exploration.AbilityTargeting.OpenSlotTooltip(subs[i]);
+                else Tts.Speak(Loc.T("actionbar.default_attack_help"), interrupt: true);
+            });
+        }
+
+        // The sighted plain right-click (ActionBarSlotPCView.OnRightClick → OnSupportClick →
+        // MechanicActionBarSlot.OnAutoUseToggle): set/clear this ability as the unit's default
+        // attack. The slot subclasses gate on IsSuitableForAutoUse and silently no-op otherwise —
+        // detect via the BRAIN state and speak the result either way (a dead entry would read as
+        // broken).
         private static void ToggleAutoUse(ActionBarSlotVM vm)
         {
             var s = vm?.MechanicActionBarSlot;

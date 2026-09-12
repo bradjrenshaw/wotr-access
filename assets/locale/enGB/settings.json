@@ -453,7 +453,7 @@
   "bind.camera.compass": "Read compass (camera facing)",
   "bind.camera.zoomIn": "Zoom in",
   "bind.camera.zoomOut": "Zoom out",
-  "bind.camera.reset": "Reset camera offset and angle",
+  "bind.camera.reset": "Reset camera and facing",
   "bind.actionbar.r1s1": "Action bar slot 1",
   "bind.actionbar.r1s2": "Action bar slot 2",
   "bind.actionbar.r1s3": "Action bar slot 3",

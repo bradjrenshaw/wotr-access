@@ -149,16 +149,26 @@ namespace WrathAccess.Exploration
         }
         private bool _gestureTurned, _gesturePanned; // what the gesture touched → what to announce on release
 
-        /// <summary>Alt+R: reset the arrangement — offsets to zero, relative angle to zero, so the
-        /// camera sits on the cursor facing wherever the cursor faces (north unless turned).</summary>
+        /// <summary>Alt+R: the whole orientation back to default. The listener faces map north again
+        /// (ListenerFrame.ResetToNorth — ears and movement keys included); in follow-cursor mode the
+        /// arrangement resets too (offsets and relative angle to zero, so the camera sits on the
+        /// cursor looking north); otherwise the GAME's own camera reset runs (the rig turns to the
+        /// area's default yaw — CameraRig.SetCameraRotateDefault, the sighted Reset Camera key).</summary>
         public static void Reset()
         {
-            if (!Active) return;
-            Angle?.Set(0);
-            OffsetX?.Set(0);
-            OffsetZ?.Set(0);
-            ClearGesture = true; // a held adjust gesture must not write back over the reset on release
-            Tts.Speak(Loc.T("camera.reset"), interrupt: true);
+            if (Active)
+            {
+                Angle?.Set(0);
+                OffsetX?.Set(0);
+                OffsetZ?.Set(0);
+                ClearGesture = true; // a held adjust gesture must not write back over the reset on release
+                Tts.Speak(Loc.T("camera.reset"), interrupt: true);
+            }
+            else
+            {
+                try { Game.Instance?.UI?.GetCameraRig()?.SetCameraRotateDefault(); } catch { }
+            }
+            ListenerFrame.ResetToNorth();
         }
 
         /// <summary>Abandon any in-flight held-key gesture (used by Reset via the instance).</summary>

@@ -760,8 +760,9 @@ namespace WrathAccess
                 WrathAccess.Exploration.CameraControls.ZoomIn).AddBinding(KeyCode.PageUp, alt: true).Repeating().Grouped("camera");
             InputManager.Register("camera.zoomOut", "Zoom out", InputCategory.Exploration,
                 WrathAccess.Exploration.CameraControls.ZoomOut).AddBinding(KeyCode.PageDown, alt: true).Repeating().Grouped("camera");
-            // Alt+R (follow-cursor mode): reset the arrangement — offsets and relative angle to zero.
-            InputManager.Register("camera.reset", "Reset camera offset and angle", InputCategory.Exploration,
+            // Alt+R: reset orientation — the listener faces north again, the follow-cursor arrangement
+            // (offsets, relative angle) zeroes, or in normal camera mode the game's own camera reset runs.
+            InputManager.Register("camera.reset", "Reset camera and facing", InputCategory.Exploration,
                 WrathAccess.Exploration.CameraFollowCursor.Reset).AddBinding(KeyCode.R, alt: true).Grouped("camera");
 
             // Action-bar hotkeys: one rebindable action per slot of the game's three 14-slot rows

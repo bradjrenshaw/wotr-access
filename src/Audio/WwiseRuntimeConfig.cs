@@ -55,6 +55,12 @@ namespace WrathAccess.Audio
         private static void TickBackgroundAudio()
         {
             bool on = ModSettings.GetSetting<BoolSetting>("audio.background_audio")?.Get() ?? false;
+            // First evaluation after a (re)load: seed only, never write. Writing runInBackground=false
+            // here froze the whole player loop whenever a module hot-reload happened with the game
+            // UNFOCUSED (the DEBUG dev server's re-assert runs from the same loop, so it never got
+            // to undo it — every /eval timed out until the window was clicked). The vanilla
+            // pause-on-unfocus is the engine default anyway; only a live toggle needs the write.
+            if (_appliedBackground == null) { _appliedBackground = on; if (on) UnityEngine.Application.runInBackground = true; return; }
             if (_appliedBackground != on)
             {
                 _appliedBackground = on;

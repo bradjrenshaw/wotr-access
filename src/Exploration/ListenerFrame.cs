@@ -64,6 +64,16 @@ namespace WrathAccess.Exploration
             }
         }
 
+        /// <summary>Alt+R: face map north again (the default), announcing it — the listener half of
+        /// the camera reset, so ears, movement and the view come back to one frame together.</summary>
+        public static void ResetToNorth()
+        {
+            FollowArea();
+            SetFacing(MapFrame.Offset);
+            Tts.Speak(Loc.T("facing.now", new { dir = Geo.DirectionWord(Facing) }), interrupt: true);
+            PlayNorthCue(); // the same ping a 45° crossing plays — dead ahead again
+        }
+
         /// <summary>Shift+Q/E: snap to the NEXT 45° multiple in that direction and announce it.</summary>
         public static void StepLeft() => Step(-1);
         public static void StepRight() => Step(1);

@@ -195,9 +195,11 @@ namespace WrathAccess.Exploration
             // Anchor: the cursor when placed, else the player reference (TB-aware) — same rule as the ears.
             var anchor = Cursor.Has ? Cursor.Position.Value : Overlays.Cursor.PlayerPosition;
 
-            float yaw = ListenerFrame.Facing + (_adjusting ? _angleLive : (Angle?.Get() ?? 0));
-            // Offsets are stored in the VIEW frame, so the arrangement turns with the camera: rotate
-            // them by the camera yaw into world space. Feet → metres like every spoken distance.
+            // The rig is mounted looking BACK (rig yaw = view yaw + 180 — see MapFrame): to look along
+            // the listener's facing, the rig turns to facing + 180 (+ the user's angle).
+            float yaw = ListenerFrame.Facing + 180f + (_adjusting ? _angleLive : (Angle?.Get() ?? 0));
+            // Offsets are stored in the rig's frame, so the arrangement turns with the camera: rotate
+            // them by the rig yaw into world space. Feet → metres like every spoken distance.
             float ox = (_adjusting ? _oxLive : (OffsetX?.Get() ?? 0)) * Geo.MetresPerFoot;
             float oz = (_adjusting ? _ozLive : (OffsetZ?.Get() ?? 0)) * Geo.MetresPerFoot;
             // The area's camera-bounds clamp: our scroll path bypasses the clamp normal scrolling

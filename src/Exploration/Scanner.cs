@@ -898,8 +898,8 @@ namespace WrathAccess.Exploration
                     parts.Add(Loc.T("where.region", new { region = RegionWord(fx, fz) }));
                 }
             }
-            // A turned listener is easy to forget by ear — remind only when off the default north.
-            if (ListenerFrame.Facing != 0f)
+            // A turned listener is easy to forget by ear — remind only when off the default (map) north.
+            if (ListenerFrame.IsTurned)
                 parts.Add(Loc.T("facing.now", new { dir = Geo.DirectionWord(ListenerFrame.Facing) }));
             Speak(parts.Count > 0 ? string.Join(", ", parts) : Loc.T("where.unknown"));
         }

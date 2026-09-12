@@ -4,7 +4,10 @@ namespace WrathAccess.Exploration
 {
     /// <summary>
     /// The listener's FACING — the rotatable orientation of the virtual head (user-designed; default
-    /// north, the historical fixed frame most players will keep). Q/E turn it in 45° PERSON-frame
+    /// north — the GAME's north for the area (<see cref="MapFrame"/>), re-seated whenever the area's
+    /// map rotation changes, so W walks toward the direction the game and its dialogue call north).
+    /// Stored as WORLD yaw (the spatial math is world XZ); 45° steps and the sector announcements
+    /// are taken in the map frame. Q/E turn it in 45° PERSON-frame
     /// steps ("turn right" = facing yaw increases: north → east — deliberately NOT the camera-key
     /// convention, which is scene-labeled and reads inverted by ear). Everything cursor-relative
     /// rotates with it: WASD movement (W = forward of facing), the spatial pans (<see cref="ToEar"/>),
@@ -15,16 +18,35 @@ namespace WrathAccess.Exploration
     /// </summary>
     internal static class ListenerFrame
     {
-        /// <summary>Degrees, 0 = north (+Z), 90 = east — same convention as every spoken bearing.</summary>
+        /// <summary>WORLD yaw, degrees (0 = +Z). Speak it through Geo.DirectionWord, which converts
+        /// to the map frame like every bearing.</summary>
         public static float Facing { get; private set; }
 
+        /// <summary>The facing in the MAP frame (0 = the game's north).</summary>
+        public static float MapFacing => MapFrame.ToMap(Facing);
+
+        /// <summary>Turned away from the default (map north)? — the "facing X" reminders key on this.</summary>
+        public static bool IsTurned => Mathf.Abs(Mathf.DeltaAngle(Facing, MapFrame.Offset)) > 0.01f;
+
         private const float TurnSpeed = 90f; // continuous turn, degrees/second (tuned by ear)
+        private static float _seatedOffset = float.NaN; // the map offset the facing was last seated to
+
+        /// <summary>Re-seat the facing to map north when the area's map rotation changes (area load):
+        /// the default frame follows the game's north. Ticked before any turning.</summary>
+        private static void FollowArea()
+        {
+            float off = MapFrame.Offset;
+            if (off == _seatedOffset) return;
+            _seatedOffset = off;
+            SetFacing(off);
+        }
 
         /// <summary>Continuous turning: Q/E poll as held (the movement-key pattern — the claim chain
         /// gates them), rotating smoothly; crossing into a new 8-point sector announces it and pings
         /// the NORTH cue, so turning narrates itself without spamming. Ticked from the frame loop.</summary>
         public static void Tick(float dt)
         {
+            FollowArea();
             int dir = 0;
             if (WrathAccess.Input.InputManager.Held("explore.turnLeft")) dir -= 1;
             if (WrathAccess.Input.InputManager.Held("explore.turnRight")) dir += 1;
@@ -48,15 +70,16 @@ namespace WrathAccess.Exploration
 
         private static void Step(int dir)
         {
-            float cur = Facing / 45f;
+            FollowArea();
+            float cur = MapFacing / 45f; // 45° multiples of the MAP frame
             float next = dir > 0 ? Mathf.Floor(cur + 1f) : Mathf.Ceil(cur - 1f);
-            SetFacing(next * 45f);
+            SetFacing(MapFrame.ToWorld(next * 45f));
             Tts.Speak(Loc.T("facing.now", new { dir = Geo.DirectionWord(Facing) }), interrupt: true);
             PlayNorthCue();
         }
 
         // The compass ping (user-designed): every cardinal/intercardinal crossed while turning plays
-        // compass_north.wav positioned AT WORLD NORTH in the rotated ear frame — a one-sound answer to
+        // compass_north.wav positioned AT MAP NORTH in the rotated ear frame — a one-sound answer to
         // "where is north relative to me right now" (left of you at east facing, darkened-behind at
         // south, dead ahead again when you come back around).
         private const float NorthCueDistance = 6f;  // metres — far enough for a pure-bearing pan
@@ -64,7 +87,8 @@ namespace WrathAccess.Exploration
 
         private static void PlayNorthCue()
         {
-            float dx = 0f, dz = NorthCueDistance; // due north of the head, in world terms
+            float dx = 0f, dz = NorthCueDistance; // due (map) north of the head
+            MapFrame.InputToWorld(ref dx, ref dz); // → world terms
             ToEar(ref dx, ref dz);
             WrathAccess.Audio.AudioEngines.Current.PlaySpatial(
                 System.IO.Path.Combine(Overlays.OverlayAudio.Dir, "compass_north.wav"),
@@ -78,7 +102,7 @@ namespace WrathAccess.Exploration
             Facing = f;
         }
 
-        private static int GridIndex() => Mathf.FloorToInt(Facing / 45f) % 8;
+        private static int GridIndex() => Mathf.FloorToInt(MapFacing / 45f) % 8; // map-frame sectors
 
         /// <summary>A WORLD ear delta (east, north) rotated into the LISTENER frame (right, ahead) —
         /// apply before any spatial pan so sounds sit around the head, not around the map.</summary>
@@ -94,25 +118,10 @@ namespace WrathAccess.Exploration
 
         /// <summary>A movement INPUT vector (right, forward) rotated into the world — W walks toward
         /// the facing. For the continuous glide (floats).</summary>
-        public static void InputToWorld(ref float dx, ref float dz)
-        {
-            if (Facing == 0f) return;
-            float r = Facing * Mathf.Deg2Rad;
-            float c = Mathf.Cos(r), s = Mathf.Sin(r);
-            float wx = dx * c + dz * s;
-            float wz = -dx * s + dz * c;
-            dx = wx; dz = wz;
-        }
+        public static void InputToWorld(ref float dx, ref float dz) => MapFrame.RotateInput(Facing, ref dx, ref dz);
 
         /// <summary>Tiled variant: rotate a held step vector by the facing and snap back onto the
         /// 8 grid directions (45° facings turn cardinals into exact diagonals).</summary>
-        public static void StepToWorld(ref int dx, ref int dz)
-        {
-            if (Facing == 0f || (dx == 0 && dz == 0)) return;
-            float fx = dx, fz = dz;
-            InputToWorld(ref fx, ref fz);
-            dx = Mathf.RoundToInt(Mathf.Clamp(fx, -1f, 1f));
-            dz = Mathf.RoundToInt(Mathf.Clamp(fz, -1f, 1f));
-        }
+        public static void StepToWorld(ref int dx, ref int dz) => MapFrame.RotateStep(Facing, ref dx, ref dz);
     }
 }

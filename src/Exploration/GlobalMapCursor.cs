@@ -96,11 +96,14 @@ namespace WrathAccess.Exploration
             string mode = ModeOf(slot);
             if (mode == "none" || (dx == 0 && dz == 0)) { st.Holding = false; return; }
 
-            if (mode == "tiled") { tiled = true; TiledStep(dx, dz, st); return; }
+            // Up = the map's north (MapFrame; 0 on the world maps, kept for symmetry with the local map).
+            if (mode == "tiled") { tiled = true; MapFrame.StepToWorld(ref dx, ref dz); TiledStep(dx, dz, st); return; }
 
             continuous = true;
             if (!_pos.HasValue) _pos = GlobalMapModel.TravelerPos; // plant at the party on first move
-            _pos = _pos.Value + new Vector3(dx, 0f, dz).normalized * (Speed(slot) * dt);
+            float fx = dx, fz = dz;
+            MapFrame.InputToWorld(ref fx, ref fz);
+            _pos = _pos.Value + new Vector3(fx, 0f, fz).normalized * (Speed(slot) * dt);
         }
 
         // This cursor slot's settings on the ENGAGED overlay (per-overlay world-map mode/speed) — so cycling

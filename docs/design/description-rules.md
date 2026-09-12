@@ -17,8 +17,13 @@ error. Design background: `environmental-descriptions.md` (same folder).
   silently frame something else.
 - `Labels()` output is a **hint, never truth** — a 30 m label radius reaches through walls. Verify
   contested claims against `State.MapObjects` and the capture.
-- Directions come from **coordinates, not eyeballing**: at the canonical capture yaw 135, north is
-  upper-right, east lower-right. If prose states a direction, derive it from world coords.
+- Directions come from **coordinates, not eyeballing**, and are stated in the **MAP frame** — the
+  game's north for the area: world yaw `LocalMapRotation − 180` (screen-up at the default camera,
+  up on the local map, N on the compass — what dialogue and walkthroughs use; `MapFrame.ToMap`).
+  Map bearing = world bearing − (LocalMapRotation − 180); a rotation-0 area's north is world
+  SOUTH. At the canonical capture yaw 135, WORLD north is upper-right and east lower-right —
+  rotate before writing the word. (All authored prose was mechanically rotated when the frame
+  changed, 2026-09-12.)
 - **Geometry seen past a wall cutaway is NOT in the room.** The isometric camera slices walls open,
   so neighbouring rooms — and unwalkable shell scenery — show inside a room's frame. Anything that
   implies traversal (stairs, doors, passages) must be checked against the room graph before prose

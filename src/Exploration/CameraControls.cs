@@ -117,27 +117,20 @@ namespace WrathAccess.Exploration
 
         /// <summary>
         /// Read the game's HUD compass (the widget sighted players watch spin as the camera turns):
-        /// the camera's facing in OUR world frame (0° = north = +Z — the frame every spoken bearing
-        /// uses), plus the widget's own needle angle, which is measured from MAP north (the camera's
-        /// per-area default = <c>LocalMapRotation</c>; the widget reads 0 when the camera is reset).
-        /// Groundwork for cursor FACING/rotation: this is the orientation vocabulary a rotatable
-        /// listener will speak.
+        /// the camera's facing as a direction word and as the widget's own needle angle — both in
+        /// the MAP frame (the game's north; the widget's exact formula, IngameMenuVM.RotateCamera, is
+        /// rig yaw minus the area's map rotation, reading 0 when the camera is reset). The VIEW
+        /// direction is the rig yaw − 180 (the rig is mounted looking back — see MapFrame).
         /// </summary>
         public static void AnnounceCompass()
         {
             var rig = Rig;
-            var area = Game.Instance?.CurrentlyLoadedArea;
-            if (rig == null || area == null) return;
-            float yaw = rig.transform.eulerAngles.y;
-            // The widget's exact formula (IngameMenuVM.RotateCamera): camera yaw minus the area's map
-            // rotation, i.e. degrees away from the camera's home orientation.
-            float needle = yaw - area.LocalMapRotation;
-            needle %= 360f; if (needle < 0f) needle += 360f;
-            float world = yaw % 360f; if (world < 0f) world += 360f;
+            if (rig == null || Game.Instance?.CurrentlyLoadedArea == null) return;
+            float yaw = rig.transform.eulerAngles.y - 180f; // screen-up in world terms
+            float needle = MapFrame.ToMap(yaw);
             Tts.Speak(Loc.T("camera.compass", new
             {
-                dir = Geo.DirectionWord(world),
-                yaw = UnityEngine.Mathf.RoundToInt(world),
+                dir = Geo.DirectionWord(yaw),
                 needle = UnityEngine.Mathf.RoundToInt(needle),
             }), interrupt: true);
         }

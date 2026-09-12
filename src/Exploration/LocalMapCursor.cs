@@ -126,10 +126,13 @@ namespace WrathAccess.Exploration
             string mode = ModeOf(slot);
             if (mode == "none" || (dx == 0 && dz == 0)) { st.Holding = false; return; }
 
-            if (mode == "tiled") { tiled = true; TiledStep(dx, dz, st); return; }
+            // Up = the GAME's north for this area (the map screens don't consult the listener facing).
+            if (mode == "tiled") { tiled = true; MapFrame.StepToWorld(ref dx, ref dz); TiledStep(dx, dz, st); return; }
 
             continuous = true;
-            SetPos(Position + new Vector3(dx, 0f, dz).normalized * (Speed(slot) * dt));
+            float fx = dx, fz = dz;
+            MapFrame.InputToWorld(ref fx, ref fz);
+            SetPos(Position + new Vector3(fx, 0f, fz).normalized * (Speed(slot) * dt));
         }
 
         // The slot's in-area settings on the engaged overlay — the map reuses the user's normal movement

@@ -4,12 +4,12 @@ using WrathAccess.Settings;
 namespace WrathAccess.Exploration
 {
     /// <summary>
-    /// Renders a world bearing (degrees, 0 = north = +Z, 90 = east) in the user's chosen direction
-    /// style — the "Direction type" dropdown beside the spatial announcement sub-toggles. The compass
-    /// styles are WORLD-aligned (8- or 16-wind, as full words or spoken-letter short forms like
-    /// "n ne"); the relative and clock-face styles are EGOCENTRIC, measured from the listener's
-    /// facing (Q/E — the cursor's orientation), for players who turn away from north and want the
-    /// readouts to follow.
+    /// Renders a world bearing (degrees, 0 = +Z, 90 = +X) in the user's chosen direction style — the
+    /// "Direction type" dropdown beside the spatial announcement sub-toggles. The compass styles are
+    /// MAP-aligned (8- or 16-wind, as full words or spoken-letter short forms like "n ne"): "north" is
+    /// the GAME's north for the area (<see cref="MapFrame"/>), the one its dialogue and compass use.
+    /// The relative and clock-face styles are EGOCENTRIC, measured from the listener's facing (Q/E —
+    /// the cursor's orientation), for players who turn away from north and want the readouts to follow.
     /// </summary>
     internal static class Directions
     {
@@ -32,11 +32,12 @@ namespace WrathAccess.Exploration
         /// <summary>A BEARING (where something lies from the reference) in the chosen style.</summary>
         public static string Word(float worldDeg)
         {
+            float mapDeg = MapFrame.ToMap(worldDeg);
             switch (Mode)
             {
-                case "compass16": return Loc.T(Full16[Sector(worldDeg, 16)]);
-                case "compass8short": return Loc.T("geo.short." + Abbr16[Sector(worldDeg, 8) * 2]);
-                case "compass16short": return Loc.T("geo.short." + Abbr16[Sector(worldDeg, 16)]);
+                case "compass16": return Loc.T(Full16[Sector(mapDeg, 16)]);
+                case "compass8short": return Loc.T("geo.short." + Abbr16[Sector(mapDeg, 8) * 2]);
+                case "compass16short": return Loc.T("geo.short." + Abbr16[Sector(mapDeg, 16)]);
                 case "relative4": return Loc.T("geo.rel." + Rel4[Sector(Egocentric(worldDeg), 4)]);
                 case "relative8": return Loc.T("geo.rel." + Rel8[Sector(Egocentric(worldDeg), 8)]);
                 case "clock":
@@ -44,7 +45,7 @@ namespace WrathAccess.Exploration
                     int hour = Mathf.RoundToInt(Normalize(Egocentric(worldDeg)) / 30f) % 12;
                     return Loc.T("geo.clock", new { hour = hour == 0 ? 12 : hour });
                 }
-                default: return Loc.T(Full16[Sector(worldDeg, 8) * 2]); // compass8
+                default: return Loc.T(Full16[Sector(mapDeg, 8) * 2]); // compass8
             }
         }
 
@@ -53,12 +54,13 @@ namespace WrathAccess.Exploration
         /// meaningless), so the relative/clock styles fall back to the plain 8-wind compass.</summary>
         public static string CompassWord(float worldDeg)
         {
+            float mapDeg = MapFrame.ToMap(worldDeg);
             switch (Mode)
             {
-                case "compass16": return Loc.T(Full16[Sector(worldDeg, 16)]);
-                case "compass8short": return Loc.T("geo.short." + Abbr16[Sector(worldDeg, 8) * 2]);
-                case "compass16short": return Loc.T("geo.short." + Abbr16[Sector(worldDeg, 16)]);
-                default: return Loc.T(Full16[Sector(worldDeg, 8) * 2]);
+                case "compass16": return Loc.T(Full16[Sector(mapDeg, 16)]);
+                case "compass8short": return Loc.T("geo.short." + Abbr16[Sector(mapDeg, 8) * 2]);
+                case "compass16short": return Loc.T("geo.short." + Abbr16[Sector(mapDeg, 16)]);
+                default: return Loc.T(Full16[Sector(mapDeg, 8) * 2]);
             }
         }
 

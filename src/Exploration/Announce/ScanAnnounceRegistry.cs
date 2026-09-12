@@ -78,7 +78,7 @@ namespace WrathAccess.Exploration.Announce
             }
 
             // The direction TYPE for every spoken bearing — a global spatial option beside the
-            // sub-toggles: world-aligned compass in 8/16 winds (full words or spoken-letter short
+            // sub-toggles: map-aligned compass (the game's north) in 8/16 winds (full words or spoken-letter short
             // forms like "n ne"), or egocentric styles measured from the listener's facing (relative
             // words / clock face) for players who turn away from north. Rendered by Directions,
             // consumed by Geo.Bearing — so every readout in the mod follows the one choice.

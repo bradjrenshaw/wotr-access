@@ -1,0 +1,310 @@
+{
+  "rooms": [
+    {
+      "x": -2.2,
+      "y": 41.0,
+      "z": -17.8,
+      "key": "wc_south_ledge"
+    },
+    {
+      "x": 6.9,
+      "y": 40.7,
+      "z": -15.6,
+      "key": "wc_south_gate_row"
+    },
+    {
+      "x": -13.3,
+      "y": 40.6,
+      "z": -15.6,
+      "key": "wc_southwest_tents"
+    },
+    {
+      "x": -52.8,
+      "y": 40.5,
+      "z": -14.8,
+      "key": "wc_southwest_corner"
+    },
+    {
+      "x": -32.5,
+      "y": 40.4,
+      "z": -13.5,
+      "key": "wc_south_wood"
+    },
+    {
+      "x": -0.3,
+      "y": 40.2,
+      "z": -12.2,
+      "key": "wc_south_gap"
+    },
+    {
+      "x": 20.7,
+      "y": 40.5,
+      "z": -11.5,
+      "key": "wc_southeast_tents"
+    },
+    {
+      "x": -50.2,
+      "y": 39.7,
+      "z": -9.5,
+      "key": "wc_west_slope_south"
+    },
+    {
+      "x": -40.0,
+      "y": 41.2,
+      "z": -9.3,
+      "key": "wc_south_ridge_steps"
+    },
+    {
+      "x": 3.3,
+      "y": 40.0,
+      "z": -2.2,
+      "key": "wc_hospital_yard"
+    },
+    {
+      "x": -36.6,
+      "y": 40.4,
+      "z": -0.8,
+      "key": "wc_west_clearing_south"
+    },
+    {
+      "x": -9.8,
+      "y": 40.0,
+      "z": -0.7,
+      "key": "wc_hospital_approach"
+    },
+    {
+      "x": 30.2,
+      "y": 40.2,
+      "z": -0.6,
+      "key": "wc_east_lane_south"
+    },
+    {
+      "x": -52.7,
+      "y": 39.5,
+      "z": 5.8,
+      "key": "wc_west_strip_south"
+    },
+    {
+      "x": -39.4,
+      "y": 41.0,
+      "z": 7.2,
+      "key": "wc_ridge_foot"
+    },
+    {
+      "x": -21.2,
+      "y": 40.0,
+      "z": 8.3,
+      "key": "wc_recruits_camp"
+    },
+    {
+      "x": 37.1,
+      "y": 40.7,
+      "z": 10.0,
+      "key": "wc_east_cliff_lane"
+    },
+    {
+      "x": -40.0,
+      "y": 41.4,
+      "z": 13.1,
+      "key": "wc_ridge_steps"
+    },
+    {
+      "x": 29.8,
+      "y": 40.0,
+      "z": 13.7,
+      "key": "wc_east_lane_bend"
+    },
+    {
+      "x": -35.1,
+      "y": 40.3,
+      "z": 14.0,
+      "key": "wc_west_clearing"
+    },
+    {
+      "x": -40.8,
+      "y": 41.7,
+      "z": 18.8,
+      "key": "wc_ridge_top_path"
+    },
+    {
+      "x": 11.5,
+      "y": 40.1,
+      "z": 20.7,
+      "key": "wc_parade_ground"
+    },
+    {
+      "x": -47.7,
+      "y": 39.0,
+      "z": 23.0,
+      "key": "wc_west_notch"
+    },
+    {
+      "x": 34.2,
+      "y": 40.3,
+      "z": 26.7,
+      "key": "wc_east_terrace"
+    },
+    {
+      "x": -52.4,
+      "y": 39.5,
+      "z": 27.7,
+      "key": "wc_west_strip"
+    },
+    {
+      "x": -6.8,
+      "y": 39.9,
+      "z": 28.3,
+      "key": "wc_quartermaster_row"
+    },
+    {
+      "x": -25.6,
+      "y": 39.9,
+      "z": 29.7,
+      "key": "wc_west_fire"
+    },
+    {
+      "x": -47.5,
+      "y": 38.9,
+      "z": 38.2,
+      "key": "wc_west_strip_gap"
+    },
+    {
+      "x": -40.1,
+      "y": 41.1,
+      "z": 41.2,
+      "key": "wc_ridge_stakes"
+    },
+    {
+      "x": 33.2,
+      "y": 40.6,
+      "z": 41.8,
+      "key": "wc_northeast_tents"
+    },
+    {
+      "x": 20.7,
+      "y": 40.1,
+      "z": 47.7,
+      "key": "wc_north_of_hq"
+    },
+    {
+      "x": -2.2,
+      "y": 40.0,
+      "z": 48.9,
+      "key": "wc_eagle_watch"
+    },
+    {
+      "x": 34.0,
+      "y": 41.1,
+      "z": 49.4,
+      "key": "wc_northeast_steps"
+    },
+    {
+      "x": -20.0,
+      "y": 40.0,
+      "z": 49.9,
+      "key": "wc_wagon_park"
+    },
+    {
+      "x": -34.2,
+      "y": 40.4,
+      "z": 50.1,
+      "key": "wc_northwest_clearing"
+    },
+    {
+      "x": 29.9,
+      "y": 40.1,
+      "z": 51.6,
+      "key": "wc_northeast_nook"
+    },
+    {
+      "x": 34.2,
+      "y": 41.1,
+      "z": 55.8,
+      "key": "wc_northeast_rocks"
+    },
+    {
+      "x": -40.6,
+      "y": 41.5,
+      "z": 57.2,
+      "key": "wc_ridge_shoulder"
+    },
+    {
+      "x": -52.3,
+      "y": 39.8,
+      "z": 58.0,
+      "key": "wc_west_strip_north"
+    },
+    {
+      "x": 18.1,
+      "y": 40.0,
+      "z": 58.1,
+      "key": "wc_north_tents_east"
+    },
+    {
+      "x": -21.4,
+      "y": 40.0,
+      "z": 62.7,
+      "key": "wc_north_tents_west"
+    },
+    {
+      "x": 11.0,
+      "y": 40.4,
+      "z": 65.5,
+      "key": "wc_north_brazier"
+    },
+    {
+      "x": 27.4,
+      "y": 40.4,
+      "z": 66.5,
+      "key": "wc_north_wagons"
+    },
+    {
+      "x": -5.8,
+      "y": 40.4,
+      "z": 68.6,
+      "key": "wc_north_camp"
+    },
+    {
+      "x": 14.5,
+      "y": 40.7,
+      "z": 68.7,
+      "key": "wc_north_steps"
+    },
+    {
+      "x": -39.0,
+      "y": 41.2,
+      "z": 69.0,
+      "key": "wc_ridge_north_end"
+    },
+    {
+      "x": -23.6,
+      "y": 40.7,
+      "z": 71.7,
+      "key": "wc_north_slope"
+    },
+    {
+      "x": -35.8,
+      "y": 40.7,
+      "z": 71.9,
+      "key": "wc_northwest_wood"
+    },
+    {
+      "x": -22.8,
+      "y": 41.83,
+      "z": 74.22,
+      "key": "wc_north_wood"
+    },
+    {
+      "x": 27.7,
+      "y": 41.5,
+      "z": 74.7,
+      "key": "wc_north_cliff_path"
+    },
+    {
+      "x": 36.0,
+      "y": 42.1,
+      "z": 75.8,
+      "key": "wc_north_cliff_corner"
+    }
+  ]
+}

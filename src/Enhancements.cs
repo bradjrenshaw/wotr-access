@@ -15,6 +15,13 @@ namespace WrathAccess
         public static bool NeutralsIgnoreFog =>
             Settings.ModSettings.GetSetting<Settings.BoolSetting>("enhancements.neutrals_ignore_fog")?.Get() ?? true;
 
+        /// <summary>Revealed COMPANIONS (player-faction units — the party, and the companions the
+        /// game parks around a hub like the war camp) stay locatable in the in-area scanner lists and
+        /// the review cycles while out of sight, like revealed neutrals. Finding a companion across
+        /// a big camp is sighted-cheap (the map shows them) and blind-expensive.</summary>
+        public static bool CompanionsIgnoreFog =>
+            Settings.ModSettings.GetSetting<Settings.BoolSetting>("enhancements.companions_ignore_fog")?.Get() ?? true;
+
         /// <summary>Strategic hints (the J cycle / "Strategic" scan category): enemy spawn points and
         /// enemy objectives derived from the loaded scene (StrategicModel). A sighted player reads the
         /// gate an assault will pour through and the building the arsonists sprint for at a glance;
@@ -35,6 +42,8 @@ namespace WrathAccess
                 localizationKey: "category.enhancements");
             enh.Add(new Settings.BoolSetting("neutrals_ignore_fog", "Neutral NPCs ignore fog of war", true,
                 "enh.neutrals_ignore_fog"));
+            enh.Add(new Settings.BoolSetting("companions_ignore_fog", "Companions ignore fog of war", true,
+                "enh.companions_ignore_fog"));
             enh.Add(new Settings.BoolSetting("strategic_hints", "Strategic hints (spawn points, enemy objectives)", true,
                 "enh.strategic_hints"));
             enh.Add(new Settings.BoolSetting("achievements_with_mods", "Achievements stay enabled with mods active", true,

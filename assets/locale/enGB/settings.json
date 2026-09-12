@@ -143,6 +143,7 @@
 
   "category.enhancements": "Enhancements",
   "enh.neutrals_ignore_fog": "Neutral NPCs ignore fog of war",
+  "enh.companions_ignore_fog": "Companions ignore fog of war",
   "enh.strategic_hints": "Strategic hints (spawn points, enemy objectives)",
   "enh.achievements_with_mods": "Achievements stay enabled with mods active",
   "enh.claim_achievements": "Claim achievements already earned",

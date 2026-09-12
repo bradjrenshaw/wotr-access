@@ -332,10 +332,15 @@ namespace WrathAccess.Exploration
         // live position even while out of sight — same rationale as the map half (re-finding a met
         // vendor is sighted-cheap, blind-expensive). Deliberately NOT wired through IsVisible: the
         // sonar/object-cue soundscape keys off that, and fogged people must not hum.
+        // COMPANIONS (player-faction units: the party and the companions a hub parks around the
+        // area) get the same treatment under their own Enhancements toggle — a sighted player reads
+        // them off the map from anywhere; by ear a spread-out camp was a sweep.
         private static bool RevealedNeutral(ScanItem it)
         {
-            if (!Enhancements.NeutralsIgnoreFog) return false;
-            if (it.Primary != ScanTaxonomy.UnitsNeutrals && it.Primary != ScanTaxonomy.UnitsBystanders) return false;
+            var p = it.Primary;
+            bool neutralish = p == ScanTaxonomy.UnitsNeutrals || p == ScanTaxonomy.UnitsBystanders;
+            bool companion = p == ScanTaxonomy.UnitsParty;
+            if (neutralish ? !Enhancements.NeutralsIgnoreFog : !(companion && Enhancements.CompanionsIgnoreFog)) return false;
             var u = it.TargetUnit;
             return u != null && u.IsInGame && u.IsRevealed;
         }

@@ -1782,6 +1782,8 @@
   "desc.wc_t1_front.body": "The front half of Nurah Dendiwhar's tent, close and candlelit under the canvas: a camp bed with a bedside table and a barrel stands against the back wall, a folding screen and a chair beside it, a table strewn with scrolls and candles in the middle, a writing desk with a candle burning on it, and a rug over the trampled ground. The tent flap out to the camp is on the west side; the inner half, crammed with shelves, lies to the south-east.",
   "desc.wc_t1_study.title": "Nurah's Tent, the Study",
   "desc.wc_t1_study.body": "The inner half of Nurah Dendiwhar's tent: shelves stacked with books, scrolls and ledgers along the canvas walls, a chest, a table with a candlestick and heaped papers, and a rug on the ground between them. The bed and the way out lie to the north-west.",
+  "desc.wc_hq.title": "The Commander's Tent",
+  "desc.wc_hq.body": "The commander's pavilion, a broad tent of hung canvas walls lit by candelabra and hanging lanterns. At its centre stands the war table, heaped with maps, scrolls, candles and a ledger, on a patterned rug with a folding chair drawn up to it. Rugs lie inside the entrance to the south-west, and racks of spears and shields stand by the south wall. The commander's bed, with a barrel and a bedside table beside it, is screened off by folding partitions on the west side; a writing desk with a chair and letters sits in the north-west corner, and chests and barrels are stacked along the north-east side. The tent flap out to the camp is on the south-west.",
   "where.region": "{region} of the map",
   "where.center": "center",
   "where.unknown": "Unknown location",

@@ -46,6 +46,7 @@ namespace WrathAccess
 
         public static Message Localized(string table, string key) => new Message(null, table, key, null);
         public static Message Localized(string table, string key, object vars) => new Message(null, table, key, ObjectToDict(vars));
+        public static Message Localized(string table, string key, Dictionary<string, Message> vars) => new Message(null, table, key, vars);
 
         public static readonly Message Empty = new Message(string.Empty, null, null, null);
 

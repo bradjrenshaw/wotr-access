@@ -152,6 +152,8 @@
   "event.settings": "Event settings",
   "event.custom": "Individual event customization",
   "event.room_changed": "Room changed",
+  "event.object_shown": "Object appears",
+  "event.object_hidden": "Object vanishes",
   "event.damage": "Damage",
   "event.heal": "Heal",
   "event.buff_gained": "Buff gained",

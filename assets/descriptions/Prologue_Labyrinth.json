@@ -324,5 +324,16 @@
       "z": 85.32,
       "key": "shieldmaze_unfinished_corner"
     }
+  ],
+  "names": [
+    {
+      "match": "^Rune_(?<puzzle>.+)_(?<color>Yellow|Blue|Red|Green)_(?<slot>\\d)$",
+      "key": "obj.sm_rune",
+      "group": "sm_runes",
+      "shown": "obj.sm_rune.shown",
+      "hidden": "obj.sm_rune.hidden",
+      "all_shown": "obj.sm_rune.all_shown",
+      "all_hidden": "obj.sm_rune.all_hidden"
+    }
   ]
 }

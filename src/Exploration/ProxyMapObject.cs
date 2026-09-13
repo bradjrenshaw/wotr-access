@@ -30,6 +30,18 @@ namespace WrathAccess.Exploration
 
         public ProxyMapObject(MapObjectEntityData obj) : base(obj) { _obj = obj; }
 
+        // Curated naming (ObjectNames — puzzle runes etc.), resolved once: the patterns allocate.
+        private ObjectNames.Naming _naming;
+        private bool _namingResolved;
+        internal ObjectNames.Naming Naming
+        {
+            get
+            {
+                if (!_namingResolved) { _namingResolved = true; try { _naming = ObjectNames.Resolve(_obj.View?.name); } catch { } }
+                return _naming;
+            }
+        }
+
         // Mirror the local map's own marker filter (LocalMapMarkerPart.IsVisible): a static object stays
         // listed once it's been revealed, even if it's currently back in fog — so we keep showing things
         // the player has seen, like the map does. Perception gates the hidden ones: IsPerceptionCheckPassed
@@ -203,6 +215,8 @@ namespace WrathAccess.Exploration
         // property below keeps its old desc→prefab→category→"object" behaviour for other consumers.
         private string RealName()
         {
+            var curated = Naming;
+            if (curated != null) return curated.Name; // mod-authored, for the player ("slot 1: yellow rune")
             var desc = _obj.Get<LocalMapMarkerPart>()?.GetDescription();
             if (!string.IsNullOrEmpty(desc)) return WithDestination(desc); // curated/localized marker label wins
             var prefab = CleanName(_obj.View?.name);
@@ -285,7 +299,10 @@ namespace WrathAccess.Exploration
         {
             if (string.IsNullOrWhiteSpace(raw)) return null;
             var s = raw.Replace("(Clone)", "").Trim();
-            s = Regex.Replace(s, @"[ _]\d+$", "").Trim(); // Unity's duplicate suffix (" 2", "_3")
+            // Unity's duplicate suffix is SPACE-separated (" 2"). An UNDERSCORED trailing number is
+            // the designer's own ("Rune_Torture_2_Yellow_1" = the puzzle's slot 1, "WeaponStand_3") —
+            // stripping it made every slot rune read alike (Shield Maze torture-room repro).
+            s = Regex.Replace(s, @" \d+$", "").Trim();
             foreach (var p in NoisePrefixes)
                 if (s.StartsWith(p, System.StringComparison.OrdinalIgnoreCase)) { s = s.Substring(p.Length); break; }
             foreach (var sfx in NoiseSuffixes)
@@ -397,6 +414,11 @@ namespace WrathAccess.Exploration
             return false;
         }
 
+        // How close a mechanism and its animated twin sit: the authored pairs are ~0.1 m apart. Kept
+        // tight — at 1.5 m the Shield Maze's blue puzzle button (1.36 m from the scripted password
+        // DOOR) read a phantom "unflipped" off the door's state (tester repro).
+        private const float TwinRadius = 0.6f;
+
         // Is THIS object the animated half of a mechanism twin? (a scripted AlwaysDisabled door
         // part, with a real interactable mechanism co-located ≤1.5m — the pairs sit ~0.1m apart).
         private bool IsSwitchVisual()
@@ -408,7 +430,7 @@ namespace WrathAccess.Exploration
             {
                 if (mo == null || ReferenceEquals(mo, _obj)) continue;
                 float dx = mo.Position.x - p.x, dz = mo.Position.z - p.z;
-                if (dx * dx + dz * dz > 1.5f * 1.5f) continue;
+                if (dx * dx + dz * dz > TwinRadius * TwinRadius) continue;
                 var ints = mo.Interactions;
                 for (int i = 0; i < ints.Count; i++)
                     if (ints[i].Enabled && !(ints[i] is InteractionDoorPart)
@@ -432,7 +454,7 @@ namespace WrathAccess.Exploration
 
             var p = Position;
             bool? state = null;
-            float bestSq = 1.5f * 1.5f;
+            float bestSq = TwinRadius * TwinRadius;
             foreach (var mo in Game.Instance.State.MapObjects)
             {
                 if (mo == null || ReferenceEquals(mo, _obj)) continue;

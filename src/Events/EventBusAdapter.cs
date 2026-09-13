@@ -8,6 +8,7 @@ using Kingmaker.RuleSystem.Rules;         // RuleDealStatDamage
 using Kingmaker.RuleSystem.Rules.Damage;  // RuleDealDamage
 using Kingmaker.UI.Models.Log;            // GameLogDisabled
 using Kingmaker.UnitLogic.Buffs;          // Buff
+using Kingmaker.EntitySystem;             // EntityDataBase (IInGameHandler)
 
 namespace WrathAccess.Events
 {
@@ -22,8 +23,96 @@ namespace WrathAccess.Events
     /// (<see cref="IRulebookHandler{T}"/> over RuleDealStatDamage) fire per instance, no de-noising.
     /// </summary>
     internal sealed class EventBusAdapter
-        : IDamageHandler, IHealingHandler, IUnitBuffHandler, IUnitHandler, IGlobalRulebookHandler<RuleDealStatDamage>
+        : IDamageHandler, IHealingHandler, IUnitBuffHandler, IUnitHandler, IGlobalRulebookHandler<RuleDealStatDamage>,
+          IInGameHandler
     {
+        // A scene object SHOWN or HIDDEN by script (HideMapObject — a puzzle's progress runes, a
+        // revealed prop): the sighted player watches it appear/vanish; by ear this is the only
+        // feedback (the Shield Maze torture-room combination lock). The game raises this from the
+        // IsInGame setter; a hidden object leaves the entity pools entirely, so the world model's
+        // own diff can't tell a scripted hide from an area change — this is the signal. Filters:
+        // map objects with something to SEE (a renderer — script zones, spawners, trap zones have
+        // none; units have their own events), never mid-cutscene/dialogue (dressing churns, and
+        // control is lost anyway), never while an area loads, within earshot of the party, and not
+        // under fog. Announced through the ordinary event pipeline (Events settings).
+        private const float ShownEventRadius = 20f;
+        public void HandleObjectInGameChanged(EntityDataBase entity)
+        {
+            try
+            {
+                var mo = entity as MapObjectEntityData;
+                if (mo == null || mo is Kingmaker.View.MapObjects.Traps.TrapObjectData) return;
+                var game = Kingmaker.Game.Instance;
+                if (game == null || game.CurrentlyLoadedArea == null || game.CutsceneLock.Active) return;
+                if (Kingmaker.EntitySystem.Persistence.LoadingProcess.Instance.IsLoadingInProcess) return;
+                var mode = game.CurrentMode;
+                if (mode == Kingmaker.GameModes.GameModeType.Cutscene || mode == Kingmaker.GameModes.GameModeType.Dialog) return;
+                var view = mo.View;
+                if (view == null || view.GetComponentInChildren<UnityEngine.Renderer>(true) == null) return;
+                var pos = view.transform.position;
+                if (WrathAccess.Exploration.Geo.Distance(WrathAccess.Exploration.Overlays.Cursor.PlayerPosition, pos) > ShownEventRadius) return;
+                if (Kingmaker.Controllers.FogOfWarController.IsInFogOfWar(pos)) return;
+                _visibility.Add(new VisibilityChange(new WrathAccess.Exploration.ProxyMapObject(mo), mo.IsInGame));
+                _visibilityLast = UnityEngine.Time.realtimeSinceStartup;
+            }
+            catch (Exception e) { Main.Log?.Warning("[shown] " + e.Message); }
+        }
+
+        // Shown/hidden changes wait out a short quiet window before speaking, so a script that flips
+        // several objects together (a failed combination hides every lit rune in one frame) reads as
+        // ONE line — the curated group's "all runes stop glowing" (ObjectNames) — rather than four
+        // overlapping utterances. Objects with no group, or a group without an "all" line, still
+        // speak one by one; a lone change speaks its own curated line ("slot 1: yellow rune glows")
+        // or the generic "{name} appears". Real time, not game time: the puzzle plays paused too.
+        private struct VisibilityChange
+        {
+            public readonly WrathAccess.Exploration.ProxyMapObject Item;
+            public readonly bool Shown;
+            public VisibilityChange(WrathAccess.Exploration.ProxyMapObject item, bool shown) { Item = item; Shown = shown; }
+        }
+        private const float VisibilityWindow = 0.25f; // seconds of quiet before the batch speaks
+        private readonly List<VisibilityChange> _visibility = new List<VisibilityChange>();
+        private float _visibilityLast;
+
+        private void FlushVisibility()
+        {
+            if (_visibility.Count == 0) return;
+            if (UnityEngine.Time.realtimeSinceStartup - _visibilityLast < VisibilityWindow) return;
+            try
+            {
+                // Count members per (group, shown) so a group changing en masse collapses to its "all" line.
+                var groupCounts = new Dictionary<string, int>();
+                foreach (var c in _visibility)
+                {
+                    var g = c.Item.Naming?.Group;
+                    if (string.IsNullOrEmpty(g)) continue;
+                    var k = (c.Shown ? "+" : "-") + g;
+                    groupCounts.TryGetValue(k, out var n);
+                    groupCounts[k] = n + 1;
+                }
+                var spokenGroups = new HashSet<string>();
+                foreach (var c in _visibility)
+                {
+                    var naming = c.Item.Naming;
+                    var g = naming?.Group;
+                    Message msg = null;
+                    if (!string.IsNullOrEmpty(g) && groupCounts[(c.Shown ? "+" : "-") + g] > 1)
+                    {
+                        var all = naming.ChangeAll(c.Shown);
+                        if (all != null)
+                        {
+                            if (!spokenGroups.Add((c.Shown ? "+" : "-") + g)) continue; // the group already spoke
+                            msg = all;
+                        }
+                    }
+                    if (msg == null) msg = naming?.Change(c.Shown);
+                    EventDispatcher.Raise(c.Shown ? (ModEvent)new ObjectShownEvent(c.Item, msg) : new ObjectHiddenEvent(c.Item, msg));
+                }
+            }
+            catch (Exception e) { Main.Log?.Warning("[shown] flush: " + e.Message); }
+            _visibility.Clear();
+        }
+
         private static EventBusAdapter _instance;
 
         // Buffs currently announced as active, keyed by (unit, blueprint).
@@ -50,7 +139,7 @@ namespace WrathAccess.Events
 
         /// <summary>Reconcile the frame's buff churn into genuine gain/loss events. Ticked once per frame
         /// (before <see cref="EventDispatcher.Tick"/>, so the reconciled events flush this frame).</summary>
-        public static void Tick() => _instance?.Reconcile();
+        public static void Tick() { _instance?.Reconcile(); _instance?.FlushVisibility(); }
 
         // The game's own "don't narrate this" contract, checked AT CAPTURE TIME (our handlers run
         // synchronously inside rule application, where these flags are live): the scoped

@@ -168,9 +168,9 @@ namespace WrathAccess.Speech
         /// <summary>Dev-only tap: every string spoken through the default path is mirrored here so the dev
         /// server's /speech log can read back what was said. Null in a normal run; set by the dev server.</summary>
         public static Action<string> Observer;
-        private static void Tap(string text) { if (!string.IsNullOrEmpty(text)) Observer?.Invoke(text); }
+        internal static void Tap(string text) { if (!string.IsNullOrEmpty(text)) Observer?.Invoke(text); }
 #else
-        private static void Tap(string text) { } // no-op; the dev speech tap exists only in Debug builds
+        internal static void Tap(string text) { } // no-op; the dev speech tap exists only in Debug builds
 #endif
         public static void Silence() { if (Ready) Default.Silence(); }
 

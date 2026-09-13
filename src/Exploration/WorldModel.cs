@@ -66,6 +66,7 @@ namespace WrathAccess.Exploration
             AreaDetails.Refresh(areaName);
             // Mod-authored environmental descriptions (room ambiance + per-asset), loaded per area the same way.
             EnvDescriptions.Refresh(areaName);
+            ObjectNames.Refresh(areaName); // curated scene-object names (puzzle runes), per area too
             // Curated composites are per area too; a reload invalidates the per-entity classification.
             if (Composites.Refresh(areaName)) { _compositeOf.Clear(); _notComposite.Clear(); _liveComposites.Clear(); }
             // Frontier blobs are per-area too — entering a different area drops the stale set.

@@ -38,6 +38,7 @@ namespace WrathAccess.Events
                 var msg = e.GetMessage();
                 if (msg == null || msg.IsEmpty) return;
                 var text = msg.Resolve();
+                SpeechManager.Tap(text); // dev speech log: events speak through a config, not Tts.Speak
                 var config = SpeechConfigRegistry.Get(EventRegistry.ConfigId(e));
 
                 // Render-capable configs (SAPI) read through the mod's mixer so utterances OVERLAP (combat

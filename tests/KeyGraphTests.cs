@@ -88,6 +88,37 @@ namespace WrathAccess.Tests
         }
 
         [Fact]
+        public void VanishedTopRowLandsOnItsOwnListsNextRow()
+        {
+            // Two Tab-stop lists (the loot window's containers). Taking the TOP row of the second
+            // list must land on that list's next row — not walk backward into the first list's
+            // last row (tester repro: "as if I'd pressed Shift+Tab"). Rows carry a landing group.
+            var state = new GraphState();
+            bool taken = false;
+            NodeVtable Row(string label, string group) { var v = Vt(label); v.LandGroup = group; return v; }
+            var g = new KeyGraph(() =>
+            {
+                var b = new GraphBuilder();
+                b.BeginStop("src0");
+                b.AddItem(Id("s0:a"), Row("sword", "src0"));
+                b.AddItem(Id("s0:b"), Row("shield", "src0"));
+                b.BeginStop("src1");
+                if (!taken) b.AddItem(Id("s1:a"), Row("potion", "src1"));
+                b.AddItem(Id("s1:b"), Row("scroll", "src1"));
+                b.AddItem(Id("s1:c"), Row("gem", "src1"));
+                return b.Build();
+            }, state);
+
+            Assert.True(g.Rerender());
+            g.MoveStop(1, false); // into the second container, at its top row
+            Assert.Equal(Id("s1:a"), state.CurKey);
+
+            taken = true; // the top row is looted and vanishes
+            Assert.True(g.Rerender());
+            Assert.Equal(Id("s1:b"), state.CurKey); // its own list's next row
+        }
+
+        [Fact]
         public void ReconcileTier1FollowsAMovedObject()
         {
             var state = new GraphState();

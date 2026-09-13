@@ -57,7 +57,15 @@ namespace WrathAccess.Screens
                     foreach (var slot in obj.SlotsGroup.VisibleCollection)
                     {
                         if (slot != null && slot.HasItem)
-                            b.AddItem(ControlId.Referenced(slot, k + "src:" + s + ":item:" + i), GraphNodes.LootItem(vm, slot));
+                        {
+                            // Rows share a LANDING GROUP per container, so taking one lands focus on the
+                            // container's next row (then its previous). Without it, taking the TOP row
+                            // fell to the generic backward walk — the previous container's last item
+                            // (tester repro: "as if I'd pressed Shift+Tab").
+                            var row = GraphNodes.LootItem(vm, slot);
+                            row.LandGroup = k + "src:" + s;
+                            b.AddItem(ControlId.Referenced(slot, k + "src:" + s + ":item:" + i), row);
+                        }
                         i++;
                     }
                     b.PopContext();
@@ -119,8 +127,9 @@ namespace WrathAccess.Screens
                         // entity too: a positional "item:N" key makes the re-dealt neighbour look like
                         // the same node (silent). Reference hash, like the vendor sheet's row keys.
                         object ent = (object)slot.Item.Value ?? slot;
-                        b.AddItem(ControlId.Referenced(ent, k + "stash:item:" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(ent)),
-                            GraphNodes.StashItem(vm, slot));
+                        var row = GraphNodes.StashItem(vm, slot);
+                        row.LandGroup = k + "stash"; // depositing lands on the next stash row, not the filters
+                        b.AddItem(ControlId.Referenced(ent, k + "stash:item:" + System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(ent)), row);
                     }
                     si++;
                 }

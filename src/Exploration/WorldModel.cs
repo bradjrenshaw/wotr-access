@@ -30,6 +30,7 @@ namespace WrathAccess.Exploration
             new List<Kingmaker.EntitySystem.Entities.MapObjectEntityData>();
         private const float DupRadius = 1.5f;
         private static int _foldedVersion = -1;
+        private static string _placeKey; // "area|part" of the last tick; a change re-seats the cursor
         // Curated composites (Composites.cs): a member map object never gets its own proxy — it feeds
         // the composite item keyed by the definition. Classified ONCE per entity (the name read
         // allocates); the negative cache keeps the common path a hash probe.
@@ -49,6 +50,17 @@ namespace WrathAccess.Exploration
             if (state == null) { FrontierModel.SyncArea(null); ClearAll(); return; } // no area loaded (menu/global map) → empty
 
             var areaName = Game.Instance.CurrentlyLoadedArea != null ? Game.Instance.CurrentlyLoadedArea.name : null;
+            // A NEW area or area part (an exit, a floor change): the shared cursor still held its old
+            // world point, which meant nothing in the new place — every readout, the sonar and the ears
+            // sat on a stale spot until the player re-planted it. Drop it, so reads fall back to the
+            // party leader exactly as on first load; the player's own next placement wins from there.
+            var partName = Game.Instance.CurrentlyLoadedAreaPart != null ? Game.Instance.CurrentlyLoadedAreaPart.name : null;
+            var placeKey = areaName + "|" + partName;
+            if (placeKey != _placeKey)
+            {
+                if (_placeKey != null) Cursor.Clear();
+                _placeKey = placeKey;
+            }
             // Curated environmental details (scene-art things with no runtime data layer) reload on
             // area change and flow through the same registry, keyed by their entry objects.
             AreaDetails.Refresh(areaName);
@@ -255,6 +267,7 @@ namespace WrathAccess.Exploration
 
         private static void ClearAll()
         {
+            _placeKey = null; // menu / world map: the next area load counts as a new place
             _suppressed.Clear();
             _transitions.Clear();
             _compositeOf.Clear();

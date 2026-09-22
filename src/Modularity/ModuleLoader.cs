@@ -32,9 +32,19 @@ namespace WrathAccess.Modularity
             return LoadGeneration();
         }
 
-        /// <summary>Dispose the current generation and load a fresh one from the same path.</summary>
+        /// <summary>Dispose the current generation and load a fresh one from the same path.
+        /// REFUSED when the file still carries the current generation's assembly name: Mono binds
+        /// byte-loaded assemblies by simple name and hands back the SAME image, so "reloading" an
+        /// unrebuilt dll re-runs Load on live statics — input actions registered twice, one-shot
+        /// boot flags already spent (focus mode off, speech mute), per-area caches stale. Every
+        /// module build stamps a fresh name; an asset-only change wants the module's /assets route.</summary>
         public static string Reload()
         {
+            var current = CurrentAssembly?.GetName().Name;
+            string candidate = null;
+            try { candidate = AssemblyName.GetAssemblyName(_path).Name; } catch { }
+            if (current != null && candidate == current)
+                return "module: gen " + Generation + " unchanged (" + current + ") - rebuild the module before reloading; POST /assets refreshes locale + descriptions\n";
             DisposeCurrent();
             bool ok = LoadGeneration();
             return ok ? Describe() : "[reload failed] see Player.log\n";

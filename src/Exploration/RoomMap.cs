@@ -185,6 +185,34 @@ namespace WrathAccess.Exploration
         /// drags along) settles first; repeated door events push the window out (coalesced).</summary>
         public static void InvalidateSoon() => _invalidateAt = UnityEngine.Time.unscaledTime + 2f;
 
+        // The navmesh keeps changing AFTER the build: additive mechanics scenes stream in their
+        // props' navmesh cuts seconds after the area loads (the war camp's blacksmith stall cut 38
+        // cells late and the first build had carved two extra rooms off the parade ground that the
+        // settled graph doesn't have). Poll a cheap fingerprint of the graph (~1 ms per 40k nodes)
+        // once a second; when it moves, schedule the coalesced rebuild.
+        private static long _builtNavFp;
+        private static int _fpCooldown;
+
+        private static long NavFingerprint()
+        {
+            var graphs = AstarPath.active?.data?.graphs;
+            if (graphs == null) return 0;
+            long count = 0, hash = 17;
+            foreach (var g in graphs)
+            {
+                if (!(g is NavmeshBase)) continue;
+                g.GetNodes(node =>
+                {
+                    var t = node as TriangleMeshNode;
+                    if (t == null) return;
+                    count++;
+                    var v = t.GetVertex(0);
+                    hash = unchecked(hash * 31 + v.x * 7 + v.z);
+                });
+            }
+            return unchecked(count * 1000003 + hash);
+        }
+
         public static void Tick()
         {
             if (_invalidateAt > 0f && UnityEngine.Time.unscaledTime >= _invalidateAt)
@@ -222,6 +250,17 @@ namespace WrathAccess.Exploration
                     _label = null; _rooms.Clear();
                     _retryCooldown = 300; // a real failure: back off, the next part change resets
                     Main.Log?.Warning("[rooms] build failed: " + e.Message);
+                }
+            }
+            else if (Ready && _invalidateAt <= 0f && ++_fpCooldown >= 60)
+            {
+                _fpCooldown = 0;
+                long fp = NavFingerprint();
+                if (fp != _builtNavFp)
+                {
+                    _builtNavFp = fp; // one rebuild per change (the rebuild re-reads it anyway)
+                    InvalidateSoon();
+                    Main.Log?.Log("[rooms] " + key + ": navmesh changed, rebuilding");
                 }
             }
             TickAnnounce();
@@ -327,6 +366,7 @@ namespace WrathAccess.Exploration
             _label = null;
             _unexplored.Clear();
 
+            _builtNavFp = NavFingerprint();
             // 1) Collect the recast navmesh triangles (world metres).
             var tris = new List<Vector3>(); // groups of 3
             var graphs = AstarPath.active.data?.graphs;

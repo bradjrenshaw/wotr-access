@@ -153,9 +153,19 @@ namespace WrathAccess.Exploration.Overlays
             var intended = cur + dir * step;
             // Wall slide: blocked motion slides along the wall's tangent — the same trace the game's
             // direct-control movement uses — funnelling through doorways instead of dead-stopping.
-            var traced = slide
-                ? ObstacleAnalyzer.TraceAlongNavmeshWithWallSlide(cur, intended)
-                : ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
+            Vector3 traced;
+            try
+            {
+                traced = slide
+                    ? ObstacleAnalyzer.TraceAlongNavmeshWithWallSlide(cur, intended)
+                    : ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
+            }
+            catch (System.NullReferenceException)
+            {
+                // No navmesh under the cursor yet (a key held through an area-part swap): the game's
+                // trace dereferences a null nearest node. Treat as blocked rather than abort the tick.
+                return false;
+            }
             if ((traced - cur).sqrMagnitude < 1e-6f) return false;
             // Re-project onto the walkable surface: the trace's unobstructed result keeps the INPUT Y
             // (the navmesh linecast never re-snaps height), so gliding up a ramp left the cursor's Y

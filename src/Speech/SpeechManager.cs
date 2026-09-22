@@ -157,6 +157,10 @@ namespace WrathAccess.Speech
             _initialized = false;
             foreach (var h in Handlers)
                 try { h.Unload(); } catch { }
+            // Forget the loaded set too: a hot reload of an UNCHANGED dll re-runs Initialize on the
+            // same image, and a surviving entry made EnsureLoaded skip Load() — the handler's native
+            // context was gone, and the reloaded module came up mute.
+            _loaded.Clear();
         }
 
         // ---- the default-config speak/render API (UI / announcements / dialogue) ----

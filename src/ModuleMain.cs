@@ -38,6 +38,10 @@ namespace WrathAccess
         {
             try
             {
+                // Statics survive a hot reload of an UNCHANGED dll (Mono binds by name and hands back the
+                // same image), so Dispose's focus-off would otherwise stick: the reloaded module came up
+                // deaf to every key. Re-arm the boot-time engage explicitly.
+                _bootFocusPending = true;
                 WrathAccess.Localization.LocalizationManager.Initialize(); // wire Message's resolver early
                 // Per-GENERATION Harmony id: Dispose unpatches by id, and a fixed id would strip a
                 // newer generation's patches if an old Dispose ever ran late.
@@ -70,6 +74,13 @@ namespace WrathAccess
                 WarningReader.Initialize(); // speak the game's "can't do that" warnings (refusal reasons)
                 WrathAccess.Events.EventBusAdapter.Initialize(); // turn game damage/buff events into mod events
                 DialogVisibility.Initialize(); // track when the dialogue window is actually shown/clickable
+                // Per-area curated data (assets/descriptions) re-reads on the next tick. A hot reload of an
+                // UNCHANGED module dll re-runs Load on the same image (Mono binds by name), so the
+                // area-keyed caches would otherwise survive it and hide freshly deployed prose.
+                WrathAccess.Exploration.EnvDescriptions.Refresh(null);
+                WrathAccess.Exploration.AreaDetails.Refresh(null);
+                WrathAccess.Exploration.Composites.Refresh(null);
+                WrathAccess.Exploration.ObjectNames.Refresh(null);
 
                 // Module-owned components on a module-owned GameObject (destroyed on Dispose).
                 // The virtual audio head (+10000: its LateUpdate must land AFTER the game's camera

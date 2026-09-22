@@ -25,6 +25,21 @@ namespace WrathAccess.Dev
                 return s.OnMain(() => Inject(verb));
             });
             s.RegisterRoute("/loadsave", (method, body, query) => LoadSave(body));
+            // Asset-only refresh (locale tables + assets/descriptions curation) without a module
+            // reload — the rooms-ritual loop deploys prose, not code. Main thread: the caches are
+            // read by the frame loop.
+            s.RegisterRoute("/assets", (method, body, query) => s.OnMain(RefreshAssets));
+        }
+
+        private static string RefreshAssets()
+        {
+            WrathAccess.Localization.LocalizationManager.Initialize();
+            WrathAccess.Exploration.EnvDescriptions.Refresh(null);
+            WrathAccess.Exploration.AreaDetails.Refresh(null);
+            WrathAccess.Exploration.Composites.Refresh(null);
+            WrathAccess.Exploration.ObjectNames.Refresh(null);
+            WrathAccess.Exploration.RoomMap.InvalidateSoon(); // curated walls/merges live in the same file
+            return "assets refreshed: locale + descriptions (room map rebuilding)\n";
         }
 
         public static void Unregister()
@@ -34,6 +49,7 @@ namespace WrathAccess.Dev
             s.UnregisterRoute("/gui");
             s.UnregisterRoute("/input");
             s.UnregisterRoute("/loadsave");
+            s.UnregisterRoute("/assets");
         }
 
         // Fire one of our InputActions by key, exactly as InputManager.Tick routes a real press: a UI action

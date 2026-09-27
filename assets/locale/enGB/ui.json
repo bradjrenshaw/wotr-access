@@ -554,6 +554,8 @@
   "worldmap.value_line": "{name}: {value}",
   "worldmap.stat_line": "{name}, rank {rank}, experience {value}, next rank {next}",
   "worldmap.stat_line_max": "{name}, rank {rank}, experience {value}, maximum rank",
+  "crusade.buy_counter": "{count}, {available} available, {cost} gold each",
+  "crusade.buy_total": "Total cost {cost} of {money} gold",
   "worldmap.enter_title": "Location",
   "worldmap.travel_paused": "Travel paused. Press Enter to continue.",
   "worldmap.continuing": "Continuing",

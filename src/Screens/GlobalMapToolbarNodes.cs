@@ -167,6 +167,9 @@ namespace WrathAccess.Screens
                         () => { var s = StatAt(k); return s == null ? "" : StatLine(s); },
                         () => StatAt(k)?.Tooltip));
                 }
+            // Buy Resources: opens the purchase window (its own modal screen, GlobalMapBuyResourcesScreen).
+            b.AddItem(ControlId.Structural("tb:buy"), GraphNodes.Button(
+                () => UIStrings.Instance.CrusadeTexts.BuyResource, () => Info()?.ShowBuyResources()));
         }
 
         private static KingdomResourceVM ResourceAt(int i)

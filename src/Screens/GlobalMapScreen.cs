@@ -90,6 +90,7 @@ namespace WrathAccess.Screens
         {
             if (!GlobalMapModel.Active) return;
             BuildLocations(b); // the location panel is its own modal screen now (GlobalMapEnterScreen)
+            GlobalMapToolbarNodes.Build(b); // the always-visible top strip + the crusade Stats fold-out
         }
 
         private void BuildLocations(GraphBuilder b)

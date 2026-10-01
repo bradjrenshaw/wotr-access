@@ -65,14 +65,33 @@ namespace WrathAccess.Screens
 
         private bool _wasPaused; // last frame's travel-pause state (announce on the transition)
 
+        // The acting traveler last frame (null = the party). Army mode IS "an army is selected", and
+        // the game flips it from several places (the toolbar flags, a click on a pawn, a card, the
+        // end of a battle), so the change is announced from the state, not from our own actions.
+        private Kingmaker.Globalmap.State.GlobalMapArmyState _lastArmy;
+
         public override void OnPush()
         {
             _order = null; _wasPaused = false;
+            _lastArmy = Game.Instance?.GlobalMapController?.SelectedArmy; // entering mid-mode is not a change
             GlobalMapScanner.Reset(); GlobalMapCursor.Reset(); // the sonar is an overlay system now (resets on overlay exit)
         }
         public override void OnPop() { _order = null; _wasPaused = false; }
 
-        public override void OnUpdate() => SyncTravelPause();
+        public override void OnUpdate() { SyncTravelPause(); SyncTraveler(); }
+
+        // Party <-> army (or army -> another army): say who now takes travel orders, and re-freeze the
+        // location list nearest-first from the new traveler (bearings are already live from it).
+        private void SyncTraveler()
+        {
+            var army = Game.Instance?.GlobalMapController?.SelectedArmy;
+            if (army == _lastArmy) return;
+            _lastArmy = army;
+            _order = null;
+            Tts.Speak(army != null
+                ? Loc.T("worldmap.army_selected", new { name = GlobalMapActions.ArmyName(army) })
+                : Loc.T("worldmap.party_mode"));
+        }
 
         // The game pauses travel mid-journey on a discovery/event (its move-helper shows Continue). Announce
         // the pause once on the transition so the player knows to resume (Enter on the cursor → resume); the
@@ -90,6 +109,7 @@ namespace WrathAccess.Screens
         {
             if (!GlobalMapModel.Active) return;
             BuildLocations(b); // the location panel is its own modal screen now (GlobalMapEnterScreen)
+            GlobalMapArmyNodes.Build(b); // army mode only: the armies card list + the selected army's cart
             GlobalMapToolbarNodes.Build(b); // the always-visible top strip + the crusade Stats fold-out
         }
 

@@ -109,7 +109,21 @@ namespace WrathAccess.Exploration
         // ---- interact (i): act on the review cursor ----
         public static void Interact()
         {
-            if (_selectedArmy != null) { Tts.Speak(GlobalMapActions.ArmyLabel(_selectedArmy)); return; } // armies: read, no enter
+            if (_selectedArmy != null)
+            {
+                // Your own army: the pawn click — select it (army mode), with the game's select sound;
+                // the screen announces the change of traveler. Already selected, or an enemy: read it.
+                var controller = Kingmaker.Game.Instance?.GlobalMapController;
+                if (controller != null && _selectedArmy.Data.Faction == Kingmaker.Armies.ArmyFaction.Crusaders
+                    && controller.SelectedArmy != _selectedArmy)
+                {
+                    UiSound.Play(Kingmaker.UI.UISoundType.ArmyManagementArmySelectPlay);
+                    controller.SetSelectedArmy(_selectedArmy);
+                    return;
+                }
+                Tts.Speak(GlobalMapActions.ArmyLabel(_selectedArmy));
+                return;
+            }
             if (_selected == null) { Tts.Speak(Loc.T("worldmap.scan_none")); return; }
             GlobalMapActions.Go(_selected);
         }

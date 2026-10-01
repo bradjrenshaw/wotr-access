@@ -50,33 +50,51 @@ namespace WrathAccess.Screens
                 {
                     var card = cards[i];
                     if (card?.Army == null) continue;
-                    b.AddItem(ControlId.Referenced(card.Army, "armycard"), Card(card));
+                    b.AddItem(ControlId.Referenced(card.Army, "armycard:" + i), Card(card));
                 }
                 b.PopContext();
             }
 
             var cart = Cart();
             if (cart == null) return;
-            var ct = UIStrings.Instance.CrusadeTexts;
             b.BeginStop("army").PushContext(cart.ArmyName.Value, "group");
-            b.AddItem(ControlId.Structural("army:leader"), GraphNodes.Text(LeaderLine));
-            b.AddItem(ControlId.Structural("army:mp"), GraphNodes.Text(
-                () => Line(ct.MovementPointsTooltipHeader, Cart()?.SquadsVM.MovementPoints.Value),
+            CartRows(b, Cart, "army:");
+            b.PopContext();
+        }
+
+        /// <summary>An army cart's rows — general, the five counters (each with the game's tooltip
+        /// text), then its squads (Space = the game's unit tooltip). Shared by the map's selected-army
+        /// stop and the recruit window, which bind the same cart VM type; the caller owns the stop.</summary>
+        /// <param name="liveGeneral">The general slot is clickable (the recruit and army windows answer
+        /// the click by opening the set-general panel); on the map's own cart it is display only.</param>
+        public static void CartRows(GraphBuilder b, Func<ArmyInfoArmyCartVM> get, string k, bool liveGeneral = false)
+        {
+            var cart = get();
+            if (cart == null || cart.IsDisposed) return;
+            var ct = UIStrings.Instance.CrusadeTexts;
+            if (liveGeneral)
+                b.AddItem(ControlId.Structural(k + "leader"), GraphNodes.Button(
+                    () => LeaderLine(get()) + ", " + (string)ct.SetLeaderHeader,
+                    () => get()?.LeaderVM.OnClick())); // the slot's click: raises the set-general request
+            else
+                b.AddItem(ControlId.Structural(k + "leader"), GraphNodes.Text(() => LeaderLine(get())));
+            b.AddItem(ControlId.Structural(k + "mp"), GraphNodes.Text(
+                () => Line(ct.MovementPointsTooltipHeader, get()?.SquadsVM.MovementPoints.Value),
                 () => SimpleTooltip.Make(ct.MovementPointsTooltipHeader, ct.MovementPointsTooltipDescription)));
-            b.AddItem(ControlId.Structural("army:morale"), GraphNodes.Text(
-                () => Line(ct.MoraleTooltipHeader, Cart()?.SquadsVM.ArmyMorale.Value),
+            b.AddItem(ControlId.Structural(k + "morale"), GraphNodes.Text(
+                () => Line(ct.MoraleTooltipHeader, get()?.SquadsVM.ArmyMorale.Value),
                 () => SimpleTooltip.Make(ct.MoraleTooltipHeader, ct.MoraleTooltipDescription)));
-            b.AddItem(ControlId.Structural("army:danger"), GraphNodes.Text(
-                () => Line(ct.DangerTooltipHeader, Cart()?.SquadsVM.Danger.Value),
+            b.AddItem(ControlId.Structural(k + "danger"), GraphNodes.Text(
+                () => Line(ct.DangerTooltipHeader, get()?.SquadsVM.Danger.Value),
                 () => SimpleTooltip.Make(ct.DangerTooltipHeader, ct.DangerTooltipDescription)));
-            b.AddItem(ControlId.Structural("army:perception"), GraphNodes.Text(
-                () => Line(ct.PerceptionTooltipHeader, Cart()?.SquadsVM.Perception.Value),
+            b.AddItem(ControlId.Structural(k + "perception"), GraphNodes.Text(
+                () => Line(ct.PerceptionTooltipHeader, get()?.SquadsVM.Perception.Value),
                 () => SimpleTooltip.Make(ct.PerceptionTooltipHeader, ct.PerceptionTooltipDescription)));
-            b.AddItem(ControlId.Structural("army:size"), GraphNodes.Text(
+            b.AddItem(ControlId.Structural(k + "size"), GraphNodes.Text(
                 () =>
                 {
-                    var s = Cart()?.SquadsVM;
-                    return s == null ? "" : Loc.T("worldmap.size_line", new { name = (string)ct.ArmySizeTooltipHeader, current = s.ArmySizeCurrent.Value, max = s.ArmySizeMax.Value });
+                    var sq = get()?.SquadsVM;
+                    return sq == null ? "" : Loc.T("worldmap.size_line", new { name = (string)ct.ArmySizeTooltipHeader, current = sq.ArmySizeCurrent.Value, max = sq.ArmySizeMax.Value });
                 },
                 () => SimpleTooltip.Make(ct.ArmySizeTooltipHeader, ct.ArmySizeTooltipDescription)));
 
@@ -90,10 +108,9 @@ namespace WrathAccess.Screens
                 var st = vm?.Squad;
                 if (st == null || st.Unit == null || !seen.Add(st)) continue;
                 var cell = vm; // capture per iteration
-                b.AddItem(ControlId.Referenced(st, "squad"), GraphNodes.Text(
+                b.AddItem(ControlId.Referenced(st, k + "squad:" + i), GraphNodes.Text(
                     () => SquadLine(cell), () => cell.GetTooltip()));
             }
-            b.PopContext();
         }
 
         // "Crusader Army I, Danger 12, Movement points 40, no general[, level up available], selected".
@@ -130,10 +147,9 @@ namespace WrathAccess.Screens
             return string.Join(", ", parts);
         }
 
-        private static string LeaderLine()
+        private static string LeaderLine(ArmyInfoArmyCartVM cart)
         {
-            var cart = Cart();
-            if (cart == null) return "";
+            if (cart == null || cart.IsDisposed) return "";
             var l = cart.LeaderVM;
             if (l == null || !l.HasLeader.Value) return Loc.T("worldmap.no_general");
             return Loc.T("worldmap.leader_line", new

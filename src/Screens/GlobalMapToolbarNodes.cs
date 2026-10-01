@@ -73,6 +73,19 @@ namespace WrathAccess.Screens
                 b.AddItem(ControlId.Structural("tb:recruit"), GraphNodes.Button(
                     () => UIStrings.Instance.CrusadeTexts.Recruit, () => Toolbar()?.AddArmy()));
 
+            // The map menu's Recruit button (shown with the crusade, or in army mode), carrying the
+            // menu's "recruits have grown" marker. Opens the recruit window (GlobalMapRecruitScreen).
+            var menu = Game.Instance.RootUiContext?.GlobalMapVM?.GlobalMapMenuVM;
+            if (menu != null && menu.RecruitBlockEnabled.Value && (tb.CanChangeArmyMode.Value || !CanAddArmy())) // not twice: the strip's own Recruit shows when there is no army
+                b.AddItem(ControlId.Structural("tb:recruitmenu"), GraphNodes.Button(
+                    () =>
+                    {
+                        var m = Game.Instance.RootUiContext?.GlobalMapVM?.GlobalMapMenuVM;
+                        string l = UIStrings.Instance.CrusadeTexts.Recruit;
+                        return m != null && m.ShowRecruitNotification.Value ? l + ", " + Loc.T("crusade.new_recruits") : l;
+                    },
+                    () => Game.Instance.RootUiContext?.GlobalMapVM?.GlobalMapMenuVM?.OnRecruitClick()));
+
             // The gear: opens the settings popup, which is its own modal screen
             // (GlobalMapToolbarSettingsScreen) exactly as the panel takes over on screen.
             b.AddItem(ControlId.Structural("tb:options"), GraphNodes.Button(

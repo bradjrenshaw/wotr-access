@@ -26,13 +26,15 @@ namespace WrathAccess.Screens
 
         public override string Key => "overlay.worldmap_buy_resources";
         public override string ScreenName => UIStrings.Instance.CrusadeTexts.BuyResource;
-        public override int Layer => 15; // a modal over the world-map base context
+        public override int Layer => 16; // over the world map AND over the recruit window that can host it
 
         // The host only DISPOSES the VM on close (its reference stays set), so a disposed one is "closed".
         private static RecruitBuyResourcesVM Vm()
         {
             var rc = Game.Instance != null ? Game.Instance.RootUiContext : null;
             var vm = rc?.GlobalMapVM?.KingdomInfoVM?.BuyResourcesVM?.Value;
+            if (vm != null && !vm.IsDisposed) return vm;
+            vm = GlobalMapRecruitScreen.Vm()?.BuyResourcesVM.Value; // the recruit window's own Buy Resources
             return vm != null && !vm.IsDisposed ? vm : null;
         }
 

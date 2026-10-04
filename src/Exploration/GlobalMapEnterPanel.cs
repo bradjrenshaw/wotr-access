@@ -23,6 +23,8 @@ namespace WrathAccess.Exploration
         public static string Title(GlobalMapEnterMessageVM vm)
         {
             var name = vm != null && vm.Location != null ? TextUtil.StripRichText(vm.Location.State.Name) : null;
+            if (string.IsNullOrEmpty(name) && vm != null && GlobalMapModel.IsWarCamp(vm.Location))
+                return Kingmaker.Blueprints.Root.Strings.UIStrings.Instance.CrusadeTexts.WarCamp; // the camp's unnamed junction
             return string.IsNullOrEmpty(name) ? Loc.T("worldmap.enter_title") : name;
         }
 

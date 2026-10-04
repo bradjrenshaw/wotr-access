@@ -124,6 +124,9 @@ namespace WrathAccess.Screens
             var live = new HashSet<GlobalMapPointView>(GlobalMapModel.Locations);
             b.BeginStop("locations").PushContext(Loc.T("worldmap.locations"), "list");
             int i = 0;
+            // A place that joined the set after the order froze (the war camp moves by script; a
+            // location revealed mid-visit) goes on the end rather than vanishing until re-entry.
+            foreach (var p in live) if (!_order.Contains(p)) _order.Add(p);
             foreach (var p in _order)
             {
                 if (p == null || !live.Contains(p)) { i++; continue; }

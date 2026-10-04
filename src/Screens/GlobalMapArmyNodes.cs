@@ -142,7 +142,7 @@ namespace WrathAccess.Screens
             var leader = card.Army?.Data?.Leader != null ? card.ArmyLeader.Value?.Name.Value : null;
             parts.Add(string.IsNullOrEmpty(leader)
                 ? Loc.T("worldmap.no_general")
-                : Loc.T("worldmap.value_line", new { name = (string)ct.GeneralLabelText, value = leader }));
+                : Loc.T("worldmap.value_line", new { name = GeneralWord(), value = leader }));
             if (card.IsLevelUp.Value) parts.Add(Loc.T("worldmap.level_up"));
             return string.Join(", ", parts);
         }
@@ -154,7 +154,7 @@ namespace WrathAccess.Screens
             if (l == null || !l.HasLeader.Value) return Loc.T("worldmap.no_general");
             return Loc.T("worldmap.leader_line", new
             {
-                label = (string)UIStrings.Instance.CrusadeTexts.GeneralLabelText,
+                label = GeneralWord(),
                 name = l.CommonVM?.Name.Value ?? "",
                 level = l.Level.Value,
             });
@@ -166,6 +166,10 @@ namespace WrathAccess.Screens
             if (st == null || st.Unit == null) return "";
             return Loc.T("worldmap.squad", new { name = (string)st.Unit.CharacterName, count = st.Count });
         }
+
+        // The game's label already carries its own colon ("General:"); ours is added by the template.
+        private static string GeneralWord()
+            => ((string)UIStrings.Instance.CrusadeTexts.GeneralLabelText ?? "").TrimEnd(':', ' ', '：');
 
         private static string Line(string name, int? value)
             => Loc.T("worldmap.value_line", new { name, value = value ?? 0 });

@@ -78,15 +78,28 @@ namespace WrathAccess.Exploration
         public static IEnumerable<GlobalMapPointView> Points
             => GlobalMapView.Instance != null ? GlobalMapView.Instance.Points : Enumerable.Empty<GlobalMapPointView>();
 
-        /// <summary>Revealed, enterable places (named locations) — what the player browses and travels to.</summary>
+        /// <summary>The crusade's war camp sits on this point (Act 2+). The camp is a pawn the game
+        /// parks on an ordinary, UNNAMED road junction and moves by script; sighted players see the
+        /// camp model there and click it to enter. To us that makes the junction a PLACE: it is named
+        /// with the game's own camp label and listed with the locations.</summary>
+        public static bool IsWarCamp(GlobalMapPointView p)
+        {
+            var st = GlobalMapView.Instance != null ? GlobalMapView.Instance.State : null;
+            return p != null && st != null && (bool)st.WarcampEnabled && st.WarCampLocation != null
+                && p.Blueprint == st.WarCampLocation;
+        }
+
+        /// <summary>Revealed, enterable places (named locations, plus the war camp's junction) — what
+        /// the player browses and travels to.</summary>
         public static IEnumerable<GlobalMapPointView> Locations
             => Points.Where(p => p != null && p.State != null && p.State.IsRevealed
-                && p.Blueprint != null && p.Blueprint.Type == GlobalMapPointType.Location);
+                && p.Blueprint != null && (p.Blueprint.Type == GlobalMapPointType.Location || IsWarCamp(p)));
 
-        /// <summary>Revealed road junctions (unnamed waypoints) — the road skeleton, not browse targets.</summary>
+        /// <summary>Revealed road junctions (unnamed waypoints) — the road skeleton, not browse targets.
+        /// The junction the war camp stands on is a location instead.</summary>
         public static IEnumerable<GlobalMapPointView> Junctions
             => Points.Where(p => p != null && p.State != null && p.State.IsRevealed
-                && p.Blueprint != null && p.Blueprint.Type.IsWaypoint());
+                && p.Blueprint != null && p.Blueprint.Type.IsWaypoint() && !IsWarCamp(p));
 
         /// <summary>Revealed armies on the current map. Empty until the crusade is active (Act 2+) — on every
         /// other map the game clears the army list, so this is naturally inert in Act 1.</summary>

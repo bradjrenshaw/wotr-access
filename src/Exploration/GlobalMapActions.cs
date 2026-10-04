@@ -20,6 +20,8 @@ namespace WrathAccess.Exploration
         /// road-junction waypoints.</summary>
         public static string Name(GlobalMapPointView p)
         {
+            // The war camp's junction has no name of its own: use the game's camp label.
+            if (GlobalMapModel.IsWarCamp(p)) return Kingmaker.Blueprints.Root.Strings.UIStrings.Instance.CrusadeTexts.WarCamp;
             var n = (string)p.Blueprint.Name;
             return string.IsNullOrEmpty(n) ? Loc.T("worldmap.junction") : n;
         }

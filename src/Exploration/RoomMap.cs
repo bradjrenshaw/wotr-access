@@ -271,8 +271,9 @@ namespace WrathAccess.Exploration
         private static Room _announced;
 
         private static bool AnnounceEnabled =>
-            WrathAccess.Settings.ModSettings.GetCategory("defaults.cursor")
-                ?.Get<WrathAccess.Settings.BoolSetting>("announce_rooms")?.Get() ?? true;
+            WrathAccess.Exploration.Overlays.CursorSettings.Flag(
+                WrathAccess.Exploration.Overlays.CursorSettings.Context(WrathAccess.Exploration.Overlays.CursorSettings.Exploration),
+                "announce_rooms", true);
 
         private static void TickAnnounce()
         {

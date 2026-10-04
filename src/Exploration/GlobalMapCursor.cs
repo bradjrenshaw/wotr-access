@@ -30,13 +30,13 @@ namespace WrathAccess.Exploration
 
         // Per-slot typematic state for tiled stepping (one step on press, a pause, then repeats while held).
         private sealed class TiledState { public bool Holding; public float NextStep; }
-        private static readonly TiledState _primaryTiled = new TiledState();
-        private static readonly TiledState _secondaryTiled = new TiledState();
+        private static readonly TiledState[] _tiled = { new TiledState(), new TiledState(), new TiledState(), new TiledState() };
+        private static void ReleaseAll() { foreach (var t in _tiled) t.Holding = false; }
 
         public static void Reset()
         {
             _pos = null; _inside = null; _spoken = null; _baselined = false;
-            _primaryTiled.Holding = false; _secondaryTiled.Holding = false;
+            ReleaseAll();
         }
 
         /// <summary>The cursor's point — its placed position, else the party's.</summary>
@@ -53,18 +53,19 @@ namespace WrathAccess.Exploration
                 || WrathAccess.Screens.GlobalMapScreen.PanelActive || !GlobalMapModel.Interactive)
             {
                 _inside = null; _spoken = null; _baselined = false;
-                _primaryTiled.Holding = false; _secondaryTiled.Holding = false;
+                ReleaseAll();
                 return;
             }
 
-            // Each slot moves per its own world-map movement type (continuous glide / tiled step / none).
-            // `continuous` = a slot glided this frame; `tiled` = a tiled slot is held (stepping cadence is
-            // managed inside). Held slots are additive.
+            // Each slot moves per its own world-map movement mode (continuous glide / tiled step / none)
+            // from the cursor settings' WORLD MAP context. `continuous` = a slot glided this frame;
+            // `tiled` = a tiled slot is held (stepping cadence is managed inside). Held slots are additive.
             bool continuous = false, tiled = false;
-            // The SHARED explore.cursor* actions (one binding set across in-area / maps); this cursor's
+            // The SHARED explore.* movement actions (one binding set across in-area / maps); this cursor's
             // screen gate above decides who consumes them here.
-            MoveSlot("explore.cursor", "primary", dt, _primaryTiled, ref continuous, ref tiled);
-            MoveSlot("explore.secondary", "secondary", dt, _secondaryTiled, ref continuous, ref tiled);
+            var ctx = CursorSettings.Context(CursorSettings.WorldMap);
+            foreach (var slot in CursorKeys.Slots)
+                MoveSlot(slot, CursorSettings.Slot(ctx, slot), dt, _tiled[(int)slot], ref continuous, ref tiled);
 
             var inside = NearestWithin();
 
@@ -81,61 +82,50 @@ namespace WrathAccess.Exploration
             else if (!tiled && inside != _spoken) { Tts.Speak(GlobalMapActions.InPlace(inside)); _spoken = inside; }
         }
 
-        // One slot's movement this frame, dispatched on its world-map movement type. Continuous glides _pos
-        // by its held arrows (+Z north, +X east) × speed; tiled defers to the typematic stepper; none/idle
-        // does nothing (and clears the slot's hold so the next press re-arms the typematic first step).
-        private static void MoveSlot(string prefix, string slot, float dt, TiledState st,
+        // One slot's movement this frame, dispatched on its world-map movement mode. Continuous glides
+        // _pos by its held arrows (+Z north, +X east) × the slot's miles/sec; tiled defers to the typematic
+        // stepper with the slot's tile size; none/idle does nothing (and clears the slot's hold so the
+        // next press re-arms the typematic first step).
+        private static void MoveSlot(MovementSlot slot, CategorySetting slotCat, float dt, TiledState st,
             ref bool continuous, ref bool tiled)
         {
-            int dx = 0, dz = 0;
-            if (InputManager.Held(prefix + "Up")) dz += 1;
-            if (InputManager.Held(prefix + "Down")) dz -= 1;
-            if (InputManager.Held(prefix + "Right")) dx += 1;
-            if (InputManager.Held(prefix + "Left")) dx -= 1;
+            CursorKeys.HeldVectorRaw(slot, out int dx, out int dz);
 
-            string mode = ModeOf(slot);
-            if (mode == "none" || (dx == 0 && dz == 0)) { st.Holding = false; return; }
+            string mode = CursorSettings.Mode(slotCat);
+            if (mode == CursorSettings.ModeNone || (dx == 0 && dz == 0)) { st.Holding = false; return; }
 
             // Up = the map's north (MapFrame; 0 on the world maps, kept for symmetry with the local map).
-            if (mode == "tiled") { tiled = true; MapFrame.StepToWorld(ref dx, ref dz); TiledStep(dx, dz, st); return; }
+            if (mode == CursorSettings.ModeTiled)
+            {
+                tiled = true; MapFrame.StepToWorld(ref dx, ref dz);
+                TiledStep(dx, dz, st, CursorSettings.TiledCell(slotCat, 2));
+                return;
+            }
 
             continuous = true;
             if (!_pos.HasValue) _pos = GlobalMapModel.TravelerPos; // plant at the party on first move
             float fx = dx, fz = dz;
             MapFrame.InputToWorld(ref fx, ref fz);
-            _pos = _pos.Value + new Vector3(fx, 0f, fz).normalized * (Speed(slot) * dt);
+            // The global map equates 1 world unit with 1 mile (GlobalMapMovementController), so miles/sec
+            // is also units/sec — no conversion when gliding _pos.
+            _pos = _pos.Value + new Vector3(fx, 0f, fz).normalized * (CursorSettings.ContinuousSpeed(slotCat, 18) * dt);
         }
-
-        // This cursor slot's settings on the ENGAGED overlay (per-overlay world-map mode/speed) — so cycling
-        // overlays drives the cursor, like the in-area cursor reads its overlay's slots.
-        private static CategorySetting SlotCat(string slot)
-            => OverlayManager.ActiveOverlay?.Cursor?.Slot(slot == "primary" ? MovementSlot.Primary : MovementSlot.Secondary);
-
-        // This slot's world-map movement type (continuous / tiled / none), defaulting to continuous.
-        private static string ModeOf(string slot)
-            => SlotCat(slot)?.Get<ChoiceSetting>("worldmap_mode")?.Current?.Id ?? "continuous";
-
-        // The slot's world-map glide speed in miles/sec. The global map equates 1 world unit with 1 mile (see
-        // GlobalMapMovementController), so this is also units/sec — no conversion needed when gliding _pos.
-        private static float Speed(string slot)
-            => SlotCat(slot)?.Get<IntSetting>("worldmap_speed")?.Get() ?? 18;
 
         // Typematic tiled stepping (mirrors the in-area TileStep cadence): one step on first press, a pause
         // of the OS initial delay, then repeats while held. Diagonals stretch the interval by sqrt(2) so the
         // held-diagonal ground speed matches cardinal.
-        private static void TiledStep(int dx, int dz, TiledState st)
+        private static void TiledStep(int dx, int dz, TiledState st, float cell)
         {
             float stretch = (dx != 0 && dz != 0) ? 1.41421356f : 1f;
             float now = Time.unscaledTime;
-            if (!st.Holding) { st.Holding = true; st.NextStep = now + OsKeyboard.InitialDelay; DoTiledStep(dx, dz); }
-            else if (now >= st.NextStep) { st.NextStep = now + OsKeyboard.RepeatInterval * stretch; DoTiledStep(dx, dz); }
+            if (!st.Holding) { st.Holding = true; st.NextStep = now + OsKeyboard.InitialDelay; DoTiledStep(dx, dz, cell); }
+            else if (now >= st.NextStep) { st.NextStep = now + OsKeyboard.RepeatInterval * stretch; DoTiledStep(dx, dz, cell); }
         }
 
         // Snap onto the world-map tile grid (cell centres) and step one tile in the held direction, then read
         // the landing: the point we're on (name + state), else the bearing + miles from the party.
-        private static void DoTiledStep(int dx, int dz)
+        private static void DoTiledStep(int dx, int dz, float cell)
         {
-            float cell = TileSize();
             if (!_pos.HasValue) _pos = GlobalMapModel.TravelerPos;
             var p = _pos.Value;
             _pos = new Vector3(Snap(p.x, cell) + dx * cell, 0f, Snap(p.z, cell) + dz * cell);
@@ -146,10 +136,6 @@ namespace WrathAccess.Exploration
         }
 
         private static float Snap(float v, float cell) => (Mathf.Floor(v / cell) + 0.5f) * cell;
-
-        // The world-map tile size in MILES (== world units), shared with the in-area grid's settings home.
-        private static float TileSize()
-            => ModSettings.GetSetting<IntSetting>("defaults.grid.worldmap_cell_size")?.Get() ?? 2;
 
         private static void PlayCue(bool enter)
         {

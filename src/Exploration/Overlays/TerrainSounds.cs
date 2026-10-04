@@ -29,8 +29,7 @@ namespace WrathAccess.Exploration.Overlays
         private static bool _keysHeld;
         private const int ReleaseFadeMs = 20;   // short enough to read as "stopped", long enough not to click
 
-        private static CategorySetting CursorCat =>
-            ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>("cursor");
+        private static CategorySetting CursorCat => CursorSettings.Context(CursorSettings.Exploration);
         private static bool On => CursorCat?.Get<BoolSetting>("terrain_sounds")?.Get() ?? false;
         private static float IntervalSec => (CursorCat?.Get<IntSetting>("terrain_interval")?.Get() ?? 300) / 1000f;
         private static float Volume =>

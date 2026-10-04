@@ -36,6 +36,7 @@ namespace WrathAccess.Screens
         private static readonly (string key, string label, string loc)[] Tabs =
         {
             ("audio", "Audio", "category.audio"),
+            ("cursor", "Cursor", "category.cursor"),
             ("enhancements", "Enhancements", "category.enhancements"),
             ("events", "Events", "category.events"),
             ("exploration", "Exploration", "category.exploration"),
@@ -281,12 +282,18 @@ namespace WrathAccess.Screens
                 if (vis != null)
                     foreach (var s in vis.Children) ModSettingNodes.Emit(b, s, k);
             }
+            else if (key == "cursor")
+            {
+                // The cursor tree: Exploration / World map / Crusade battles, each with its behaviours and
+                // four movement slots (a slot shows only the subtree of its selected mode).
+                var root = WrathAccess.Exploration.Overlays.CursorSettings.Root;
+                if (root != null)
+                    foreach (var s in root.Children) ModSettingNodes.Emit(b, s, k);
+            }
             else if (key == "exploration")
             {
-                // The Default overlay's cursor (mode + speed per slot) first, then the remaining shared
-                // system defaults, one collapsible group per system (empty ones are skipped by Emit).
-                var cursor = ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>("cursor");
-                if (cursor != null) ModSettingNodes.Emit(b, cursor, k);
+                // The shared system defaults, one collapsible group per system (empty ones are skipped
+                // by Emit). The cursor has its own tab now.
                 foreach (var sysKey in new[] { "grid", "spatial", "slope", "walltones", "object", "fog", "path" })
                 {
                     var d = SystemDefaults(sysKey);
@@ -412,6 +419,9 @@ namespace WrathAccess.Screens
                 if (c is CategorySetting sysCat
                     && WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.SystemName(sysCat.Key) != null)
                     EmitSystemNode(b, id, sysCat, ok);
+                else if (c is CategorySetting cursorCat
+                    && cursorCat.Key == WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.CursorKey)
+                    EmitCursorNode(b, id, cursorCat, ok);
                 else
                     ModSettingNodes.Emit(b, c, ok);
             }
@@ -442,6 +452,44 @@ namespace WrathAccess.Screens
             if (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key))
             {
                 var custom = sysCat.Get<CategorySetting>("custom");
+                if (custom != null)
+                    foreach (var c in custom.Children) ModSettingNodes.Emit(b, c, sk);
+                b.AddItem(ControlId.Structural(sk + "reset"),
+                    GraphNodes.Button(() => L("overlay.reset_defaults", "Reset to defaults"), () =>
+                    {
+                        WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.ResetSystem(id, key);
+                        Tts.Speak(L("overlay.state_default", "following defaults"));
+                        Navigation.FocusNode(ControlId.Structural(sk + "group"), announce: false);
+                    }));
+            }
+            else
+            {
+                b.AddItem(ControlId.Structural(sk + "customize"),
+                    GraphNodes.Button(() => L("overlay.customize", "Customize for this overlay"), () =>
+                    {
+                        WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.Customize(id, key);
+                        Tts.Speak(L("overlay.state_customized", "customized"));
+                        Navigation.FocusNode(ControlId.Structural(sk + "group"), announce: false);
+                    }));
+            }
+            b.EndGroup();
+        }
+
+        // The overlay's cursor: whole-subtree inheritance like a system, minus the play-mode dropdown.
+        // "Following defaults" shows just Customize (the tree lives on the Cursor tab); Customize
+        // materializes the overlay's own copy of the whole cursor tree, which renders here.
+        private static void EmitCursorNode(GraphBuilder b, string id, CategorySetting cursorCat, string ok)
+        {
+            var key = cursorCat.Key;
+            string sk = ok + key + ".";
+            b.BeginGroup(ControlId.Structural(sk + "group"), GraphNodes.Group(
+                () => L("overlay.cursor", "Cursor")
+                    + ", " + (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key)
+                        ? L("overlay.state_customized", "customized")
+                        : L("overlay.state_default", "following defaults"))));
+            if (WrathAccess.Exploration.Overlays.OverlaySettingsRegistry.IsCustomized(id, key))
+            {
+                var custom = cursorCat.Get<CategorySetting>("custom");
                 if (custom != null)
                     foreach (var c in custom.Children) ModSettingNodes.Emit(b, c, sk);
                 b.AddItem(ControlId.Structural(sk + "reset"),
@@ -501,9 +549,10 @@ namespace WrathAccess.Screens
             switch (key)
             {
                 case "audio": return new[] { "audio" };
+                case "cursor": return new[] { "cursor" };
                 case "exploration": return new[]
                 {
-                    "defaults.cursor", "defaults.grid", "defaults.spatial", "defaults.slope",
+                    "defaults.grid", "defaults.spatial", "defaults.slope",
                     "defaults.walltones", "defaults.object", "defaults.fog", "defaults.path",
                 };
                 case "input": return new[] { "bindings" };

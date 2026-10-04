@@ -16,12 +16,14 @@ namespace WrathAccess.Exploration.Overlays
     internal sealed class ContinuousGlide : MovementMode
     {
         private readonly MovementSlot _slot;
-        private readonly CategorySetting _settings; // cursor.<slot> — holds "speed"
+        private readonly CategorySetting _settings; // the slot's category (mode + per-mode subtrees)
+        private readonly CategorySetting _context;  // the exploration context (the behaviour flags)
 
-        public ContinuousGlide(MovementSlot slot, CategorySetting settings)
+        public ContinuousGlide(MovementSlot slot, CategorySetting settings, CategorySetting context)
         {
             _slot = slot;
             _settings = settings;
+            _context = context;
         }
 
         public override string Name => "Continuous glide";
@@ -29,27 +31,21 @@ namespace WrathAccess.Exploration.Overlays
         public override AnnouncementContext Context => AnnouncementContext.Point;
         public override bool AnnouncesOnMove => false; // audio-driven, not per-frame speech
 
-        private float Speed => (_settings?.Get<IntSetting>("speed")?.Get() ?? 15) * Geo.MetresPerFoot;
+        private float Speed => CursorSettings.ContinuousSpeed(_settings, 15) * Geo.MetresPerFoot;
 
-        // Opt-in wall sliding (Exploration → Cursor), read live — a GLOBAL cursor behaviour, not a
-        // per-slot/per-overlay knob, so it lives on the shared defaults.cursor category.
-        private static bool WallSlide =>
-            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
-                "defaults.cursor.wall_slide")?.Get() ?? false;
+        // Opt-in wall sliding (Cursor → Exploration), read live from the context this mode was built
+        // against (the overlay's custom copy or the shared defaults).
+        private bool WallSlide => CursorSettings.Flag(_context, "wall_slide");
 
         // Opt-in first-direction priority steering (user-designed): diagonals move normally in the
         // OPEN, but on the first wall contact the FIRST-held key becomes the goal — the second key
         // wall-follows, and the instant the goal direction opens the cursor turns INTO the gap
         // (instead of diagonally overshooting it). Releasing/changing the held keys resets to free.
-        private static bool DirectionPriority =>
-            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
-                "defaults.cursor.direction_priority")?.Get() ?? false;
+        private bool DirectionPriority => CursorSettings.Flag(_context, "direction_priority");
 
         // EXPERIMENTAL collision naming (opt-in): a pure readout, so it lives with the other
         // cursor behaviours on defaults.cursor, not under Enhancements.
-        private static bool CollisionNames =>
-            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
-                "defaults.cursor.collision_names")?.Get() ?? false;
+        private bool CollisionNames => CursorSettings.Flag(_context, "collision_names");
 
         // Priority-steering state, per slot (this mode instance IS per-slot): which INPUT axis was
         // held first (0 = x/east-west, 1 = z/north-south), whether we're wall-following, and last

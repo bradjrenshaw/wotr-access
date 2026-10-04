@@ -19,8 +19,10 @@ namespace WrathAccess.Exploration.Overlays
     /// </summary>
     internal enum MovementSlot
     {
-        Primary,
-        Secondary,
+        Primary,    // W A S D
+        Secondary,  // Shift + W A S D
+        Tertiary,   // arrow keys
+        Quaternary, // Shift + arrow keys
     }
 
     /// <summary>Outcome of a vertical (level) follow, so the overlay can announce appropriately.</summary>

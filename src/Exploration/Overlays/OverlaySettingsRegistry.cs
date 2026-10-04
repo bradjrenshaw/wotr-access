@@ -11,7 +11,7 @@ namespace WrathAccess.Exploration.Overlays
     /// SETTINGS MODEL (the redesign): system TUNABLES are SHARED — registered once under
     /// <c>defaults.&lt;system&gt;</c> (surfaced by the Sonar / Log / Exploration tabs) with audio volumes
     /// under <c>audio.volumes</c> (Audio tab). An overlay's subtree (<c>overlays.&lt;id&gt;</c>) holds only
-    /// COMPOSITION: a hidden display name, the cursor slots, and per system an <c>enabled</c> toggle +
+    /// COMPOSITION: a hidden display name, a cursor customized flag, and per system an <c>enabled</c> toggle +
     /// hidden <c>customized</c> flag. Whole-subtree inheritance: Customize() materializes the overlay's own
     /// full copy of a system's tree (same RegisterSettings schema, seeded from the current defaults) under
     /// <c>custom</c>, and the system then reads ONLY that copy; ResetSystem() drops it. The first id in the
@@ -85,12 +85,39 @@ namespace WrathAccess.Exploration.Overlays
             new HashSet<string> { "grid", "sonar", "fog", "object", "path", "aoe", "log" };
 
         private static readonly Dictionary<string, Overlay> _objects = new Dictionary<string, Overlay>();
+        private static bool _cursorChangedWired;
+
+        /// <summary>The settings-level name of the cursor pseudo-system an overlay can customize.</summary>
+        public const string CursorKey = "cursor";
+
+        // Every overlay rebuilds its movement modes (a mode dropdown changed somewhere).
+        private static void ResolveAllCursors()
+        {
+            if (_defaultOverlay != null) _defaultOverlay.Cursor.ResolveModes(_defaultOverlay);
+            foreach (var o in _objects.Values) o.Cursor.ResolveModes(o);
+        }
+
+        // Point each overlay at its custom cursor copy (when customized and materialized), else the
+        // defaults, and rebuild its modes.
+        private static void SyncCursorRoots()
+        {
+            foreach (var id in Ids())
+            {
+                if (!_objects.TryGetValue(id, out var o)) continue;
+                var cCat = SystemCat(id, CursorKey);
+                o.CursorRoot = cCat != null && cCat.Get<BoolSetting>("customized")?.Get() == true
+                    ? cCat.Get<CategorySetting>("custom") : null;
+            }
+            ResolveAllCursors();
+        }
 
         /// <summary>Pre-load (in BuildSettings): create only the overlays category + the id list, so Load
         /// can apply the saved list. The overlay subtrees are built afterwards (see <see cref="BuildOverlays"/>),
         /// because we don't know the user's ids until the list has loaded.</summary>
         public static void Register()
         {
+            CursorSettings.Register(); // the cursor's own tree (pre-load, so saved values apply onto it)
+            if (!_cursorChangedWired) { _cursorChangedWired = true; CursorSettings.Changed += ResolveAllCursors; }
             ModSettingsRegistry.EnsureCategory("overlays", "Overlays", "category.overlays");
             EnsureList();
             RegisterDefaults();
@@ -114,51 +141,7 @@ namespace WrathAccess.Exploration.Overlays
                     proto.RegisterSettings(cat);
                 }
             }
-            // The Default overlay's cursor (mode + speed per slot) — surfaced on the Exploration tab.
-            var cursorCat = ModSettingsRegistry.EnsureCategory("defaults.cursor", "Defaults/Cursor", "overlay.cursor");
-            if (cursorCat.GetByKey("announce_rooms") == null)
-                cursorCat.Add(new BoolSetting("announce_rooms", "Announce room changes", true,
-                    "overlay.cursor.announce_rooms"));
-            // OPT-IN wall sliding for the glide (user decision — off by default): a blocked glide slides
-            // along the wall's tangent instead of dead-stopping, funnelling through doorways — the game's
-            // own TraceAlongNavmeshWithWallSlide, the trace its direct-control unit movement uses.
-            if (cursorCat.GetByKey("wall_slide") == null)
-                cursorCat.Add(new BoolSetting("wall_slide", "Slide along walls", false,
-                    "overlay.cursor.wall_slide"));
-            // OPT-IN first-direction priority steering (user-designed): diagonals move normally in
-            // the open; on the first wall contact the FIRST-held key becomes the goal (retried every
-            // frame — the cursor turns INTO a gap the moment it opens) while the second key follows
-            // the wall. More precise than wall sliding for threading small openings.
-            if (cursorCat.GetByKey("direction_priority") == null)
-                cursorCat.Add(new BoolSetting("direction_priority", "First-held direction has priority", false,
-                    "overlay.cursor.direction_priority"));
-            // OPT-IN review-cycle reset: once the cursor moves past a small threshold (0.5 m), the next
-            // review key (Comma/Period/N/M/B/L/V) starts over at the nearest thing instead of
-            // continuing a stale cycle from wherever you last reviewed.
-            if (cursorCat.GetByKey("review_reset") == null)
-                cursorCat.Add(new BoolSetting("review_reset", "Cursor movement resets review cycles", false,
-                    "overlay.cursor.review_reset"));
-            // EXPERIMENTAL collision naming: releasing the movement keys while dead-stopped speaks
-            // the blocking object's cleaned-up asset name (BlockProbe/CollisionNamer). Pure readout —
-            // no game behaviour change — hence a cursor setting, not an Enhancement.
-            if (cursorCat.GetByKey("collision_names") == null)
-                cursorCat.Add(new BoolSetting("collision_names", "Name blocking objects on collision", false,
-                    "overlay.cursor.collision_names"));
-            // OPT-IN terrain footsteps under the moving cursor (the game's own foley, see TerrainSounds).
-            TerrainSounds.RegisterSettings(cursorCat);
-            // Continuous is the primary development target and the intended mode for most players
-            // (2026-07-22) — tiled remains a settings choice, no longer the default.
-            BuildSlotSettings("defaults.cursor.primary", "Defaults/Cursor/Primary", "overlay.cursor.primary", "continuous", 15, "continuous", 18);
-            BuildSlotSettings("defaults.cursor.secondary", "Defaults/Cursor/Secondary", "overlay.cursor.secondary", "continuous", 30, "continuous", 45);
-
-            // The world-map tiled cursor's tile size, in MILES (== world units on the global map). Lives on
-            // the in-area grid system's defaults — beside "Tile size (feet)" on the Exploration tab — but
-            // only here (NOT in GridSystem.RegisterSettings, like the `enabled` flag), so per-overlay custom
-            // grid copies don't get a dead duplicate: the global map has no overlays and always reads this.
-            var grid = ModSettingsRegistry.EnsureCategory("defaults.grid", "Defaults/Grid", "system.grid");
-            if (grid.GetByKey("worldmap_cell_size") == null)
-                grid.Add(new IntSetting("worldmap_cell_size", "World map tile size (miles)", 2, 1, 50, 1,
-                    "overlay.grid.worldmap_cell_size"));
+            // (The cursor's settings are their own tree now — CursorSettings — registered pre-load.)
 
             var volumes = ModSettingsRegistry.EnsureCategory("audio.volumes", "Audio/System volumes", "audio.volumes");
             foreach (var proto in Prototypes)
@@ -240,26 +223,6 @@ namespace WrathAccess.Exploration.Overlays
                     "Keep audio when the game is in the background", false, "audio.background_audio"));
         }
 
-        private static CategorySetting BuildSlotSettings(string path, string labelPath, string locKey,
-            string defaultMode, int defaultSpeed, string defaultWorldMapMode, int defaultWorldMapSpeed)
-        {
-            var cat = ModSettingsRegistry.EnsureCategory(path, labelPath, locKey);
-            if (cat.GetByKey("mode") == null)
-                cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.movement_mode"));
-            if (cat.GetByKey("speed") == null)
-                cat.Add(new IntSetting("speed", "Speed (feet/sec)", defaultSpeed, 1, 60, 1, "overlay.speed"));
-            // World-map cursor for this slot (a SEPARATE system from the in-area one above, but reusing this
-            // settings home): its movement type — continuous glide vs typematic tiled stepping (same
-            // none/continuous/tiled choices) — and its glide speed in MILES/sec. The global map equates 1
-            // world unit with 1 mile (GlobalMapMovementController.MilesTravelled), so units == miles. Read by
-            // GlobalMapCursor; tiled steps by the world-map tile size on defaults.grid.
-            if (cat.GetByKey("worldmap_mode") == null)
-                cat.Add(new ChoiceSetting("worldmap_mode", "World map movement type", ModeChoices, defaultWorldMapMode, "overlay.worldmap_mode"));
-            if (cat.GetByKey("worldmap_speed") == null)
-                cat.Add(new IntSetting("worldmap_speed", "World map speed (miles/sec)", defaultWorldMapSpeed, 1, 100, 1, "overlay.worldmap_speed"));
-            return cat;
-        }
-
         /// <summary>Post-load (after ModSettings.Initialize): build every overlay in the now-loaded list,
         /// re-apply their saved values onto the freshly-created subtrees, and publish the live set.</summary>
         public static void BuildOverlays()
@@ -273,7 +236,10 @@ namespace WrathAccess.Exploration.Overlays
             ModSettings.ReapplyUnknown();    // applies the saved custom.* values over the seeds
             MigrateLegacyTunables();         // pre-redesign per-overlay tunables -> shared defaults/volumes
             MigrateEnabledToMode();          // pre-mode-refactor `enabled` bool -> `mode` choice
+            CursorSettings.MigrateLegacy();  // pre-cursor-refactor defaults.cursor.* -> the cursor tree
+            CursorSettings.RefreshVisibility(CursorSettings.Root); // show each slot's loaded mode's subtree
             Publish();
+            SyncCursorRoots();
             ModSettings.Save();              // normalize the file (applied keys now persisted as known)
         }
 
@@ -292,6 +258,7 @@ namespace WrathAccess.Exploration.Overlays
             sCat.Get<BoolSetting>("customized")?.Set(true);
             ModSettings.Reindex();
             ModSettings.MarkDirty();
+            if (sysKey == CursorKey) SyncCursorRoots();
         }
 
         /// <summary>Drop the overlay copy — the system follows the shared defaults again.</summary>
@@ -304,24 +271,38 @@ namespace WrathAccess.Exploration.Overlays
             sCat.Get<BoolSetting>("customized")?.Set(false);
             ModSettings.Reindex();
             ModSettings.MarkDirty();
+            if (sysKey == CursorKey) SyncCursorRoots();
         }
 
         private static void MaterializeCustomizedSubtrees()
         {
             foreach (var id in Ids())
-                foreach (var proto in Prototypes)
-                {
-                    var sCat = SystemCat(id, proto.Key);
-                    if (sCat != null && sCat.Get<BoolSetting>("customized")?.Get() == true
-                        && sCat.Get<CategorySetting>("custom") == null)
-                        CreateCustomTree(sCat, proto.Key);
-                }
+            {
+                foreach (var proto in Prototypes) MaterializeIfFlagged(id, proto.Key);
+                MaterializeIfFlagged(id, CursorKey);
+            }
+        }
+
+        private static void MaterializeIfFlagged(string id, string key)
+        {
+            var sCat = SystemCat(id, key);
+            if (sCat != null && sCat.Get<BoolSetting>("customized")?.Get() == true
+                && sCat.Get<CategorySetting>("custom") == null)
+                CreateCustomTree(sCat, key);
         }
 
         private static void CreateCustomTree(CategorySetting sysCat, string key)
         {
             var custom = new CategorySetting("custom", "Custom settings", localizationKey: "overlay.custom");
             sysCat.Add(custom);
+            if (key == CursorKey)
+            {
+                // The cursor pseudo-system: the whole CursorSettings schema, seeded from the cursor tree.
+                CursorSettings.RegisterTree(custom);
+                if (CursorSettings.Root != null) CopyValues(CursorSettings.Root, custom);
+                CursorSettings.RefreshVisibility(custom);
+                return;
+            }
             FactoryFor(key)?.Invoke().RegisterSettings(custom); // the SAME schema as the defaults tree
             var defaults = DefaultsFor(key);
             if (defaults != null) CopyValues(defaults, custom);
@@ -507,35 +488,14 @@ namespace WrathAccess.Exploration.Overlays
                 overlay.With(sys);
             }
 
-            var primaryCat = BuildSlot(id, "primary", "Primary", DefaultSlotMode("primary", "tiled"));
-            var secondaryCat = BuildSlot(id, "secondary", "Secondary", DefaultSlotMode("secondary", "none"));
-            overlay.Cursor.SetSlots(primaryCat, secondaryCat);
-            WireModeChange(primaryCat, overlay);
-            WireModeChange(secondaryCat, overlay);
+            // The cursor: composition only (a hidden customized flag); Customize materializes the
+            // overlay's own copy of the cursor tree under custom (CursorSettings schema).
+            var cCat = ModSettingsRegistry.EnsureCategory("overlays." + id + "." + CursorKey, "Overlays/_/Cursor", "overlay.cursor");
+            if (cCat.GetByKey("customized") == null)
+                cCat.Add(new BoolSetting("customized", "Customized", false) { Hidden = true });
+            overlay.CursorRoot = cCat.Get<BoolSetting>("customized")?.Get() == true ? cCat.Get<CategorySetting>("custom") : null;
+            overlay.Cursor.ResolveModes(overlay);
             return overlay;
-        }
-
-        private static CategorySetting BuildSlot(string id, string key, string label, string defaultMode)
-        {
-            var cat = ModSettingsRegistry.EnsureCategory("overlays." + id + ".cursor." + key,
-                "Overlays/_/Cursor/" + label); // overlay name segment is irrelevant (already labelled)
-            if (cat.GetByKey("mode") == null)
-                cat.Add(new ChoiceSetting("mode", "Movement mode", ModeChoices, defaultMode, "overlay.movement_mode"));
-            if (cat.GetByKey("speed") == null)
-                cat.Add(new IntSetting("speed", "Speed (feet/sec)", 15, 1, 60, 1, "overlay.speed"));
-            // World-map cursor for this slot (read by GlobalMapCursor off the active overlay) — same as the
-            // defaults' slots (BuildSlotSettings), so each overlay's world-map cursor is configured per-overlay.
-            if (cat.GetByKey("worldmap_mode") == null)
-                cat.Add(new ChoiceSetting("worldmap_mode", "World map movement type", ModeChoices, "continuous", "overlay.worldmap_mode"));
-            if (cat.GetByKey("worldmap_speed") == null)
-                cat.Add(new IntSetting("worldmap_speed", "World map speed (miles/sec)", key == "secondary" ? 45 : 18, 1, 100, 1, "overlay.worldmap_speed"));
-            return cat;
-        }
-
-        private static void WireModeChange(CategorySetting slotCat, Overlay overlay)
-        {
-            var mode = slotCat?.Get<ChoiceSetting>("mode");
-            if (mode != null) mode.Changed += _ => overlay.Cursor.ResolveModes();
         }
 
         // The invisible Default overlay: always first in the Ctrl+O cycle, never in the Overlays tab.
@@ -555,11 +515,7 @@ namespace WrathAccess.Exploration.Overlays
                 sys.Bind(d, d);
                 overlay.With(sys);
             }
-            var primary = ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>("cursor")?.Get<CategorySetting>("primary");
-            var secondary = ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>("cursor")?.Get<CategorySetting>("secondary");
-            overlay.Cursor.SetSlots(primary, secondary);
-            WireModeChange(primary, overlay);
-            WireModeChange(secondary, overlay);
+            overlay.Cursor.ResolveModes(overlay); // follows the cursor tree's defaults
             return overlay;
         }
 
@@ -573,10 +529,6 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         // ---- list helpers ----
-
-        private static string DefaultSlotMode(string slot, string fallback)
-            => ModSettings.Root.Get<CategorySetting>("defaults")?.Get<CategorySetting>("cursor")
-                ?.Get<CategorySetting>(slot)?.Get<ChoiceSetting>("mode")?.Current?.Id ?? fallback;
 
         // The list starts EMPTY: the invisible Default overlay is always present, and users add
         // explicit overlays only when they want a deviating lens.

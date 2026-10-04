@@ -40,8 +40,8 @@ namespace WrathAccess.Exploration
 
         // Per-slot typematic state for tiled stepping (one step on press, a pause, then repeats while held).
         private sealed class TiledState { public bool Holding; public float NextStep; }
-        private static readonly TiledState _primaryTiled = new TiledState();
-        private static readonly TiledState _secondaryTiled = new TiledState();
+        private static readonly TiledState[] _tiled = { new TiledState(), new TiledState(), new TiledState(), new TiledState() };
+        private static void ReleaseAll() { foreach (var t in _tiled) t.Holding = false; }
 
         /// <summary>On map open: plant at the in-area cursor (the spot you were exploring), else the leader.</summary>
         public static void Reset()
@@ -49,7 +49,7 @@ namespace WrathAccess.Exploration
             _pos = Cursor.Has ? Cursor.Position : (Vector3?)LeaderPos();
             _inside = null; _spoken = null; _baselined = false;
             _room = null;
-            _primaryTiled.Holding = false; _secondaryTiled.Holding = false;
+            ReleaseAll();
         }
 
         public static Vector3 Position => _pos ?? LeaderPos();
@@ -64,15 +64,16 @@ namespace WrathAccess.Exploration
             if (WrathAccess.Screens.ScreenManager.Current?.Key != WrathAccess.Screens.LocalMapScreen.ScreenKey)
             {
                 _baselined = false;
-                _primaryTiled.Holding = false; _secondaryTiled.Holding = false;
+                ReleaseAll();
                 return;
             }
 
             bool continuous = false, tiled = false;
-            // The SHARED explore.cursor* actions (one binding set across in-area / maps); the screen
-            // gate above decides who consumes them here.
-            MoveSlot("explore.cursor", MovementSlot.Primary, dt, _primaryTiled, ref continuous, ref tiled);
-            MoveSlot("explore.secondary", MovementSlot.Secondary, dt, _secondaryTiled, ref continuous, ref tiled);
+            // The SHARED explore.* movement actions (one binding set across in-area / maps); the screen
+            // gate above decides who consumes them here. Each slot moves on its EXPLORATION mode.
+            var ctx = CursorSettings.Context(CursorSettings.Exploration);
+            foreach (var slot in CursorKeys.Slots)
+                MoveSlot(slot, CursorSettings.Slot(ctx, slot), dt, _tiled[(int)slot], ref continuous, ref tiled);
 
             var inside = MarkerAt(Position);
 
@@ -113,38 +114,26 @@ namespace WrathAccess.Exploration
         private static bool Known(RoomMap.Room room)
             => room != null && RoomMap.UnexploredPercent(room) < 100;
 
-        // One slot's movement this frame, on its IN-AREA movement type (continuous / tiled / none).
-        private static void MoveSlot(string prefix, MovementSlot slot, float dt, TiledState st,
+        // One slot's movement this frame, on its EXPLORATION movement mode (continuous / tiled / none):
+        // the map reuses the user's normal movement mode and speed (x SpeedFactor), so there's no
+        // second set of movement knobs to configure.
+        private static void MoveSlot(MovementSlot slot, CategorySetting slotCat, float dt, TiledState st,
             ref bool continuous, ref bool tiled)
         {
-            int dx = 0, dz = 0;
-            if (InputManager.Held(prefix + "Up")) dz += 1;
-            if (InputManager.Held(prefix + "Down")) dz -= 1;
-            if (InputManager.Held(prefix + "Right")) dx += 1;
-            if (InputManager.Held(prefix + "Left")) dx -= 1;
+            CursorKeys.HeldVectorRaw(slot, out int dx, out int dz);
 
-            string mode = ModeOf(slot);
-            if (mode == "none" || (dx == 0 && dz == 0)) { st.Holding = false; return; }
+            string mode = CursorSettings.Mode(slotCat);
+            if (mode == CursorSettings.ModeNone || (dx == 0 && dz == 0)) { st.Holding = false; return; }
 
             // Up = the GAME's north for this area (the map screens don't consult the listener facing).
-            if (mode == "tiled") { tiled = true; MapFrame.StepToWorld(ref dx, ref dz); TiledStep(dx, dz, st); return; }
+            if (mode == CursorSettings.ModeTiled) { tiled = true; MapFrame.StepToWorld(ref dx, ref dz); TiledStep(dx, dz, st); return; }
 
             continuous = true;
             float fx = dx, fz = dz;
             MapFrame.InputToWorld(ref fx, ref fz);
-            SetPos(Position + new Vector3(fx, 0f, fz).normalized * (Speed(slot) * dt));
+            float speed = CursorSettings.ContinuousSpeed(slotCat, 15) * Geo.MetresPerFoot * SpeedFactor;
+            SetPos(Position + new Vector3(fx, 0f, fz).normalized * (speed * dt));
         }
-
-        // The slot's in-area settings on the engaged overlay — the map reuses the user's normal movement
-        // type and speed (x SpeedFactor), so there's no second set of movement knobs to configure.
-        private static CategorySetting SlotCat(MovementSlot slot)
-            => OverlayManager.ActiveOverlay?.Cursor?.Slot(slot);
-
-        private static string ModeOf(MovementSlot slot)
-            => SlotCat(slot)?.Get<ChoiceSetting>("mode")?.Current?.Id ?? "continuous";
-
-        private static float Speed(MovementSlot slot)
-            => (SlotCat(slot)?.Get<IntSetting>("speed")?.Get() ?? 15) * Geo.MetresPerFoot * SpeedFactor;
 
         // Clamp into the map rectangle, then re-seat the height on the walkable surface where one exists
         // (so Enter/where-am-I read the right floor); off-navmesh spots keep their last height.

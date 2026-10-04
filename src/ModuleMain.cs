@@ -59,6 +59,7 @@ namespace WrathAccess
                 WrathAccess.Settings.ModSettings.Initialize(
                     System.IO.Path.Combine(UnityEngine.Application.persistentDataPath, "WrathAccess"));
                 MigrateMapBinding(); // one-time: the map's default moved Ctrl+L → Ctrl+V (Ctrl+L = log now)
+                MigrateCursorBindings(); // one-time: the arrows moved off the primary/secondary slots (cursor refactor)
                 // Speech comes up AFTER settings load so the persisted handler/backend choices apply.
                 WrathAccess.Speech.SpeechManager.Initialize();
                 // Overlays are built AFTER load: the saved overlay-id list (incl. user-added ones) is only
@@ -448,6 +449,41 @@ namespace WrathAccess
         // configs override code defaults, so an existing install would keep map on Ctrl+L and COLLIDE
         // with the new log default. Run after settings load: a saved map binding that is still exactly
         // the old default gets re-pointed at the new one; any custom combo the user chose is kept.
+        // The cursor refactor split the arrows off onto their own slots. A saved binding that still
+        // holds the OLD default pair (arrow + letter) would double-drive two slots at once, so such
+        // bindings fall back to the new default; a user's own rebind is left alone.
+        private static void MigrateCursorBindings()
+        {
+            var olds = new Dictionary<string, (KeyCode arrow, KeyCode letter, bool shift)>
+            {
+                { "explore.cursorUp", (KeyCode.UpArrow, KeyCode.W, false) },
+                { "explore.cursorDown", (KeyCode.DownArrow, KeyCode.S, false) },
+                { "explore.cursorLeft", (KeyCode.LeftArrow, KeyCode.A, false) },
+                { "explore.cursorRight", (KeyCode.RightArrow, KeyCode.D, false) },
+                { "explore.secondaryUp", (KeyCode.UpArrow, KeyCode.W, true) },
+                { "explore.secondaryDown", (KeyCode.DownArrow, KeyCode.S, true) },
+                { "explore.secondaryLeft", (KeyCode.LeftArrow, KeyCode.A, true) },
+                { "explore.secondaryRight", (KeyCode.RightArrow, KeyCode.D, true) },
+            };
+            int n = 0;
+            foreach (var action in InputManager.Actions)
+            {
+                if (!olds.TryGetValue(action.Key, out var o)) continue;
+                var a = new WrathAccess.Input.KeyboardBinding(o.arrow, shift: o.shift).Serialize();
+                var l = new WrathAccess.Input.KeyboardBinding(o.letter, shift: o.shift).Serialize();
+                if (action.Bindings.Count != 2) continue;
+                var s0 = (action.Bindings[0] as WrathAccess.Input.KeyboardBinding)?.Serialize();
+                var s1 = (action.Bindings[1] as WrathAccess.Input.KeyboardBinding)?.Serialize();
+                if ((s0 == a && s1 == l) || (s0 == l && s1 == a))
+                {
+                    action.ClearBindings();
+                    action.AddBinding(o.letter, shift: o.shift);
+                    n++;
+                }
+            }
+            if (n > 0) Log?.Log("[input] cursor refactor: " + n + " slot bindings reset to their new defaults (arrows are the tertiary/quaternary slots now).");
+        }
+
         private static void MigrateMapBinding()
         {
             foreach (var action in InputManager.Actions)
@@ -533,22 +569,41 @@ namespace WrathAccess
             // Space, Escape, Backspace - are won by the HUD while it's focused, by these while not) ----
             // The cursor arrows have NO press handlers: movement modes POLL the held keys each frame as
             // one combined vector (CursorKeys), so held diagonals move diagonally instead of zigzagging.
-            InputManager.Register("explore.cursorUp", "Move cursor up", InputCategory.Exploration)
-                .AddBinding(KeyCode.UpArrow).AddBinding(KeyCode.W).Repeating().Grouped("cursor");
-            InputManager.Register("explore.cursorDown", "Move cursor down", InputCategory.Exploration)
-                .AddBinding(KeyCode.DownArrow).AddBinding(KeyCode.S).Repeating().Grouped("cursor");
-            InputManager.Register("explore.cursorLeft", "Move cursor left", InputCategory.Exploration)
-                .AddBinding(KeyCode.LeftArrow).AddBinding(KeyCode.A).Repeating().Grouped("cursor");
-            InputManager.Register("explore.cursorRight", "Move cursor right", InputCategory.Exploration)
-                .AddBinding(KeyCode.RightArrow).AddBinding(KeyCode.D).Repeating().Grouped("cursor");
+            // Four cursor slots (the cursor refactor): primary W A S D, secondary Shift+W A S D,
+            // tertiary arrows, quaternary Shift+arrows. Each slot has its own movement mode per
+            // context in the Cursor settings tree (CursorSettings).
+            InputManager.Register("explore.cursorUp", "Primary cursor up", InputCategory.Exploration)
+                .AddBinding(KeyCode.W).Repeating().Grouped("cursor");
+            InputManager.Register("explore.cursorDown", "Primary cursor down", InputCategory.Exploration)
+                .AddBinding(KeyCode.S).Repeating().Grouped("cursor");
+            InputManager.Register("explore.cursorLeft", "Primary cursor left", InputCategory.Exploration)
+                .AddBinding(KeyCode.A).Repeating().Grouped("cursor");
+            InputManager.Register("explore.cursorRight", "Primary cursor right", InputCategory.Exploration)
+                .AddBinding(KeyCode.D).Repeating().Grouped("cursor");
             InputManager.Register("explore.secondaryUp", "Secondary cursor up", InputCategory.Exploration)
-                .AddBinding(KeyCode.UpArrow, shift: true).AddBinding(KeyCode.W, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.W, shift: true).Grouped("cursor");
             InputManager.Register("explore.secondaryDown", "Secondary cursor down", InputCategory.Exploration)
-                .AddBinding(KeyCode.DownArrow, shift: true).AddBinding(KeyCode.S, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.S, shift: true).Grouped("cursor");
             InputManager.Register("explore.secondaryLeft", "Secondary cursor left", InputCategory.Exploration)
-                .AddBinding(KeyCode.LeftArrow, shift: true).AddBinding(KeyCode.A, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.A, shift: true).Grouped("cursor");
             InputManager.Register("explore.secondaryRight", "Secondary cursor right", InputCategory.Exploration)
-                .AddBinding(KeyCode.RightArrow, shift: true).AddBinding(KeyCode.D, shift: true).Grouped("cursor");
+                .AddBinding(KeyCode.D, shift: true).Grouped("cursor");
+            InputManager.Register("explore.tertiaryUp", "Tertiary cursor up", InputCategory.Exploration)
+                .AddBinding(KeyCode.UpArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.tertiaryDown", "Tertiary cursor down", InputCategory.Exploration)
+                .AddBinding(KeyCode.DownArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.tertiaryLeft", "Tertiary cursor left", InputCategory.Exploration)
+                .AddBinding(KeyCode.LeftArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.tertiaryRight", "Tertiary cursor right", InputCategory.Exploration)
+                .AddBinding(KeyCode.RightArrow).Repeating().Grouped("cursor");
+            InputManager.Register("explore.quaternaryUp", "Quaternary cursor up", InputCategory.Exploration)
+                .AddBinding(KeyCode.UpArrow, shift: true).Grouped("cursor");
+            InputManager.Register("explore.quaternaryDown", "Quaternary cursor down", InputCategory.Exploration)
+                .AddBinding(KeyCode.DownArrow, shift: true).Grouped("cursor");
+            InputManager.Register("explore.quaternaryLeft", "Quaternary cursor left", InputCategory.Exploration)
+                .AddBinding(KeyCode.LeftArrow, shift: true).Grouped("cursor");
+            InputManager.Register("explore.quaternaryRight", "Quaternary cursor right", InputCategory.Exploration)
+                .AddBinding(KeyCode.RightArrow, shift: true).Grouped("cursor");
             // Our "left click": interact with the thing under the cursor. On the map screens, Enter is
             // the cursor's commit: local map plants the in-area cursor, world map acts on the point.
             InputManager.Register("explore.interact", "Interact at cursor", InputCategory.Exploration,

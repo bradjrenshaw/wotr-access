@@ -531,8 +531,7 @@ namespace WrathAccess.Exploration
         // the next cycle key starts over nearest-first instead of continuing from the old position —
         // "I moved; now show me what's close" without hand-stepping back through a stale cycle.
         private static bool ReviewResetOnMove =>
-            WrathAccess.Settings.ModSettings.GetSetting<WrathAccess.Settings.BoolSetting>(
-                "defaults.cursor.review_reset")?.Get() ?? false;
+            Overlays.CursorSettings.Flag(Overlays.CursorSettings.Context(Overlays.CursorSettings.Exploration), "review_reset");
 
         private const float ReviewResetDistance = 0.25f; // metres of cursor travel that forgets the cycle
         private static Vector3 _lastCycleFrom;

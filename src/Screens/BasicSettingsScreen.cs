@@ -136,8 +136,10 @@ namespace WrathAccess.Screens
             // ---- Cursor: movement speed and the cursor-driven readouts.
             b.BeginGroup(ControlId.Structural(k + "move"),
                 GraphNodes.Group(() => L("basic.cursor", "Cursor")));
-            var cursor = ModSettingsScreen.SystemDefaults("cursor");
-            var speed = cursor?.Get<CategorySetting>("primary")?.Get<IntSetting>("speed");
+            var cursor = WrathAccess.Exploration.Overlays.CursorSettings.Root
+                ?.Get<CategorySetting>(WrathAccess.Exploration.Overlays.CursorSettings.Exploration);
+            var speed = cursor?.Get<CategorySetting>("movement")?.Get<CategorySetting>("primary")
+                ?.Get<CategorySetting>("continuous")?.Get<IntSetting>("speed");
             if (speed != null)
                 b.AddItem(ControlId.Structural(k + "move.speed"), ModSettingNodes.IntSlider(speed));
             var rooms = cursor?.Get<BoolSetting>("announce_rooms");

@@ -19,6 +19,11 @@ namespace WrathAccess.Exploration.Overlays
         public string Name { get; set; } // settable so a live rename updates the spoken cycle name
         public Cursor Cursor { get; } = new Cursor();
 
+        /// <summary>This overlay's customized cursor settings (the full <see cref="CursorSettings"/>
+        /// schema under overlays.&lt;id&gt;.cursor.custom), or null while it follows the shared defaults.
+        /// Readers resolve through <see cref="CursorSettings.Context"/>.</summary>
+        public WrathAccess.Settings.CategorySetting CursorRoot { get; set; }
+
         public Overlay(string name) { Name = name; }
 
         // ---- composition ----

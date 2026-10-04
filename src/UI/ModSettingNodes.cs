@@ -26,6 +26,11 @@ namespace WrathAccess.UI
             {
                 case CategorySetting cat:
                     if (!HasVisibleLeaf(cat)) return; // skip empty groups
+                    if (cat.Inline) // flat inside the parent group; path-based keys stay unique
+                    {
+                        foreach (var c in cat.Children) Emit(b, c, prefix + cat.Key + ".");
+                        break;
+                    }
                     b.BeginGroup(ControlId.Structural(prefix + cat.Key), GraphNodes.Group(() => cat.Label));
                     foreach (var c in cat.Children) Emit(b, c, prefix + cat.Key + ".");
                     b.EndGroup();

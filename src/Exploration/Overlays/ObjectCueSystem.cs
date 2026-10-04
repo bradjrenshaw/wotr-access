@@ -68,23 +68,25 @@ namespace WrathAccess.Exploration.Overlays
                 _inside = inside;
             }
 
-            // Idle hover announce. While the HUD owns the arrows, freeze the spoken state (a held arrow
-            // there is UI nav, not movement — re-arming on it would cause spurious re-announces on release).
-            if (WrathAccess.UI.Navigation.HasFocus) return;
-            var mode = overlay.Cursor.ModeFor(MovementSlot.Primary);
-            if (mode == null || mode.AnnouncesOnMove || !Bool("announce_hover", true)) { _spoken = null; return; }
-            if (MoveKeyHeld() || inside == null) { _spoken = null; return; } // moving / over nothing → re-arm
-            if (inside != _spoken)
-            {
-                Tts.Speak(inside.DescribeInPlace());
-                _spoken = inside;
-            }
+            // Leaving the object re-arms the settle readout for the next one (see Announce).
+            if (inside == null) _spoken = null;
         }
 
-        private static bool MoveKeyHeld()
-            => InputManager.Held("explore.cursorUp") || InputManager.Held("explore.cursorDown")
-            || InputManager.Held("explore.cursorLeft") || InputManager.Held("explore.cursorRight")
-            || InputManager.Held("explore.secondaryUp") || InputManager.Held("explore.secondaryDown")
-            || InputManager.Held("explore.secondaryLeft") || InputManager.Held("explore.secondaryRight");
+        /// <summary>The thing under the cursor, for the readout pipeline: on a Settle, only when it is
+        /// new since the last settle (an idle cursor never repeats itself) and the hover option is on;
+        /// on Demand, always. Not on a tile Step — the grid's tile readout lists the cell's contents.</summary>
+        public override System.Collections.Generic.IEnumerable<OverlayAnnouncement> Announce(OverlayContext ctx)
+        {
+            if (!Enabled || ctx.Want != AnnouncementContext.Point) yield break;
+            var inside = _inside;
+            if (inside == null) { _spoken = null; yield break; }
+            if (ctx.Trigger == ReadoutTrigger.Settle)
+            {
+                if (!Bool("announce_hover", true) || inside == _spoken) yield break;
+                _spoken = inside;
+            }
+            else if (ctx.Trigger == ReadoutTrigger.Step) yield break;
+            yield return new OverlayAnnouncement(AnnouncementContext.Point, Message.Raw(inside.DescribeInPlace()), OverlayAnnouncement.OrderContents);
+        }
     }
 }

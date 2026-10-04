@@ -16,7 +16,7 @@ namespace WrathAccess.Exploration.Overlays
     ///       primary | secondary | tertiary | quaternary      (W A S D / Shift+W A S D / arrows / Shift+arrows)
     ///         mode: none | continuous | tiled
     ///         continuous: speed            shown only while mode == continuous
-    ///         tiled: tile size (world map) shown only while mode == tiled
+    ///         tiled: tile size             shown only while mode == tiled (feet in an area, miles on the map)
     /// </code>
     /// Each mode keeps its OWN subtree so switching modes swaps what is shown without losing the other
     /// mode's tuned values (the subtree not matching the dropdown is hidden, never overwritten). An
@@ -96,7 +96,8 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         // One input slot: the mode dropdown plus a subtree per mode this context offers. The dropdown
-        // hides the subtrees that don't match (visibility, not values) and raises Changed.
+        // hides the subtrees that don't match (visibility, not values) and raises Changed. The subtrees
+        // render INLINE — the selected mode's settings read right after the dropdown, no sub-heading.
         private static void Slot(CategorySetting movement, string ctx, string key, string defaultMode, int defaultSpeed)
         {
             var slot = Ensure(movement, key, SlotLabel(key), "cursor.slot." + key);
@@ -111,16 +112,20 @@ namespace WrathAccess.Exploration.Overlays
             if (ctx != Battles)
             {
                 var cont = Ensure(slot, ModeContinuous, "Continuous", "cursor.continuous");
+                cont.Inline = true; // its settings sit right under the mode dropdown
                 if (cont.GetByKey("speed") == null)
                     cont.Add(ctx == WorldMap
                         ? new IntSetting("speed", "Speed (miles per second)", defaultSpeed, 1, 100, 1, "cursor.speed_miles")
                         : new IntSetting("speed", "Speed (feet per second)", defaultSpeed, 1, 60, 1, "cursor.speed_feet"));
             }
             var tiled = Ensure(slot, ModeTiled, "Tiled", "cursor.tiled");
-            if (ctx == WorldMap && tiled.GetByKey("cell_size") == null)
-                tiled.Add(new IntSetting("cell_size", "Tile size (miles)", 2, 1, 50, 1, "cursor.cell_miles"));
-            // (In an area the tile size is the grid system's cell size — one grid for stepping and
-            // readouts alike; the tiled subtree stays empty there, and empty groups don't render.)
+            tiled.Inline = true;
+            if (tiled.GetByKey("cell_size") == null)
+            {
+                if (ctx == WorldMap) tiled.Add(new IntSetting("cell_size", "Tile size (miles)", 2, 1, 50, 1, "cursor.cell_miles"));
+                else if (ctx == Exploration) tiled.Add(new IntSetting("cell_size", "Tile size (feet)", 5, 1, 30, 1, "cursor.cell_feet"));
+                // (Battles: the game's hex grid fixes the step; the subtree stays empty and renders nothing.)
+            }
             ApplyVisibility(slot);
         }
 
@@ -184,6 +189,22 @@ namespace WrathAccess.Exploration.Overlays
         public static int TiledCell(CategorySetting slotCat, int fallback)
             => slotCat?.Get<CategorySetting>(ModeTiled)?.Get<IntSetting>("cell_size")?.Get() ?? fallback;
 
+        /// <summary>An in-area tiled slot's cell edge in world metres (the setting is in feet).</summary>
+        public static float TiledCellMetres(CategorySetting slotCat)
+            => TiledCell(slotCat, 5) * Geo.MetresPerFoot;
+
+        /// <summary>The in-area tile size a reader should assume when no slot has stepped yet: the first
+        /// tiled slot's, else five feet. Seeds <see cref="Overlays.Cursor.TileCell"/>.</summary>
+        public static float DefaultTileCellMetres(CategorySetting ctx)
+        {
+            foreach (var slot in CursorKeys.Slots)
+            {
+                var sc = Slot(ctx, slot);
+                if (Mode(sc) == ModeTiled) return TiledCellMetres(sc);
+            }
+            return 5f * Geo.MetresPerFoot;
+        }
+
         public static bool Flag(CategorySetting ctx, string key, bool fallback = false)
             => ctx?.Get<BoolSetting>(key)?.Get() ?? fallback;
 
@@ -209,6 +230,22 @@ namespace WrathAccess.Exploration.Overlays
             var cells = new List<string>();
             foreach (var slot in SlotKeys) cells.Add("cursor.worldmap.movement." + slot + ".tiled.cell_size");
             map["defaults.grid.worldmap_cell_size"] = cells.ToArray();
+            // The grid system no longer owns the in-area tile size (2026-10-04): its saved value seeds
+            // every in-area tiled slot, in the defaults and in each overlay whose cursor copy exists (an
+            // overlay that customized only its grid has no cursor copy to carry a per-overlay size; it
+            // follows the defaults, which got the same value).
+            cells = new List<string>();
+            foreach (var slot in SlotKeys) cells.Add("cursor.exploration.movement." + slot + ".tiled.cell_size");
+            map["defaults.grid.cell_size"] = cells.ToArray();
+            foreach (var path in ModSettings.UnknownPaths())
+            {
+                var m = System.Text.RegularExpressions.Regex.Match(path, @"^overlays\.([^.]+)\.grid\.custom\.cell_size$");
+                if (!m.Success) continue;
+                cells = new List<string>();
+                foreach (var slot in SlotKeys)
+                    cells.Add("overlays." + m.Groups[1].Value + ".cursor.custom.exploration.movement." + slot + ".tiled.cell_size");
+                map[path] = cells.ToArray();
+            }
 
             int moved = 0;
             foreach (var pair in map)
@@ -222,6 +259,7 @@ namespace WrathAccess.Exploration.Overlays
                 }
             }
             ModSettings.RemoveUnknownWhere(p => p.StartsWith("defaults.cursor.") || p == "defaults.grid.worldmap_cell_size"
+                || p == "defaults.grid.cell_size" || p.EndsWith(".grid.custom.cell_size")
                 || (p.StartsWith("overlays.") && (p.Contains(".cursor.primary.") || p.Contains(".cursor.secondary."))));
             if (moved > 0) Main.Log?.Log("[cursor] migrated " + moved + " pre-refactor cursor settings into the cursor tree");
             RefreshVisibility(root);

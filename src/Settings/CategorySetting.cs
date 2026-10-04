@@ -11,6 +11,11 @@ namespace WrathAccess.Settings
 
         public IReadOnlyList<Setting> Children => _children;
 
+        /// <summary>When true the settings menu renders this category's children flat inside the parent
+        /// group instead of as a nested group of their own (the saved path keeps the key). For
+        /// subtrees whose heading would only repeat a sibling dropdown's selected value.</summary>
+        public bool Inline { get; set; }
+
         public CategorySetting(string key, string label, bool includeInPath = true, string localizationKey = "")
             : base(key, label, localizationKey)
         {

@@ -29,43 +29,43 @@ namespace WrathAccess.Exploration.Overlays
     ///    PERPENDICULAR to the caster→point direction (the spawn's own orientation rule — walls pivot
     ///    as the caster moves, and so does this readout).
     /// Only units the player can currently see are listed — the decal reveals nothing hidden, and
-    /// neither do we. Same stop-detection idiom as PathInfoSystem, plus an immediate announce when
-    /// aiming begins (the cursor may already sit on the target).
+    /// neither do we. A contribution to the cursor's readout pipeline (which owns the stop), plus an
+    /// immediate readout when aiming begins (the cursor may already sit on the target).
     /// </summary>
     internal sealed class AoePreviewSystem : OverlaySystem
     {
         public override string Name => "Area preview";
         public override string Key => "aoe";
 
-        // Fires when the cursor STOPS (and once on aim start) — "when moving" would suppress it.
+        // A readout (no movement-timed playback) — Off/Continuous only.
         public override IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
 
-        private Vector3 _last;
-        private bool _has;      // _last is valid
-        private bool _armed;    // cursor moved (or aim just began) since the last announce
         private bool _wasAiming;
-
-        private const float DeltaSqr = 0.0001f;
         private const float WallHalfThickness = 0.762f; // the spawn's box is 5 ft thick
 
-        public override void OnExit(Overlay overlay) { _has = false; _armed = false; _wasAiming = false; }
+        public override void OnExit(Overlay overlay) { _wasAiming = false; }
 
+        // The stop itself belongs to the readout pipeline (Overlay.TickSettle); this only notices aiming
+        // BEGIN and asks for an immediate readout (the cursor may already sit on the target).
         public override void Tick(float dt, Overlay overlay)
         {
-            if (!OverlayManager.Active || !ShouldPlay(overlay)) { OnExit(overlay); return; }
+            if (!OverlayManager.Active || !ShouldPlay(overlay)) { _wasAiming = false; return; }
+            var ability = Game.Instance?.SelectedAbilityHandler?.SelectedAbility;
+            bool aiming = Resolve(ability) != null;
+            if (aiming && !_wasAiming) overlay.RequestSettle();
+            _wasAiming = aiming;
+        }
 
+        /// <summary>What the aimed ability would hit at the cursor, for the readout pipeline (every
+        /// trigger while aiming).</summary>
+        public override IEnumerable<OverlayAnnouncement> Announce(OverlayContext ctx)
+        {
+            if (!Enabled) yield break;
             var ability = Game.Instance?.SelectedAbilityHandler?.SelectedAbility;
             var info = Resolve(ability);
-            if (info == null) { OnExit(overlay); return; }
-            if (!_wasAiming) { _wasAiming = true; _armed = true; } // announce at the initial spot too
-            if (WrathAccess.UI.Navigation.HasFocus) return; // HUD owns the arrows — freeze, don't fire
-
-            var p = overlay.Cursor.Position;
-            if (!_has) { _has = true; _last = p; return; }
-            if ((p - _last).sqrMagnitude > DeltaSqr) { _last = p; _armed = true; return; }
-            if (!_armed || MoveKeyHeld()) return;
-            _armed = false;
-            Announce(ability, info, p);
+            if (info == null) yield break;
+            var line = Line(ability, info, ctx.Cursor);
+            if (line != null) yield return new OverlayAnnouncement(ctx.Want, Message.Raw(line), OverlayAnnouncement.OrderEffect);
         }
 
         // ---- shape resolution (cached per aimed ability — Tick asks every frame) ----
@@ -158,10 +158,10 @@ namespace WrathAccess.Exploration.Overlays
 
         // ---- announcing ----
 
-        private static void Announce(AbilityData ability, ShapeInfo info, Vector3 point)
+        private static string Line(AbilityData ability, ShapeInfo info, Vector3 point)
         {
             var caster = ability.Caster != null ? ability.Caster.Unit : null;
-            if (caster == null) return;
+            if (caster == null) return null;
 
             string shapeKey;
             List<UnitEntityData> hits;
@@ -200,12 +200,12 @@ namespace WrathAccess.Exploration.Overlays
             }
 
             string shape = Loc.T(shapeKey);
-            if (hits.Count == 0) { Tts.Speak(Loc.T("aoe.none", new { shape })); return; }
+            if (hits.Count == 0) return Loc.T("aoe.none", new { shape });
             hits.Sort((a, b) => (a.Position - caster.Position).sqrMagnitude
                 .CompareTo((b.Position - caster.Position).sqrMagnitude));
             var names = new List<string>();
             foreach (var u in hits) names.Add(u.CharacterName);
-            Tts.Speak(Loc.T("aoe.hits", new { shape, names = string.Join(", ", names) }));
+            return Loc.T("aoe.hits", new { shape, names = string.Join(", ", names) });
         }
 
         // Burst/cylinder/chain-radius at the cursor point: the spells' own enumeration (LOS-checked,
@@ -289,10 +289,5 @@ namespace WrathAccess.Exploration.Overlays
         private static bool Listable(UnitEntityData u, bool includeDead)
             => (includeDead || !u.Descriptor.State.IsDead) && u.IsVisibleForPlayer;
 
-        private static bool MoveKeyHeld()
-            => InputManager.Held("explore.cursorUp") || InputManager.Held("explore.cursorDown")
-            || InputManager.Held("explore.cursorLeft") || InputManager.Held("explore.cursorRight")
-            || InputManager.Held("explore.secondaryUp") || InputManager.Held("explore.secondaryDown")
-            || InputManager.Held("explore.secondaryLeft") || InputManager.Held("explore.secondaryRight");
     }
 }

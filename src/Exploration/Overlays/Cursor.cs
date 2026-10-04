@@ -27,6 +27,11 @@ namespace WrathAccess.Exploration.Overlays
         public IReadOnlyList<MovementMode> Modes => _modes;
         public void AddMode(MovementMode mode) { if (mode != null) _modes.Add(mode); }
 
+        /// <summary>The tile edge (world metres) the cursor last stepped by — what a tile-context readout
+        /// should describe. Each tiled slot has its own size; the slot that moved last sets this. Seeded
+        /// from the first tiled slot when the modes resolve.</summary>
+        public float TileCell { get; set; } = 5f * Geo.MetresPerFoot;
+
         // Movement is driven by each slot's "mode" choice in the EXPLORATION context of the cursor
         // settings (the overlay's custom copy when it has one, else the shared defaults —
         // CursorSettings.Context). Rebuilt on any mode change (CursorSettings.Changed).
@@ -34,12 +39,13 @@ namespace WrathAccess.Exploration.Overlays
         {
             _modes.Clear();
             var ctx = CursorSettings.Context(CursorSettings.Exploration, overlay);
+            TileCell = CursorSettings.DefaultTileCellMetres(ctx);
             foreach (var slot in CursorKeys.Slots)
             {
                 var slotCat = CursorSettings.Slot(ctx, slot);
                 var id = CursorSettings.Mode(slotCat);
                 if (id == CursorSettings.ModeContinuous) _modes.Add(new ContinuousGlide(slot, slotCat, ctx));
-                else if (id == CursorSettings.ModeTiled) _modes.Add(new TileStep(slot));
+                else if (id == CursorSettings.ModeTiled) _modes.Add(new TileStep(slot, slotCat));
             }
         }
 

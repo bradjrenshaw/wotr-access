@@ -7,30 +7,28 @@ using WrathAccess.Settings;
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
-    /// The tiled-space lens: describes the cell the cursor is in — direction + distance from the player to
-    /// the cell centre, walkable / edge / slope, fog, and any visible things standing on it. Owns the cell
-    /// size (which <see cref="TileStep"/> reads). Each fragment is an individually-toggleable setting;
+    /// The tile readout: describes the cell the cursor is in — direction + distance from the player to
+    /// the cell centre, walkable / edge / slope, fog, and any visible things standing on it. The cell
+    /// size is the stepping slot's (<see cref="OverlayContext.Cell"/>; each tiled slot carries its own
+    /// in the cursor settings) — this system owns no geometry. Each fragment is an individually-toggleable setting;
     /// they're still composed into one Tile-context line. The elevation change ("up 5 ft") is computed
     /// against the last cell it described, so a step reports the slope and a re-announce doesn't.
     /// </summary>
     internal sealed class GridSystem : OverlaySystem
     {
-        public override string Name => "Grid";
+        public override string Name => "Tile readout";
         public override string Key => "grid";
 
         // A readout (announces the cursor's cell on demand) — it has no continuous playback, so "when
         // moving" doesn't apply; Off/Continuous only.
         public override System.Collections.Generic.IReadOnlyList<OverlayMode> SupportedModes => OverlayModes.OffContinuous;
 
-        public float CellSize => Int("cell_size", 5) * Geo.MetresPerFoot; // world metres per tile
-        private float Half => CellSize * 0.5f;
         private const float LevelGap = 3f; // |Δy| treated as a different level
 
         private float? _lastHeight; // surface height at the last described cell (for slope deltas)
 
         public override void RegisterSettings(CategorySetting cat)
         {
-            cat.Add(new IntSetting("cell_size", "Tile size (feet)", 5, 1, 30, 1, "overlay.grid.cell_size"));
             cat.Add(new BoolSetting("bearing", "Announce direction & distance", true, "overlay.grid.bearing"));
             cat.Add(new BoolSetting("terrain", "Announce terrain", true, "overlay.grid.terrain"));
             cat.Add(new BoolSetting("contents", "Announce contents", true, "overlay.grid.contents"));
@@ -64,14 +62,14 @@ namespace WrathAccess.Exploration.Overlays
 
             if (Bool("contents", true))
             {
-                var contents = Contents(centre);
+                var contents = Contents(centre, ctx.Cell * 0.5f);
                 if (contents.Count > 0) Append(sb, string.Join(", ", contents.ToArray()));
             }
 
             if (Bool("raw", false)) Append(sb, Geo.Raw(centre));
 
             _lastHeight = centre.y;
-            if (sb.Length > 0) yield return new OverlayAnnouncement(AnnouncementContext.Tile, Message.Raw(sb.ToString()));
+            if (sb.Length > 0) yield return new OverlayAnnouncement(AnnouncementContext.Tile, Message.Raw(sb.ToString()), OverlayAnnouncement.OrderPosition);
         }
 
         private static void Append(StringBuilder sb, string frag)
@@ -100,14 +98,14 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         // Visible things whose footprint overlaps this cell and that are on roughly this level.
-        private List<string> Contents(Vector3 centre)
+        private List<string> Contents(Vector3 centre, float half)
         {
             var names = new List<string>();
             foreach (var item in WorldModel.Items)
             {
                 if (!item.IsVisible) continue;
                 if (Mathf.Abs(item.Position.y - centre.y) > LevelGap) continue;
-                if (!OverlapsTile(item, centre)) continue;
+                if (!OverlapsTile(item, centre, half)) continue;
                 var name = string.IsNullOrEmpty(item.Name) ? Loc.T("scan.object_fallback") : item.Name;
                 if (!names.Contains(name)) names.Add(name);
             }
@@ -116,10 +114,10 @@ namespace WrathAccess.Exploration.Overlays
 
         // The item's real footprint overlaps this tile when the closest point of its shape to the tile
         // centre lands within the tile square — so a wall marks the cells along its length, not a circle.
-        private bool OverlapsTile(ScanItem item, Vector3 centre)
+        private static bool OverlapsTile(ScanItem item, Vector3 centre, float half)
         {
             var np = item.NearestPoint(centre);
-            return Mathf.Abs(np.x - centre.x) <= Half && Mathf.Abs(np.z - centre.z) <= Half;
+            return Mathf.Abs(np.x - centre.x) <= half && Mathf.Abs(np.z - centre.z) <= half;
         }
     }
 }

@@ -8,21 +8,28 @@ namespace WrathAccess.Exploration.Overlays
     /// The cursor is a "standing position": its height follows the walkable surface, and at a level
     /// boundary it does NOT fall — it keeps its height so the player can feel the edge. Stacked levels are
     /// reached by a connected ramp or an explicit follow-down/up (<see cref="VerticalFollow"/>). The cell
-    /// size comes from the sibling <see cref="GridSystem"/> (one per overlay). It re-snaps from the shared
+    /// size is the SLOT's (its tiled subtree in the cursor settings), so a coarse and a fine slot can
+    /// coexist; each action records it on the cursor for the readout. It re-snaps from the shared
     /// cursor each action, so a jump made elsewhere (the scanner's Home) is honoured. Tile context — the
     /// readout itself is <see cref="GridSystem"/>'s job.
     /// </summary>
     internal sealed class TileStep : MovementMode
     {
         private readonly MovementSlot _slot;
-        public TileStep(MovementSlot slot) { _slot = slot; }
+        private readonly WrathAccess.Settings.CategorySetting _slotCat;
+        public TileStep(MovementSlot slot, WrathAccess.Settings.CategorySetting slotCat) { _slot = slot; _slotCat = slotCat; }
 
         public override string Name => "Tile stepping";
         public override MovementSlot Slot => _slot;
         public override AnnouncementContext Context => AnnouncementContext.Tile;
 
-        private static float Cell(Overlay overlay)
-            => overlay.Get<GridSystem>()?.CellSize ?? (5f * Geo.MetresPerFoot);
+        // Read live each action (the setting may change mid-session); the readout sees the same value.
+        private float Cell(Overlay overlay)
+        {
+            float cell = CursorSettings.TiledCellMetres(_slotCat);
+            overlay.Cursor.TileCell = cell;
+            return cell;
+        }
 
         private static float Snap(float v, float cell) => (Mathf.Floor(v / cell) + 0.5f) * cell;
 
@@ -70,7 +77,7 @@ namespace WrathAccess.Exploration.Overlays
             var s = NavmeshProbe.Sample(x, z, y);
             if (s.OnNavmesh) y = s.Point.y; // follow the surface; otherwise keep height (never fall)
             overlay.Cursor.Position = new Vector3(x, y, z);
-            overlay.Announce(Context); // the landing readout (GridSystem composes it)
+            overlay.Announce(Context, ReadoutTrigger.Step); // the landing readout (GridSystem composes it)
         }
 
         public override void Recenter(Overlay overlay)
@@ -94,7 +101,7 @@ namespace WrathAccess.Exploration.Overlays
         }
 
         // Snap the shared cursor onto a cell centre without moving it (keeps grid + shared cursor aligned).
-        private static void Resync(Overlay overlay)
+        private void Resync(Overlay overlay)
         {
             float cell = Cell(overlay);
             var p = overlay.Cursor.Position;

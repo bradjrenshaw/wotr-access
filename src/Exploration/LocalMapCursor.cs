@@ -126,7 +126,7 @@ namespace WrathAccess.Exploration
             if (mode == CursorSettings.ModeNone || (dx == 0 && dz == 0)) { st.Holding = false; return; }
 
             // Up = the GAME's north for this area (the map screens don't consult the listener facing).
-            if (mode == CursorSettings.ModeTiled) { tiled = true; MapFrame.StepToWorld(ref dx, ref dz); TiledStep(dx, dz, st); return; }
+            if (mode == CursorSettings.ModeTiled) { tiled = true; MapFrame.StepToWorld(ref dx, ref dz); TiledStep(dx, dz, st, CursorSettings.TiledCellMetres(slotCat)); return; }
 
             continuous = true;
             float fx = dx, fz = dz;
@@ -155,17 +155,16 @@ namespace WrathAccess.Exploration
 
         // Typematic tiled stepping on the in-area grid cell (mirrors TileStep's cadence; diagonals
         // stretch the interval by sqrt(2) so held-diagonal ground speed matches cardinal).
-        private static void TiledStep(int dx, int dz, TiledState st)
+        private static void TiledStep(int dx, int dz, TiledState st, float cell)
         {
             float stretch = (dx != 0 && dz != 0) ? 1.41421356f : 1f;
             float now = Time.unscaledTime;
-            if (!st.Holding) { st.Holding = true; st.NextStep = now + OsKeyboard.InitialDelay; DoTiledStep(dx, dz); }
-            else if (now >= st.NextStep) { st.NextStep = now + OsKeyboard.RepeatInterval * stretch; DoTiledStep(dx, dz); }
+            if (!st.Holding) { st.Holding = true; st.NextStep = now + OsKeyboard.InitialDelay; DoTiledStep(dx, dz, cell); }
+            else if (now >= st.NextStep) { st.NextStep = now + OsKeyboard.RepeatInterval * stretch; DoTiledStep(dx, dz, cell); }
         }
 
-        private static void DoTiledStep(int dx, int dz)
+        private static void DoTiledStep(int dx, int dz, float cell)
         {
-            float cell = OverlayManager.ActiveOverlay?.Get<GridSystem>()?.CellSize ?? (5f * Geo.MetresPerFoot);
             var p = Position;
             SetPos(new Vector3(Snap(p.x, cell) + dx * cell, p.y, Snap(p.z, cell) + dz * cell));
 

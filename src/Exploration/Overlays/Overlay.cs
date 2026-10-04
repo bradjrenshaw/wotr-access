@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using WrathAccess.UI; // NavDirection
 
 namespace WrathAccess.Exploration.Overlays
@@ -84,7 +85,8 @@ namespace WrathAccess.Exploration.Overlays
             // Cursor MOVEMENT is the one thing gated on having control — so it can't drift during a cutscene.
             // The sensing systems keep ticking regardless (each decides what, if anything, to suppress); the
             // overlay's master gate (OverlayManager.InExploration) is context-only, not control.
-            if (InAreaNow && WrathAccess.ControlState.HasControl) Cursor.Tick(dt, this);
+            if (InAreaNow && WrathAccess.ControlState.HasControl) { Cursor.Tick(dt, this); if (OverlayManager.Active) TickSettle(); else ResetSettle(); }
+            else ResetSettle();
             // Refresh the moving signal from the (now fresh) cursor before systems read ShouldPlay. Holding
             // the movement keys counts as moving even when blocked (against a wall), via the input-action
             // held state; a real position change covers walking while the cursor is untethered.
@@ -104,36 +106,71 @@ namespace WrathAccess.Exploration.Overlays
         {
             var m = PrimaryMode;
             if (m != null) m.Recenter(this); else Cursor.Recenter();
-            Announce(PrimaryContext);
+            Announce(PrimaryContext, ReadoutTrigger.Demand);
         }
 
         public void VerticalFollow(int dir)
         {
             var m = PrimaryMode;
             var r = m != null ? m.VerticalFollow(dir, this) : VerticalResult.Unsupported;
-            if (r == VerticalResult.Moved) Announce(PrimaryContext);
+            if (r == VerticalResult.Moved) Announce(PrimaryContext, ReadoutTrigger.Demand);
             else if (r == VerticalResult.NoSurface) Tts.Speak(Loc.T(dir < 0 ? "overlay.no_surface_below" : "overlay.no_surface_above"), interrupt: true);
         }
 
-        public void AnnounceCurrent() => Announce(PrimaryContext);
+        public void AnnounceCurrent() => Announce(PrimaryContext, ReadoutTrigger.Demand);
 
-        // ---- announce pipeline ----
+        // ---- the ONE readout pipeline ----
 
-        /// <summary>Gather every system's announcements, keep those describing the requested context, and
-        /// speak the composed line.</summary>
-        public void Announce(AnnouncementContext want)
+        /// <summary>Gather every system's announcements for the requested context and trigger, order
+        /// them (position, effect, path, contents), drop exact repeats, and speak the composed line as
+        /// one utterance. A Settle with nothing to say stays silent; Step and Demand interrupt.</summary>
+        public void Announce(AnnouncementContext want, ReadoutTrigger trigger)
         {
-            var ctx = new OverlayContext(this, Cursor.Position, Cursor.PlayerPosition, want);
-            var spoken = new List<Message>();
+            var ctx = new OverlayContext(this, Cursor.Position, Cursor.PlayerPosition, want, trigger, Cursor.TileCell);
+            var parts = new List<OverlayAnnouncement>();
             foreach (var s in _systems)
                 if (Applies(s.Scope))
                     foreach (var a in s.Announce(ctx))
-                        if (a != null && a.Context == want && a.Text != null) spoken.Add(a.Text);
-            if (spoken.Count > 0)
+                        if (a != null && a.Context == want && a.Text != null) parts.Add(a);
+            if (parts.Count == 0) return;
+            parts.Sort((a, b) => a.Order.CompareTo(b.Order)); // List.Sort is unstable; equal orders keep system order below
+            var seen = new HashSet<string>();
+            var texts = new List<string>();
+            foreach (var a in parts)
             {
-                var line = Message.Join("; ", spoken.ToArray()).Resolve();
-                if (!string.IsNullOrEmpty(line)) Tts.Speak(line, interrupt: true);
+                var t = a.Text.Resolve();
+                if (string.IsNullOrEmpty(t) || !seen.Add(t)) continue;
+                texts.Add(t);
             }
+            if (texts.Count == 0) return;
+            if (trigger == ReadoutTrigger.Step) _stepSpoken = true;
+            Tts.Speak(string.Join("; ", texts.ToArray()), interrupt: trigger != ReadoutTrigger.Settle);
         }
+
+        // ---- settle: the continuous glide's "I stopped" readout ----
+
+        private Vector3 _settleLast;
+        private bool _settleHas, _settleArmed, _stepSpoken, _settleRequested;
+
+        /// <summary>A system asks for the next idle readout even without movement (an ability began
+        /// aiming with the cursor already on its target).</summary>
+        public void RequestSettle() => _settleRequested = true;
+
+        // Arm on any cursor movement; fire once when the keys are released and the position has come to
+        // rest — unless a discrete mode already announced its landing during this motion (a tile step
+        // reads itself). Frozen while the HUD owns the arrows (a held arrow there is UI nav).
+        private void TickSettle()
+        {
+            var p = Cursor.Position;
+            if (!_settleHas) { _settleHas = true; _settleLast = p; return; }
+            if ((p - _settleLast).sqrMagnitude > 1e-4f) { _settleLast = p; _settleArmed = true; return; }
+            if (_settleRequested) { _settleRequested = false; _settleArmed = true; _stepSpoken = false; }
+            if (!_settleArmed || Cursor.MovementKeysHeld() || WrathAccess.UI.Navigation.HasFocus) return;
+            _settleArmed = false;
+            bool stepped = _stepSpoken; _stepSpoken = false;
+            if (!stepped) Announce(AnnouncementContext.Point, ReadoutTrigger.Settle);
+        }
+
+        private void ResetSettle() { _settleHas = false; _settleArmed = false; _stepSpoken = false; _settleRequested = false; }
     }
 }

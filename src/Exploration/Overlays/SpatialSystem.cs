@@ -25,10 +25,12 @@ namespace WrathAccess.Exploration.Overlays
 
         public override IEnumerable<OverlayAnnouncement> Announce(OverlayContext ctx)
         {
-            if (!Enabled || ctx.Want != AnnouncementContext.Point) yield break;
+            // A readout on demand (the announce key, recenter): the settle after a glide stays quiet
+            // about plain position — only things worth saying (an object, a path cost) speak then.
+            if (!Enabled || ctx.Want != AnnouncementContext.Point || ctx.Trigger == ReadoutTrigger.Settle) yield break;
             var text = WrathAccess.Exploration.Announce.SpatialPart.Text(null, ctx.Reference, ctx.Cursor);
             if (Bool("raw", false)) text += "; " + Geo.Raw(ctx.Cursor);
-            yield return new OverlayAnnouncement(AnnouncementContext.Point, Message.Raw(text));
+            yield return new OverlayAnnouncement(AnnouncementContext.Point, Message.Raw(text), OverlayAnnouncement.OrderPosition);
         }
     }
 }

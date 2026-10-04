@@ -13,6 +13,18 @@ namespace WrathAccess.Exploration.Overlays
         Tile,
     }
 
+    /// <summary>Why the cursor is being read out — the ONE readout pipeline (Overlay.Announce) runs on
+    /// each, and contributors decide what they add for which. <b>Step</b>: a discrete movement mode
+    /// landed (tile stepping). <b>Settle</b>: a continuous glide stopped (keys released, position
+    /// still) — spoken only when some system has something new. <b>Demand</b>: the player asked (the
+    /// announce key, recenter, a level follow) — everything that applies.</summary>
+    internal enum ReadoutTrigger
+    {
+        Step,
+        Settle,
+        Demand,
+    }
+
     /// <summary>
     /// Which input a movement mode listens on, so several modes can drive one cursor at once (e.g. arrows
     /// glide while Shift+arrows step). Only Primary is wired today; Secondary is the planned second slot.

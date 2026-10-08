@@ -7,11 +7,14 @@ using WrathAccess.UI; // NavDirection
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
-    /// Holds the registered overlays and which one is active, and forwards input to it. Each overlay is a
-    /// composition of movement modes + systems (see the builders below). Cycling steps off → 0 → … → off,
-    /// only while exploring (focus mode owns the keyboard AND the plain in-game context is on top), so the
-    /// overlay keys never fight the game during normal play. Movement/announce verbs are gated on
-    /// <see cref="Active"/>; the selected overlay still ticks when inactive so its audio can mute itself.
+    /// Holds the registered overlays (lenses) and which one is engaged, ticks the live context's cursor
+    /// (<see cref="Cursor.Area"/> / <see cref="Cursor.WorldMap"/>) ahead of it, and forwards the in-area
+    /// cursor verbs (the map's are routed by screen to <c>GlobalMapCursor</c>). Each overlay is a composition
+    /// of systems (see the builders below); the cursor is NOT per overlay — cycling changes the lens, never
+    /// the point. Cycling steps off → 0 → … → off, only while exploring (focus mode owns the keyboard AND
+    /// the plain in-game context is on top), so the overlay keys never fight the game during normal play.
+    /// Movement/announce verbs are gated on <see cref="Active"/>; the selected overlay still ticks when
+    /// inactive so its audio can mute itself.
     /// </summary>
     internal static class OverlayManager
     {
@@ -79,6 +82,7 @@ namespace WrathAccess.Exploration.Overlays
                 try { o.OnExit(); } catch { }
             _overlays = new List<Overlay>();
             _active = -1;
+            Cursor.ResetAll(); // fresh cursor state (modes, settle, motion, the map's placed point) for the next image
         }
 
         public static void Cycle()
@@ -90,17 +94,21 @@ namespace WrathAccess.Exploration.Overlays
             if (Current == null) { Tts.Speak(Loc.T("overlay.off"), interrupt: true); return; }
             Tts.Speak(Current.Name, interrupt: true);
             Current.OnEnter();
-            Current.AnnounceCurrent();
+            Cursor.Area.AnnounceCurrent(); // through the new lens (its modes re-resolve on the next tick if it customized the cursor)
         }
 
-        // Ticks the selected overlay every frame (whether or not we're exploring); its systems/modes
-        // self-gate on Active so they mute/idle when a menu's up or focus is off. First mirror the
-        // hold-to-force-on keys (Shift+F1/F2) onto the engaged overlay's systems — InputManager.Held is
-        // category-aware, so it's only true while exploring owns those keys, and false (released) otherwise.
+        // Every frame (whether or not we're exploring): the live context's cursor moves first (its modes
+        // self-gate on Active; MOVEMENT is additionally gated by its space — control in an area so it can't
+        // drift during a cutscene, no open panel on the map), then the selected overlay's systems read the
+        // fresh position (they self-gate on Active so they mute/idle when a menu's up or focus is off). First mirror the hold-to-force-on keys
+        // (Shift+F1/F2) onto the engaged overlay's systems — InputManager.Held is category-aware, so it's
+        // only true while exploring owns those keys, and false (released) otherwise.
         public static void Tick(float dt)
         {
             SetForceHeld("walltones", InputManager.Held("overlay.holdWalltones"));
             SetForceHeld("sonar", InputManager.Held("overlay.holdSonar"));
+            if (CurrentScope == OverlayScope.InArea) { Cursor.Area.Tick(dt); Cursor.WorldMap.Idle(); }
+            else { Cursor.WorldMap.Tick(dt); Cursor.Area.Idle(); }
             Current?.Tick(dt);
         }
 
@@ -131,8 +139,8 @@ namespace WrathAccess.Exploration.Overlays
             Tts.Speak(Loc.T("overlay.mode_set", new { system = sysName, mode = setting.Current?.Label ?? "" }), interrupt: true);
         }
 
-        public static void Recenter() { if (Active) Current.Recenter(); }
-        public static void AnnounceCurrent() { if (Active) Current.AnnounceCurrent(); }
-        public static void VerticalFollow(int dir) { if (Active) Current.VerticalFollow(dir); }
+        public static void Recenter() { if (Active) Cursor.Area.Recenter(); }
+        public static void AnnounceCurrent() { if (Active) Cursor.Area.AnnounceCurrent(); }
+        public static void VerticalFollow(int dir) { if (Active) Cursor.Area.VerticalFollow(dir); }
     }
 }

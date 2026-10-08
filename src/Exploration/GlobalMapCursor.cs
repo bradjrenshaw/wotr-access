@@ -1,176 +1,47 @@
-using System.IO;
 using System.Linq;
+using Kingmaker.Globalmap.State; // GlobalMapArmyState
 using Kingmaker.Globalmap.View;
 using UnityEngine;
-using WrathAccess.Audio;
-using WrathAccess.Exploration.Overlays; // OverlayAudio
-using WrathAccess.Input;
-using WrathAccess.Settings;
+using WrathAccess.Exploration.Overlays;
 
 namespace WrathAccess.Exploration
 {
     /// <summary>
-    /// The world-map MOVEMENT cursor — free-roam over the XZ plane with WASD/arrows (the analogue of the
-    /// in-area cursor; isolated, no navmesh). A SEPARATE point from the in-area <see cref="Cursor"/> so it
-    /// never pollutes it. Each slot (primary WASD, secondary Shift+WASD) has its own world-map movement
-    /// type: <b>continuous</b> glides at the slot's miles/sec speed; <b>tiled</b> steps on the OS typematic
-    /// cadence by the world-map tile size, announcing each landing (for tracking discrete positions, e.g.
-    /// army movement) — mirroring the in-area <see cref="Overlays.TileStep"/>. Crossing onto/off a point
-    /// plays the same object enter/leave cue as in-area. <b>Enter</b> acts on the point under it; <b>C</b>
-    /// recenters on the party; <b>K</b> reads it; <b>/</b> jumps to the review cursor.
+    /// The world-map MOVEMENT cursor's map-specific verbs. The cursor itself is <see cref="Overlays.Cursor.WorldMap"/>
+    /// (the cursor refactor, step four — 2026-10-08): the same <see cref="Overlays.Cursor"/> class as in-area, on a
+    /// <see cref="GlobalMapSpace"/> (its own point over the flat map, miles, map-north input), moved by the
+    /// shared glide / tile-step modes from the cursor settings' WORLD MAP context, read out through the
+    /// engaged overlay (<see cref="GlobalMapPointSystem"/>). What stays here is what only the map has:
+    /// <b>Enter</b> acts on the point under the cursor, <b>/</b> jumps to the review cursor, and the
+    /// point-footprint hit test the readout and the actions share. <b>C</b> recenters and <b>K</b> reads
+    /// through the cursor's own verbs.
     /// </summary>
     internal static class GlobalMapCursor
     {
         private const float Padding = 0.4f; // a little extra reach past each point's footprint so it's easy to land on
 
-        private static Vector3? _pos;
-        private static GlobalMapPointView _inside; // the point the cursor is on (for the enter/leave cue)
-        private static GlobalMapPointView _spoken; // last point the idle-settle readout spoke (null = armed)
-        private static bool _baselined;            // don't fire the cue on the first tick / on entering the map
+        /// <summary>The cursor's point — its placed position, else the traveler's.</summary>
+        public static Vector3 Position => Overlays.Cursor.WorldMap.Position;
 
-        // Per-slot typematic state for tiled stepping (one step on press, a pause, then repeats while held).
-        private sealed class TiledState { public bool Holding; public float NextStep; }
-        private static readonly TiledState[] _tiled = { new TiledState(), new TiledState(), new TiledState(), new TiledState() };
-        private static void ReleaseAll() { foreach (var t in _tiled) t.Holding = false; }
-
+        /// <summary>Entering the map: forget the placed point so the cursor starts on the traveler.</summary>
         public static void Reset()
         {
-            _pos = null; _inside = null; _spoken = null; _baselined = false;
-            ReleaseAll();
-        }
-
-        /// <summary>The cursor's point — its placed position, else the party's.</summary>
-        public static Vector3 Position => _pos ?? GlobalMapModel.TravelerPos;
-
-        // Per-frame movement + the object enter/leave cue. InputManager.Held respects the claim chain, so the
-        // shared explore.cursor* keys read as held only while the cursor (not the focused list) owns the arrows.
-        public static void Tick(float dt)
-        {
-            // Tied to the engaged overlay (Ctrl+O): the cursor runs only when an overlay is active on the
-            // world map and no location panel is open — same as the in-area cursor lives under an overlay.
-            // Otherwise pause (keep _pos), re-baselining the cue so it doesn't fire spuriously on resume.
-            if (!OverlayManager.Active || OverlayManager.CurrentScope != OverlayScope.WorldMap
-                || WrathAccess.Screens.GlobalMapScreen.PanelActive || !GlobalMapModel.Interactive)
-            {
-                _inside = null; _spoken = null; _baselined = false;
-                ReleaseAll();
-                return;
-            }
-
-            // Each slot moves per its own world-map movement mode (continuous glide / tiled step / none)
-            // from the cursor settings' WORLD MAP context. `continuous` = a slot glided this frame;
-            // `tiled` = a tiled slot is held (stepping cadence is managed inside). Held slots are additive.
-            bool continuous = false, tiled = false;
-            // The SHARED explore.* movement actions (one binding set across in-area / maps); this cursor's
-            // screen gate above decides who consumes them here.
-            var ctx = CursorSettings.Context(CursorSettings.WorldMap);
-            foreach (var slot in CursorKeys.Slots)
-                MoveSlot(slot, CursorSettings.Slot(ctx, slot), dt, _tiled[(int)slot], ref continuous, ref tiled);
-
-            var inside = NearestWithin();
-
-            // Object cue: same wavs + shared volume as the in-area ObjectCueSystem. Fires on a change of the
-            // point we're inside — enter when arriving on one (incl. a discrete tiled jump), leave to none.
-            if (!_baselined) { _inside = inside; _spoken = inside; _baselined = true; return; }
-            if (inside != _inside) { PlayCue(inside != null); _inside = inside; }
-
-            // Continuous idle-settle: gliding is too fast to narrate, so once the keys are released, speak the
-            // point the cursor sits on once (quiet over nothing), like in-area's idle hover announce. TILED
-            // instead announces each step itself (and sets _spoken there), so it's excluded here: we only
-            // re-arm (_spoken = null) on continuous motion, and never speak the settle on a tiled frame.
-            if (continuous || inside == null) _spoken = null;
-            else if (!tiled && inside != _spoken) { Tts.Speak(GlobalMapActions.InPlace(inside)); _spoken = inside; }
-        }
-
-        // One slot's movement this frame, dispatched on its world-map movement mode. Continuous glides
-        // _pos by its held arrows (+Z north, +X east) × the slot's miles/sec; tiled defers to the typematic
-        // stepper with the slot's tile size; none/idle does nothing (and clears the slot's hold so the
-        // next press re-arms the typematic first step).
-        private static void MoveSlot(MovementSlot slot, CategorySetting slotCat, float dt, TiledState st,
-            ref bool continuous, ref bool tiled)
-        {
-            CursorKeys.HeldVectorRaw(slot, out int dx, out int dz);
-
-            string mode = CursorSettings.Mode(slotCat);
-            if (mode == CursorSettings.ModeNone || (dx == 0 && dz == 0)) { st.Holding = false; return; }
-
-            // Up = the map's north (MapFrame; 0 on the world maps, kept for symmetry with the local map).
-            if (mode == CursorSettings.ModeTiled)
-            {
-                tiled = true; MapFrame.StepToWorld(ref dx, ref dz);
-                TiledStep(dx, dz, st, CursorSettings.TiledCell(slotCat, 2));
-                return;
-            }
-
-            continuous = true;
-            if (!_pos.HasValue) _pos = GlobalMapModel.TravelerPos; // plant at the party on first move
-            float fx = dx, fz = dz;
-            MapFrame.InputToWorld(ref fx, ref fz);
-            // The global map equates 1 world unit with 1 mile (GlobalMapMovementController), so miles/sec
-            // is also units/sec — no conversion when gliding _pos.
-            _pos = _pos.Value + new Vector3(fx, 0f, fz).normalized * (CursorSettings.ContinuousSpeed(slotCat, 18) * dt);
-        }
-
-        // Typematic tiled stepping (mirrors the in-area TileStep cadence): one step on first press, a pause
-        // of the OS initial delay, then repeats while held. Diagonals stretch the interval by sqrt(2) so the
-        // held-diagonal ground speed matches cardinal.
-        private static void TiledStep(int dx, int dz, TiledState st, float cell)
-        {
-            float stretch = (dx != 0 && dz != 0) ? 1.41421356f : 1f;
-            float now = Time.unscaledTime;
-            if (!st.Holding) { st.Holding = true; st.NextStep = now + OsKeyboard.InitialDelay; DoTiledStep(dx, dz, cell); }
-            else if (now >= st.NextStep) { st.NextStep = now + OsKeyboard.RepeatInterval * stretch; DoTiledStep(dx, dz, cell); }
-        }
-
-        // Snap onto the world-map tile grid (cell centres) and step one tile in the held direction, then read
-        // the landing: the point we're on (name + state), else the bearing + miles from the party.
-        private static void DoTiledStep(int dx, int dz, float cell)
-        {
-            if (!_pos.HasValue) _pos = GlobalMapModel.TravelerPos;
-            var p = _pos.Value;
-            _pos = new Vector3(Snap(p.x, cell) + dx * cell, 0f, Snap(p.z, cell) + dz * cell);
-
-            var on = NearestWithin();
-            if (on != null) { Tts.Speak(GlobalMapActions.InPlace(on)); _spoken = on; }
-            else { Tts.Speak(GlobalMapActions.PositionAt(Position)); _spoken = null; }
-        }
-
-        private static float Snap(float v, float cell) => (Mathf.Floor(v / cell) + 0.5f) * cell;
-
-        private static void PlayCue(bool enter)
-        {
-            float vol = (ModSettings.GetSetting<IntSetting>("audio.volumes.object")?.Get() ?? 100) / 100f * OverlayAudio.Master;
-            AudioEngines.Current.Play2D(Path.Combine(OverlayAudio.Dir, enter ? "object_enter.wav" : "object_exit.wav"), vol);
+            (Overlays.Cursor.WorldMap.Space as GlobalMapSpace)?.Reset();
+            Overlays.Cursor.WorldMap.Idle();
         }
 
         // ---- on-demand keys ----
-        public static void Recenter() { _pos = GlobalMapModel.TravelerPos; Settle(); }
+        public static void Recenter() => Overlays.Cursor.WorldMap.Recenter();
 
         public static void JumpToReview()
         {
             var p = GlobalMapScanner.SelectedPosition;
             if (!p.HasValue) { Tts.Speak(Loc.T("worldmap.scan_none")); return; }
-            _pos = p.Value;
-            Settle();
+            Overlays.Cursor.WorldMap.JumpTo(p.Value);
         }
 
         // K: read what the cursor is on (manual readout).
-        public static void Announce()
-        {
-            var p = NearestWithin();
-            if (p != null) Tts.Speak(GlobalMapActions.InPlace(p));
-            else Tts.Speak(Loc.T("worldmap.cursor_empty"));
-        }
-
-        // Snap-and-read (recenter / jump-to-review): speak the point we land on and baseline the cue +
-        // idle readout so the next Tick doesn't repeat it.
-        private static void Settle()
-        {
-            var p = NearestWithin();
-            _inside = p; _spoken = p;
-            if (p != null) Tts.Speak(GlobalMapActions.InPlace(p));
-            else Tts.Speak(Loc.T("worldmap.cursor_empty"));
-        }
+        public static void Announce() => Overlays.Cursor.WorldMap.AnnounceCurrent();
 
         public static void Interact()
         {
@@ -182,15 +53,19 @@ namespace WrathAccess.Exploration
             // Mid-journey pause (the game's move-helper Continue): Enter resumes travel, like the game's own
             // primary travel input. Otherwise act on the point under the cursor.
             if (GlobalMapModel.TravelPaused) { GlobalMapActions.ResumeTravel(); return; }
+            // An army pawn sits on top of its point (the game's click lands on the pawn first).
+            var a = ArmyWithin();
+            if (a != null) { GlobalMapActions.ArmyInteract(a); return; }
             var p = NearestWithin();
             if (p != null) GlobalMapActions.Go(p);
             else Tts.Speak(Loc.T("worldmap.cursor_empty"));
         }
 
-        // The nearest point whose OWN footprint contains the cursor, or null. Each point uses its real
-        // clickable radius (below) rather than one fixed circle — a fixed 8-unit radius was far larger than a
-        // location's icon, so the cursor read "on" many overlapping points and exact selection was hard.
-        private static GlobalMapPointView NearestWithin()
+        /// <summary>The nearest point whose OWN footprint contains the cursor, or null. Each point uses its
+        /// real clickable radius (below) rather than one fixed circle — a fixed 8-unit radius was far larger
+        /// than a location's icon, so the cursor read "on" many overlapping points and exact selection was
+        /// hard.</summary>
+        public static GlobalMapPointView NearestWithin()
         {
             GlobalMapPointView best = null;
             float bd = float.MaxValue;
@@ -199,7 +74,25 @@ namespace WrathAccess.Exploration
             {
                 if (pt == null) continue;
                 float d = Geo.Distance(c, pt.transform.position);
-                if (d <= PointRadius(pt) && d < bd) { bd = d; best = pt; }
+                if (d <= Radius(pt) && d < bd) { bd = d; best = pt; }
+            }
+            return best;
+        }
+
+        /// <summary>The nearest revealed army whose pawn footprint contains the cursor, or null — the same
+        /// hit test as the points, on the pawn's collider (armies share the map with locations: one may be
+        /// camped on a point, in which case both are "under" the cursor).</summary>
+        public static GlobalMapArmyState ArmyWithin()
+        {
+            GlobalMapArmyState best = null;
+            float bd = float.MaxValue;
+            var c = Position;
+            foreach (var army in GlobalMapModel.Armies)
+            {
+                var pos = GlobalMapActions.ArmyPosition(army);
+                if (!pos.HasValue) continue;
+                float d = Geo.Distance(c, pos.Value);
+                if (d <= Radius(army.View) && d < bd) { bd = d; best = army; }
             }
             return best;
         }
@@ -209,9 +102,9 @@ namespace WrathAccess.Exploration
         // from the collider's world bounds (scale-adjusted) so it matches the game's actual click target,
         // plus a small <see cref="Padding"/> so it's comfortable to land on. A modest fallback covers the rare
         // frame before the collider is built.
-        private static float PointRadius(GlobalMapPointView pt)
+        private static float Radius(Component pt)
         {
-            var col = pt.GetComponent<Collider>();
+            var col = pt != null ? pt.GetComponent<Collider>() : null;
             if (col != null)
             {
                 var e = col.bounds.extents;

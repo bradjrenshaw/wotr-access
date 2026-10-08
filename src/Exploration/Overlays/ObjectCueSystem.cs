@@ -47,7 +47,7 @@ namespace WrathAccess.Exploration.Overlays
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl)
                 { _inside = null; _spoken = null; _baselined = false; return; }
 
-            var c = overlay.Cursor.Position;
+            var c = Cursor.Area.Position;
             ScanItem inside = null;
             float best = float.MaxValue;
             foreach (var it in WorldModel.Items)

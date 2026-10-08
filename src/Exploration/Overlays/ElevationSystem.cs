@@ -42,7 +42,7 @@ namespace WrathAccess.Exploration.Overlays
             // Silent without control (cutscene): same as the other spatial-audio overlays.
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { _tone.Silence(); _has = false; _pitch = 0f; _silence = 999f; return; }
 
-            var p = overlay.Cursor.Position;
+            var p = Cursor.Area.Position;
             if (!_has) { _prev = p; _has = true; _silence = 999f; _tone.Silence(); return; }
             float dyFeet = (p.y - _prev.y) / Geo.MetresPerFoot;
             _prev = p;

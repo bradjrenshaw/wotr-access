@@ -30,6 +30,7 @@ namespace WrathAccess.Exploration.Overlays
             () => new FogSystem(),
             () => new ObjectCueSystem(),
             () => new PathInfoSystem(),
+            () => new GlobalMapPointSystem(),
             () => new AoePreviewSystem(),
             () => new LogSystem(),
             () => new GlobalMapSonarSystem(), // WorldMap-scoped: sweeps map points under the engaged overlay
@@ -82,7 +83,7 @@ namespace WrathAccess.Exploration.Overlays
         // worldmap_sonar defaults OFF (2026-07-22): it sweeps every location on the map at once — the
         // old setup wizard's sonar step turned it off as its recommendation; now it just starts off.
         private static readonly HashSet<string> DefaultOn =
-            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "aoe", "log" };
+            new HashSet<string> { "grid", "sonar", "fog", "object", "path", "aoe", "log", "worldmap_point" };
 
         private static readonly Dictionary<string, Overlay> _objects = new Dictionary<string, Overlay>();
         private static bool _cursorChangedWired;
@@ -90,15 +91,11 @@ namespace WrathAccess.Exploration.Overlays
         /// <summary>The settings-level name of the cursor pseudo-system an overlay can customize.</summary>
         public const string CursorKey = "cursor";
 
-        // Every overlay rebuilds its movement modes (a mode dropdown changed somewhere).
-        private static void ResolveAllCursors()
-        {
-            if (_defaultOverlay != null) _defaultOverlay.Cursor.ResolveModes(_defaultOverlay);
-            foreach (var o in _objects.Values) o.Cursor.ResolveModes(o);
-        }
+        // The in-area cursor rebuilds its movement modes (a mode dropdown changed somewhere).
+        private static void ResolveAllCursors() { Cursor.Area.Invalidate(); Cursor.WorldMap.Invalidate(); }
 
         // Point each overlay at its custom cursor copy (when customized and materialized), else the
-        // defaults, and rebuild its modes.
+        // defaults; the cursor re-resolves its modes from whichever overlay is engaged.
         private static void SyncCursorRoots()
         {
             foreach (var id in Ids())
@@ -494,7 +491,6 @@ namespace WrathAccess.Exploration.Overlays
             if (cCat.GetByKey("customized") == null)
                 cCat.Add(new BoolSetting("customized", "Customized", false) { Hidden = true });
             overlay.CursorRoot = cCat.Get<BoolSetting>("customized")?.Get() == true ? cCat.Get<CategorySetting>("custom") : null;
-            overlay.Cursor.ResolveModes(overlay);
             return overlay;
         }
 
@@ -515,8 +511,7 @@ namespace WrathAccess.Exploration.Overlays
                 sys.Bind(d, d);
                 overlay.With(sys);
             }
-            overlay.Cursor.ResolveModes(overlay); // follows the cursor tree's defaults
-            return overlay;
+            return overlay; // the cursor follows the cursor tree's defaults while this overlay is engaged
         }
 
         private static void Publish()

@@ -276,6 +276,7 @@
   "system.fog": "Fog cue",
   "system.object": "Object cue",
   "system.path": "Path info",
+  "system.worldmap_point": "World map point readout",
   "system.aoe": "Area preview",
   "system.log": "Log",
   "overlay.custom": "Custom settings",

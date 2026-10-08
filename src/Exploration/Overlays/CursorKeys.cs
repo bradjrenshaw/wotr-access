@@ -23,8 +23,10 @@ namespace WrathAccess.Exploration.Overlays
             }
         }
 
-        /// <summary>The slot's held vector regardless of screen (+Z = north, +X = east). The map cursors
-        /// gate on their own screen before calling this.</summary>
+        /// <summary>The slot's held vector regardless of screen (+Z = north, +X = east). The explore.*
+        /// movement actions are SHARED across in-area / local map / world map (one binding set), so each
+        /// cursor gates on its own screen first (<see cref="CursorSpace.OwnsKeys"/> via
+        /// <see cref="Cursor.HeldVector"/>; the local map screen's cursor checks its screen itself).</summary>
         public static void HeldVectorRaw(MovementSlot slot, out int dx, out int dz)
         {
             dx = 0; dz = 0;
@@ -33,16 +35,6 @@ namespace WrathAccess.Exploration.Overlays
             if (InputManager.Held(p + "Down")) dz -= 1;
             if (InputManager.Held(p + "Right")) dx += 1;
             if (InputManager.Held(p + "Left")) dx -= 1;
-        }
-
-        public static void HeldVector(MovementSlot slot, out int dx, out int dz)
-        {
-            dx = 0; dz = 0;
-            // The explore.* movement actions are SHARED across in-area / local map / world map (one
-            // binding set); only the in-area overlay modes read them through here, so gate on the
-            // in-area context — the map cursors poll the same actions with their own screen gates.
-            if (WrathAccess.Screens.ScreenManager.Current?.Key != "ctx.ingame") return;
-            HeldVectorRaw(slot, out dx, out dz);
         }
     }
 }

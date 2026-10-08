@@ -35,18 +35,14 @@ namespace WrathAccess.Exploration.Overlays
         private int _index;
         private float _timer;
 
-        // The world-map cursor's movement (this system reads GlobalMapCursor, not the overlay's in-area
-        // cursor) — drives the WhenMoving mode.
-        private readonly MotionTracker _motion = new MotionTracker();
-        protected override bool MovingNow(Overlay overlay) => _motion.MovingRecently;
+        // The WORLD-MAP cursor's movement drives the WhenMoving mode (not the in-area cursor's).
+        protected override bool MovingNow(Overlay overlay) => Cursor.WorldMap.MovingRecently;
 
         private void Reset() { _sweep.Clear(); _index = 0; _timer = 0f; }
         public override void OnExit(Overlay overlay) => Reset();
 
         public override void Tick(float dt, Overlay overlay)
         {
-            _motion.Update(GlobalMapCursor.Position, dt); // refresh WhenMoving before the play gate reads it
-
             // Run only under an engaged overlay; pause while a location panel tab stop is open (so it doesn't
             // sweep while the player reads/acts on it), same as the cursor freeze.
             if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl
@@ -80,7 +76,16 @@ namespace WrathAccess.Exploration.Overlays
                 if (Mathf.Sqrt(dx * dx + dz * dz) > MaxDist) continue;
                 _sweep.Add(p);
             }
-            _sweep.Sort((a, b) => (a.transform.position.x - c.x).CompareTo(b.transform.position.x - c.x));
+            // Left → right as HEARD: the world map's axes are rotated 180 from map north, so order by
+            // the ear-frame x (the same rotation the pans use), not raw world x.
+            _sweep.Sort((a, b) => EarX(a.transform.position, c).CompareTo(EarX(b.transform.position, c)));
+        }
+
+        private static float EarX(Vector3 p, Vector3 c)
+        {
+            float dx = p.x - c.x, dz = p.z - c.z;
+            ListenerFrame.ToEar(ref dx, ref dz);
+            return dx;
         }
 
         // The world-map taxonomy node a point sounds as (its sound is set in the Scanner tab).
@@ -99,6 +104,27 @@ namespace WrathAccess.Exploration.Overlays
                 _ => pos,
                 dist => Mathf.Clamp(RefDist / (RefDist + dist), MinVol, 1f) * SonarVolume(),
                 PanWidth);
+        }
+
+        /// <summary>The review ping (the m / n / b / . , cycles, the category browse and the explicit
+        /// Semicolon ping): the user's sound for the route outcome — straight (one road from the
+        /// traveler), path (several roads), unreachable (no road the traveler can take) — positioned at
+        /// the target with the sweep's distance/pan model, relative to the WORLD-MAP cursor (anchored
+        /// there). The sound picks are the in-area sonar's review sounds, so one set covers both maps.
+        /// NOT gated on Enabled: it's selection feedback, not part of the sweep; pick Silent to mute.</summary>
+        public void PlayReviewCue(Vector3 target, string outcome, Overlay overlay)
+        {
+            var stem = overlay?.Get<SonarSystem>()?.ReviewStem(outcome) ?? "review_" + outcome;
+            if (string.IsNullOrEmpty(stem) || stem == "silent") return;
+            var from = GlobalMapCursor.Position;
+            float dx = target.x - from.x, dz = target.z - from.z;
+            float dist = Mathf.Sqrt(dx * dx + dz * dz);
+            // Into the head's frame, like the sweep and the in-area ping: the world map's axes are
+            // rotated 180 from the game's north (MapFrame.Offset), and the default facing IS map north,
+            // so raw world deltas would pan mirrored.
+            ListenerFrame.ToEar(ref dx, ref dz);
+            AudioEngines.Current.PlaySpatial(Path.Combine(OverlayAudio.Dir, stem + ".wav"),
+                Mathf.Clamp(RefDist / (RefDist + dist), MinVol, 1f) * SonarVolume(), dx, dz, PanWidth);
         }
 
         private static float SonarVolume()

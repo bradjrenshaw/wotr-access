@@ -92,6 +92,8 @@ namespace WrathAccess.UI.Tooltips
             Register(new BuffBrickRenderer());
             Register(new MultipleBuffBrickRenderer());
             Register(new ArmyEffectBrickRenderer());
+            Register(new ArmySquadsBrickRenderer());
+            Register(new ArmyLeaderBrickRenderer());
             Register(new NonStackBrickRenderer());
             Register(new ChangeVisualBrickRenderer());
             Register(new BabHorizontalBrickRenderer());

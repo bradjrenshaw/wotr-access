@@ -198,8 +198,7 @@ namespace WrathAccess
             // Ticks the active overlay: movement modes (glide) update the cursor, then systems (sonar,
             // wall tones, fog/object cues) read the fresh position.
             WrathAccess.Exploration.ListenerFrame.Tick(UnityEngine.Time.unscaledDeltaTime); // continuous Q/E turning, before the systems that read Facing
-            OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime); // also drives the world-map sonar (a WorldMap overlay system)
-            WrathAccess.Exploration.GlobalMapCursor.Tick(UnityEngine.Time.unscaledDeltaTime); // world-map cursor; gated on the engaged overlay
+            OverlayManager.Tick(UnityEngine.Time.unscaledDeltaTime); // the live context's cursor (in-area / world map), then the engaged overlay's systems
             WrathAccess.Audio.SpatialSources.Tick(); // re-spatialise live one-shots against the cursors just moved above
             WrathAccess.Events.EventBusAdapter.Tick(); // reconcile this frame's buff churn into gain/loss events
             WrathAccess.Events.EventDispatcher.Tick(); // flush this frame's queued events (damage, buffs, room changes)
@@ -770,7 +769,10 @@ namespace WrathAccess
             // Inspect: open the game's unit Inspect window (only if the unit actually has one). Y inspects the
             // review-cursor unit; ' inspects the unit the movement cursor is over. (Where am I moved to X.)
             InputManager.Register("inspect.review", "Inspect review-cursor unit", InputCategory.Exploration,
-                WrathAccess.Exploration.Inspect.Review).AddBinding(KeyCode.Y).Grouped("scanner");
+                Route(inArea: WrathAccess.Exploration.Inspect.Review,
+                      localMap: WrathAccess.Exploration.Inspect.Review,
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.InspectReview)) // the army's info window
+                .AddBinding(KeyCode.Y).Grouped("scanner");
             InputManager.Register("inspect.cursor", "Inspect unit under cursor", InputCategory.Exploration,
                 WrathAccess.Exploration.Inspect.AtCursor).AddBinding(KeyCode.Quote).Grouped("scanner");
             InputManager.Register("scan.moveToCursor", "Move to cursor", InputCategory.Exploration,
@@ -1023,7 +1025,8 @@ namespace WrathAccess
             // Semicolon = ping the review target from the movement cursor: one of four sight/route
             // cues (blocked sight / sighted-but-unreachable / route-around / straight line).
             InputManager.Register("review.ping", "Ping review object", InputCategory.Exploration,
-                Route(inArea: WrathAccess.Exploration.Scanner.PingReview))
+                Route(inArea: WrathAccess.Exploration.Scanner.PingReview,
+                      worldMap: WrathAccess.Exploration.GlobalMapScanner.PingReview))
                 .AddBinding(KeyCode.Semicolon).Grouped("review");
         }
         /// <summary>The game's default action-bar hotkeys per row/slot (null = unbound), read live

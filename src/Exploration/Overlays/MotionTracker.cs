@@ -6,7 +6,7 @@ namespace WrathAccess.Exploration.Overlays
     /// Tracks whether a point (a cursor) has moved recently, with a short linger so it reads as "moving"
     /// smoothly across discrete steps / key-repeat gaps instead of flickering. Fed a position each frame;
     /// <see cref="MovingRecently"/> stays true for <see cref="LingerSec"/> after the last real move. Drives
-    /// the systems' "when moving" play mode (in-area cursor on the Overlay; world-map cursor on the map sonar).
+    /// the systems' "when moving" play mode (the shared in-area cursor; the world-map cursor on the map sonar).
     /// </summary>
     internal sealed class MotionTracker
     {

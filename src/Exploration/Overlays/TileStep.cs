@@ -4,14 +4,15 @@ using WrathAccess.Input; // OsKeyboard (typematic cadence)
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
-    /// Walks the cursor across an imaginary 5-ft grid with the arrow keys (one tile = a tabletop square).
-    /// The cursor is a "standing position": its height follows the walkable surface, and at a level
-    /// boundary it does NOT fall — it keeps its height so the player can feel the edge. Stacked levels are
-    /// reached by a connected ramp or an explicit follow-down/up (<see cref="VerticalFollow"/>). The cell
-    /// size is the SLOT's (its tiled subtree in the cursor settings), so a coarse and a fine slot can
-    /// coexist; each action records it on the cursor for the readout. It re-snaps from the shared
-    /// cursor each action, so a jump made elsewhere (the scanner's Home) is honoured. Tile context — the
-    /// readout itself is <see cref="GridSystem"/>'s job.
+    /// Walks the cursor across an imaginary grid with the arrow keys (one tile = a tabletop square in an
+    /// area; a tile of so many miles on the world map). The cursor is a "standing position": where the
+    /// space has a surface its height follows it, and at a level boundary it does NOT fall — it keeps its
+    /// height so the player can feel the edge. Stacked levels are reached by a connected ramp or an
+    /// explicit follow-down/up (<see cref="VerticalFollow"/>). The cell size is the SLOT's (its tiled
+    /// subtree in the cursor settings), so a coarse and a fine slot can coexist; each action records it on
+    /// the cursor for the readout. It re-snaps from the cursor's point each action, so a jump made
+    /// elsewhere (the scanner's Home) is honoured. All geometry goes through the cursor's
+    /// <see cref="CursorSpace"/>; the landing readout is the engaged overlay's job.
     /// </summary>
     internal sealed class TileStep : MovementMode
     {
@@ -24,16 +25,16 @@ namespace WrathAccess.Exploration.Overlays
         public override AnnouncementContext Context => AnnouncementContext.Tile;
 
         // Read live each action (the setting may change mid-session); the readout sees the same value.
-        private float Cell(Overlay overlay)
+        private float Cell(Cursor cursor)
         {
-            float cell = CursorSettings.TiledCellMetres(_slotCat);
-            overlay.Cursor.TileCell = cell;
+            float cell = CursorSettings.TiledCellWorld(_slotCat, cursor.Space);
+            cursor.TileCell = cell;
             return cell;
         }
 
         private static float Snap(float v, float cell) => (Mathf.Floor(v / cell) + 0.5f) * cell;
 
-        public override void OnEnter(Overlay overlay) => Resync(overlay); // snap to the nearest cell centre
+        public override void OnEnter(Cursor cursor) => Resync(cursor); // snap to the nearest cell centre
 
         // Stepping POLLS the slot's held arrows as one vector (so Up+Right = a single diagonal step),
         // with its own typematic cadence (the user's OS delay/rate): one step on press, a pause, then
@@ -42,15 +43,18 @@ namespace WrathAccess.Exploration.Overlays
         private bool _holding;
         private float _nextStep;
 
-        public override void Tick(float dt, Overlay overlay)
+        public override void Idle(Cursor cursor) => _holding = false; // the next press re-arms the first step
+
+        public override void Tick(float dt, Cursor cursor)
         {
             // No HUD-focus gate needed: with the HUD focused the primary arrows are SHADOWED by the UI
             // category (InputManager.Held reads live bindings only), while the secondary slot keeps moving.
             if (!OverlayManager.Active) { _holding = false; return; }
-            CursorKeys.HeldVector(_slot, out int dx, out int dz);
+            cursor.HeldVector(_slot, out int dx, out int dz);
             if (dx == 0 && dz == 0) { _holding = false; return; }
-            // W steps toward the facing; the GRID stays world-aligned (a 45° facing walks diagonals).
-            ListenerFrame.StepToWorld(ref dx, ref dz);
+            // W steps toward the space's "up" (the facing in an area, north on the map); the GRID stays
+            // world-aligned (a 45° facing walks diagonals).
+            cursor.Space.StepToWorld(ref dx, ref dz);
 
             // A diagonal tile is sqrt(2) longer than a cardinal one; stretch the repeat interval to
             // match so held-diagonal GROUND speed equals cardinal (the step itself stays on-grid).
@@ -60,52 +64,45 @@ namespace WrathAccess.Exploration.Overlays
             {
                 _holding = true;
                 _nextStep = now + OsKeyboard.InitialDelay;
-                Step(dx, dz, overlay);
+                Step(dx, dz, cursor);
             }
             else if (now >= _nextStep)
             {
                 _nextStep = now + OsKeyboard.RepeatInterval * stretch;
-                Step(dx, dz, overlay);
+                Step(dx, dz, cursor);
             }
         }
 
-        private void Step(int dx, int dz, Overlay overlay)
+        private void Step(int dx, int dz, Cursor cursor)
         {
-            float cell = Cell(overlay);
-            var p = overlay.Cursor.Position;
-            float x = Snap(p.x, cell) + dx * cell, z = Snap(p.z, cell) + dz * cell, y = p.y;
-            var s = NavmeshProbe.Sample(x, z, y);
-            if (s.OnNavmesh) y = s.Point.y; // follow the surface; otherwise keep height (never fall)
-            overlay.Cursor.Position = new Vector3(x, y, z);
-            overlay.Announce(Context, ReadoutTrigger.Step); // the landing readout (GridSystem composes it)
+            float cell = Cell(cursor);
+            var p = cursor.Position;
+            cursor.Position = cursor.Space.Land(Snap(p.x, cell) + dx * cell, Snap(p.z, cell) + dz * cell, p.y);
+            cursor.Announce(Context, ReadoutTrigger.Step); // the landing readout (the lens composes it)
         }
 
-        public override void Recenter(Overlay overlay)
+        public override void Recenter(Cursor cursor)
         {
-            float cell = Cell(overlay);
-            var p = Cursor.PlayerPosition;
-            overlay.Cursor.Position = new Vector3(Snap(p.x, cell), p.y, Snap(p.z, cell));
+            float cell = Cell(cursor);
+            var p = cursor.Reference;
+            cursor.Position = new Vector3(Snap(p.x, cell), p.y, Snap(p.z, cell));
         }
 
-        public override VerticalResult VerticalFollow(int dir, Overlay overlay)
+        public override VerticalResult VerticalFollow(int dir, Cursor cursor)
         {
-            float cell = Cell(overlay);
-            var p = overlay.Cursor.Position;
-            float x = Snap(p.x, cell), z = Snap(p.z, cell), y = p.y;
-            bool found = dir < 0
-                ? NavmeshProbe.FloorBelow(x, z, y, out var floor)
-                : NavmeshProbe.FloorAbove(x, z, y, out floor);
-            if (!found) return VerticalResult.NoSurface;
-            overlay.Cursor.Position = new Vector3(x, floor.y, z);
-            return VerticalResult.Moved;
+            float cell = Cell(cursor);
+            var p = cursor.Position;
+            var r = cursor.Space.FollowLevel(Snap(p.x, cell), Snap(p.z, cell), p.y, dir, out var at);
+            if (r == VerticalResult.Moved) cursor.Position = at;
+            return r;
         }
 
-        // Snap the shared cursor onto a cell centre without moving it (keeps grid + shared cursor aligned).
-        private void Resync(Overlay overlay)
+        // Snap the cursor onto a cell centre without moving it (keeps grid + shared point aligned).
+        private void Resync(Cursor cursor)
         {
-            float cell = Cell(overlay);
-            var p = overlay.Cursor.Position;
-            overlay.Cursor.Position = new Vector3(Snap(p.x, cell), p.y, Snap(p.z, cell));
+            float cell = Cell(cursor);
+            var p = cursor.Position;
+            cursor.Position = new Vector3(Snap(p.x, cell), p.y, Snap(p.z, cell));
         }
     }
 }

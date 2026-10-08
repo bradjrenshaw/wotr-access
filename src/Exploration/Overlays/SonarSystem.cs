@@ -107,16 +107,26 @@ namespace WrathAccess.Exploration.Overlays
                 : !info.HasPath ? "unreachable"
                 : info.IsStraight ? "straight"
                 : "path";
-            var stem = Settings?.Get<WrathAccess.Settings.CategorySetting>("review_sounds")
-                ?.Get<WrathAccess.Settings.ChoiceSetting>(outcome)?.ValueId
-                ?? "review_" + outcome; // no settings registered (shouldn't happen) → shipped default
-            if (string.IsNullOrEmpty(stem) || stem == "silent") return;
+            var stem = ReviewStem(outcome);
+            if (stem == null) return;
             var np = item.NearestPoint(from);
             float dx = np.x - from.x, dz = np.z - from.z;
             float dist = Mathf.Sqrt(dx * dx + dz * dz);
             ListenerFrame.ToEar(ref dx, ref dz); // pan in the facing's frame
             AudioEngines.Current.PlaySpatial(Path.Combine(OverlayAudio.Dir, stem + ".wav"),
                 VolumeFor(dist), dx, dz, PanWidthM);
+        }
+
+        /// <summary>The user's sound for a review-ping outcome ("straight" / "path" / "unreachable" /
+        /// "los"), as a wav stem under the overlay audio dir — null when they picked Silent. Shared with
+        /// the world map's review ping (<see cref="GlobalMapSonarSystem.PlayReviewCue"/>), so one set of
+        /// picks covers both maps.</summary>
+        public string ReviewStem(string outcome)
+        {
+            var stem = Settings?.Get<WrathAccess.Settings.CategorySetting>("review_sounds")
+                ?.Get<WrathAccess.Settings.ChoiceSetting>(outcome)?.ValueId
+                ?? "review_" + outcome; // no settings registered (shouldn't happen) → shipped default
+            return string.IsNullOrEmpty(stem) || stem == "silent" ? null : stem;
         }
 
         // The sweep's distance→volume curve (reads the live ref-distance + system volume settings).
@@ -173,7 +183,7 @@ namespace WrathAccess.Exploration.Overlays
 
             // The frame's candidates: the SAME filter as the sweep snapshot (sound configured,
             // radius cap, detectable), plus distance and the left/right phase.
-            var c = overlay.Cursor.Position;
+            var c = Cursor.Area.Position;
             float maxDist = _field.DistFar;
             _candidates.Clear();
             foreach (var it in WorldModel.Items)
@@ -203,7 +213,7 @@ namespace WrathAccess.Exploration.Overlays
         // sounding deceptively close — out past it, it simply drops from the sweep.
         private void Snapshot(Overlay overlay)
         {
-            var c = overlay.Cursor.Position;
+            var c = Cursor.Area.Position;
             float maxDist = Int("max_distance", 40) * Geo.MetresPerFoot;
             _sweep.Clear();
             foreach (var it in WorldModel.Items)
@@ -235,7 +245,7 @@ namespace WrathAccess.Exploration.Overlays
             // and re-attenuates it every frame until the ping finishes — it no longer freezes at fire time.
             WrathAccess.Audio.SpatialSources.Play(
                 Path.Combine(OverlayAudio.Dir, "interactables", snd + ".wav"),
-                () => overlay.Cursor.Position,
+                () => Cursor.Area.Position,
                 c => item.NearestPoint(c),
                 VolumeFor,
                 PanWidthM);

@@ -193,16 +193,20 @@ namespace WrathAccess.Exploration.Overlays
         public static float TiledCellMetres(CategorySetting slotCat)
             => TiledCell(slotCat, 5) * Geo.MetresPerFoot;
 
-        /// <summary>The in-area tile size a reader should assume when no slot has stepped yet: the first
-        /// tiled slot's, else five feet. Seeds <see cref="Overlays.Cursor.TileCell"/>.</summary>
-        public static float DefaultTileCellMetres(CategorySetting ctx)
+        /// <summary>A tiled slot's cell edge in a space's world units (feet → metres in an area; miles on the map).</summary>
+        public static float TiledCellWorld(CategorySetting slotCat, CursorSpace space)
+            => TiledCell(slotCat, space.DefaultCell) * space.Unit;
+
+        /// <summary>The tile size a reader should assume when no slot has stepped yet: the first tiled
+        /// slot's, else the space's default. Seeds <see cref="Overlays.Cursor.TileCell"/>.</summary>
+        public static float DefaultTileCell(CategorySetting ctx, CursorSpace space)
         {
             foreach (var slot in CursorKeys.Slots)
             {
                 var sc = Slot(ctx, slot);
-                if (Mode(sc) == ModeTiled) return TiledCellMetres(sc);
+                if (Mode(sc) == ModeTiled) return TiledCellWorld(sc, space);
             }
-            return 5f * Geo.MetresPerFoot;
+            return space.DefaultCell * space.Unit;
         }
 
         public static bool Flag(CategorySetting ctx, string key, bool fallback = false)

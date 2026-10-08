@@ -17,13 +17,20 @@ namespace WrathAccess.Exploration.Overlays
     /// paired sight ray for colliderless geometry; off = the classic single bank. Two voice banks
     /// run at once; each direction feeds whichever bank its hit classifies into. Self-gates on
     /// <see cref="OverlayManager.Active"/>; releases its voices on exit.
+    ///
+    /// On the WORLD MAP the same tones sound the map's edge (<see cref="GlobalMapSpace.MapBounds"/>):
+    /// there are no walls, only the end of the painted map, so each direction's hit is where the ray
+    /// meets that rectangle, on the single bank. The range setting reads in the map's units (miles).
+    /// Follows whichever cursor the live context has.
     /// </summary>
     internal sealed class WallToneSystem : AudioSystem
     {
         public override string Name => "Wall tones";
         public override string Key => "walltones";
+        public override OverlayScope Scope => OverlayScope.Both;
 
-        private float Range => Int("range", 15) * Geo.MetresPerFoot;
+        // Feet in an area; the same number in miles on the map (the space's unit, like the cursor's speed).
+        private float Range => Int("range", 15) * (OverlayManager.CurrentScope == OverlayScope.WorldMap ? 1f : Geo.MetresPerFoot);
 
         // EXPERIMENTAL opt-in: classify hits and play obstacles on tone set 2. Off = the classic
         // single bank (everything sounds as a wall; no per-frame classification cost).
@@ -61,11 +68,13 @@ namespace WrathAccess.Exploration.Overlays
 
         public override void Tick(float dt, Overlay overlay)
         {
-            // Silent without control (cutscene): the overlay stays engaged, but wall tones shouldn't play
-            // over a scripted scene. Mute (don't dispose) so they resume seamlessly when control returns.
-            if (!OverlayManager.Active || !ShouldPlay(overlay) || !WrathAccess.ControlState.HasControl) { Mute(); return; }
+            // Silent without control (cutscene; on the map: a panel open): the overlay stays engaged, but
+            // wall tones shouldn't play over a scripted scene. Mute (don't dispose) so they resume seamlessly.
+            bool onMap = OverlayManager.CurrentScope == OverlayScope.WorldMap;
+            var cursor = onMap ? Cursor.WorldMap : Cursor.Area;
+            if (!OverlayManager.Active || !ShouldPlay(overlay) || !cursor.Space.CanMove) { Mute(); return; }
 
-            bool split = Split;
+            bool split = Split && !onMap; // the map's edge is never an "obstacle
             // A backend switch disposed the engine our voices lived on: drop and recreate them.
             if (_gen != AudioEngines.Generation)
             {
@@ -76,8 +85,26 @@ namespace WrathAccess.Exploration.Overlays
             if (_walls == null) _walls = AudioEngines.Current.CreateWallTones("1");
             if (split && _obstacles == null) _obstacles = AudioEngines.Current.CreateWallTones("2");
 
-            var c = overlay.Cursor.Position;
+            var c = cursor.Position;
             float v = EffectiveVolume;
+
+            if (onMap)
+            {
+                // The map's edge in each facing-relative direction (the pans stay in ear space, as in-area).
+                var space = (GlobalMapSpace)cursor.Space;
+                float mr = ListenerFrame.Facing * Mathf.Deg2Rad, mc = Mathf.Cos(mr), ms = Mathf.Sin(mr);
+                for (int i = 0; i < 4; i++)
+                {
+                    var rel = DirVecs[i];
+                    var dir = new Vector3(rel.x * mc + rel.z * ms, 0f, -rel.x * ms + rel.z * mc);
+                    _hits[i] = space.EdgeHit(c, dir);
+                    _wallVols[i] = Curve(c, _hits[i]) * v;
+                    _obstVols[i] = 0f;
+                }
+                _walls.Update(_hits, _wallVols);
+                _obstacles?.Update(_hits, _obstVols);
+                return;
+            }
 
             // The four trace directions in WORLD space this frame: the relative set (ahead/behind/
             // right/left) rotated by the facing. Voice pans are fixed in ear space, so this is the

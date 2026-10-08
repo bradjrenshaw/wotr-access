@@ -108,9 +108,9 @@ namespace WrathAccess.Exploration.Overlays
             }
         }
 
-        /// <summary>Whether this system's relevant cursor is moving (for WhenMoving). Default: the overlay's
+        /// <summary>Whether this system's relevant cursor is moving (for WhenMoving). Default: the shared
         /// in-area cursor; world-map systems override to their own cursor.</summary>
-        protected virtual bool MovingNow(Overlay overlay) => overlay != null && overlay.CursorMovingRecently;
+        protected virtual bool MovingNow(Overlay overlay) => Cursor.Area.MovingRecently;
 
         protected bool Bool(string key, bool fallback) => Settings?.Get<BoolSetting>(key)?.Get() ?? fallback;
         protected int Int(string key, int fallback) => Settings?.Get<IntSetting>(key)?.Get() ?? fallback;

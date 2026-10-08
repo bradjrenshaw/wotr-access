@@ -52,7 +52,7 @@ namespace WrathAccess.Exploration.Overlays
             if (!OverlayManager.Active || !ShouldPlay(overlay)) { _wasAiming = false; return; }
             var ability = Game.Instance?.SelectedAbilityHandler?.SelectedAbility;
             bool aiming = Resolve(ability) != null;
-            if (aiming && !_wasAiming) overlay.RequestSettle();
+            if (aiming && !_wasAiming) Cursor.Area.RequestSettle();
             _wasAiming = aiming;
         }
 

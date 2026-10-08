@@ -27,7 +27,9 @@ namespace WrathAccess.Exploration
         }
 
         /// <summary>Name + compass bearing from the party + a state tag (here / closed). For lists.</summary>
-        public static string Label(GlobalMapPointView p)
+        /// <param name="from">The origin for the bearing: the world-map cursor for the review cycles
+        /// (cursor-relative, like the in-area scanner), the traveler for the map screen's own list.</param>
+        public static string Label(GlobalMapPointView p, Vector3 from)
         {
             var parts = new List<string> { Name(p) };
             if (p.Blueprint == GlobalMapModel.CurrentLocation)
@@ -36,7 +38,7 @@ namespace WrathAccess.Exploration
             }
             else
             {
-                var bearing = Geo.Bearing(GlobalMapModel.TravelerPos, p.transform.position);
+                var bearing = Geo.Bearing(from, p.transform.position);
                 if (!string.IsNullOrEmpty(bearing)) parts.Add(bearing);
                 if (p.State.IsClosed) parts.Add(Loc.T("worldmap.closed"));
             }
@@ -110,8 +112,63 @@ namespace WrathAccess.Exploration
             return string.IsNullOrEmpty(n) ? Loc.T("worldmap.army_fallback") : n;
         }
 
-        /// <summary>Name + side (ally/enemy) + bearing + miles from the party — for the army cycles.</summary>
-        public static string ArmyLabel(GlobalMapArmyState army)
+        /// <summary>The review-ping outcome for a target, by the game's own path manager for the CURRENT
+        /// traveler (the selected army, else the party — so army-only / party-only roads and locked roads
+        /// count the way the game counts them): "straight" = where you are or one road away, "path" =
+        /// several roads, "unreachable" = no path. Exactly one of <paramref name="point"/> /
+        /// <paramref name="army"/> is the target.</summary>
+        public static string RouteOutcome(GlobalMapPointView point, GlobalMapArmyState army)
+        {
+            var view = GlobalMapView.Instance;
+            var state = view?.State;
+            var pm = state?.PathManager;
+            if (pm == null) return "unreachable";
+            var traveler = Kingmaker.Game.Instance?.GlobalMapController?.SelectedTraveler ?? (IGlobalMapTraveler)state.Player;
+            var selectedArmy = traveler as GlobalMapArmyState;
+            GlobalMapTravelData data = null;
+            if (point != null && point.Blueprint != null)
+                data = pm.CalculateTravelerPathToLocation(traveler, point.Blueprint);
+            else if (army != null)
+                data = selectedArmy != null ? pm.CalculateArmyPathToPosition(selectedArmy, army.Position)
+                                            : pm.CalculatePlayerPathToPosition(army.Position);
+            if (data == null) return "unreachable";
+            return data.Path.Count <= 1 ? "straight" : "path";
+        }
+
+        /// <summary>Name + side (ally/enemy), WITHOUT bearing — for "what the cursor is on" readouts (the
+        /// army analogue of <see cref="InPlace"/>).</summary>
+        public static string ArmyInPlace(GlobalMapArmyState army)
+            => ArmyName(army) + ", " + Loc.T(army.Data.Faction == ArmyFaction.Crusaders ? "worldmap.army_ally" : "worldmap.army_enemy");
+
+        /// <summary>Act on an army (the review cursor's i, the movement cursor's Enter): your own army is
+        /// the pawn click — select it (army mode), with the game's select sound; the screen announces the
+        /// change of traveler. Already selected, or an enemy: read it.</summary>
+        public static void ArmyInteract(GlobalMapArmyState army)
+        {
+            var controller = Kingmaker.Game.Instance?.GlobalMapController;
+            if (controller != null && army.Data.Faction == ArmyFaction.Crusaders && controller.SelectedArmy != army)
+            {
+                UiSound.Play(Kingmaker.UI.UISoundType.ArmyManagementArmySelectPlay);
+                controller.SetSelectedArmy(army);
+                return;
+            }
+            Tts.Speak(ArmyLabel(army, GlobalMapCursor.Position));
+        }
+
+        /// <summary>The game's right-click on an army pawn (<c>GlobalMapArmyOvertipItemPCView.OnGlobalMapArmyPawnClick</c>):
+        /// open its overtip tooltip as the persistent Info window — name, type, squads, general, and for an
+        /// enemy on a location its resources / loot / experience / siege state. The window itself is the
+        /// game's (<c>InfoWindowVM</c>), read by <see cref="WrathAccess.Screens.InfoWindowScreen"/>.</summary>
+        public static void ArmyInfo(GlobalMapArmyState army)
+        {
+            if (army == null) return;
+            Kingmaker.UI.MVVM._VM.Tooltip.Utils.TooltipHelper.ShowInfo(
+                new Kingmaker.UI.MVVM._VM.Tooltip.Templates.TooltipTemplateArmyOvertip(army));
+        }
+
+        /// <summary>Name + side (ally/enemy) + bearing + miles from <paramref name="from"/> (the world-map
+        /// cursor for the army cycles) — for the army cycles and the review cursor's interact.</summary>
+        public static string ArmyLabel(GlobalMapArmyState army, Vector3 from)
         {
             var parts = new List<string>
             {
@@ -121,7 +178,6 @@ namespace WrathAccess.Exploration
             var pos = ArmyPosition(army);
             if (pos.HasValue)
             {
-                var from = GlobalMapModel.TravelerPos;
                 if (!Geo.IsHere(from, pos.Value))
                 {
                     parts.Add(Geo.Bearing(from, pos.Value));

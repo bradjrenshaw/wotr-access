@@ -26,6 +26,17 @@ namespace WrathAccess.Exploration
 
         public static void Reset() { _selected = null; _selectedArmy = null; _catIndex = 0; }
 
+        /// <summary>The army the review cursor is on, or null (it is on a point, or nothing).</summary>
+        public static GlobalMapArmyState SelectedArmy => _selectedArmy;
+
+        /// <summary>Y on the world map: the game's army info window for the review cursor's army (the
+        /// right-click on its pawn). Points have no info window; the in-area wording covers "nothing".</summary>
+        public static void InspectReview()
+        {
+            if (_selectedArmy != null) GlobalMapActions.ArmyInfo(_selectedArmy);
+            else Tts.Speak(Loc.T("inspect.none"), interrupt: true);
+        }
+
         /// <summary>The review cursor's world position, for the movement cursor's "jump to review" (/).</summary>
         public static Vector3? SelectedPosition
             => _selectedArmy != null ? GlobalMapActions.ArmyPosition(_selectedArmy)
@@ -43,7 +54,21 @@ namespace WrathAccess.Exploration
         }
 
         private static void Announce(int i, int count)
-            => Tts.Speak(GlobalMapActions.Label(_selected) + ", " + Loc.T("nav.position", new { index = i + 1, count }));
+        {
+            Tts.Speak(GlobalMapActions.Label(_selected, From) + ", " + Loc.T("nav.position", new { index = i + 1, count }));
+            PingReview();
+        }
+
+        /// <summary>The positional review ping (every cycle landing, and Semicolon on demand): the route
+        /// outcome's sound at the review target, relative to the world-map cursor — the map's analogue of
+        /// the in-area review ping, through the engaged overlay's world-map sonar.</summary>
+        public static void PingReview()
+        {
+            var pos = SelectedPosition;
+            if (!pos.HasValue) { if (_selected == null && _selectedArmy == null) Tts.Speak(Loc.T("worldmap.scan_none")); return; }
+            var overlay = Overlays.OverlayManager.ActiveOverlay ?? Overlays.OverlaySettingsRegistry.DefaultOverlay;
+            overlay?.Get<Overlays.GlobalMapSonarSystem>()?.PlayReviewCue(pos.Value, GlobalMapActions.RouteOutcome(_selected, _selectedArmy), overlay);
+        }
 
         // ---- categorised scanner browse ----
         private static List<GlobalMapPointView> CategoryList(Cat c)
@@ -96,12 +121,17 @@ namespace WrathAccess.Exploration
             i = i < 0 ? (dir > 0 ? 0 : list.Count - 1) : Mathf.Clamp(i + dir, 0, list.Count - 1);
             _selectedArmy = list[i];
             _selected = null; // armies + points share the one review cursor
-            Tts.Speak(GlobalMapActions.ArmyLabel(_selectedArmy) + ", " + Loc.T("nav.position", new { index = i + 1, count = list.Count }));
+            Tts.Speak(GlobalMapActions.ArmyLabel(_selectedArmy, From) + ", " + Loc.T("nav.position", new { index = i + 1, count = list.Count }));
+            PingReview();
         }
+
+        /// <summary>The scanner's reference point — the world-map cursor (which falls back to the traveler
+        /// until placed), like the in-area scanner's: nearest-first and bearings are cursor-relative.</summary>
+        private static Vector3 From => GlobalMapCursor.Position;
 
         private static List<GlobalMapArmyState> SortedArmies(IEnumerable<GlobalMapArmyState> src)
         {
-            var from = GlobalMapModel.TravelerPos;
+            var from = From;
             return src.Where(a => GlobalMapActions.ArmyPosition(a).HasValue)
                       .OrderBy(a => Geo.Distance(from, GlobalMapActions.ArmyPosition(a).Value)).ToList();
         }
@@ -109,21 +139,7 @@ namespace WrathAccess.Exploration
         // ---- interact (i): act on the review cursor ----
         public static void Interact()
         {
-            if (_selectedArmy != null)
-            {
-                // Your own army: the pawn click — select it (army mode), with the game's select sound;
-                // the screen announces the change of traveler. Already selected, or an enemy: read it.
-                var controller = Kingmaker.Game.Instance?.GlobalMapController;
-                if (controller != null && _selectedArmy.Data.Faction == Kingmaker.Armies.ArmyFaction.Crusaders
-                    && controller.SelectedArmy != _selectedArmy)
-                {
-                    UiSound.Play(Kingmaker.UI.UISoundType.ArmyManagementArmySelectPlay);
-                    controller.SetSelectedArmy(_selectedArmy);
-                    return;
-                }
-                Tts.Speak(GlobalMapActions.ArmyLabel(_selectedArmy));
-                return;
-            }
+            if (_selectedArmy != null) { GlobalMapActions.ArmyInteract(_selectedArmy); return; }
             if (_selected == null) { Tts.Speak(Loc.T("worldmap.scan_none")); return; }
             GlobalMapActions.Go(_selected);
         }
@@ -131,7 +147,7 @@ namespace WrathAccess.Exploration
         // ---- list builders ----
         private static List<GlobalMapPointView> Sorted(IEnumerable<GlobalMapPointView> src)
         {
-            var from = GlobalMapModel.TravelerPos;
+            var from = From;
             return src.OrderBy(p => Geo.Distance(from, p.transform.position)).ToList();
         }
 

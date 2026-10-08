@@ -1,4 +1,3 @@
-using Kingmaker.View; // ObstacleAnalyzer.TraceAlongNavmesh
 using UnityEngine;
 using WrathAccess.Input;
 using WrathAccess.Settings;
@@ -6,12 +5,12 @@ using WrathAccess.Settings;
 namespace WrathAccess.Exploration.Overlays
 {
     /// <summary>
-    /// A precise, free-moving cursor: hold the arrows to glide the world point continuously at a
-    /// configurable ft/sec. It traces from the current point toward the intended one along the navmesh
-    /// each frame (<see cref="ObstacleAnalyzer.TraceAlongNavmesh"/>) and stops at the first wall/ledge, so
-    /// it can't leave walkable ground. Feedback is audio (wall tones / sonar), so it doesn't speak on
-    /// move — describing the exact point is the Point-context job of <c>SpatialSystem</c>. Speed reads live
-    /// from the cursor slot's settings.
+    /// A precise, free-moving cursor: hold the arrows to glide the point continuously at a configurable
+    /// speed (ft/sec in an area, miles/sec on the map). Each frame it asks the cursor's
+    /// <see cref="CursorSpace"/> to trace from the current point toward the intended one — along the navmesh
+    /// in an area (stopping at the first wall/ledge, so it can't leave walkable ground), freely on the flat
+    /// map. Feedback is audio (wall tones / sonar), so it doesn't speak on move — the idle settle readout
+    /// describes where it stops. Speed reads live from the cursor slot's settings.
     /// </summary>
     internal sealed class ContinuousGlide : MovementMode
     {
@@ -31,7 +30,8 @@ namespace WrathAccess.Exploration.Overlays
         public override AnnouncementContext Context => AnnouncementContext.Point;
         public override bool AnnouncesOnMove => false; // audio-driven, not per-frame speech
 
-        private float Speed => CursorSettings.ContinuousSpeed(_settings, 15) * Geo.MetresPerFoot;
+        private float Speed(Cursor cursor)
+            => CursorSettings.ContinuousSpeed(_settings, cursor.Space.DefaultSpeed) * cursor.Space.Unit;
 
         // Opt-in wall sliding (Cursor → Exploration), read live from the context this mode was built
         // against (the overlay's custom copy or the shared defaults).
@@ -59,18 +59,23 @@ namespace WrathAccess.Exploration.Overlays
         private bool _blocked;
         private Vector3 _blockedDir;
 
-        public override void OnEnter(Overlay overlay)
+        public override void OnEnter(Cursor cursor)
         {
             // Make sure the shared cursor is planted (so move-to-cursor has a point); the getter already
             // falls back to the player, so reading-then-writing pins it there on a cold start.
-            overlay.Cursor.Position = overlay.Cursor.Position;
+            cursor.Position = cursor.Position;
         }
 
-        public override void Tick(float dt, Overlay overlay)
+        public override void Idle(Cursor cursor)
+        {
+            _blocked = false; _prioAxis = -1; _wallFollow = false; _prevHx = _prevHz = false;
+        }
+
+        public override void Tick(float dt, Cursor cursor)
         {
             if (!OverlayManager.Active) { _blocked = false; return; } // menu up / focus off → don't move
 
-            CursorKeys.HeldVector(_slot, out int ix, out int iz);
+            cursor.HeldVector(_slot, out int ix, out int iz);
             if (ix == 0 && iz == 0)
             {
                 _prioAxis = -1; _wallFollow = false; _prevHx = _prevHz = false;
@@ -79,24 +84,24 @@ namespace WrathAccess.Exploration.Overlays
                 {
                     _blocked = false;
                     if (CollisionNames)
-                        CollisionNamer.Announce(overlay.Cursor.Position, _blockedDir);
+                        CollisionNamer.Announce(cursor.Position, _blockedDir);
                 }
                 return;
             }
             TrackPriority(ix != 0, iz != 0);
 
-            bool moved = Move(ix, iz, Speed * dt, overlay);
+            bool moved = Move(ix, iz, Speed(cursor) * dt, cursor);
             _blocked = !moved;
             if (_blocked)
             {
                 float wx = ix, wz = iz;
-                ListenerFrame.InputToWorld(ref wx, ref wz);
+                cursor.Space.InputToWorld(ref wx, ref wz);
                 _blockedDir = new Vector3(wx, 0f, wz);
             }
         }
 
         // One glide frame's movement resolution; true when the cursor made any progress.
-        private bool Move(int ix, int iz, float step, Overlay overlay)
+        private bool Move(int ix, int iz, float step, Cursor cursor)
         {
             // First-direction priority steering (opt-in), only meaningful with BOTH axes held:
             // diagonal while the way is open; first wall contact arms wall-following — from then on
@@ -106,22 +111,22 @@ namespace WrathAccess.Exploration.Overlays
             {
                 if (!_wallFollow)
                 {
-                    if (TryMove(ix, iz, step, overlay, slide: false)) return true;
+                    if (TryMove(ix, iz, step, cursor, slide: false)) return true;
                     _wallFollow = true;
                 }
                 bool prioX = _prioAxis != 1; // unset/x → x leads (both-same-frame picks x, arbitrary)
-                if (TryMove(prioX ? ix : 0, prioX ? 0 : iz, step, overlay, slide: false)) return true;
-                return TryMove(prioX ? 0 : ix, prioX ? iz : 0, step, overlay, slide: false);
+                if (TryMove(prioX ? ix : 0, prioX ? 0 : iz, step, cursor, slide: false)) return true;
+                return TryMove(prioX ? 0 : ix, prioX ? iz : 0, step, cursor, slide: false);
             }
 
             // Normal path: combined vector, wall-slide honoured; blocked diagonals fall back to the
             // free axis (holding two directions is explicit intent for both — don't discard the open
             // half because the other is walled). Single-direction into a wall still dead-stops.
-            if (TryMove(ix, iz, step, overlay, slide: WallSlide)) return true;
+            if (TryMove(ix, iz, step, cursor, slide: WallSlide)) return true;
             if (ix != 0 && iz != 0 && !WallSlide)
             {
-                return TryMove(ix, 0, step, overlay, slide: false)
-                    || TryMove(0, iz, step, overlay, slide: false);
+                return TryMove(ix, 0, step, cursor, slide: false)
+                    || TryMove(0, iz, step, cursor, slide: false);
             }
             return false;
         }
@@ -138,39 +143,16 @@ namespace WrathAccess.Exploration.Overlays
             _prevHx = hx; _prevHz = hz;
         }
 
-        /// <summary>Attempt one glide step along the given INPUT vector (rotated by the listener
-        /// facing). Moves the cursor and returns true when the trace made real progress.</summary>
-        private bool TryMove(float inDx, float inDz, float step, Overlay overlay, bool slide)
+        /// <summary>Attempt one glide step along the given INPUT vector (rotated into the space's world
+        /// axes). Moves the cursor and returns true when the trace made real progress.</summary>
+        private bool TryMove(float inDx, float inDz, float step, Cursor cursor, bool slide)
         {
             if (inDx == 0f && inDz == 0f) return false;
-            ListenerFrame.InputToWorld(ref inDx, ref inDz); // W = forward of the facing (default north)
-            var cur = overlay.Cursor.Position;
+            cursor.Space.InputToWorld(ref inDx, ref inDz); // W = forward of the facing in an area; north on the map
+            var cur = cursor.Position;
             var dir = new Vector3(inDx, 0f, inDz).normalized;
-            var intended = cur + dir * step;
-            // Wall slide: blocked motion slides along the wall's tangent — the same trace the game's
-            // direct-control movement uses — funnelling through doorways instead of dead-stopping.
-            Vector3 traced;
-            try
-            {
-                traced = slide
-                    ? ObstacleAnalyzer.TraceAlongNavmeshWithWallSlide(cur, intended)
-                    : ObstacleAnalyzer.TraceAlongNavmesh(cur, intended); // stops at walls/ledges
-            }
-            catch (System.NullReferenceException)
-            {
-                // No navmesh under the cursor yet (a key held through an area-part swap): the game's
-                // trace dereferences a null nearest node. Treat as blocked rather than abort the tick.
-                return false;
-            }
-            if ((traced - cur).sqrMagnitude < 1e-6f) return false;
-            // Re-project onto the walkable surface: the trace's unobstructed result keeps the INPUT Y
-            // (the navmesh linecast never re-snaps height), so gliding up a ramp left the cursor's Y
-            // fossilized at wherever it was last planted — path-dependent heights on one slope, and a
-            // stale feed to the slope indicator. Seeding the sample with the current Y keeps genuine
-            // multi-level geometry honest (nearest tier wins; ascend/descend still switch tiers).
-            var s = NavmeshProbe.Sample(traced.x, traced.z, traced.y);
-            if (s.OnNavmesh) traced.y = s.Point.y;
-            overlay.Cursor.Position = traced;
+            if (!cursor.Space.Trace(cur, cur + dir * step, slide, out var traced)) return false;
+            cursor.Position = traced;
             return true;
         }
     }

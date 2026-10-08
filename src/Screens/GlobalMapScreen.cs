@@ -132,7 +132,7 @@ namespace WrathAccess.Screens
                 if (p == null || !live.Contains(p)) { i++; continue; }
                 var pv = p; // capture per-iteration for the closures
                 b.AddItem(ControlId.Referenced(pv, "loc:" + i), GraphNodes.Button(
-                    () => GlobalMapActions.Label(pv), () => GlobalMapActions.Go(pv)));
+                    () => GlobalMapActions.Label(pv, GlobalMapModel.TravelerPos), () => GlobalMapActions.Go(pv))); // the screen's list stays traveler-relative
                 i++;
             }
             b.PopContext();

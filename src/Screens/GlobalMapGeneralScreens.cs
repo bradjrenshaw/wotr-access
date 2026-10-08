@@ -70,6 +70,38 @@ namespace WrathAccess.Screens
             b.PopContext();
         }
 
+        /// <summary>The same card as read-only tooltip lines — for the game's army-leader tooltip brick
+        /// (<c>TooltipBrickArmyLeaderVM</c>): name, level, the five stats (each with the game's tooltip
+        /// text on drill-in), mana, skills (drill-in = the skill's own tooltip).</summary>
+        public static IEnumerable<WrathAccess.UI.Tooltips.BrickLine> BrickLines(ArmyLeaderInfoVM l)
+        {
+            if (l == null || l.IsDisposed) yield break;
+            var ct = UIStrings.Instance.CrusadeTexts;
+            yield return new WrathAccess.UI.Tooltips.BrickLine(l.CommonVM?.Name.Value ?? "");
+            yield return new WrathAccess.UI.Tooltips.BrickLine(LevelLine(l));
+            yield return new WrathAccess.UI.Tooltips.BrickLine(Line(ct.AttackBonusTooltipHeader, l.StatsVM.AttackBonus.Value),
+                () => SimpleTooltip.Make(ct.AttackBonusTooltipHeader, ct.AttackBonusTooltipDescription));
+            yield return new WrathAccess.UI.Tooltips.BrickLine(Line(ct.DefenceBonusTooltipHeader, l.StatsVM.DefenseBonus.Value),
+                () => SimpleTooltip.Make(ct.DefenceBonusTooltipHeader, ct.DefenceBonusTooltipDescription));
+            yield return new WrathAccess.UI.Tooltips.BrickLine(Line(ct.SpellBonusTooltipHeader, l.StatsVM.SpellStrength.Value),
+                () => SimpleTooltip.Make(ct.SpellBonusTooltipHeader, ct.SpellBonusTooltipDescription));
+            yield return new WrathAccess.UI.Tooltips.BrickLine(Line(ct.ArmySizeIncreaseTooltipHeader, l.StatsVM.ArmySize.Value),
+                () => SimpleTooltip.Make(ct.ArmySizeIncreaseTooltipHeader, ct.ArmySizeIncreaseTooltipDescription));
+            yield return new WrathAccess.UI.Tooltips.BrickLine(Line(ct.InfirmaryTooltipHeader, l.StatsVM.Infirmary.Value),
+                () => SimpleTooltip.Make(ct.InfirmaryTooltipHeader, ct.InfirmaryTooltipDescription));
+            yield return new WrathAccess.UI.Tooltips.BrickLine(Loc.T("worldmap.size_line",
+                new { name = (string)ct.MagicReserves, current = l.StatsVM.CurrentMana.Value, max = l.StatsVM.MaxMana.Value }));
+            var skills = l.SkillsVM.Skills;
+            for (int i = 0; i < skills.Count; i++)
+            {
+                var s = skills[i];
+                if (s == null) continue;
+                yield return new WrathAccess.UI.Tooltips.BrickLine(
+                    s.Count.Value > 1 ? Loc.T("crusade.skill_count", new { name = s.Name.Value, count = s.Count.Value }) : s.Name.Value,
+                    () => s.GetTooltipTemplate());
+            }
+        }
+
         private static string LevelLine(ArmyLeaderInfoVM l)
         {
             var e = l.ExpLevel.Value;

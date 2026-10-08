@@ -45,14 +45,15 @@ namespace WrathAccess.Exploration.Overlays
                     "overlay.cursor.terrain_interval"));
         }
 
-        public static void Tick(float dt, Overlay overlay)
+        public static void Tick(float dt)
         {
+            var cursor = Cursor.Area;
             // Releasing the movement keys cuts the step in flight (user request): a step that starts
             // right as you let go otherwise trails on after the cursor has stopped.
-            bool held = overlay.Cursor.MovementKeysHeld();
+            bool held = cursor.MovementKeysHeld();
             if (_keysHeld && !held) StopCurrent();
             _keysHeld = held;
-            if (!On || !OverlayManager.Active || !overlay.CursorMovingRecently || !WrathAccess.ControlState.HasControl)
+            if (!On || !OverlayManager.Active || !cursor.MovingRecently || !WrathAccess.ControlState.HasControl)
             {
                 _sinceStep = 999f; // next movement starts with an immediate step
                 return;
@@ -60,7 +61,7 @@ namespace WrathAccess.Exploration.Overlays
             _sinceStep += dt;
             if (_sinceStep < IntervalSec) return;
             _sinceStep = 0f;
-            Step(overlay.Cursor.Position);
+            Step(cursor.Position);
         }
 
         private static void Step(Vector3 pos)

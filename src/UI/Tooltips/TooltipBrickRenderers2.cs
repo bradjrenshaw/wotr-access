@@ -84,6 +84,38 @@ namespace WrathAccess.UI.Tooltips
         }
     }
 
+    /// <summary>A crusade army's squads (the army info / overtip tooltip): one line per squad — unit
+    /// and head count, drill-in = the game's unit tooltip. A wide unit spans grid cells (one VM each),
+    /// so each squad is listed once, in grid order; empty cells are skipped.</summary>
+    public sealed class ArmySquadsBrickRenderer : TooltipBrickRenderer<TooltipBrickArmySquadsVM>
+    {
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickArmySquadsVM vm)
+        {
+            var squads = vm?.SquadsVM?.Squads;
+            if (squads == null) yield break;
+            var seen = new HashSet<Kingmaker.Armies.State.SquadState>();
+            foreach (var cell in squads)
+            {
+                var st = cell?.Squad;
+                if (st == null || st.Unit == null || !seen.Add(st)) continue;
+                var c = cell;
+                yield return new BrickLine(
+                    Loc.T("worldmap.squad", new { name = (string)st.Unit.CharacterName, count = st.Count }),
+                    () => c.GetTooltip());
+            }
+        }
+    }
+
+    /// <summary>A crusade army's general (the army info / overtip tooltip): the same read-only card the
+    /// hire / set-general panels show, as lines.</summary>
+    public sealed class ArmyLeaderBrickRenderer : TooltipBrickRenderer<TooltipBrickArmyLeaderVM>
+    {
+        public override IEnumerable<BrickLine> GetExpandedLines(TooltipBrickArmyLeaderVM vm)
+            => vm?.ArmyLeaderInfoVM != null
+                ? WrathAccess.Screens.GeneralNodes.BrickLines(vm.ArmyLeaderInfoVM)
+                : System.Linq.Enumerable.Empty<BrickLine>();
+    }
+
     /// <summary>The "does not stack with" list: the game's own header, then one line per entity.</summary>
     public sealed class NonStackBrickRenderer : TooltipBrickRenderer<TooltipBrickNonStackVm>
     {

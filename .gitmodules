@@ -1,0 +1,3 @@
+[submodule "external/loadstar"]
+	path = external/loadstar
+	url = https://github.com/bradjrenshaw/loadstar.git

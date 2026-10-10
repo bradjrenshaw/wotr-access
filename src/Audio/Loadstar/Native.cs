@@ -1,4 +1,4 @@
-// VENDORED from c:/users/bradj/code/loadstar/bindings/csharp/Loadstar.Net/Native.cs (Loadstar.Net, MIT).
+// VENDORED from external/loadstar/bindings/csharp/Loadstar.Net/Native.cs (the loadstar submodule, Loadstar.Net, MIT).
 // Kept verbatim so the module's byte-loaded assembly carries the P/Invoke surface itself;
 // update by re-copying when loadstar's ABI changes (ls_abi_version).
 

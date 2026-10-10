@@ -197,27 +197,13 @@ namespace WrathAccess.Screens
             return info;
         }
 
+        // A lone ramp (no list to rank against): its family word, shaded only when extreme.
         private static string BaseName(Texture2D ramp, RampInfo info, string context)
         {
-            if (true)
-            {
-                string w = FamilyWord(info, context);
-                bool shaded = info.SkinWord == null && info.Hue != "Black" && info.Hue != "White" && info.Sampled;
-                int step = !shaded ? 0 : info.Light > 0.78f ? 1 : info.Light > 0.58f ? 2 : info.Light < 0.18f ? 7 : info.Light < 0.36f ? 6 : 0;
-                return step == 0 ? w : Shade(step, w);
-            }
-            if (info.SkinWord != null)
-                return LocalizationManager.GetOrDefault(Table, "skin." + info.SkinWord, SplitCamel(info.SkinWord).ToLowerInvariant());
-            string hue = info.Hue ?? (info.Sampled ? HueFromSample(info.Colour) : null);
-            if (hue == null) return ramp.name;
-            string hueWord = context != null
-                ? LocalizationManager.GetOrDefault(Table, "hue." + context + "." + hue, null) : null;
-            if (hueWord == null) hueWord = LocalizationManager.GetOrDefault(Table, "hue." + hue, hue.ToLowerInvariant());
-            if (hue == "Black" || hue == "White" || !info.Sampled) return hueWord;
-            float l = info.Light;
-            string shade = l > 0.78f ? "verylight" : l > 0.58f ? "light" : l < 0.18f ? "verydark" : l < 0.36f ? "dark" : null;
-            if (shade == null) return hueWord;
-            return LocalizationManager.GetOrDefault(Table, "shade." + shade, shade + " {hue}").Replace("{hue}", hueWord);
+            string w = FamilyWord(info, context);
+            bool shaded = info.SkinWord == null && info.Hue != "Black" && info.Hue != "White" && info.Sampled;
+            int step = !shaded ? 0 : info.Light > 0.78f ? 1 : info.Light > 0.58f ? 2 : info.Light < 0.18f ? 7 : info.Light < 0.36f ? 6 : 0;
+            return step == 0 ? w : Shade(step, w);
         }
 
         private static Color? Sample(Texture2D ramp)

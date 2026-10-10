@@ -13,6 +13,7 @@ using Kingmaker.UI.MVVM._VM.CharGen.Phases.Alignment;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Name;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Spells;
 using Kingmaker.UI.MVVM._VM.CharGen.Phases.Total;
+using Kingmaker.UI.MVVM._VM.CharGen.Phases.Appearance;
 using WrathAccess.UI;
 
 namespace WrathAccess.Screens
@@ -70,6 +71,7 @@ namespace WrathAccess.Screens
             Register<CharGenNamePhaseVM>(vm => new NamePhaseContent(vm));
             Register<CharGenSpellsPhaseVM>(vm => new SpellsPhaseContent(vm));
             Register<CharGenTotalPhaseVM>(vm => new TotalPhaseContent(vm));
+            Register<CharGenAppearancePhaseVM>(vm => new AppearancePhaseContent(vm));
         }
     }
 }

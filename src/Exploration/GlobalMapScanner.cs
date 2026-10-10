@@ -159,13 +159,24 @@ namespace WrathAccess.Exploration
             return cur == null ? new List<GlobalMapPointView>() : Sorted(new[] { cur }.Concat(Neighbors(cur)).Distinct());
         }
 
+        // The next VISIBLE point along each road out of p: invisible system nodes are read through (a
+        // road that bends or forks at one continues to whatever the sighted see at its far end).
         private static IEnumerable<GlobalMapPointView> Neighbors(GlobalMapPointView p)
         {
-            if (p.Edges == null) yield break;
-            foreach (var e in p.Edges)
+            var seen = new HashSet<GlobalMapPointView> { p };
+            var pending = new Stack<GlobalMapPointView>();
+            pending.Push(p);
+            while (pending.Count > 0)
             {
-                var other = e.Point1 == p ? e.Point2 : e.Point1;
-                if (other != null && other.State != null && other.State.IsRevealed) yield return other;
+                var q = pending.Pop();
+                if (q.Edges == null) continue;
+                foreach (var e in q.Edges)
+                {
+                    var other = e.Point1 == q ? e.Point2 : e.Point1;
+                    if (other == null || other.State == null || !other.State.IsRevealed || !seen.Add(other)) continue;
+                    if (GlobalMapModel.IsSystemNode(other)) pending.Push(other);
+                    else yield return other;
+                }
             }
         }
 

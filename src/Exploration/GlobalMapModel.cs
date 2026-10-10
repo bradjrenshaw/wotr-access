@@ -95,11 +95,19 @@ namespace WrathAccess.Exploration
             => Points.Where(p => p != null && p.State != null && p.State.IsRevealed
                 && p.Blueprint != null && (p.Blueprint.Type == GlobalMapPointType.Location || IsWarCamp(p)));
 
-        /// <summary>Revealed road junctions (unnamed waypoints) — the road skeleton, not browse targets.
+        /// <summary>Revealed road junctions — the VISIBLE crossroads markers (type Waypoint), not browse
+        /// targets. SYSTEM waypoints are excluded: they are invisible path nodes (no model, no icon, no hover
+        /// sound) that exist so roads can bend and fork — a sighted player never sees or clicks one, so we
+        /// don't list one either (they stay in the road graph for routing; see <see cref="IsSystemNode"/>).
         /// The junction the war camp stands on is a location instead.</summary>
         public static IEnumerable<GlobalMapPointView> Junctions
             => Points.Where(p => p != null && p.State != null && p.State.IsRevealed
-                && p.Blueprint != null && p.Blueprint.Type.IsWaypoint() && !IsWarCamp(p));
+                && p.Blueprint != null && p.Blueprint.Type == GlobalMapPointType.Waypoint && !IsWarCamp(p));
+
+        /// <summary>An invisible routing node (system waypoint) — part of the road, not a place. Roads are
+        /// read THROUGH these: the next place along a road is the first non-system point.</summary>
+        public static bool IsSystemNode(GlobalMapPointView p)
+            => p != null && p.Blueprint != null && p.Blueprint.Type == GlobalMapPointType.SystemWaypoint && !IsWarCamp(p);
 
         /// <summary>Revealed armies on the current map. Empty until the crusade is active (Act 2+) — on every
         /// other map the game clears the army list, so this is naturally inert in Act 1.</summary>
